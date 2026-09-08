@@ -1,0 +1,32 @@
+{
+  "name": "@tiinex/core",
+  "version": "0.1.0",
+  "description": "Shared host-neutral Tiinex implementation core for artifacts, schemas, validation, lineage, grounding, Handoffs, provenance and deterministic workflows.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/public/index.js",
+    "./browser": "./src/public/index.js",
+    "./node": "./src/public/node.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "test:portable": "node test/portable-smoke.mjs",
+    "pack:check": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=22.14"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
