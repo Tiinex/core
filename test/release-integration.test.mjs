@@ -1,6 +1,20 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {spawnSync} from 'node:child_process';
+import fs from 'node:fs/promises';import os from 'node:os';import path from 'node:path';import {spawnSync} from 'node:child_process';import {gunzipSync} from 'node:zlib';
 import {runRelease} from '../src/release/run.mjs';
+
+function readTarEntry(gzipBytes,wanted) {
+ const tar=gunzipSync(gzipBytes);let offset=0;
+ while(offset+512<=tar.length) {
+  const header=tar.subarray(offset,offset+512);if(header.every(byte=>byte===0))break;
+  const field=(start,length)=>header.subarray(start,start+length).toString('utf8').replace(/\0.*$/,'').trim();
+  const name=field(0,100),prefix=field(345,155),full=prefix?`${prefix}/${name}`:name;
+  const sizeText=field(124,12);const size=sizeText?Number.parseInt(sizeText,8):0;if(!Number.isFinite(size))throw Error(`Invalid tar size for ${full}`);
+  const start=offset+512,end=start+size;if(end>tar.length)throw Error(`Truncated tar entry ${full}`);
+  if(full===wanted)return tar.subarray(start,end);
+  offset=start+Math.ceil(size/512)*512;
+ }
+ throw Error(`Tar entry not found: ${wanted}`);
+}
 test('release prepares exact source, keeps canonical versions unchanged and detects archive tampering',async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'tiinex-release-'));
  const saved=globalThis.fetch;let metadata={name:'@tiinex/fixture',versions:{}};
@@ -13,7 +27,7 @@ test('release prepares exact source, keeps canonical versions unchanged and dete
   globalThis.fetch=async()=>({status:200,ok:true,json:async()=>metadata});
   const env={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'push',GITHUB_REF:'refs/heads/master',GITHUB_REPOSITORY:'Tiinex/fixture',GITHUB_SHA:commit,TIINEX_ENABLE_NPM_PUBLISH:'true'};
   const plan=await runRelease({cwd:root,argv:['prepare'],env});assert.equal(plan.version,'0.1.0');assert.ok(plan.integrity.startsWith('sha512-'));assert.deepEqual(JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8')),original);assert.equal(git('status','--porcelain'),'');
-  const tar=path.join(root,plan.file);const listing=spawnSync('tar',['-xOf',tar,'package/package.json'],{encoding:'utf8'});assert.equal(listing.status,0);const packed=JSON.parse(listing.stdout);assert.equal(packed.tiinexRelease.sourceCommit,commit);assert.equal(packed.gitHead,commit);
+  const tar=path.join(root,plan.file);const packed=JSON.parse(readTarEntry(await fs.readFile(tar),'package/package.json').toString('utf8'));assert.equal(packed.tiinexRelease.sourceCommit,commit);assert.equal(packed.gitHead,commit);
   metadata.versions['0.1.0']={...packed,dist:{integrity:plan.integrity}};
   const skip=await runRelease({cwd:root,argv:['prepare'],env});assert.equal(skip.action,'skip');
   await fs.writeFile(path.join(root,'src/index.js'),'export const ready = true; export const feature = true;\n');git('add','.');git('commit','-m','feat: second surface');const next=git('rev-parse','HEAD');
