@@ -38,3 +38,8 @@ Not yet release-qualified. The public packages are tested headlessly from local 
 The explicit package export map also exposes the shared module paths used by App. These preserve the mirrored layout, not a second implementation. `tools/tiinex-portable.mjs` is retained as the existing bootstrap entrypoint until the later CLI/Interop extraction.
 
 Application data is a declared-data projection: parsing and exact reference resolution are not schema validation, integrity verification or authority qualification. Missing Parent evidence remains unresolved. Companion byte access belongs to registered host readers, not automatic filesystem or network permissions.
+
+
+## 2026-09-08 integration frontier
+
+Master-only automatic versioning/publication is implemented through the single Core Node release helper. See `docs/NPM-PUBLISH.md`; release is disabled until `TIINEX_ENABLE_NPM_PUBLISH` and the npm environment are configured. No registry publication was performed by Anchor.

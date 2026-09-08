@@ -1,6 +1,6 @@
 {
   "name": "@tiinex/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared host-neutral Tiinex implementation core for artifacts, schemas, validation, lineage, grounding, Handoffs, provenance and deterministic workflows.",
   "type": "module",
   "sideEffects": true,
@@ -131,7 +131,9 @@
     "./workspaces/workspace.materialRole.js": "./src/workspaces/workspace.materialRole.js",
     "./workspaces/workspace.recordPaths.js": "./src/workspaces/workspace.recordPaths.js",
     "./portable-entry": "./tools/tiinex-portable.mjs",
-    "./schema-bootstrap": "./src/tooling/portable/schema/bootstrap/canonical.pack.js"
+    "./schema-bootstrap": "./src/tooling/portable/schema/bootstrap/canonical.pack.js",
+    "./node/release": "./src/release/run.mjs",
+    "./node/release-policy": "./src/release/policy.mjs"
   },
   "files": [
     "src",
@@ -145,7 +147,11 @@
     "test:portable": "node test/portable-smoke.mjs",
     "pack:check": "npm pack --dry-run",
     "test:bootstrap": "node tools/check-bootstrap.mjs",
-    "validate": "npm test && npm run test:portable && npm run test:bootstrap"
+    "validate": "npm test && npm run test:portable && npm run test:bootstrap",
+    "release:preview": "node tools/release.mjs preview",
+    "publish:bootstrap": "node tools/release.mjs bootstrap",
+    "release:prepare": "node tools/release.mjs prepare",
+    "release:publish": "node tools/release.mjs publish"
   },
   "engines": {
     "node": ">=22.14"
@@ -153,7 +159,7 @@
   "license": "Apache-2.0",
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "registry": "https://registry.npmjs.org/"
   },
   "repository": {
     "type": "git",
