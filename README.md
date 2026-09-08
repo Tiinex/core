@@ -30,3 +30,11 @@ provider precedence; unresolved same-level single-value conflicts fail closed.
 Source paths intentionally follow the same `src/...` conventions used by other Tiinex
 repositories where the concepts match. npm distribution preserves this source layout
 rather than inventing a second directory vocabulary.
+
+## This source checkpoint
+
+Not yet release-qualified. The public packages are tested headlessly from local npm archives. A full dependency-equipped React/Vite bundle and rendered external-Verse acceptance remain pending. Publishing is disabled in `.github/release-policy.json`.
+
+The explicit package export map also exposes the shared module paths used by App. These preserve the mirrored layout, not a second implementation. `tools/tiinex-portable.mjs` is retained as the existing bootstrap entrypoint until the later CLI/Interop extraction.
+
+Application data is a declared-data projection: parsing and exact reference resolution are not schema validation, integrity verification or authority qualification. Missing Parent evidence remains unresolved. Companion byte access belongs to registered host readers, not automatic filesystem or network permissions.

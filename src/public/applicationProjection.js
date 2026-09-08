@@ -25,14 +25,16 @@ export function projectApplicationData(input = {}) {
     records: freeze([...records].sort(compareHistorical)),
     relations: freeze(records.flatMap((record) => record.relation ? [record.relation] : [])),
     findings,
-    boundary: 'Read-only qualified-data projection. Parent and endpoint links use exact declared references only; titles, filenames, chronology and repository basenames never infer semantic relations or authority.'
+    boundary: 'Read-only declared-data projection; parsing and exact-reference resolution do not certify schema validity or authority. Parent and endpoint links use exact declared references only; titles, filenames, chronology and repository basenames never infer semantic relations or authority.'
   });
 }
 
 export function toPlaythingsStoryRecords(applicationData = {}) {
   const records = Array.isArray(applicationData.records) ? applicationData.records : [];
+  const counts = new Map();
+  for (const record of records) counts.set(record.id, (counts.get(record.id) || 0) + 1);
   return freeze(records.flatMap((record) => {
-    if (!Number.isFinite(record.historicalTimeMs)) return [];
+    if (!Number.isFinite(record.historicalTimeMs) || counts.get(record.id) !== 1) return [];
     const story = {
       id: record.id,
       historicalTimeMs: record.historicalTimeMs,
@@ -49,7 +51,8 @@ export function toPlaythingsStoryRecords(applicationData = {}) {
 }
 
 function projectWorkspace(workspace = {}, index, findings) {
-  const id = token(workspace.id || workspace.workspaceId || `workspace-${index + 1}`) || `workspace-${index + 1}`;
+  const id = text(workspace.id || workspace.workspaceId);
+  if (!id || id.includes('::')) throw new TypeError('An explicit unambiguous Workspace id is required.');
   const title = text(workspace.title || workspace.name || id);
   const sourceIdentity = freeze({
     workspaceId: id,
@@ -64,19 +67,20 @@ function projectWorkspace(workspace = {}, index, findings) {
 }
 
 function projectRecord(record = {}, workspace, index, findings) {
-  const path = normPath(record.path || record.id || `record-${index + 1}.md`);
+  const path = normPath(record.path || record.id);
+  if (!path) throw new TypeError('An explicit artifact path or id is required.');
   const id = `${workspace.id}::${path}`;
   let parsed = null;
   if (typeof record.markdown === 'string' && record.markdown.trim()) {
     try { parsed = parseArtifactMarkdown(record.markdown); }
     catch (error) { findings.push(finding('warning', 'application-data.parse.failed', 'Artifact Markdown could not be projected.', { id, message: String(error?.message || error) })); }
   }
-  const schemaId = text(record.currentSchemaId || record.schemaId || parsed?.envelope?.current?.schema?.id || record.kind || '');
+  const schemaId = text(parsed?.envelope?.current?.schema?.id || record.currentSchemaId || record.schemaId || record.kind || '');
   const createdAt = text(record.currentCreatedAt || record.createdAt || parsed?.envelope?.current?.createdAt || '');
   const historicalTimeMs = createdAt ? Date.parse(createdAt.replace(' ', 'T') + (/Z$|[+-]\d\d:?\d\d$/.test(createdAt) ? '' : 'Z')) : NaN;
   if (createdAt && !Number.isFinite(historicalTimeMs)) findings.push(finding('warning', 'application-data.created-at.invalid', 'Created At is present but cannot be represented as a deterministic historical timestamp.', { id, createdAt }));
   const authors = splitIdentities(record.authors ?? parsed?.envelope?.current?.authors ?? '');
-  const parentTarget = text(record.parentRef || record.trace || parsed?.envelope?.parent?.trace || '');
+  const parentTarget = text(parsed?.envelope?.parent?.trace || record.parentRef || record.trace || '');
   const explicitParticipants = Array.isArray(record.participants) ? freeze(record.participants.map(identityString).filter(Boolean)) : undefined;
   const actionStatus = ['unknown', 'planned', 'occurred', 'cancelled'].includes(text(record.actionStatus).toLowerCase()) ? text(record.actionStatus).toLowerCase() : 'unknown';
   return freeze({
@@ -91,6 +95,8 @@ function projectRecord(record = {}, workspace, index, findings) {
     participants: explicitParticipants,
     actionStatus,
     parentTarget,
+    parentDeclared: Boolean(parsed?.hasContinuityContext && /^\s*- Parent\s*$/m.test(record.markdown || '')),
+    hasEnvelope: Boolean(parsed?.hasContinuityContext),
     parsed,
     source: freeze({ ...workspace.sourceIdentity, recordSourceMode: text(record.sourceMode || record.source?.adapterId || '') }),
     raw: record
@@ -113,6 +119,7 @@ function finalizeRecord(record, workspace, locator, findings) {
     actionStatus: record.actionStatus,
     parent,
     source: record.source,
+    qualification: { schema: 'not-validated-by-this-projection', integrity: 'not-checked-by-this-projection' },
     handoff,
     relation
   };
@@ -123,13 +130,13 @@ function finalizeRecord(record, workspace, locator, findings) {
 function buildLocator(workspaces) {
   const exact = new Map();
   for (const workspace of workspaces) {
-    for (const record of workspace.records) exact.set(record.id, record);
+    for (const record of workspace.records) { const matches = exact.get(record.id) || []; matches.push(record); exact.set(record.id, matches); }
   }
   return { exact };
 }
 
 function resolveParent(record, workspace, locator, findings) {
-  if (!record.parentTarget) return freeze({ state: 'root', id: null, target: '' });
+  if (!record.parentTarget) return freeze({ state: record.hasEnvelope && !record.parentDeclared ? 'root' : 'unresolved', id: null, target: '', basis: 'declared-envelope-not-semantic-qualification' });
   const resolved = resolveReference(record.parentTarget, record, workspace, locator);
   if (resolved.state === 'resolved') return freeze({ state: 'resolved', id: resolved.record.id, target: record.parentTarget, method: resolved.method });
   findings.push(finding(resolved.state === 'ambiguous' ? 'error' : 'warning', `application-data.parent.${resolved.state}`, 'Declared Parent reference did not resolve to exactly one loaded artifact.', { id: record.id, target: record.parentTarget, candidates: resolved.candidates || [] }));
@@ -184,17 +191,17 @@ function resolveReference(value, record, workspace, locator) {
   if (!target) return { state: 'unresolved', candidates: [] };
   const workspaceQualified = target.match(/^([^:]+)::(.+)$/);
   if (workspaceQualified) {
-    const id = `${token(workspaceQualified[1])}::${normPath(workspaceQualified[2])}`;
+    const id = `${text(workspaceQualified[1])}::${normPath(workspaceQualified[2])}`;
     const hit = locator.exact.get(id);
-    return hit ? { state: 'resolved', record: hit, method: 'workspace-qualified' } : { state: 'unresolved', candidates: [] };
+    return exactCandidateResult(hit || [], 'workspace-qualified');
   }
   if (/^[a-z]+:\/\//i.test(target)) {
-    const candidates = [...locator.exact.values()].filter((candidate) => [candidate.raw?.browseUrl, candidate.raw?.rawUrl, candidate.raw?.sourceUrl, candidate.raw?.source?.url].map(text).includes(target));
+    const candidates = [...locator.exact.values()].flat().filter((candidate) => [candidate.raw?.browseUrl, candidate.raw?.rawUrl, candidate.raw?.sourceUrl, candidate.raw?.source?.url].map(text).includes(target));
     return exactCandidateResult(candidates, 'exact-url');
   }
   const resolvedPath = target.startsWith('/') ? normPath(target) : resolveRelative(record.path, target);
   const hit = locator.exact.get(`${workspace.id}::${resolvedPath}`);
-  return hit ? { state: 'resolved', record: hit, method: 'relative-path' } : { state: 'unresolved', candidates: [] };
+  return exactCandidateResult(hit || [], 'relative-path');
 }
 
 function exactCandidateResult(candidates, method) {
@@ -207,7 +214,7 @@ function resolveRelative(currentPath, target) {
   const base = normPath(currentPath).split('/'); base.pop();
   for (const part of normPath(target).split('/')) {
     if (!part || part === '.') continue;
-    if (part === '..') base.pop(); else base.push(part);
+    if (part === '..') { if (!base.length) return ''; base.pop(); } else base.push(part);
   }
   return base.join('/');
 }

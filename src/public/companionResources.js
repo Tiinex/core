@@ -54,7 +54,15 @@ export function resolveCompanionResources(input = {}) {
     findings.push(finding('info', 'companion.resource.missing', 'No registered companion resource matched the qualified query.', query));
   } else if (cardinality === 'multiple') {
     status = 'resolved';
-    resources = stableUnique(finalists, resourceIdentity);
+    const groups = new Map();
+    for (const candidate of candidates) { const key = candidate.key || candidate.path || candidate.id; const values = groups.get(key) || []; values.push(candidate); groups.set(key, values); }
+    for (const [key, values] of [...groups].sort(([a], [b]) => codePoint(a, b))) {
+      const first = values[0];
+      const tied = stableUnique(values.filter(v => v.specificity === first.specificity && v.providerPrecedence === first.providerPrecedence), resourceIdentity);
+      if (tied.length !== 1) { status = 'ambiguous'; findings.push(finding('error', 'companion.collection.key.ambiguous', 'A collection key has conflicting equally ranked resources.', { key })); }
+      else resources.push(tied[0]);
+    }
+    if (status === 'ambiguous') resources = [];
   } else {
     const unique = stableUnique(finalists, resourceIdentity);
     if (unique.length === 1) {
@@ -135,7 +143,7 @@ export function companionProviderFromWorkspace(workspace = {}, options = {}) {
 
 export function parseCompanionFilename(path = '') {
   const name = normPath(path).split('/').at(-1) || '';
-  const match = name.match(/^(.*?)\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)(?:\.([a-z0-9][a-z0-9_-]*))?\.([a-z0-9]+)$/i);
+  const match = name.match(/^(.*)\.([a-z0-9][a-z0-9_-]*)\.([a-z0-9][a-z0-9_-]*)(?:\.(many|multiple))?\.([a-z0-9]+)$/i);
   if (!match) return null;
   // The common form is owner.namespace.slot.ext. Optional cardinality token may be
   // `many`/`multiple`; arbitrary extra tokens are treated as part of the slot so
@@ -154,9 +162,11 @@ function normalizeResource(resource = {}, provider = {}) {
   const owner = normalizeOwner(resource.owner || {});
   const cardinality = text(resource.cardinality || 'single').toLowerCase() === 'multiple' ? 'multiple' : 'single';
   const path = normPath(resource.path || '');
+  if (path.split('/').includes('..') || /^(?:[a-z]:|\/)/i.test(text(resource.path))) throw new TypeError('Companion path must be relative and stay inside its provider.');
   const id = text(resource.id || `${provider.providerId}:${namespace}:${slot}:${ownerIdentity(owner)}:${path || provider.index}`);
   return freeze({
     id,
+    key: text(resource.key || ''),
     namespace,
     slot,
     cardinality,
@@ -176,6 +186,7 @@ function normalizeOwner(owner = {}) {
   const kind = text(owner.kind || 'root').toLowerCase();
   if (kind === 'artifact') return freeze({ kind, workspaceId: text(owner.workspaceId), artifactPath: normPath(owner.artifactPath || owner.path || '') });
   if (kind === 'schema') return freeze({ kind, schemaId: text(owner.schemaId || owner.id) });
+  if (kind !== 'root') throw new TypeError('Unsupported companion owner kind.');
   return freeze({ kind: 'root', schemaId: text(owner.schemaId || '') });
 }
 

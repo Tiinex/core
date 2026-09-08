@@ -26,11 +26,11 @@ test('same specificity uses deployment override precedence', () => {
   assert.equal(result.resources[0].providerId, 'site');
 });
 
-test('collection slots append only within selected specificity and precedence', () => {
+test('collection slots append distinct resource keys across provider layers', () => {
   const result = resolveCompanionResources({ providers: [verse, site], query: { namespace: 'playthings', slot: 'props', cardinality: 'multiple', owner: { kind: 'schema', schemaId: 'tiinex.task.v1' }, schemaLineage: ['tiinex.task.v1'] } });
   assert.equal(result.status, 'resolved');
-  assert.equal(result.resources.length, 1);
-  assert.equal(result.resources[0].providerId, 'site');
+  assert.equal(result.resources.length, 2);
+  assert.deepEqual(new Set(result.resources.map(r => r.providerId)), new Set(['site', 'playthings']));
 });
 
 test('equal single-value conflicts fail closed', () => {

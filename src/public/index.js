@@ -12,3 +12,5 @@ export {
   companionProviderFromWorkspace,
   parseCompanionFilename
 } from './companionResources.js';
+
+export { projectSchemaAncestry } from './schemaAncestry.js';
