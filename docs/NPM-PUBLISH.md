@@ -50,6 +50,8 @@ npm ci
 npm run publish:bootstrap
 ```
 
+`publish:bootstrap` is a historical release-script name meaning **first npm publication**. It is unrelated to Tiinex carrier, schema or Interop bootstrap responsibilities; later cleanup may expose a clearer alias without changing release semantics.
+
 Bootstrap-kommandot kräver master, ren källa och ett hittills opublicerat paket.
 Det kör paketets `validate` eller `check`, packar ett separat release-träd och
 publicerar första stabila versionen på `latest` med ditt konto/2FA. Källornas

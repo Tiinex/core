@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { projectApplicationData, toPlaythingsStoryRecords, projectSchemaAncestry, defineCompanionProvider, resolveCompanionResources, parseCompanionFilename } from '../src/public/index.js';
+import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../src/transitions/record.transitions.js';
+import { normalizeParentReference } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
+import { normalizePackageParentWorkspaceAliases, packageParentWorkspaceSupersededByCurrent } from '../src/tooling/portable/adapters/node/handoff.manufacture.packageParent.js';
 const root = '# Continuity Context\n\n- Current\n  - Current Schema: tiinex.task.v1\n  - Created At: 2026-09-08 10:00:00\n\n---\n\n# Root\n';
 test('missing material is not promoted to a semantic root', () => {
  const data=projectApplicationData({workspaces:[{id:'w',records:[{path:'x.md',createdAt:'2026-09-08 10:00:00'}]}]});
@@ -31,4 +34,43 @@ test('keyed append is stable across registration order and overrides only matchi
  const query={namespace:'p',slot:'props',owner:{kind:'root'},cardinality:'multiple'};
  const a=resolveCompanionResources({providers,query}); const b=resolveCompanionResources({providers:[...providers].reverse(),query});
  assert.equal(a.status,'resolved');assert.deepEqual(a.resources.map(x=>x.path),['custom-chair.png','desk.png']);assert.deepEqual(a,b);
+});
+
+
+test('directory-local continuation allocation does not import Parent filename lineage across directories',()=>{
+ const result=allocateContinuationPath({parentRecord:{path:'.topics/example/001-alpha.trace.md'},targetId:'tiinex.task.v1',targetLabel:'Task',title:'First Subarea Task'},{targetDirectory:'.topics/example/subarea',existingPaths:['.topics/example/001-alpha.trace.md']});
+ assert.equal(result.path,'.topics/example/subarea/001-first-subarea-task.trace.md');
+ assert.equal(result.policy.kind,'directory-local-continuation');
+});
+
+test('directory-local allocation advances only from the target directory namespace',()=>{
+ const result=allocateContinuationPath({parentRecord:{path:'.topics/example/009-parent.trace.md'},targetId:'tiinex.task.v1',targetLabel:'Task',title:'Next Local Task'},{targetDirectory:'.topics/example/subarea',existingPaths:['.topics/example/009-parent.trace.md','.topics/other/099-unrelated.trace.md','.topics/example/subarea/001-existing.trace.md']});
+ assert.equal(result.path,'.topics/example/subarea/002-next-local-task.trace.md');
+});
+
+test('same-directory continuation retains local child progression',()=>{
+ const result=allocateContinuationPath({parentRecord:{path:'.topics/example/001-alpha.trace.md'},targetId:'tiinex.task.v1',targetLabel:'Task',title:'Child'},{existingPaths:['.topics/example/001-alpha.trace.md','.topics/example/001-1-existing-child.trace.md']});
+ assert.equal(result.path,'.topics/example/001-2-child.trace.md');
+ assert.equal(result.policy.kind,'same-parent-directory');
+});
+
+test('standalone directory allocation is isolated from sibling directories',()=>{
+ const result=allocateDirectoryArtifactPath({targetDirectory:'.topics/example/subarea',targetId:'tiinex.task.v1',targetLabel:'Task',title:'Local Root'},{existingPaths:['.topics/example/007-parent.trace.md','.topics/another/033-other.trace.md']});
+ assert.equal(result.path,'.topics/example/subarea/001-local-root.trace.md');
+ assert.equal(result.policy.allocationAuthority,'target-directory-local-namespace');
+});
+
+
+test('Workspace-qualified Parent references remain addresses, not local path allocation authority',()=>{
+ assert.equal(normalizeParentReference('business::.topics/initiatives/001-task.trace.md'),'business::.topics/initiatives/001-task.trace.md');
+ assert.equal(normalizeParentReference('../business/.topics/001.trace.md'),'');
+ assert.equal(normalizeParentReference('business::../001.trace.md'),'');
+});
+
+
+test('explicit package-parent Workspace aliases supersede renamed predecessor ids without treating carrier lineage as source authority',()=>{
+ const aliases=normalizePackageParentWorkspaceAliases({playthings:'verse-playthings'});
+ assert.equal(packageParentWorkspaceSupersededByCurrent('playthings',new Set(['verse-playthings']),aliases),true);
+ assert.equal(packageParentWorkspaceSupersededByCurrent('docs',new Set(['verse-playthings']),aliases),false);
+ assert.throws(()=>normalizePackageParentWorkspaceAliases({playthings:'verse-playthings',legacy:'verse-playthings'}),/duplicate-target/);
 });

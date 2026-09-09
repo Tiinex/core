@@ -6,11 +6,13 @@ export function preparePackageParentWorkspaceReuse(input = {}) {
   const bundle = input.bundle || null;
   if (!bundle?.files?.length) return emptyReuse('unavailable');
   const currentIds = new Set([...(input.currentWorkspaceIds || [])].map(normalizeId).filter(Boolean));
+  const workspaceAliases = normalizePackageParentWorkspaceAliases(input.workspaceAliases || input.packageParentWorkspaceAliases || {});
+  for (const alias of workspaceAliases.values()) if (!currentIds.has(alias)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-alias.target-unresolved:${alias}`);
   const inspection = inspectRecipientFacingV2Topology(bundle);
   const declared = declaredPackageWorkspaceBindings(bundle, inspection);
   if (!declared.length) return emptyReuse('unsupported-parent-surface');
   if (inspection.status !== 'valid') throw new Error('portable.handoff-manufacture.package-parent.workspace-provider.invalid');
-  const missing = declared.filter((item) => !currentIds.has(normalizeId(item.workspaceId)));
+  const missing = declared.filter((item) => !packageParentWorkspaceSupersededByCurrent(item.workspaceId, currentIds, workspaceAliases));
   if (!missing.length) return emptyReuse('not-needed');
 
   const providerById = new Map((inspection.workspaceByteProvider?.workspaces || []).map((item) => [normalizeId(item.id), item]));
@@ -39,7 +41,8 @@ export function preparePackageParentWorkspaceReuse(input = {}) {
     workspaceTargets: Object.freeze(workspaceTargets),
     inspectionStatus: inspection.status,
     missingWorkspaceIds: Object.freeze(missing.map((item) => normalizeId(item.workspaceId))),
-    boundary: 'Exact complete Workspace bytes reused from one independently qualified received package parent. Explicit current Workspace roots take precedence by id; parent-carrier placement and lineage remain non-semantic.'
+    workspaceAliases: Object.freeze([...workspaceAliases.entries()].map(([parentWorkspaceId, currentWorkspaceId]) => Object.freeze({ parentWorkspaceId, currentWorkspaceId }))),
+    boundary: 'Exact complete Workspace bytes reused from one independently qualified received package parent. Explicit current Workspace roots take precedence by id, and explicit qualified workspace aliases may supersede a renamed parent-carrier Workspace without carrying stale duplicate source. Parent-carrier placement and lineage remain non-semantic.'
   });
 }
 
@@ -121,8 +124,34 @@ function buildInheritedEnumeration(provider = {}, source = {}) {
   });
 }
 
+export function normalizePackageParentWorkspaceAliases(value = {}) {
+  const entries = Array.isArray(value)
+    ? value.map((item) => [item?.parentWorkspaceId || item?.parent || item?.from, item?.currentWorkspaceId || item?.current || item?.to])
+    : Object.entries(value || {});
+  const out = new Map();
+  const targets = new Set();
+  for (const [parentValue, currentValue] of entries) {
+    const parentWorkspaceId = normalizeId(parentValue);
+    const currentWorkspaceId = normalizeId(currentValue);
+    if (!parentWorkspaceId || !currentWorkspaceId) throw new Error('portable.handoff-manufacture.package-parent.workspace-alias.invalid');
+    if (parentWorkspaceId === currentWorkspaceId) throw new Error(`portable.handoff-manufacture.package-parent.workspace-alias.identity:${parentWorkspaceId}`);
+    if (out.has(parentWorkspaceId)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-alias.duplicate-parent:${parentWorkspaceId}`);
+    if (targets.has(currentWorkspaceId)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-alias.duplicate-target:${currentWorkspaceId}`);
+    out.set(parentWorkspaceId, currentWorkspaceId);
+    targets.add(currentWorkspaceId);
+  }
+  return out;
+}
+
+export function packageParentWorkspaceSupersededByCurrent(parentWorkspaceId = '', currentWorkspaceIds = new Set(), workspaceAliases = new Map()) {
+  const id = normalizeId(parentWorkspaceId);
+  if (currentWorkspaceIds.has(id)) return true;
+  const replacement = workspaceAliases.get(id) || '';
+  return Boolean(replacement && currentWorkspaceIds.has(replacement));
+}
+
 function emptyReuse(state) {
-  return Object.freeze({ state, inherited: Object.freeze([]), workspaceTargets: Object.freeze([]), inspectionStatus: '', missingWorkspaceIds: Object.freeze([]), boundary: 'No package-parent Workspace provider reuse was required.' });
+  return Object.freeze({ state, inherited: Object.freeze([]), workspaceTargets: Object.freeze([]), inspectionStatus: '', missingWorkspaceIds: Object.freeze([]), workspaceAliases: Object.freeze([]), boundary: 'No package-parent Workspace provider reuse was required.' });
 }
 function normalizeId(value = '') { return String(value || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, ''); }
 function mediaTypeForPath(value = '') { const lower = String(value || '').toLowerCase(); if (lower.endsWith('.md')) return 'text/markdown'; if (lower.endsWith('.json')) return 'application/json'; if (/\.(?:m?js|cjs)$/.test(lower)) return 'text/javascript'; if (lower.endsWith('.ts')) return 'text/typescript'; if (lower.endsWith('.css')) return 'text/css'; if (lower.endsWith('.html')) return 'text/html'; if (/\.(?:yml|yaml)$/.test(lower)) return 'text/yaml'; if (lower.endsWith('.txt')) return 'text/plain'; return 'application/octet-stream'; }

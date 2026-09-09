@@ -167,29 +167,59 @@ export function allocateContinuationPath({ parentRecord = {}, targetId = '', tar
   if (explicitPath) return { path: uniqueTransitionPath(explicitPath, occupied), policy: pathPolicyForExplicit(explicitPath) };
   const parentPath = externalWebArtifactUrl(parentRecord) ? '' : canonicalLocalPath(parentRecord.path || parentRecord.sourcePath || parentRecord.sourceTarget?.sourceArtifactPath || '');
   const parentDir = parentDirectory(parentPath) || '.topics';
+  const requestedDir = canonicalLocalPath(options.targetDirectory || options.directory || '');
+  const targetDir = requestedDir || parentDir;
   const parentPrefix = lineagePrefixFromPath(parentPath);
   const labelSlug = slugify(title || parentRecord.title || targetLabel || 'continuation');
   const targetSlug = slugify(targetLabel || labelFromSchemaId(targetId) || 'leaf');
   const extension = '.trace.md';
+  const directoryLocal = Boolean(requestedDir && requestedDir !== parentDir);
   const policy = {
     schema: 'tiinex.transition.path-policy.v1',
-    kind: 'same-parent-directory',
+    kind: directoryLocal ? 'directory-local-continuation' : 'same-parent-directory',
     parentDirectory: parentDir,
+    targetDirectory: targetDir,
     parentPath,
     parentLineagePrefix: parentPrefix,
     labelSlug,
     targetSlug,
-    extension
+    extension,
+    allocationAuthority: directoryLocal ? 'target-directory-local-namespace' : 'same-parent-directory-continuation'
+  };
+  return { path: pathFromPolicy(policy, occupied), policy };
+}
+
+export function allocateDirectoryArtifactPath({ targetDirectory = '.topics', targetId = '', targetLabel = '', title = '' } = {}, options = {}) {
+  const occupied = existingTransitionPaths(options);
+  const explicitPath = canonicalLocalPath(options.path || options.draftPath || '');
+  if (explicitPath) return { path: uniqueTransitionPath(explicitPath, occupied), policy: pathPolicyForExplicit(explicitPath) };
+  const dir = canonicalLocalPath(targetDirectory || '.topics') || '.topics';
+  const labelSlug = slugify(title || targetLabel || labelFromSchemaId(targetId) || 'artifact');
+  const targetSlug = slugify(targetLabel || labelFromSchemaId(targetId) || 'artifact');
+  const extension = '.trace.md';
+  const policy = {
+    schema: 'tiinex.transition.path-policy.v1',
+    kind: 'directory-local-root',
+    targetDirectory: dir,
+    labelSlug,
+    targetSlug,
+    extension,
+    allocationAuthority: 'target-directory-local-namespace'
   };
   return { path: pathFromPolicy(policy, occupied), policy };
 }
 
 function pathFromPolicy(policy = {}, occupied = new Set()) {
-  const dir = canonicalLocalPath(policy.parentDirectory || '.topics') || '.topics';
+  const kind = String(policy.kind || '').trim();
+  const dir = canonicalLocalPath(policy.targetDirectory || policy.parentDirectory || '.topics') || '.topics';
   const extension = String(policy.extension || '.trace.md').startsWith('.') ? String(policy.extension || '.trace.md') : `.${policy.extension}`;
   const labelSlug = slugify(policy.labelSlug || 'continuation');
   const targetSlug = slugify(policy.targetSlug || 'leaf');
   const parentPrefix = String(policy.parentLineagePrefix || '').trim();
+  if (kind === 'directory-local-root' || kind === 'directory-local-continuation') {
+    const rootPrefix = nextDirectoryRootLineagePrefix(dir, occupied);
+    return `${dir}/${rootPrefix}-${labelSlug}.${extension.replace(/^\./, '')}`;
+  }
   if (parentPrefix) {
     const childPrefix = nextChildLineagePrefix(parentPrefix, dir, occupied);
     return `${dir}/${childPrefix}-${labelSlug}.${extension.replace(/^\./, '')}`;
@@ -224,6 +254,25 @@ function lineagePrefixFromPath(path = '') {
   const numeric = name.match(/^(\d+(?:-\d+)*)(?:-|$)/);
   if (numeric && !/^20\d{2}$/.test(numeric[1])) return numeric[1];
   return '';
+}
+
+
+function nextDirectoryRootLineagePrefix(dir = '', occupied = new Set()) {
+  const numbers = [];
+  let width = 3;
+  for (const value of occupied || []) {
+    const canonical = canonicalLocalPath(value);
+    if (parentDirectory(canonical) !== dir) continue;
+    const name = basenameWithoutKnownMarkdownExtension(canonical);
+    const match = name.match(/^(\d+)(?:-|$)/);
+    if (!match || /^20\d{2}$/.test(match[1])) continue;
+    const root = match[1].split('-')[0];
+    if (!/^\d+$/.test(root)) continue;
+    numbers.push(Number(root));
+    width = Math.max(width, root.length);
+  }
+  const next = numbers.length ? Math.max(...numbers) + 1 : 1;
+  return String(next).padStart(width, '0');
 }
 
 function nextChildLineagePrefix(parentPrefix = '', dir = '', occupied = new Set()) {

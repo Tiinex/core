@@ -67,7 +67,8 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     bundle: input.packageParentBundle || null,
     currentWorkspaceIds: [...seenWorkspaceIds],
     parentPackagePath: input.packageParentPath || '',
-    parentPackageSha256: input.packageParentSha256 || ''
+    parentPackageSha256: input.packageParentSha256 || '',
+    workspaceAliases: input.packageParentWorkspaceAliases || input.workspaceAliases || {}
   });
   const additionalEnumerationsPromise = Promise.all(additionalWorkspaceInputs.map(async ({ descriptor, id, root, requestedTitle }) => {
     const enumerated = await enumerateNodeWorkspace(root, {
@@ -168,6 +169,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
         state: String(packageParentReuse.state || ''),
         inspectionStatus: String(packageParentReuse.inspectionStatus || ''),
         inheritedWorkspaceIds: Object.freeze((packageParentReuse.inherited || []).map((item) => String(item.id || ''))),
+        workspaceAliases: Object.freeze([...(packageParentReuse.workspaceAliases || [])].map((item) => Object.freeze({ ...item }))),
         boundary: String(packageParentReuse.boundary || '')
       }),
       carrierProjection: Object.freeze({ requestedRoutes: transportRoutes.length || 1, carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null), carrierProfile: normalizeHandoffCarrierProfile(input.carrierProfile || null), boundary: 'Routes are qualified later against packaged workspace bytes; adapter text is not authority.' })

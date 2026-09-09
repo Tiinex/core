@@ -10,7 +10,7 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
     'Common path (same command for humans and LLMs):',
     `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>]`,
     `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> --continue <workspace-dir>`,
-    `${command} author <workspace-dir> --schema <schema-id> --path <workspace-relative-artifact> --body <body.md> [--parent <workspace-relative-parent>] [--title <title>] [--summary <summary>] [--why <why>]`,
+    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>]`,
     `${command} handoff <workspace-dir>`,
     '',
     `Handoff aliases: ${command} orient <carrier.zip>; ${command} validate <carrier.zip>`,
@@ -20,7 +20,7 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
     '- `orient`, `ground`, and public `handoff` use compact decision-first default projections; add `--full` on the same command for the complete qualified receipt.',
     '- `ground` is read-only; append `--continue <workspace-dir>` only after `grounded-to-act` to materialize the selected carried Workspace and runtime-only `.tiinex/continuation.json`.',
     '- `author` uses continuation state to infer ordinary Parent continuity, seal c14n-v2 integrity, audit, and stage; invalid artifacts are not retained.',
-    '- `handoff` uses continuation state plus the latest qualified authored Handoff to manufacture the canonical return carrier and excludes runtime-only `.tiinex` state. Normal operator completion is one Handoff package plus the exact routing text; markdown-capable hosts render that routing in a fenced code block, and do not emit loose Evidence/Handoff markdown as extra transport payloads.',
+    '- `handoff` uses continuation state plus the latest qualified authored Handoff to manufacture the canonical return carrier and excludes runtime-only `.tiinex` state. When a package parent carries an older Workspace id that has been explicitly renamed, advanced manufacture may bind that predecessor id to a supplied current Workspace with `--package-parent-workspace-aliases`; aliases never infer source identity. Normal operator completion is one Handoff package plus the exact routing text; markdown-capable hosts render that routing in a fenced code block, and do not emit loose Evidence/Handoff markdown as extra transport payloads.',
     '- Remote reads/writes remain explicit host concerns. Tooling operation safety does not create or revoke semantic Task/Handoff authority.',
     '',
     'Use `<common-command> --help` for focused common-path usage. Use `operations` deliberately for the advanced/internal operation catalog.'
@@ -43,9 +43,9 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'author') return [
     'Tiinex portable tooling — author',
     '',
-    `${command} author <workspace-dir> --schema <schema-id> --path <workspace-relative-artifact> --body <body.md> [--parent <workspace-relative-parent>] [--title <title>] [--summary <summary>] [--why <why>]`,
+    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>]`,
     '',
-    'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted, seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. Invalid output is not retained.',
+    'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted. Supply `--path` for an exact requested coordinate or `--directory` to let Tooling allocate inside that directory-local filename namespace. For a Workspace-qualified Parent such as `business::.topics/...`, also supply `--parent-source` so Tooling reads and seals against the exact Parent bytes without treating the foreign address as a local path. Authoring seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. Invalid output is not retained.',
     '',
     `Advanced/internal catalog: ${command} operations`
   ];

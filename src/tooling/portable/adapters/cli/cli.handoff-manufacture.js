@@ -28,6 +28,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   if (!flags.route && handoffPath) flags.route = handoffPath;
   if (!flags.output && !flags['output-dir'] && parsed.surfaceCommand === 'handoff' && continuationState.returnOutputDir) flags['output-dir'] = continuationState.returnOutputDir;
   const materialBindings = await readOptionalJson(flags['material-bindings'] || flags.materials);
+  const packageParentWorkspaceAliases = await readOptionalJson(flags['package-parent-workspace-aliases']);
   const operatorCarrierProfile = await readOptionalJson(flags['carrier-profile']);
   const expectedToolingBootstrap = await readOptionalJson(flags['tooling-bootstrap-manifest']);
   const workspaceDescriptorValue = await readOptionalJson(flags['workspace-roots'] || flags['workspace-descriptors']);
@@ -124,7 +125,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     carrierProfile,
     packageParentBundle,
     packageParentPath: parentPackagePath ? path.resolve(parentPackagePath) : '',
-    packageParentSha256
+    packageParentSha256,
+    packageParentWorkspaceAliases
   }, runtime);
   return {
     input,

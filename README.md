@@ -31,15 +31,15 @@ Source paths intentionally follow the same `src/...` conventions used by other T
 repositories where the concepts match. npm distribution preserves this source layout
 rather than inventing a second directory vocabulary.
 
-## This source checkpoint
+## Current implementation frontier
 
-Not yet release-qualified. The public packages are tested headlessly from local npm archives. A full dependency-equipped React/Vite bundle and rendered external-Verse acceptance remain pending. Publishing is disabled in `.github/release-policy.json`.
+`@tiinex/core` is a published package boundary; package publication does not by itself establish browser/product acceptance or semantic authority. App/Site/Verse integration remains separately qualified by those consumers.
 
-The explicit package export map also exposes the shared module paths used by App. These preserve the mirrored layout, not a second implementation. `tools/tiinex-portable.mjs` is retained as the existing bootstrap entrypoint until the later CLI/Interop extraction.
+The explicit package export map exposes the shared module paths used by App. These preserve the mirrored layout, not a second implementation. `tools/tiinex-portable.mjs` remains a transitional compatibility entrypoint while dedicated CLI/Interop hosts are stabilized. See [`docs/ARCHITECTURE-BOUNDARIES.md`](docs/ARCHITECTURE-BOUNDARIES.md) for the carrier-bootstrap, schema-material and external-Interop split.
 
 Application data is a declared-data projection: parsing and exact reference resolution are not schema validation, integrity verification or authority qualification. Missing Parent evidence remains unresolved. Companion byte access belongs to registered host readers, not automatic filesystem or network permissions.
 
 
-## 2026-09-08 integration frontier
+## npm release frontier
 
-Master-only automatic versioning/publication is implemented through the single Core Node release helper. See `docs/NPM-PUBLISH.md`; release is disabled until `TIINEX_ENABLE_NPM_PUBLISH` and the npm environment are configured. No registry publication was performed by Anchor.
+Master-only automatic versioning/publication is implemented through the Core Node release helper. See `docs/NPM-PUBLISH.md`. OIDC/Trusted Publisher configuration is an external repository/package setting and remains separate from source qualification.

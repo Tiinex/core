@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArtifactMarkdown } from '../../../../artifacts/artifact.parse.js';
 import { buildArtifactCreationContract } from '../../../../schemas/creation.contracts.js';
@@ -8,6 +8,7 @@ import { sha256Hex, utf8Bytes } from '../../../../export/package.bytes.js';
 import { resolveSchemaModule } from '../../../../schemas/resolver.js';
 import { loadNodePortableInput } from '../../input/node.input.js';
 import { runPortableOperation } from '../../operation.catalog.js';
+import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../../../../transitions/record.transitions.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 
@@ -16,21 +17,27 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   const workspaceRoot = path.resolve(String(flags.workspace || parsed.positionals?.[0] || '.'));
   const state = await readContinuationState(workspaceRoot);
   const schemaId = String(flags.schema || '').trim();
-  const artifactRelativePath = normalizeWorkspaceRelativePath(flags.path || parsed.positionals?.[1] || '');
+  const requestedArtifactRelativePath = normalizeWorkspaceRelativePath(flags.path || parsed.positionals?.[1] || '');
+  const targetDirectory = normalizeWorkspaceRelativePath(flags.directory || flags.dir || '');
   const bodyPath = String(flags.body || flags.content || '').trim();
   if (!schemaId) throw new Error('portable.cli.author.schema.required');
-  if (!artifactRelativePath) throw new Error('portable.cli.author.path.required');
+  if (!requestedArtifactRelativePath && !targetDirectory) throw new Error('portable.cli.author.path-or-directory.required');
   if (!bodyPath) throw new Error('portable.cli.author.body.required');
-  const artifactPath = safeWorkspaceTarget(workspaceRoot, artifactRelativePath);
   const bodyMarkdown = (await readFile(path.resolve(bodyPath), 'utf8')).trim();
   if (!bodyMarkdown) throw new Error('portable.cli.author.body.empty');
+  const title = String(flags.title || firstHeading(bodyMarkdown) || state?.roleLabel || schemaId).trim();
 
-  const parentRelativePath = resolveParentRelativePath(flags, state);
-  const parentPath = parentRelativePath ? safeWorkspaceTarget(workspaceRoot, parentRelativePath) : '';
-  const parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentRelativePath, { workspaceRoot, childRelativePath: artifactRelativePath }) : {};
+  const parentReference = resolveParentReference(flags, state);
+  const parentSource = String(flags['parent-source'] || flags['parent-file'] || '').trim();
+  if (isWorkspaceQualifiedReference(parentReference) && !parentSource) throw new Error('portable.cli.author.parent-source.required');
+  if (parentSource && !parentReference) throw new Error('portable.cli.author.parent.required');
+  if (isWorkspaceQualifiedReference(parentReference) && !requestedArtifactRelativePath && !targetDirectory) throw new Error('portable.cli.author.cross-workspace-parent.target-required');
+  const parentPath = parentReference ? (parentSource ? path.resolve(parentSource) : safeWorkspaceTarget(workspaceRoot, parentReference)) : '';
+  const artifactRelativePath = requestedArtifactRelativePath || await allocateArtifactRelativePath({ workspaceRoot, targetDirectory, parentRelativePath: parentReference, schemaId, title });
+  const artifactPath = safeWorkspaceTarget(workspaceRoot, artifactRelativePath);
+  const parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentReference, { workspaceRoot, childRelativePath: artifactRelativePath }) : {};
   const transitionType = String(flags.transition || defaultTransition(schemaId, Boolean(parentPath))).trim();
   const contract = buildArtifactCreationContract({ schemaId, transitionType });
-  const title = String(flags.title || firstHeading(bodyMarkdown) || state?.roleLabel || schemaId).trim();
   const summary = String(flags.summary || title).trim();
   const authors = String(flags.authors || state?.roleLabel || '').trim();
   const why = Object.prototype.hasOwnProperty.call(flags, 'why') ? String(flags.why || '').trim() : '';
@@ -94,7 +101,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
       schema: 'tiinex.portable.common-author.result.v1',
       operation: 'author',
       status: 'qualified',
-      artifact: Object.freeze({ path: artifactRelativePath, absolutePath: artifactPath, schemaId, parentPath: parentRelativePath, selfIntegrity: selfIntegrity.state, written: true }),
+      artifact: Object.freeze({ path: artifactRelativePath, absolutePath: artifactPath, schemaId, parentPath: parentReference, parentSource: parentSource || '', selfIntegrity: selfIntegrity.state, written: true }),
       qualification: Object.freeze({ audit: audit.status, stage: stage.status, exportReady: Boolean(stage?.stagedArtifact?.qualification?.exportReady) }),
       findingSummary: mergeFindingSummaries(audit?.findingSummary, stage?.findingSummary),
       nextAction: schemaId === 'tiinex.handoff.v1'
@@ -186,10 +193,60 @@ async function recoverQualifiedLocalSchemaReferenceAuthority(schemaId, context =
   });
 }
 
-function resolveParentRelativePath(flags = {}, state = {}) {
+async function allocateArtifactRelativePath({ workspaceRoot, targetDirectory, parentRelativePath, schemaId, title } = {}) {
+  const directory = normalizeWorkspaceRelativePath(targetDirectory || (parentRelativePath ? path.posix.dirname(parentRelativePath) : '.topics')) || '.topics';
+  const existingPaths = await directoryArtifactPaths(workspaceRoot, directory);
+  const allocation = parentRelativePath
+    ? allocateContinuationPath({ parentRecord: { path: parentRelativePath }, targetId: schemaId, targetLabel: labelFromSchemaId(schemaId), title }, { targetDirectory: directory, existingPaths })
+    : allocateDirectoryArtifactPath({ targetDirectory: directory, targetId: schemaId, targetLabel: labelFromSchemaId(schemaId), title }, { existingPaths });
+  const allocated = normalizeWorkspaceRelativePath(allocation?.path || '');
+  if (!allocated) throw new Error('portable.cli.author.allocation.unavailable');
+  return allocated;
+}
+
+async function directoryArtifactPaths(workspaceRoot, directory) {
+  const dirPath = safeWorkspaceDirectory(workspaceRoot, directory);
+  let entries = [];
+  try { entries = await readdir(dirPath, { withFileTypes: true }); }
+  catch (error) {
+    if (error?.code === 'ENOENT') return [];
+    throw error;
+  }
+  return entries.filter((entry) => entry.isFile()).map((entry) => `${directory}/${entry.name}`);
+}
+
+function safeWorkspaceDirectory(root, relative) {
+  const normalized = normalizeWorkspaceRelativePath(relative || '.topics') || '.topics';
+  const target = path.resolve(root, normalized);
+  const rel = path.relative(root, target);
+  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) throw new Error(`portable.cli.author.directory.unsafe:${relative}`);
+  return target;
+}
+
+function labelFromSchemaId(id = '') {
+  const tail = String(id || '').split('.').filter(Boolean).slice(-2, -1)[0] || String(id || 'artifact');
+  return tail.charAt(0).toUpperCase() + tail.slice(1);
+}
+
+function resolveParentReference(flags = {}, state = {}) {
   if (flags['no-parent']) return '';
-  if (typeof flags.parent === 'string' && flags.parent.trim()) return normalizeWorkspaceRelativePath(flags.parent);
+  if (typeof flags.parent === 'string' && flags.parent.trim()) return normalizeParentReference(flags.parent);
   return normalizeWorkspaceRelativePath(state?.lastAuthoredPath || state?.selectedHandoffPath || '');
+}
+
+export function normalizeParentReference(value = '') {
+  const raw = String(value || '').trim().replace(/\\/g, '/').replace(/^\.\//, '');
+  if (!raw || raw.startsWith('/') || /^[A-Za-z]:\//.test(raw)) return '';
+  const marker = raw.indexOf('::');
+  if (marker < 0) return normalizeWorkspaceRelativePath(raw);
+  const workspaceId = raw.slice(0, marker).trim();
+  const innerPath = normalizeWorkspaceRelativePath(raw.slice(marker + 2));
+  if (!workspaceId || !/^[A-Za-z0-9._-]+$/.test(workspaceId) || !innerPath) return '';
+  return `${workspaceId}::${innerPath}`;
+}
+
+function isWorkspaceQualifiedReference(value = '') {
+  return /^[A-Za-z0-9._-]+::/.test(String(value || ''));
 }
 
 function defaultTransition(schemaId, hasParent) {
