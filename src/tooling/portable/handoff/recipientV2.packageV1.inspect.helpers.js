@@ -7,6 +7,7 @@ import { parentTrace } from './recipientV2.lineage.js';
 import { finding } from './recipientV2.topology.materials.js';
 import { RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH } from './recipientV2.packageV1.constants.js';
 import { currentSchemaId, decodeUtf8, field, markdownTarget, numericDimension, oneFile, sectionText, unquote } from './recipientV2.packageV1.shared.js';
+import { parseTransportEnvelopeV1, TRANSPORT_ENVELOPE_V1_ROLE, TRANSPORT_ENVELOPE_V1_SCHEMA_ID } from './transportEnvelopeV1.js';
 
 export function validateRouteClosure(routePointers, endpointPointers, participantPointers, caches, workspaces, findings) {
   const roles = new Map([...(endpointPointers || []), ...(participantPointers || [])].map((item) => [item.path, item]));
@@ -55,7 +56,7 @@ function validateNumericParentChain(pointer, roles, cacheByPath, workspace, find
   }
 }
 
-export function deriveVisibleFacts({ markdown = '', schemaId = '', packageContract = null, index = new Map() } = {}) {
+export function deriveVisibleFacts({ file = null, markdown = '', schemaId = '', packageContract = null, index = new Map() } = {}) {
   if (schemaId === 'tiinex.pointer.v1') {
     const visible = parseRecipientV2Pointer(markdown);
     const role = String(visible.role || '');
@@ -83,6 +84,11 @@ export function deriveVisibleFacts({ markdown = '', schemaId = '', packageContra
       return { ...base, workspaceId: workspaceIdForRoute(index, visible.routeId || ''), routeId: visible.routeId || '', endpointRequirementId: visible.endpointRequirementId || '', participantRequirementId: visible.participantRequirementId || '', endpointParty: visible.endpointParty || '', roleLabelHint: visible.roleLabelHint || '', referenceTarget: visible.roleReference || '', targetCarrierKind: visible.targetCarrierKind || '', targetWorkspaceId: visible.targetWorkspaceId || '', archivePath: targetPayload, archiveSha256: payload ? sha256Hex(packageFileBytes(payload)) : '', targetInnerPath: visible.targetInnerPath || '', targetArchiveEntry: visible.targetArchiveEntry || '', targetBytes: Number(entry?.bytes || 0), targetSha256: String(entry?.sha256 || '') };
     }
     return base;
+  }
+  if (schemaId === TRANSPORT_ENVELOPE_V1_SCHEMA_ID) {
+    const visible = parseTransportEnvelopeV1(markdown);
+    const workspaceId = (packageContract?.workspaces || []).find((item) => item.transportEnvelopePath === file?.path)?.workspaceId || '';
+    return { factsFormat: 'portable-recipient-v2', factsVersion: 1, role: TRANSPORT_ENVELOPE_V1_ROLE, workspaceId: String(workspaceId || ''), workspaceArtifactPath: visible.workspaceArtifactPath, protectedPayloadDescriptorPath: visible.protectedPayloadDescriptorPath, workspaceBindingValue: visible.workspaceBindingValue, profileId: visible.profile?.profileId || '', profileVersion: Number(visible.profile?.profileVersion || 0) };
   }
   if (schemaId === 'tiinex.external.payload.v1') {
     const visible = parseRecipientV2ExternalPayload(markdown);
@@ -118,7 +124,7 @@ function parsePayloadMaterials(section = '') {
     if (first) { if (current) out.push(current); current = { requirementId: first[1].trim() }; continue; }
     const match = line.match(/^\s{2}-\s+([^:]+):\s*(.*)$/); if (!current || !match) continue;
     const key = match[1].trim(), value = match[2].trim();
-    if (key === 'Classification') current.classification = value; else if (key === 'Material Reference') current.referenceTarget = value; else if (key === 'Archive Entry') current.archiveEntry = value; else if (key === 'Route Workspace Id') current.routeWorkspaceId = value; else if (key === 'Route Path') current.routePath = value; else if (key === 'Source Requirement Id') current.sourceRequirementId = value; else if (key === 'Original Path') current.originalPath = value; else if (key === 'Byte Size') current.bytes = Number(value || 0); else if (key === 'SHA256') current.sha256 = value;
+    if (key === 'Classification') current.classification = value; else if (key === 'Material Reference') current.referenceTarget = value; else if (key === 'Archive Entry') current.archiveEntry = value; else if (key === 'Route Workspace Id') current.routeWorkspaceId = value; else if (key === 'Route Path') current.routePath = value; else if (key === 'Source Requirement Id') current.sourceRequirementId = value; else if (key === 'Source Workspace Id') current.sourceWorkspaceId = value; else if (key === 'Source Path') current.sourcePath = value; else if (key === 'Target Workspace Id') current.targetWorkspaceId = value; else if (key === 'Target Path') current.targetPath = value; else if (key === 'Original Path') current.originalPath = value; else if (key === 'Byte Size') current.bytes = Number(value || 0); else if (key === 'SHA256') current.sha256 = value;
   }
   if (current) out.push(current);
   return out;

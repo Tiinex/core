@@ -47,6 +47,13 @@ export function roleMaterialTarget(requirement = {}, descriptor = {}, workspaceB
 
 export function detachedMaterial(descriptor, byPath, findings) {
   const out = [];
+  const requirementById = new Map([
+    ...(descriptor.requirements?.required || []),
+    ...(descriptor.requirements?.reference || []),
+    ...(descriptor.requirements?.endpointRoles || []),
+    ...(descriptor.requirements?.participantRoles || []),
+    ...(descriptor.requirements?.dependencies || [])
+  ].map((item) => [String(item.requirementId || ''), item]));
   for (const material of descriptor.materialized || []) {
     if (String(material.carrierKind || '') === 'workspace-archive-entry') continue;
     const file = oneFile(byPath, material.packagePath, findings, 'detached-material');
@@ -54,7 +61,8 @@ export function detachedMaterial(descriptor, byPath, findings) {
     const data = packageFileBytes(file);
     const sha256 = sha256Hex(data);
     if (Number(material.bytes || 0) !== data.byteLength || String(material.sha256 || '') !== sha256) findings.push(finding('error', 'portable.handoff-v2-surface.cache.material-identity-mismatch', 'Detached material bytes diverge from qualified closure identity.', { requirementId: material.requirementId || '' }));
-    out.push(Object.freeze({ requirementId: String(material.requirementId || ''), classification: String(material.classification || ''), referenceTarget: String(material.referenceTarget || ''), routeWorkspaceId: String(material.routeWorkspaceId || ''), routePath: String(material.routePath || ''), sourceRequirementId: String(material.sourceRequirementId || ''), originalPath: String(material.originalPath || ''), bytes: data.byteLength, sha256, data }));
+    const requirement = requirementById.get(String(material.requirementId || '')) || {};
+    out.push(Object.freeze({ requirementId: String(material.requirementId || ''), classification: String(material.classification || ''), referenceTarget: String(material.referenceTarget || ''), routeWorkspaceId: String(material.routeWorkspaceId || ''), routePath: String(material.routePath || ''), sourceRequirementId: String(material.sourceRequirementId || ''), sourceWorkspaceId: String(requirement.sourceWorkspaceId || ''), sourcePath: String(requirement.sourcePath || ''), targetWorkspaceId: String(requirement.targetWorkspaceId || material.provenance?.workspaceId || ''), targetPath: String(requirement.targetPath || material.originalPath || ''), originalPath: String(material.originalPath || ''), bytes: data.byteLength, sha256, data }));
   }
   return out.sort((a, b) => a.requirementId.localeCompare(b.requirementId));
 }

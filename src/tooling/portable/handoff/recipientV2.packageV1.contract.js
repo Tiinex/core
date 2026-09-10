@@ -24,7 +24,7 @@ export function renderHandoffPackageV1(input = {}) {
   const packageRole = [HANDOFF_PACKAGE_ROLE, WORKSPACE_PACKAGE_ROLE].includes(String(input.packageRole || '')) ? String(input.packageRole) : HANDOFF_PACKAGE_ROLE;
   const routeProfile = routeProfileForRole(packageRole);
   const workspaces = input.workspaces || [];
-  const workspaceBlocks = workspaces.map((workspace) => `- ${workspace.workspaceId}\n  - Workspace Id: ${workspace.workspaceId}\n  - Workspace Artifact: [${workspace.workspaceId} Workspace](${workspace.workspacePath})\n  - Snapshot Path: [${workspace.workspaceId} Snapshot](${workspace.archivePath})\n  - Workspace Artifact Inner Path: \`${workspace.sourceWorkspaceTargetInnerPath}\`\n  - Snapshot Kind: exact-workspace-byte-tree-archive\n  - Coverage: complete\n  - Binding State: verified\n  - Integrity Method: sha256\n  - Integrity Value: ${workspace.archiveSha256}\n  - Byte Size: ${workspace.archiveBytes || ''}`.replace(/\n  - Byte Size: $/, '')).join('\n');
+  const workspaceBlocks = workspaces.map((workspace) => renderWorkspaceBinding(workspace)).join('\n');
   const unsigned = `# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${RECIPIENT_V2_ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.handoff.package.v1](${RECIPIENT_V2_PACKAGE_V1_SCHEMA_TARGET})\n  - Created At: ${createdAt}\n  - Summary: Recipient-facing self-contained Handoff carrier identity, discovery, exact complete Workspace snapshot bindings, and fail-closed qualification boundary.\n\n---\n\n# Handoff Package\n\n## Package Identity\n\n- Package Role: ${packageRole}\n- Carrier Kind: self-contained\n\n## Bootstrap Exposure\n\n- Start Artifact: [Start](${input.startPath || RECIPIENT_V2_READ_PATH})\n${input.bootstrapPath ? `- Tooling Bootstrap Descriptor: [Bootstrap](${input.bootstrapPath})\n` : '- Tooling Bootstrap Descriptor: [Bootstrap](001-2-bootstrap.trace.md)\n'}- Bootstrap Rule: start-then-qualified-bootstrap\n\n## Workspace Snapshot Bindings\n\n${workspaceBlocks || '- none'}\n\n## Route Discovery\n\n- Route Placement Rule: ${routeProfile.routePlacementRule}\n- Continue-From Rule: ${routeProfile.continueFromRule}\n- Pre-Handoff Closure Rule: ${routeProfile.preHandoffClosureRule}\n\n## Carrier Continuity\n\n- Carrier Dimension: ${String(lineage.dimension || '001')}\n${lineage.parentDimension ? `- Parent Carrier Dimension: ${String(lineage.parentDimension)}\n` : ''}- Carrier Checkpoint: ${String(lineage.checkpointKind || 'progression')}\n${lineage.majorReason ? `- Major Reason: ${String(lineage.majorReason)}\n` : ''}- Carrier Profile Id: ${carrierProfile.id || 'none'}\n- Required Major Workspace Ids: ${carrierProfile.requiredMajorWorkspaceIds.length ? carrierProfile.requiredMajorWorkspaceIds.join(', ') : 'none'}\n\n## Qualification Boundary\n\n- Receiver Qualification: reverify-carried-authority-and-bytes\n- Failure Policy: fail-closed\n- Derived Inventory Authority: none\n\n## Interpretation Limits\n\n- Does Not Mean: package placement, discovery ancestry, or byte integrity creates Handoff, Workspace, Role, participation, acceptance, provenance, or Parent authority\n- Must Not Be Used To Claim: carrier convenience metadata overrides the authoritative contained artifacts or exact qualified source bytes\n- Generic Payload Boundary: bootstrap/cache payloads retain explicit External Payload ownership when required; complete Workspace snapshot binding is package-local only\n- Generic Representation Boundary: bounded, partial, independently selectable, multi-representation, or external-lifecycle Workspace representations require the generic Workspace Representation contract\n- Carrier Profile Boundary: required Workspace identifiers come only from the explicit carrier profile; literal project Workspace names have no generic semantic meaning\n\n---\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: pending\n`;
   const sealed = sealC14nV2Self(unsigned);
   if (sealed.state !== 'sealed') throw new Error(`portable.handoff-package-v1.integrity.seal-failed:${sealed.reason || sealed.state}`);
@@ -58,6 +58,7 @@ export function validatePackageFields(value, findings) {
   for (const [key, expected] of exact) if (String(value?.[key] || '') !== expected) findings.push(finding('error', `portable.handoff-package-v1.field.${key}.invalid`, 'Handoff package v1 required closed-domain field is missing or invalid.', { field: key, expected, observed: String(value?.[key] || '') }));
   if (!value?.startPath || !value?.bootstrapPath) findings.push(finding('error', 'portable.handoff-package-v1.bootstrap-exposure-invalid', 'Start Artifact and Tooling Bootstrap Descriptor must be package-local links.'));
   if (!Array.isArray(value?.workspaces) || !value.workspaces.length) findings.push(finding('error', 'portable.handoff-package-v1.workspace-bindings-missing', 'Handoff package v1 requires at least one complete Workspace snapshot binding.'));
+  for (const binding of value?.workspaces || []) validateWorkspaceBinding(binding, findings);
   if (!validCarrierDimension(value?.carrierDimension)) findings.push(finding('error', 'portable.handoff-package-v1.carrier-dimension-invalid', 'Carrier Dimension must be a canonical numeric hyphen path.', { value: value?.carrierDimension || '' }));
   if (value?.parentCarrierDimension && !validCarrierDimension(value.parentCarrierDimension)) findings.push(finding('error', 'portable.handoff-package-v1.parent-carrier-dimension-invalid', 'Parent Carrier Dimension must be a canonical numeric hyphen path.', { value: value.parentCarrierDimension || '' }));
   if (!['progression', 'major'].includes(String(value?.carrierCheckpoint || ''))) findings.push(finding('error', 'portable.handoff-package-v1.carrier-checkpoint-invalid', 'Carrier Checkpoint must be progression or major.'));
@@ -82,17 +83,45 @@ function parseWorkspaceBindings(text = '') {
       if (key === 'Workspace Id') current.workspaceId = value;
       else if (key === 'Workspace Artifact') current.workspaceArtifactPath = markdownTarget(value);
       else if (key === 'Snapshot Path') current.snapshotPath = markdownTarget(value);
+      else if (key === 'Protected Payload Descriptor') current.protectedPayloadDescriptorPath = markdownTarget(value);
+      else if (key === 'Transport Envelope') current.transportEnvelopePath = markdownTarget(value);
       else if (key === 'Workspace Artifact Inner Path') current.workspaceArtifactInnerPath = unquote(value);
       else if (key === 'Snapshot Kind') current.snapshotKind = value;
       else if (key === 'Coverage') current.coverage = value;
       else if (key === 'Binding State') current.bindingState = value;
       else if (key === 'Integrity Method') current.integrityMethod = value;
       else if (key === 'Integrity Value') current.integrityValue = value;
+      else if (key === 'Protection State') current.protectionState = value;
+      else if (key === 'Post-Open Correlation Rule') current.postOpenCorrelationRule = value;
       else if (key === 'Byte Size') current.byteSize = /^\d+$/.test(value) ? Number(value) : null;
     }
     out.push(current);
   }
   return out.map((item) => Object.freeze({ ...item, byteSize: item.byteSize ?? null }));
+}
+
+
+function renderWorkspaceBinding(workspace = {}) {
+  const sealed = String(workspace.snapshotKind || '') === 'password-sealed-workspace-byte-tree' || String(workspace.bindingState || '') === 'sealed';
+  if (sealed) return `- ${workspace.workspaceId}\n  - Workspace Id: ${workspace.workspaceId}\n  - Workspace Artifact: [${workspace.workspaceId} Workspace](${workspace.workspacePath})\n  - Protected Payload Descriptor: [${workspace.workspaceId} Protected Payload](${workspace.protectedPayloadDescriptorPath})\n  - Transport Envelope: [${workspace.workspaceId} Transport Envelope](${workspace.transportEnvelopePath})\n  - Snapshot Kind: password-sealed-workspace-byte-tree\n  - Coverage: complete\n  - Binding State: sealed\n  - Protection State: password-sealed\n  - Post-Open Correlation Rule: unique-exact-workspace-artifact-byte-match`;
+  return `- ${workspace.workspaceId}\n  - Workspace Id: ${workspace.workspaceId}\n  - Workspace Artifact: [${workspace.workspaceId} Workspace](${workspace.workspacePath})\n  - Snapshot Path: [${workspace.workspaceId} Snapshot](${workspace.archivePath})\n  - Workspace Artifact Inner Path: \`${workspace.sourceWorkspaceTargetInnerPath}\`\n  - Snapshot Kind: exact-workspace-byte-tree-archive\n  - Coverage: complete\n  - Binding State: verified\n  - Integrity Method: sha256\n  - Integrity Value: ${workspace.archiveSha256}\n  - Byte Size: ${workspace.archiveBytes || ''}`.replace(/\n  - Byte Size: $/, '');
+}
+
+function validateWorkspaceBinding(binding = {}, findings = []) {
+  const workspaceId = String(binding.workspaceId || '');
+  if (!workspaceId || !binding.workspaceArtifactPath || String(binding.coverage || '') !== 'complete') findings.push(finding('error', 'portable.handoff-package-v1.workspace-binding-common-invalid', 'Workspace binding requires Workspace Id, Workspace Artifact, and complete coverage.', { workspaceId }));
+  const kind = String(binding.snapshotKind || '');
+  if (kind === 'exact-workspace-byte-tree-archive') {
+    if (String(binding.bindingState || '') !== 'verified' || !binding.snapshotPath || !binding.workspaceArtifactInnerPath || String(binding.integrityMethod || '') !== 'sha256' || !/^[0-9a-f]{64}$/.test(String(binding.integrityValue || ''))) findings.push(finding('error', 'portable.handoff-package-v1.workspace-binding-clear-invalid', 'Clear Workspace binding requires exact complete verified sha256 snapshot fields.', { workspaceId }));
+    if (binding.protectedPayloadDescriptorPath || binding.transportEnvelopePath || binding.protectionState || binding.postOpenCorrelationRule) findings.push(finding('error', 'portable.handoff-package-v1.workspace-binding-clear-sealed-fields-forbidden', 'Clear Workspace binding must not expose sealed-only binding fields.', { workspaceId }));
+    return;
+  }
+  if (kind === 'password-sealed-workspace-byte-tree') {
+    if (String(binding.bindingState || '') !== 'sealed' || !binding.protectedPayloadDescriptorPath || !binding.transportEnvelopePath || String(binding.protectionState || '') !== 'password-sealed' || String(binding.postOpenCorrelationRule || '') !== 'unique-exact-workspace-artifact-byte-match') findings.push(finding('error', 'portable.handoff-package-v1.workspace-binding-sealed-invalid', 'Sealed Workspace binding requires exact password-sealed binding fields.', { workspaceId }));
+    if (binding.snapshotPath || binding.workspaceArtifactInnerPath || binding.integrityMethod || binding.integrityValue) findings.push(finding('error', 'portable.handoff-package-v1.workspace-binding-sealed-clear-fields-forbidden', 'Sealed Workspace binding must not expose clear snapshot path, inner Workspace path, or duplicated payload integrity fields.', { workspaceId }));
+    return;
+  }
+  findings.push(finding('error', 'portable.handoff-package-v1.workspace-binding-kind-invalid', 'Workspace binding Snapshot Kind is unsupported.', { workspaceId, snapshotKind: kind }));
 }
 
 function normalizeProfileId(value = '') {

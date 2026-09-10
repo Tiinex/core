@@ -16,13 +16,26 @@ export function releasePlan({pkg,metadata,sourceCommit,messages=[],previousPacka
  if(metadata?.versions?.[decision.targetVersion])throw Error('release.version.collision');
  return {policy:RELEASE_POLICY,action:'publish',name:pkg.name,version:decision.targetVersion,previousVersion:last?.version||null,previousCommit:last?.tiinexRelease?.sourceCommit||last?.gitHead||null,sourceCommit,decision};
 }
+export function publishedArchiveState(metadata,{version,integrity}) {
+ const published=metadata?.versions?.[version];
+ if(!published)return {status:'absent',published:null};
+ if(published.dist?.integrity!==integrity)return {status:'collision',published};
+ return {status:'exact',published};
+}
 export function assertPublishContext(env,repository) {
  if(env.GITHUB_ACTIONS!=='true'||!['push','workflow_dispatch'].includes(env.GITHUB_EVENT_NAME)||env.GITHUB_REF!=='refs/heads/master'||env.GITHUB_REPOSITORY!==repository)throw Error('release.master-only: publishing requires this repository on refs/heads/master');
  if(env.TIINEX_ENABLE_NPM_PUBLISH!=='true')throw Error('release.not-enabled');
 }
-export async function readRegistry(name,{fetcher=globalThis.fetch}={}) {
- const response=await fetcher(`https://registry.npmjs.org/${encodeURIComponent(name)}`,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(30000)});
- if(response.status===404)return {name,versions:{}};
- if(!response.ok)throw Error(`release.registry.failure:${response.status}`);
- const data=await response.json();if(data.name!==name||!data.versions||typeof data.versions!=='object')throw Error('release.registry.invalid-response');return data;
+export async function readRegistry(name,{fetcher=globalThis.fetch,attempts=1,retryDelayMs=250,sleeper=(ms)=>new Promise(resolve=>setTimeout(resolve,ms))}={}) {
+ const count=Math.max(1,Number.isInteger(attempts)?attempts:1);
+ for(let attempt=1;attempt<=count;attempt+=1){
+  const response=await fetcher(`https://registry.npmjs.org/${encodeURIComponent(name)}`,{headers:{Accept:'application/json','Cache-Control':'no-cache'},signal:AbortSignal.timeout(30000)});
+  if(response.status===404){
+   if(attempt<count){await sleeper(Math.max(0,retryDelayMs)*attempt);continue;}
+   return {name,versions:{}};
+  }
+  if(!response.ok)throw Error(`release.registry.failure:${response.status}`);
+  const data=await response.json();if(data.name!==name||!data.versions||typeof data.versions!=='object')throw Error('release.registry.invalid-response');return data;
+ }
+ return {name,versions:{}};
 }

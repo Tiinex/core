@@ -15,6 +15,7 @@ import {
 } from './handoff.manufacture.requirements.js';
 import {
   expandBoundedParentBoundaryClosure,
+  expandRouteParentBoundaryClosure,
   normalizeWorkspaceScopes,
   normalizeWorkspaceTargetBindings,
   projectBoundedWorkspaceMaterialization
@@ -68,6 +69,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     currentWorkspaceIds: [...seenWorkspaceIds],
     parentPackagePath: input.packageParentPath || '',
     parentPackageSha256: input.packageParentSha256 || '',
+    workspaceIds: input.packageParentWorkspaceIds || input.reusePackageParentWorkspaceIds || [],
     workspaceAliases: input.packageParentWorkspaceAliases || input.workspaceAliases || {}
   });
   const additionalEnumerationsPromise = Promise.all(additionalWorkspaceInputs.map(async ({ descriptor, id, root, requestedTitle }) => {
@@ -114,6 +116,11 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     workspaceEnumerations.push(Object.freeze({ id, root: '', evidence: inheritedEnumeration.evidence, provider: 'qualified-package-parent-workspace' }));
     workspaceRuntimeById.set(id, Object.freeze({ id, root: '', enumeration: inheritedEnumeration, provider: 'qualified-package-parent-workspace' }));
   }
+  for (const provided of packageParentReuse.providers || []) {
+    const id = safeWorkspaceToken(provided.id || provided.enumeration?.materialization?.id || '');
+    if (!id || workspaceRuntimeById.has(id)) continue;
+    workspaceRuntimeById.set(id, Object.freeze({ id, root: '', enumeration: provided.enumeration, provider: 'qualified-package-parent-workspace-material-provider' }));
+  }
   const transportRoutes = Object.freeze([...(input.transportRoutes || input.handoffRoutes || [])].map((route) => normalizeTransportRoute(route, workspaceId)).filter(Boolean));
   const workspaceTargets = mergeWorkspaceTargetBindings(normalizeWorkspaceTargetBindings({
     primaryWorkspaceId: workspaceId,
@@ -137,6 +144,9 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   const dependencyClosure = await expandPointerDependencyClosure({ requirements, materials, workspaceRuntimeById, bindings: input.materialBindings || {} });
   requirements = dependencyClosure.requirements;
   materials = dependencyClosure.materials;
+  const routeParentBoundaryClosure = expandRouteParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById, routeSpecs });
+  requirements = routeParentBoundaryClosure.requirements;
+  materials = routeParentBoundaryClosure.materials;
   const parentBoundaryClosure = expandBoundedParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById });
   requirements = parentBoundaryClosure.requirements;
   materials = parentBoundaryClosure.materials;
@@ -167,7 +177,11 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
       toolingBootstrap: toolingBootstrap.summary,
       packageParentWorkspaceReuse: Object.freeze({
         state: String(packageParentReuse.state || ''),
+        providerState: String(packageParentReuse.providerState || ''),
         inspectionStatus: String(packageParentReuse.inspectionStatus || ''),
+        selectionMode: String(packageParentReuse.selectionMode || ''),
+        requestedWorkspaceIds: Object.freeze([...(packageParentReuse.requestedWorkspaceIds || [])].map(String)),
+        providerWorkspaceIds: Object.freeze([...(packageParentReuse.providerWorkspaceIds || [])].map(String)),
         inheritedWorkspaceIds: Object.freeze((packageParentReuse.inherited || []).map((item) => String(item.id || ''))),
         workspaceAliases: Object.freeze([...(packageParentReuse.workspaceAliases || [])].map((item) => Object.freeze({ ...item }))),
         boundary: String(packageParentReuse.boundary || '')

@@ -14,3 +14,24 @@ export {
 } from './companionResources.js';
 
 export { projectSchemaAncestry } from './schemaAncestry.js';
+export {
+  SECURE_TRANSPORT_V1_PROFILE,
+  SECURE_TRANSPORT_V1_ENVELOPE_CONTRACT,
+  qualifySecureTransportV1Envelope,
+  sealPasswordWorkspacePayload,
+  openPasswordWorkspacePayload,
+  replacePasswordWorkspaceRecipients,
+  secureTransportV1AuthenticatedMetadata
+} from '../transport/secureTransportV1.js';
+
+export {
+  PORTABLE_SOURCE_FRONTIER_SCHEMA_ID,
+  PORTABLE_SOURCE_FRONTIER_COMPARISON_SCHEMA_ID,
+  PORTABLE_SOURCE_FRONTIER_SUMMARY_SCHEMA_ID,
+  createPortableSourceFrontier,
+  createPortableWorkspaceSnapshot,
+  comparePortableSourceFrontiers,
+  reconcilePortableSourceFrontiers,
+  compareOrReconcilePortableSourceFrontiers,
+  projectPortableSourceFrontierComparisonSummary
+} from '../tooling/portable/comparison/sourceFrontierComparison.js';

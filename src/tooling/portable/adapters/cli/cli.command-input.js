@@ -10,6 +10,7 @@ import { prepareQualifyColdStartCommandInput } from './cli.cold-start-input.js';
 import { reductionPreflightCliInput } from './cli.reduction-input.js';
 import {land} from './cli.land.js';
 import { OPERATIONS_WITHOUT_EXPLICIT_MATERIAL } from './cli.material-policy.js';
+import { prepareSourceFrontierComparisonCliInput } from './cli.source-frontier-comparison.js';
 
 export async function commandInput(parsed, runtime = {}) {
   const flags = parsed.flags;
@@ -137,6 +138,8 @@ export async function commandInput(parsed, runtime = {}) {
     const prior = await readOptionalJson(flags.prior || flags.previous);
     return { input: { plan: plan.result || plan, receipt: receipt.result || receipt, priorAcceptance: prior.result || prior }, options: {} };
   }
+
+  if (parsed.command === 'compare-source-frontiers') return prepareSourceFrontierComparisonCliInput(parsed, flags);
 
   if (parsed.command === 'manufacture-handoff-package') {
     return prepareHandoffManufactureCliCommand(parsed, runtime);

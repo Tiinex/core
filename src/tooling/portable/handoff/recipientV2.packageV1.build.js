@@ -1,9 +1,9 @@
 import { finalizeFile } from '../../../export/package.fileMap.js';
-import { packageFileByteView } from '../../../export/package.bytes.js';
+import { packageFileByteView, sha256Hex } from '../../../export/package.bytes.js';
 import { exportFileMapZipUint8Array } from '../../../export/package.zip.js';
 import { qualifyHandoffWorkspaceTarget } from './workspaceTargetConformance.js';
 import { inspectStoredWorkspaceArchive } from './workspaceByteProvider.js';
-import { renderRecipientV2ExternalPayload, renderRecipientV2Pointer } from './recipientV2.artifacts.js';
+import { RECIPIENT_V2_EXTERNAL_PAYLOAD_SCHEMA_TARGET, renderRecipientV2ExternalPayload, renderRecipientV2Pointer } from './recipientV2.artifacts.js';
 import { RECIPIENT_V2_READ_PATH } from './recipientV2.topology.js';
 import { RECIPIENT_V2_ROUTE_SELECTION_AUTHORITY, RECIPIENT_V2_SIBLING_ROUTE_INFERENCE, recipientV2EntryCurrentRead } from './recipientV2.entryContract.js';
 import { recipientV2TransportFacts } from './recipientV2.transportManifest.js';
@@ -14,8 +14,18 @@ import { RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH, R
 import { renderHandoffPackageV1 } from './recipientV2.packageV1.contract.js';
 import { inspectRecipientFacingV2PackageV1 } from './recipientV2.packageV1.inspect.js';
 import { blocked, deepFreeze, exactFile, workspaceSchemaTarget } from './recipientV2.packageV1.shared.js';
+import { sealPasswordWorkspacePayload } from '../../../transport/secureTransportV1.js';
+import { renderTransportEnvelopeV1, TRANSPORT_ENVELOPE_V1_ROLE } from './transportEnvelopeV1.js';
 
-export function buildRecipientFacingV2PackageV1(input = {}) {
+export function buildRecipientFacingV2PackageV1(input = {}) { return buildRecipientFacingV2PackageV1Prepared(input, new Map()); }
+
+export async function buildRecipientFacingV2PackageV1Secure(input = {}) {
+  const prepared = await prepareSealedWorkspaceBindings(input);
+  if (prepared.status !== 'ready') return prepared;
+  return buildRecipientFacingV2PackageV1Prepared(input, prepared.byWorkspaceId);
+}
+
+function buildRecipientFacingV2PackageV1Prepared(input = {}, sealedByWorkspaceId = new Map()) {
   const sourceSurface = input.sourceSurface || null;
   const descriptor = input.descriptor || input.bundle?.handoffClosure || {};
   const carrier = input.carrierProjection || {};
@@ -29,10 +39,11 @@ export function buildRecipientFacingV2PackageV1(input = {}) {
   const route = selected[0];
   const sourceWorkspaceById = new Map((sourceSurface.topology?.workspaces || []).map((item) => [String(item.workspaceId || ''), item]));
   const sourceByPath = new Map((sourceSurface.files || []).map((file) => [String(file.path || ''), file]));
-  // The package-v1 carrier preserves the complete inherited Workspace source chain.
-  // Route closure remains selected and minimal, but complete package-local Workspace
-  // bindings are not pruned merely because one carried Workspace is not on the
-  // selected Handoff's pre-Handoff closure.
+  // The package-v1 carrier preserves every complete Workspace source explicitly
+  // selected for carriage. Route closure remains selected and minimal, but an
+  // explicitly carried Workspace is not pruned merely because it is outside the
+  // selected Handoff's pre-Handoff closure. Qualified package-parent Workspaces
+  // used only as read-only requirement providers remain detached closure material.
   const workspaceIds = [...sourceWorkspaceById.keys()].filter(Boolean).sort();
   const workspacePlans = workspaceIds.map((workspaceId, index) => Object.freeze({ workspaceId, ordinal: index + 3, prefix: `001-${index + 3}`, slug: safeToken(workspaceId) }));
   const files = [];
@@ -54,18 +65,33 @@ export function buildRecipientFacingV2PackageV1(input = {}) {
     const targetQualification = qualifyHandoffWorkspaceTarget({ targetPath: innerPath, targetData, entries: parsed.entries || [] });
     if (targetQualification.state !== 'qualified') { findings.push(finding('error', 'portable.handoff-package-v1.workspace.target-unqualified', 'Exact Workspace artifact bytes inside the snapshot do not qualify.', { workspaceId: plan.workspaceId, reasons: targetQualification.reasons || [] })); continue; }
     const workspacePath = `${plan.prefix}-${plan.slug}.workspace.md`;
-    const archivePath = `${plan.prefix}-${plan.slug}.workspace.zip`;
     const workspaceFile = exactFile(workspacePath, targetData, 'recipient-v2-package-v1-exact-workspace-artifact', 'text/markdown');
-    const archiveFile = exactFile(archivePath, archiveData, 'recipient-v2-package-v1-complete-workspace-snapshot', 'application/zip');
-    files.push(workspaceFile, archiveFile);
+    files.push(workspaceFile);
     const parent = recipientV2ParentAuthority(workspaceFile, 'tiinex.workspace.v1', workspaceSchemaTarget(targetQualification), createdAt);
-    const projection = Object.freeze({
-      workspaceId: plan.workspaceId, ordinal: plan.ordinal, workspacePath, workspaceSha256: workspaceFile.sha256,
-      archivePath, archiveSha256: archiveFile.sha256, sourceWorkspaceTargetInnerPath: innerPath,
-      sourceWorkspaceTargetSha256: workspaceFile.sha256, sourceWorkspaceTargetBytes: workspaceFile.bytes, coverage: 'complete'
-    });
-    topology.workspaces.push(projection);
-    workspaceById.set(plan.workspaceId, { ...projection, file: workspaceFile, parent });
+    const sealedPrepared = sealedByWorkspaceId.get(plan.workspaceId) || null;
+    if (sealedPrepared) {
+      const protectedPayloadPath = `${plan.prefix}-${plan.slug}.protected.bin`;
+      const protectedPayloadDescriptorPath = `${plan.prefix}-${plan.slug}.protected-payload.trace.md`;
+      const transportEnvelopePath = `${plan.prefix}-${plan.slug}.transport-envelope.trace.md`;
+      const projection = Object.freeze({
+        workspaceId: plan.workspaceId, ordinal: plan.ordinal, workspacePath, workspaceSha256: workspaceFile.sha256,
+        snapshotKind: 'password-sealed-workspace-byte-tree', bindingState: 'sealed', protectedPayloadPath, protectedPayloadDescriptorPath, transportEnvelopePath,
+        protectedPayloadBytes: sealedPrepared.protectedPayload.byteLength, sourceWorkspaceTargetSha256: workspaceFile.sha256, sourceWorkspaceTargetBytes: workspaceFile.bytes, coverage: 'complete'
+      });
+      topology.workspaces.push(projection);
+      workspaceById.set(plan.workspaceId, { ...projection, file: workspaceFile, parent, sealed: true });
+    } else {
+      const archivePath = `${plan.prefix}-${plan.slug}.workspace.zip`;
+      const archiveFile = exactFile(archivePath, archiveData, 'recipient-v2-package-v1-complete-workspace-snapshot', 'application/zip');
+      files.push(archiveFile);
+      const projection = Object.freeze({
+        workspaceId: plan.workspaceId, ordinal: plan.ordinal, workspacePath, workspaceSha256: workspaceFile.sha256,
+        archivePath, archiveSha256: archiveFile.sha256, sourceWorkspaceTargetInnerPath: innerPath,
+        sourceWorkspaceTargetSha256: workspaceFile.sha256, sourceWorkspaceTargetBytes: workspaceFile.bytes, coverage: 'complete'
+      });
+      topology.workspaces.push(projection);
+      workspaceById.set(plan.workspaceId, { ...projection, file: workspaceFile, parent });
+    }
   }
 
   if (findings.some((item) => item.severity === 'error')) return blocked('workspace-binding-blocked', findings);
@@ -80,6 +106,15 @@ export function buildRecipientFacingV2PackageV1(input = {}) {
   files.push(packageFile);
   topology.root = Object.freeze({ path: packageFile.path, sha256: packageFile.sha256 });
   const packageParent = recipientV2ParentAuthority(packageFile, RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID, RECIPIENT_V2_PACKAGE_V1_SCHEMA_TARGET, createdAt);
+
+  for (const workspace of topology.workspaces.filter((item) => item.bindingState === 'sealed')) {
+    const prepared = sealedByWorkspaceId.get(workspace.workspaceId);
+    const protectedFile = exactFile(workspace.protectedPayloadPath, prepared.protectedPayload, 'recipient-v2-package-v1-password-sealed-workspace-payload', 'application/octet-stream');
+    const payloadFacts = recipientV2TransportFacts('password-sealed Workspace protected payload', { workspaceId: workspace.workspaceId, archivePath: protectedFile.path, archiveBytes: protectedFile.bytes, archiveSha256: protectedFile.sha256 });
+    const payloadArtifact = finalizeFile({ path: workspace.protectedPayloadDescriptorPath, kind: 'protected-workspace-payload-descriptor', logicalKind: 'recipient-v2-package-v1-password-sealed-payload-descriptor', mediaType: 'text/markdown', transportFacts: payloadFacts, content: renderRecipientV2ExternalPayload({ createdAt, parent: packageParent, title: `Protected Workspace Payload — ${workspace.workspaceId}`, summary: 'Exact password-sealed Workspace ciphertext. Protected Workspace filenames, directories, inner artifact paths, and plaintext inventory remain encrypted.', label: `${workspace.workspaceId} protected Workspace payload`, kind: 'password-sealed-workspace-ciphertext', mediaType: 'application/octet-stream', format: prepared.envelope.profile.contentEncryptionParameters.binaryFraming, role: 'password-sealed Workspace protected payload', workspaceId: workspace.workspaceId, location: protectedFile.path, bytes: protectedFile.bytes, sha256: protectedFile.sha256 }) });
+    const envelopeArtifact = finalizeFile({ path: workspace.transportEnvelopePath, kind: 'password-sealed-workspace-transport-envelope', logicalKind: 'recipient-v2-package-v1-transport-envelope', mediaType: 'text/markdown', transportFacts: recipientV2TransportFacts(TRANSPORT_ENVELOPE_V1_ROLE, { workspaceId: workspace.workspaceId, workspaceArtifactPath: workspace.workspacePath, protectedPayloadDescriptorPath: workspace.protectedPayloadDescriptorPath, workspaceBindingValue: prepared.envelope.workspaceBindingValue, profileId: prepared.envelope.profile.profileId, profileVersion: prepared.envelope.profile.profileVersion }), content: renderTransportEnvelopeV1({ createdAt, parent: packageParent, workspaceArtifactPath: workspace.workspacePath, protectedPayloadDescriptorPath: workspace.protectedPayloadDescriptorPath, envelope: prepared.envelope }) });
+    files.push(payloadArtifact, envelopeArtifact, protectedFile);
+  }
 
   const bootstrapSource = (input.bundle?.files || []).filter((file) => String(file.path || '').startsWith('tiinex.bootstrap/'));
   if (bootstrapSource.length) {
@@ -101,15 +136,16 @@ export function buildRecipientFacingV2PackageV1(input = {}) {
     const cacheFile = finalizeFile({ path: archivePath, kind: 'handoff-material-cache', logicalKind: 'recipient-v2-package-v1-workspace-dependency-cache', mediaType: 'application/zip', data: cacheBytes });
     const cacheFacts = {
       workspaceId: owningWorkspace.workspaceId, archivePath, archiveBytes: cacheFile.bytes, archiveSha256: cacheFile.sha256,
-      materials: selectedDetached.map((item, index) => ({ requirementId: item.requirementId, classification: item.classification, referenceTarget: item.referenceTarget, routeWorkspaceId: item.routeWorkspaceId, routePath: item.routePath, sourceRequirementId: item.sourceRequirementId, originalPath: item.originalPath, archiveEntry: cacheEntries[index].path, bytes: item.bytes, sha256: item.sha256 }))
+      materials: selectedDetached.map((item, index) => ({ requirementId: item.requirementId, classification: item.classification, referenceTarget: item.referenceTarget, routeWorkspaceId: item.routeWorkspaceId, routePath: item.routePath, sourceRequirementId: item.sourceRequirementId, sourceWorkspaceId: item.sourceWorkspaceId, sourcePath: item.sourcePath, targetWorkspaceId: item.targetWorkspaceId, targetPath: item.targetPath, originalPath: item.originalPath, archiveEntry: cacheEntries[index].path, bytes: item.bytes, sha256: item.sha256 }))
     };
-    const cacheArtifact = finalizeFile({ path: artifactPath, kind: 'tiinex-external-payload-artifact', logicalKind: 'recipient-v2-package-v1-workspace-dependency-cache-reference', mediaType: 'text/markdown', transportFacts: recipientV2TransportFacts('workspace-scoped Handoff dependency cache', cacheFacts), content: renderRecipientV2ExternalPayload({ createdAt, parent: owningWorkspace.parent, title: `Workspace Dependency Cache — ${owningWorkspace.workspaceId}`, summary: 'Exact route-bounded dependency bytes not satisfied by a complete carried Workspace snapshot.', label: `${owningWorkspace.workspaceId} Handoff dependency cache`, kind: 'zip export', role: 'workspace-scoped Handoff dependency cache', location: archivePath, bytes: cacheFile.bytes, sha256: cacheFile.sha256, facts: cacheFacts }) });
+    const cacheArtifact = finalizeFile({ path: artifactPath, kind: 'tiinex-external-payload-artifact', logicalKind: 'recipient-v2-package-v1-workspace-dependency-cache-reference', mediaType: 'text/markdown', transportFacts: recipientV2TransportFacts('workspace-scoped Handoff dependency cache', cacheFacts), content: renderRecipientV2ExternalPayload({ createdAt, parent: owningWorkspace.parent, title: `Workspace Dependency Cache — ${owningWorkspace.workspaceId}`, summary: 'Exact route-bounded dependency bytes not satisfied by a complete carried Workspace snapshot.', label: `${owningWorkspace.workspaceId} Handoff dependency cache`, kind: 'zip export', role: 'workspace-scoped Handoff dependency cache', location: archivePath, bytes: cacheFile.bytes, sha256: cacheFile.sha256, materials: cacheFacts.materials }) });
     files.push(cacheArtifact, cacheFile);
     cache = { workspaceId: owningWorkspace.workspaceId, artifactPath, archivePath, materials: cacheFacts.materials, parent: recipientV2ParentAuthority(cacheArtifact, 'tiinex.external.payload.v1', RECIPIENT_V2_EXTERNAL_PAYLOAD_SCHEMA_TARGET, createdAt) };
     topology.caches.push(Object.freeze({ workspaceId: cache.workspaceId, artifactPath, archivePath, materials: cache.materials }));
   }
 
   if (!owningWorkspace) findings.push(finding('error', 'portable.handoff-package-v1.route.workspace-unresolved', 'Selected Handoff route owning Workspace is not carried.'));
+  else if (owningWorkspace.sealed) findings.push(finding('error', 'portable.handoff-package-v1.route.workspace-sealed-forbidden', 'Selected authoritative Handoff route Workspace must remain a clear verified snapshot in Secure Transport V1.', { workspaceId: owningWorkspace.workspaceId }));
   else {
     const plan = workspacePlans.find((item) => item.workspaceId === owningWorkspace.workspaceId);
     const binding = bindingForWorkspace(descriptor, owningWorkspace.workspaceId);
@@ -142,6 +178,44 @@ export function buildRecipientFacingV2PackageV1(input = {}) {
   const bundle = { ...(input.bundle || {}), files: Object.freeze(sortedFiles), handoffClosure: null, transportFormat: RECIPIENT_V2_PACKAGE_V1_FORMAT_ID };
   const inspection = inspectRecipientFacingV2PackageV1(bundle);
   return Object.freeze({ status: inspection.status === 'valid' && !findings.some((item) => item.severity === 'error') ? 'ready' : 'blocked', files: Object.freeze(sortedFiles), topology: deepFreeze(topology), inspection, findings: Object.freeze([...findings, ...(inspection.findings || [])]), boundary: 'Recipient-facing tiinex.handoff.package.v1 carrier with exact complete Workspace artifacts/snapshots, bootstrap/cache External Payload ownership retained, and no redundant Workspace External Payload or Workspace Representation companions.' });
+}
+
+
+async function prepareSealedWorkspaceBindings(input = {}) {
+  const protections = Array.isArray(input.sealedWorkspaces) ? input.sealedWorkspaces : [];
+  if (!protections.length) return Object.freeze({ status: 'ready', byWorkspaceId: new Map() });
+  const sourceSurface = input.sourceSurface || null;
+  const carrier = input.carrierProjection || {};
+  if (!sourceSurface || sourceSurface.status !== 'ready') return blocked('source-surface-unready', sourceSurface?.findings || []);
+  const routes = (carrier.routes || []).filter((route) => route.state === 'qualified');
+  const selector = String(input.routeSelector || input.routeId || '').trim();
+  const selected = selector ? routes.filter((route) => route.id === selector || route.workspaceRelativePath === selector || `${String(route.workspaceId || '')}:${String(route.workspaceRelativePath || '')}` === selector || `handoff-route:${String(route.workspaceId || '')}:${String(route.workspaceRelativePath || '')}` === selector) : routes;
+  if (selected.length !== 1) return blocked('route-selection-unresolved', [finding('error', 'portable.handoff-package-v1.route-selection-unresolved', 'Secure package manufacture requires exactly one selected Handoff route.', { count: selected.length })]);
+  const routeWorkspaceId = String(selected[0].workspaceId || '');
+  const sourceWorkspaceById = new Map((sourceSurface.topology?.workspaces || []).map((item) => [String(item.workspaceId || ''), item]));
+  const sourceByPath = new Map((sourceSurface.files || []).map((file) => [String(file.path || ''), file]));
+  const byWorkspaceId = new Map();
+  const findings = [];
+  for (const protection of protections) {
+    const workspaceId = String(protection?.workspaceId || '').trim();
+    if (!workspaceId || byWorkspaceId.has(workspaceId)) { findings.push(finding('error', 'secure-transport.manufacture.workspace-id-invalid', 'Each sealed Workspace selection must identify one unique carried Workspace.', { workspaceId })); continue; }
+    if (workspaceId === routeWorkspaceId) { findings.push(finding('error', 'secure-transport.manufacture.route-workspace-must-remain-clear', 'Secure Transport V1 does not permit sealing the authoritative selected Handoff route Workspace.', { workspaceId })); continue; }
+    const source = sourceWorkspaceById.get(workspaceId);
+    const sourceArchive = source ? sourceByPath.get(String(source.archivePath || '')) : null;
+    if (!source || String(source.coverage || '') !== 'complete' || !sourceArchive) { findings.push(finding('error', 'secure-transport.manufacture.workspace-unresolved', 'Selected sealed Workspace must resolve to one complete qualified source snapshot.', { workspaceId })); continue; }
+    const archiveData = packageFileByteView(sourceArchive);
+    const parsed = inspectStoredWorkspaceArchive(archiveData, { ownedBytes: true });
+    const innerPath = String(source.sourceWorkspaceTargetInnerPath || '');
+    const targetMatches = (parsed.entries || []).filter((entry) => entry.path === innerPath);
+    if (parsed.state !== 'qualified' || targetMatches.length !== 1) { findings.push(finding('error', 'secure-transport.manufacture.workspace-source-unqualified', 'Selected sealed Workspace source archive/Workspace artifact correlation does not qualify.', { workspaceId })); continue; }
+    const targetData = packageFileByteView({ data: targetMatches[0].data });
+    const targetQualification = qualifyHandoffWorkspaceTarget({ targetPath: innerPath, targetData, entries: parsed.entries || [] });
+    if (targetQualification.state !== 'qualified') { findings.push(finding('error', 'secure-transport.manufacture.workspace-target-unqualified', 'Selected sealed Workspace artifact does not qualify before encryption.', { workspaceId, reasons: targetQualification.reasons || [] })); continue; }
+    const sealed = await sealPasswordWorkspacePayload({ plaintext: archiveData, workspaceBindingValue: sha256Hex(targetData), recipients: protection.recipients || [], crypto: input.crypto });
+    if (sealed.state !== 'sealed') { findings.push(finding('error', 'secure-transport.manufacture.seal-failed', 'Selected Workspace could not be sealed under the supported V1 profile.', { workspaceId, reason: sealed.reason || sealed.state })); continue; }
+    byWorkspaceId.set(workspaceId, sealed);
+  }
+  return findings.some((item) => item.severity === 'error') ? blocked('secure-workspace-preparation-blocked', findings) : Object.freeze({ status: 'ready', byWorkspaceId, findings: Object.freeze(findings) });
 }
 
 function hasBootstrap(bundle = {}) { return (bundle.files || []).some((file) => String(file.path || '').startsWith('tiinex.bootstrap/')); }

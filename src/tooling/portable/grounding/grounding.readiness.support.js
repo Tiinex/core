@@ -1,4 +1,4 @@
-import { packageFileBytes } from '../../../export/package.bytes.js';
+import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
 import { inspectStoredWorkspaceArchive } from '../handoff/workspaceByteProvider.js';
 import { RECIPIENT_V2_READ_PATH } from '../handoff/recipientV2.topology.js';
 import { decodeUtf8, findFile } from '../handoff/coldStartQualification.shared.js';
@@ -47,6 +47,68 @@ export function materializeQualifiedWorkspaceSnapshot(bundle, contextAudit, opti
         sourceMode: 'portable-handoff-workspace-snapshot'
       }));
     }
+  }
+  return Object.freeze({ files: Object.freeze(files), findings: Object.freeze(findings) });
+}
+
+export function materializeQualifiedDetachedLineage(bundle, contextAudit, options = {}) {
+  const files = [];
+  const findings = [];
+  if (String(contextAudit?.status || '') !== 'ready' || String(contextAudit?.inspections?.parentBoundaryGrounding || '') !== 'qualified-package-v1') return Object.freeze({ files: Object.freeze(files), findings: Object.freeze(findings) });
+  for (const material of contextAudit?.lineageMaterializations || []) {
+    const workspaceId = String(material.workspaceId || '').trim();
+    const innerPath = String(material.workspaceRelativePath || '').replace(/^\/+/, '').replace(/\\/g, '/');
+    const archivePath = String(material.archivePackagePath || '').trim();
+    const archiveEntry = String(material.archiveEntry || '').trim();
+    if (!workspaceId || !innerPath || !archivePath || !archiveEntry) {
+      findings.push(finding('error', 'portable.grounding.detached-lineage.binding-incomplete', 'An independently qualified detached Parent-boundary projection lacks its exact Workspace/path/cache binding.', { workspaceId, innerPath, archivePath, archiveEntry, requirementId: String(material.requirementId || '') }));
+      continue;
+    }
+    if (!isGroundingArtifactPath(innerPath)) {
+      findings.push(finding('error', 'portable.grounding.detached-lineage.target-kind-invalid', 'Detached Parent-boundary grounding material must target one Tiinex trace/workspace artifact path.', { workspaceId, innerPath, requirementId: String(material.requirementId || '') }));
+      continue;
+    }
+    if (!options.includeLegacyTopics && /(?:^|\/)\.topics\/development(?:\/|$)/.test(innerPath)) continue;
+    const archiveFile = findFile(bundle, archivePath);
+    if (!archiveFile) {
+      findings.push(finding('error', 'portable.grounding.detached-lineage.cache-unavailable', 'Qualified detached Parent-boundary cache archive could not be resolved from the carrier.', { workspaceId, innerPath, archivePath }));
+      continue;
+    }
+    const archive = inspectStoredWorkspaceArchive(packageFileBytes(archiveFile), { ownedBytes: true });
+    if (archive.state !== 'qualified') {
+      findings.push(finding('error', 'portable.grounding.detached-lineage.cache-invalid', 'Detached Parent-boundary cache archive is not qualified readable material.', { workspaceId, innerPath, archivePath }));
+      continue;
+    }
+    const matches = (archive.entries || []).filter((entry) => String(entry.path || '') === archiveEntry);
+    if (matches.length !== 1) {
+      findings.push(finding('error', 'portable.grounding.detached-lineage.entry-unresolved', 'Detached Parent-boundary cache binding must resolve exactly one archive entry.', { workspaceId, innerPath, archivePath, archiveEntry, count: matches.length }));
+      continue;
+    }
+    const entry = matches[0];
+    const data = packageFileBytes({ data: entry.data });
+    const actualSha256 = sha256Hex(data);
+    if (Number(material.bytes || 0) !== data.byteLength || String(material.sha256 || '') !== actualSha256) {
+      findings.push(finding('error', 'portable.grounding.detached-lineage.entry-identity-mismatch', 'Detached Parent-boundary cache entry bytes diverge from the independently qualified package-v1 binding.', { workspaceId, innerPath, archiveEntry }));
+      continue;
+    }
+    const content = decodeUtf8(data);
+    if (!content) {
+      findings.push(finding('error', 'portable.grounding.detached-lineage.entry-unreadable', 'Detached Parent-boundary cache entry could not be decoded as grounding Markdown.', { workspaceId, innerPath, archiveEntry }));
+      continue;
+    }
+    files.push(Object.freeze({
+      path: `${workspaceId}/${innerPath}`,
+      content,
+      size: data.byteLength,
+      sourceMode: 'portable-handoff-qualified-parent-boundary-cache',
+      locator: Object.freeze({
+        workspaceId,
+        workspaceRelativePath: innerPath,
+        archivePackagePath: archivePath,
+        archiveEntry,
+        qualification: String(material.qualification || '')
+      })
+    }));
   }
   return Object.freeze({ files: Object.freeze(files), findings: Object.freeze(findings) });
 }

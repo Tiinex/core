@@ -2,7 +2,7 @@ import {readFile,writeFile,mkdir,rm,cp,realpath,stat} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {assertPublishContext,readRegistry,releasePlan,compareVersion} from './plan.mjs';
+import {assertPublishContext,readRegistry,releasePlan,compareVersion,publishedArchiveState} from './plan.mjs';
 import {parseSemver} from './policy.mjs';
 const npm=process.platform==='win32'?'npm.cmd':'npm';
 function run(command,args,cwd,{allowFailure=false}={}) {const r=spawnSync(command,args,{cwd,encoding:'utf8',timeout:180000,maxBuffer:32*1024*1024,shell:process.platform==='win32'&&command===npm});if(r.error||(!allowFailure&&r.status!==0))throw Error(`${command} ${args[0]} failed: ${r.error?.message||r.stderr||r.stdout}`);return r;}
@@ -16,6 +16,7 @@ export async function runRelease({cwd=process.cwd(),argv=process.argv.slice(2),e
  const pkg=JSON.parse(await readFile(path.join(cwd,'package.json'),'utf8'));
  const policy=JSON.parse(await readFile(path.join(cwd,'.github/release-policy.json'),'utf8'));
  const repository=policy.repository;
+ const registryReadOptions=command==='bootstrap'?{}:env.GITHUB_ACTIONS==='true'?{attempts:6,retryDelayMs:500}:{};
  if(pkg.repository?.url!==`git+https://github.com/${repository}.git`||!repository.startsWith('Tiinex/'))throw Error('release.repository.mismatch');
  const git=(args,opts)=>run('git',args,cwd,opts);
  const head=git(['rev-parse','HEAD']).stdout.trim();
@@ -26,18 +27,19 @@ export async function runRelease({cwd=process.cwd(),argv=process.argv.slice(2),e
   if(p.action==='skip'){console.log(JSON.stringify(p));return p;}
   const file=path.resolve(cwd,p.file);if(path.dirname(file)!==path.join(cwd,'.release'))throw Error('release.archive-path');
   const bytes=await readFile(file);if(createHash('sha512').update(bytes).digest('base64')!==p.integrity.slice(7))throw Error('release.archive-tampered');
-  const meta=await readRegistry(pkg.name);const existing=meta.versions[p.version];
-  if(existing){if(existing.dist?.integrity!==p.integrity)throw Error('release.version.collision');console.log('Already published exact archive');return p;}
+  const meta=await readRegistry(pkg.name,{...registryReadOptions,attempts:8});const existingState=publishedArchiveState(meta,{version:p.version,integrity:p.integrity});
+  if(existingState.status==='collision')throw Error('release.version.collision');
+  if(existingState.status==='exact'){console.log('Already published exact archive');return p;}
   const latest=Object.values(meta.versions).filter(v=>!parseSemver(v.version).prerelease).sort((a,b)=>compareVersion(a.version,b.version)).at(-1);
   if(latest&&compareVersion(latest.version,p.version)>=0)throw Error('release.newer-version-already-published');
   const result=run(npm,['publish',file,'--ignore-scripts','--access','public','--tag','latest','--provenance'],cwd,{allowFailure:true});
-  if(result.status!==0){const check=await readRegistry(pkg.name);if(check.versions[p.version]?.dist?.integrity!==p.integrity)throw Error('release.publish.failed: '+result.stderr);}
+  if(result.status!==0){const check=await readRegistry(pkg.name,{...registryReadOptions,attempts:10,retryDelayMs:750});const failedState=publishedArchiveState(check,{version:p.version,integrity:p.integrity});if(failedState.status==='collision')throw Error('release.version.collision-after-publish');if(failedState.status!=='exact')throw Error('release.publish.failed: '+result.stderr);}
   console.log(JSON.stringify({...p,published:true}));return p;
  }
  if(command==='prepare') {assertPublishContext(env,repository);if(env.GITHUB_SHA!==head)throw Error('release.checkout-is-not-event-commit');}
  if(command==='bootstrap' && git(['branch','--show-current']).stdout.trim()!=='master')throw Error('release.bootstrap.master-only');
  if(git(['status','--porcelain','--untracked-files=no']).stdout.trim())throw Error('release.dirty-source');
- const metadata=await readRegistry(pkg.name);
+ const metadata=await readRegistry(pkg.name,registryReadOptions);
  if(command==='bootstrap'&&Object.keys(metadata.versions).length)throw Error('Package exists: configure OIDC and use the master workflow, not bootstrap.');
  if(command==='bootstrap') { const check=pkg.scripts?.validate?'validate':pkg.scripts?.check?'check':'test'; run(npm,['run',check],cwd); }
  const previous=Object.values(metadata.versions).filter(v=>!parseSemver(v.version).prerelease).sort((a,b)=>compareVersion(a.version,b.version)).at(-1);

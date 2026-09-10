@@ -191,17 +191,22 @@ export function virtualCacheMaterial(cache = {}, findings = []) {
   const byPath = new Map((archive?.entries || []).map((entry) => [String(entry.path || ''), entry]));
   const files = [];
   const materialized = [];
+  const boundEntries = new Map();
   for (const item of cache.facts?.materials || []) {
     const entry = byPath.get(String(item.archiveEntry || ''));
     if (!entry) {
       findings.push(finding('error', 'portable.handoff-v2-surface.cache.entry-missing', 'Context cache declaration does not resolve to exactly one archive entry.', { requirementId: item.requirementId || '', archiveEntry: item.archiveEntry || '' }));
       continue;
     }
+    const archiveEntry = String(item.archiveEntry || '');
+    boundEntries.set(archiveEntry, Number(boundEntries.get(archiveEntry) || 0) + 1);
     if (Number(item.bytes || 0) !== Number(entry.bytes || 0) || String(item.sha256 || '') !== String(entry.sha256 || '')) findings.push(finding('error', 'portable.handoff-v2-surface.cache.entry-identity-mismatch', 'Context cache entry bytes differ from its visible declaration.', { requirementId: item.requirementId || '', archiveEntry: item.archiveEntry || '' }));
     const packagePath = `recipient.v2.cache/${boundedRecipientToken(cache.facts?.workspaceId || 'workspace')}/${boundedRecipientToken(item.requirementId || item.archiveEntry)}.bin`;
     files.push(Object.freeze({ path: packagePath, data: entry.data, size: entry.bytes, kind: 'recipient-v2-virtual-cache-material' }));
-    materialized.push(Object.freeze({ requirementId: String(item.requirementId || ''), classification: String(item.classification || ''), referenceTarget: String(item.referenceTarget || ''), originalPath: String(item.originalPath || ''), packagePath, carrierKind: 'detached-material', bytes: Number(entry.bytes || 0), sha256: String(entry.sha256 || ''), authority: Object.freeze({ carrierDedupBasis: 'visible-cache-artifact-plus-exact-archive-entry-byte-identity' }) }));
+    materialized.push(Object.freeze({ requirementId: String(item.requirementId || ''), classification: String(item.classification || ''), referenceTarget: String(item.referenceTarget || ''), routeWorkspaceId: String(item.routeWorkspaceId || ''), routePath: String(item.routePath || ''), sourceRequirementId: String(item.sourceRequirementId || ''), sourceWorkspaceId: String(item.sourceWorkspaceId || ''), sourcePath: String(item.sourcePath || ''), targetWorkspaceId: String(item.targetWorkspaceId || ''), targetPath: String(item.targetPath || ''), originalPath: String(item.originalPath || ''), packagePath, carrierKind: 'detached-material', bytes: Number(entry.bytes || 0), sha256: String(entry.sha256 || ''), authority: Object.freeze({ carrierDedupBasis: 'visible-cache-artifact-plus-exact-archive-entry-byte-identity' }) }));
   }
+  for (const [archiveEntry, count] of boundEntries) if (count !== 1) findings.push(finding('error', 'portable.handoff-v2-surface.cache.entry-binding-ambiguous', 'Each cache archive entry must be claimed by exactly one visible material binding.', { archiveEntry, count }));
+  for (const entry of archive?.entries || []) if (!boundEntries.has(String(entry.path || ''))) findings.push(finding('error', 'portable.handoff-v2-surface.cache.entry-unbound', 'Each cache archive entry must be claimed by one visible material binding; opaque unbound dependency bytes are not permitted.', { archiveEntry: String(entry.path || '') }));
   return Object.freeze({ files: Object.freeze(files), materialized: Object.freeze(materialized) });
 }
 

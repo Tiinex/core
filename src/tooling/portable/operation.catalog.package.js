@@ -11,7 +11,6 @@ import { projectPortableEditorAssistance } from './editor/editor.assistance.js';
 import { projectQualifiedHandoffLeaves } from './handoff/handoffLeafProjection.js';
 import { projectPortableAuthoringParent } from './editor/authoring.parent.js';
 import { projectQualifiedWorkspacePackageSources } from './handoff/workspacePackageSources.js';
-import { compareSourceFrontiers } from './handoff/sourceFrontierComparison.js';
 import { projectPortableHandoffAuthoringPlan } from './handoff/handoffAuthoringPlan.js';
 import { projectQualifiedHandoffEndpoints } from './handoff/handoffEndpointProjection.js';
 import { projectPortableOperatorContext } from './handoff/operatorContextProjection.js';
@@ -95,13 +94,6 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     safety: 'planning-only-read-only',
     inputSchema: 'tiinex.portable.input.v1',
     handler: (input = {}) => wrapPortableResult('project-workspace-package-sources', projectQualifiedWorkspacePackageSources(input))
-  }),
-  'compare-source-frontiers': operation({
-    name: 'compare-source-frontiers',
-    description: 'Compare one local Workspace root against one carried workspace snapshot bound by a recipient-facing Handoff package.',
-    safety: 'read-only',
-    inputSchema: 'tiinex.portable.input.v1',
-    handler: async (input = {}) => wrapPortableResult('compare-source-frontiers', await compareSourceFrontiers(input))
   }),
   'project-handoff-authoring-plan': operation({
     name: 'project-handoff-authoring-plan',

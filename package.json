@@ -133,7 +133,9 @@
     "./portable-entry": "./tools/tiinex-portable.mjs",
     "./schema-bootstrap": "./src/tooling/portable/schema/bootstrap/canonical.pack.js",
     "./node/release": "./src/release/run.mjs",
-    "./node/release-policy": "./src/release/policy.mjs"
+    "./node/release-policy": "./src/release/policy.mjs",
+    "./tooling/portable/comparison/sourceFrontierComparison.js": "./src/tooling/portable/comparison/sourceFrontierComparison.js",
+    "./tooling/portable/adapters/node/sourceFrontierComparison.js": "./src/tooling/portable/adapters/node/sourceFrontierComparison.js"
   },
   "files": [
     "src",

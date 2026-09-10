@@ -4,46 +4,93 @@ import { parseHandoffPackageV1, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH } from '../../
 
 export function preparePackageParentWorkspaceReuse(input = {}) {
   const bundle = input.bundle || null;
-  if (!bundle?.files?.length) return emptyReuse('unavailable');
   const currentIds = new Set([...(input.currentWorkspaceIds || [])].map(normalizeId).filter(Boolean));
   const workspaceAliases = normalizePackageParentWorkspaceAliases(input.workspaceAliases || input.packageParentWorkspaceAliases || {});
   for (const alias of workspaceAliases.values()) if (!currentIds.has(alias)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-alias.target-unresolved:${alias}`);
+  const selection = normalizePackageParentWorkspaceSelection(input.workspaceIds || input.packageParentWorkspaceIds || input.reuseWorkspaceIds || []);
+  if (!bundle?.files?.length) return emptyReuse('unavailable', { selection, workspaceAliases });
   const inspection = inspectRecipientFacingV2Topology(bundle);
   const declared = declaredPackageWorkspaceBindings(bundle, inspection);
-  if (!declared.length) return emptyReuse('unsupported-parent-surface');
-  if (inspection.status !== 'valid') throw new Error('portable.handoff-manufacture.package-parent.workspace-provider.invalid');
-  const missing = declared.filter((item) => !packageParentWorkspaceSupersededByCurrent(item.workspaceId, currentIds, workspaceAliases));
-  if (!missing.length) return emptyReuse('not-needed');
+  if (!declared.length) {
+    if (selection.mode !== 'none') throw new Error('portable.handoff-manufacture.package-parent.workspace-selection.parent-surface-unresolved');
+    return emptyReuse('not-requested', { selection, workspaceAliases, inspectionStatus: inspection.status, providerState: 'unsupported-parent-surface' });
+  }
+  if (inspection.status !== 'valid') {
+    if (selection.mode !== 'none') throw new Error('portable.handoff-manufacture.package-parent.workspace-provider.invalid');
+    return emptyReuse('not-requested', { selection, workspaceAliases, inspectionStatus: inspection.status, providerState: 'invalid' });
+  }
+  const selected = selectDeclaredPackageParentWorkspaceBindings(declared, selection);
+  const missing = selected.filter((item) => !packageParentWorkspaceSupersededByCurrent(item.workspaceId, currentIds, workspaceAliases));
 
   const providerById = new Map((inspection.workspaceByteProvider?.workspaces || []).map((item) => [normalizeId(item.id), item]));
   const inspectedById = new Map((inspection.workspaces || []).map((item) => [normalizeId(item.workspaceId), item]));
-  const inherited = [];
-  const workspaceTargets = [];
-  for (const binding of missing) {
+  const providers = [];
+  const providerTargetById = new Map();
+  for (const binding of declared) {
     const id = normalizeId(binding.workspaceId);
+    if (packageParentWorkspaceSupersededByCurrent(id, currentIds, workspaceAliases)) continue;
     const provider = providerById.get(id);
     const inspected = inspectedById.get(id);
     if (!provider || provider.state !== 'qualified' || provider.mode !== 'archive' || provider.materialization?.materialization !== 'complete' || inspected?.coverage !== 'complete') {
-      throw new Error(`portable.handoff-manufacture.package-parent.workspace-provider.unqualified:${id}`);
+      if (selection.mode === 'all' || selection.ids.includes(id)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-provider.unqualified:${id}`);
+      continue;
     }
     const targetPath = String(inspected.sourceWorkspaceTargetInnerPath || binding.workspaceArtifactInnerPath || '').trim();
-    if (!targetPath) throw new Error(`portable.handoff-manufacture.package-parent.workspace-target.unresolved:${id}`);
-    inherited.push(buildInheritedEnumeration(provider, {
+    if (!targetPath) {
+      if (selection.mode === 'all' || selection.ids.includes(id)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-target.unresolved:${id}`);
+      continue;
+    }
+    providers.push(buildInheritedEnumeration(provider, {
       parentPackagePath: input.parentPackagePath || '',
       parentPackageSha256: input.parentPackageSha256 || '',
       archivePackagePath: inspected.workspaceArchivePath || binding.snapshotPath || ''
     }));
-    workspaceTargets.push(Object.freeze({ workspaceId: id, path: targetPath, source: 'qualified-package-parent-workspace' }));
+    providerTargetById.set(id, targetPath);
   }
+  const providerEnumerationById = new Map(providers.map((item) => [normalizeId(item.id), item]));
+  const inherited = [];
+  const workspaceTargets = [];
+  for (const binding of missing) {
+    const id = normalizeId(binding.workspaceId);
+    const inheritedProvider = providerEnumerationById.get(id);
+    if (!inheritedProvider) throw new Error(`portable.handoff-manufacture.package-parent.workspace-provider.unqualified:${id}`);
+    inherited.push(inheritedProvider);
+    workspaceTargets.push(Object.freeze({ workspaceId: id, path: providerTargetById.get(id), source: 'qualified-package-parent-workspace' }));
+  }
+  const state = selection.mode === 'none' ? 'not-requested' : (missing.length ? 'qualified' : 'not-needed');
   return Object.freeze({
-    state: 'qualified',
+    state,
+    providers: Object.freeze(providers),
+    providerState: 'qualified',
+    providerWorkspaceIds: Object.freeze(providers.map((item) => normalizeId(item.id))),
     inherited: Object.freeze(inherited),
     workspaceTargets: Object.freeze(workspaceTargets),
     inspectionStatus: inspection.status,
     missingWorkspaceIds: Object.freeze(missing.map((item) => normalizeId(item.workspaceId))),
+    selectionMode: selection.mode,
+    requestedWorkspaceIds: selection.ids,
     workspaceAliases: Object.freeze([...workspaceAliases.entries()].map(([parentWorkspaceId, currentWorkspaceId]) => Object.freeze({ parentWorkspaceId, currentWorkspaceId }))),
-    boundary: 'Exact complete Workspace bytes reused from one independently qualified received package parent. Explicit current Workspace roots take precedence by id, and explicit qualified workspace aliases may supersede a renamed parent-carrier Workspace without carrying stale duplicate source. Parent-carrier placement and lineage remain non-semantic.'
+    boundary: 'Qualified package-parent Workspace snapshots may serve as read-only exact material providers, but complete Workspace carriage is reused only for explicitly selected package-parent Workspace ids. Package-parent carrier lineage alone never selects Workspace source. Explicit current Workspace roots take precedence by id, and explicit qualified workspace aliases may supersede a renamed parent-carrier Workspace without carrying stale duplicate source. Parent-carrier placement and lineage remain non-semantic.'
   });
+}
+
+export function normalizePackageParentWorkspaceSelection(value = []) {
+  const raw = Array.isArray(value) ? value : [value];
+  const tokens = raw.flatMap((item) => String(item || '').split(',')).map((item) => String(item || '').trim()).filter(Boolean);
+  if (!tokens.length) return Object.freeze({ mode: 'none', ids: Object.freeze([]) });
+  if (tokens.some((item) => ['*', 'all'].includes(item.toLowerCase()))) return Object.freeze({ mode: 'all', ids: Object.freeze([]) });
+  return Object.freeze({ mode: 'explicit', ids: Object.freeze([...new Set(tokens.map(normalizeId).filter(Boolean))].sort()) });
+}
+
+export function selectDeclaredPackageParentWorkspaceBindings(declared = [], selection = normalizePackageParentWorkspaceSelection()) {
+  const normalized = [...(declared || [])]
+    .map((item) => Object.freeze({ ...item, workspaceId: normalizeId(item.workspaceId) }))
+    .filter((item) => item.workspaceId);
+  if (selection.mode === 'none') return Object.freeze([]);
+  if (selection.mode === 'all') return Object.freeze(normalized);
+  const byId = new Map(normalized.map((item) => [item.workspaceId, item]));
+  for (const id of selection.ids || []) if (!byId.has(id)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-selection.unresolved:${id}`);
+  return Object.freeze((selection.ids || []).map((id) => byId.get(id)));
 }
 
 function declaredPackageWorkspaceBindings(bundle = {}, inspection = null) {
@@ -150,8 +197,25 @@ export function packageParentWorkspaceSupersededByCurrent(parentWorkspaceId = ''
   return Boolean(replacement && currentWorkspaceIds.has(replacement));
 }
 
-function emptyReuse(state) {
-  return Object.freeze({ state, inherited: Object.freeze([]), workspaceTargets: Object.freeze([]), inspectionStatus: '', missingWorkspaceIds: Object.freeze([]), workspaceAliases: Object.freeze([]), boundary: 'No package-parent Workspace provider reuse was required.' });
+function emptyReuse(state, options = {}) {
+  const selection = options.selection || normalizePackageParentWorkspaceSelection();
+  const workspaceAliases = options.workspaceAliases || new Map();
+  return Object.freeze({
+    state,
+    providers: Object.freeze([]),
+    providerState: String(options.providerState || 'unavailable'),
+    providerWorkspaceIds: Object.freeze([]),
+    inherited: Object.freeze([]),
+    workspaceTargets: Object.freeze([]),
+    inspectionStatus: String(options.inspectionStatus || ''),
+    missingWorkspaceIds: Object.freeze([]),
+    selectionMode: selection.mode,
+    requestedWorkspaceIds: selection.ids,
+    workspaceAliases: Object.freeze([...workspaceAliases.entries()].map(([parentWorkspaceId, currentWorkspaceId]) => Object.freeze({ parentWorkspaceId, currentWorkspaceId }))),
+    boundary: selection.mode === 'none'
+      ? 'Package-parent carrier lineage was supplied without an explicit package-parent Workspace reuse selection; no parent Workspace source was carried. Qualified parent Workspace providers, when available, are read-only requirement-material sources only.'
+      : 'No explicitly selected package-parent Workspace provider reuse was required.'
+  });
 }
 function normalizeId(value = '') { return String(value || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, ''); }
 function mediaTypeForPath(value = '') { const lower = String(value || '').toLowerCase(); if (lower.endsWith('.md')) return 'text/markdown'; if (lower.endsWith('.json')) return 'application/json'; if (/\.(?:m?js|cjs)$/.test(lower)) return 'text/javascript'; if (lower.endsWith('.ts')) return 'text/typescript'; if (lower.endsWith('.css')) return 'text/css'; if (lower.endsWith('.html')) return 'text/html'; if (/\.(?:yml|yaml)$/.test(lower)) return 'text/yaml'; if (lower.endsWith('.txt')) return 'text/plain'; return 'application/octet-stream'; }

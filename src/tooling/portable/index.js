@@ -50,3 +50,7 @@ export * from './handoff/manufacture.js';
 export * from './handoff/carrierProfile.js';
 export * from './handoff/toolingBootstrap.js';
 export * from './handoff/coldStartQualification.js';
+export * from './handoff/transportEnvelopeV1.js';
+export * from './handoff/recipientV2.packageV1.js';
+
+export * from './comparison/sourceFrontierComparison.js';

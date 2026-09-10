@@ -1,3 +1,5 @@
+import { projectPortableSourceFrontierComparisonSummary } from '../../comparison/sourceFrontierComparison.js';
+
 const COMMON_DEFAULT_PROJECTION = 'common-default';
 
 export function projectCommonCliDefaultOutput(result = {}, parsed = {}) {
@@ -5,7 +7,28 @@ export function projectCommonCliDefaultOutput(result = {}, parsed = {}) {
   if (parsed?.command === 'orient-handoff-package') return projectOrientDefault(result, parsed);
   if (parsed?.command === 'project-grounding-readiness') return projectGroundDefault(result, parsed);
   if (parsed?.command === 'manufacture-handoff-package' && parsed?.surfaceCommand === 'handoff') return projectHandoffDefault(result, parsed);
+  if (parsed?.command === 'compare-source-frontiers') return projectCompareDefault(result, parsed);
   return result;
+}
+
+function projectCompareDefault(result = {}, parsed = {}) {
+  const summary = projectPortableSourceFrontierComparisonSummary({ ...result, schema: result.resultSchema || result.schema || '' }, { maxPaths: parsed?.flags?.['max-paths'] || 20 });
+  return Object.freeze({
+    schema: result.schema,
+    operation: result.operation || 'compare-source-frontiers',
+    resultSchema: result.resultSchema,
+    projection: COMMON_DEFAULT_PROJECTION,
+    status: summary.status,
+    state: summary.state,
+    mode: summary.mode,
+    inputs: summary.inputs,
+    workspaces: summary.workspaces,
+    counts: summary.counts,
+    findingSummary: summary.findingSummary,
+    actionableFindings: summary.actionableFindings,
+    detail: Object.freeze({ fullReceipt: Object.freeze({ command: String(parsed.surfaceCommand || 'compare'), flag: '--full' }) }),
+    boundary: summary.boundary
+  });
 }
 
 function projectOrientDefault(result = {}, parsed = {}) {

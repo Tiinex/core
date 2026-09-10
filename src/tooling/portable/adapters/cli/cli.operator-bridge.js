@@ -3,19 +3,6 @@ export async function prepareOperatorBridgeCliInput(command = '', material = {},
     const repositories = await readOptionalJson(flags.repositories);
     return { input: { ...material, repositories: repositories.repositories || repositories }, options: {} };
   }
-  if (command === 'compare-source-frontiers') {
-    return {
-      input: {
-        leftKind: flags['left-kind'] || flags.leftKind || '',
-        left: flags.left || '',
-        leftId: flags['left-id'] || flags.leftId || '',
-        rightKind: flags['right-kind'] || flags.rightKind || '',
-        right: flags.right || '',
-        rightSelect: flags['right-select'] || flags.rightSelect || ''
-      },
-      options: {}
-    };
-  }
   if (command === 'project-handoff-authoring-plan') return { input: { ...material, parentPath: flags.parent || flags['parent-path'] || '', title: flags.title || '' }, options: {} };
   if (command === 'project-handoff-endpoints') return { input: { ...material, workspaceId: flags['workspace-id'] || flags.workspace || 'workspace' }, options: {} };
   if (command === 'project-operator-context') {

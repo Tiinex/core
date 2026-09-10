@@ -2,7 +2,7 @@ import { resolveLineage } from '../../../lineage/lineage.resolve.js';
 import { normalizePortableInput } from '../input/portable.input.js';
 import { projectPortableOperatingOverview } from '../overview/operatingOverview.js';
 import { summarizePortableFindings } from '../findings.js';
-import { directedLineageCone, isRoutedHandoffBundle, materializeQualifiedWorkspaceSnapshot, normalizeSelectors, projectBlockers, projectRelevantTopology, projectRequiredContext, relevantLineageIssues, resolveRequiredContextRecords, resolveSelectedRouteRecords } from './grounding.readiness.support.js';
+import { directedLineageCone, isRoutedHandoffBundle, materializeQualifiedDetachedLineage, materializeQualifiedWorkspaceSnapshot, normalizeSelectors, projectBlockers, projectRelevantTopology, projectRequiredContext, relevantLineageIssues, resolveRequiredContextRecords, resolveSelectedRouteRecords } from './grounding.readiness.support.js';
 import { groundPortableColdConsumer } from '../handoff/coldStartQualification.grounding.js';
 import { createColdStartMaterialContext, projectGroundedContinuation } from '../handoff/coldStartQualification.materials.js';
 import { auditHandoffPackageContextCarriage } from '../handoff/contextAudit.js';
@@ -51,10 +51,13 @@ export function projectPortableGroundingReadiness(input = {}, options = {}) {
   const snapshot = materializeQualifiedWorkspaceSnapshot(bundle, contextAudit, {
     includeLegacyTopics: Boolean(input.includeLegacyTopics || options.includeLegacyTopics)
   });
+  const detachedLineage = materializeQualifiedDetachedLineage(bundle, contextAudit, {
+    includeLegacyTopics: Boolean(input.includeLegacyTopics || options.includeLegacyTopics)
+  });
   const recoveryMaterial = acceptedRecoveryMaterial(input.recoveryAcceptance || input.recovery || input.recoveredMaterial || {});
   const material = normalizePortableInput({
-    files: [...snapshot.files, ...recoveryMaterial.files],
-    findings: [...snapshot.findings, ...recoveryMaterial.findings]
+    files: [...snapshot.files, ...detachedLineage.files, ...recoveryMaterial.files],
+    findings: [...snapshot.findings, ...detachedLineage.findings, ...recoveryMaterial.findings]
   });
   return composeGroundingReadiness({
     mode: 'routed-handoff-package',
@@ -69,6 +72,7 @@ export function projectPortableGroundingReadiness(input = {}, options = {}) {
       ...(grounding.findings || []),
       ...(contextAudit.findings || []),
       ...(snapshot.findings || []),
+      ...(detachedLineage.findings || []),
       ...(material.findings || [])
     ]
   });
@@ -143,7 +147,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   if (!records.length) missing(missingEvidence, unresolved, 'no-artifact-records', 'No readable Tiinex artifact records were loaded for grounding.');
   else known.push(evidence('loaded-artifact-records', 'known', `${records.length} record(s)`));
 
-  inferred.push(evidence('relevant-lineage-scope', 'bounded-inference', handoffMode ? 'directed declared-Parent cone around the exact selected Handoff route within complete carried Workspace snapshots' : 'all loaded records'));
+  inferred.push(evidence('relevant-lineage-scope', 'bounded-inference', handoffMode ? 'directed declared-Parent cone around the exact selected Handoff route within complete carried Workspace snapshots plus independently qualified exact detached Parent-boundary cache records' : 'all loaded records'));
   inferred.push(evidence('lineage-leaf-role', 'bounded-inference', 'derived only from declared Parent edges in the shared resolver'));
 
   if (handoffMode) {

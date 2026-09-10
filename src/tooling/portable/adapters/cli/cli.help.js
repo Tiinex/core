@@ -12,6 +12,7 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
     `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> --continue <workspace-dir>`,
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>]`,
     `${command} handoff <workspace-dir>`,
+    `${command} compare --left-kind <kind> --left <path> --right-kind <kind> --right <path> [side selectors]`,
     '',
     `Handoff aliases: ${command} orient <carrier.zip>; ${command} validate <carrier.zip>`,
     `Advanced/internal catalog: ${command} operations`,
@@ -20,7 +21,7 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
     '- `orient`, `ground`, and public `handoff` use compact decision-first default projections; add `--full` on the same command for the complete qualified receipt.',
     '- `ground` is read-only; append `--continue <workspace-dir>` only after `grounded-to-act` to materialize the selected carried Workspace and runtime-only `.tiinex/continuation.json`.',
     '- `author` uses continuation state to infer ordinary Parent continuity, seal c14n-v2 integrity, audit, and stage; invalid artifacts are not retained.',
-    '- `handoff` uses continuation state plus the latest qualified authored Handoff to manufacture the canonical return carrier and excludes runtime-only `.tiinex` state. When a package parent carries an older Workspace id that has been explicitly renamed, advanced manufacture may bind that predecessor id to a supplied current Workspace with `--package-parent-workspace-aliases`; aliases never infer source identity. Normal operator completion is one Handoff package plus the exact routing text; markdown-capable hosts render that routing in a fenced code block, and do not emit loose Evidence/Handoff markdown as extra transport payloads.',
+    '- `handoff` uses continuation state plus the latest qualified authored Handoff to manufacture the canonical return carrier and excludes runtime-only `.tiinex` state. A received `--package-parent` continues carrier lineage only; it never selects parent Workspace source by itself. Advanced manufacture may opt into exact parent snapshots with `--package-parent-workspaces <id,...|all>` and may bind an explicitly selected renamed predecessor with `--package-parent-workspace-aliases`; aliases never infer source identity. Normal operator completion is one Handoff package plus the exact routing text; markdown-capable hosts render that routing in a fenced code block, and do not emit loose Evidence/Handoff markdown as extra transport payloads.',
     '- Remote reads/writes remain explicit host concerns. Tooling operation safety does not create or revoke semantic Task/Handoff authority.',
     '',
     'Use `<common-command> --help` for focused common-path usage. Use `operations` deliberately for the advanced/internal operation catalog.'
@@ -28,6 +29,21 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
 }
 
 function commonCommandHelp(command, surfaceCommand) {
+  if (surfaceCommand === 'compare' || surfaceCommand === 'compare-source-frontiers') return [
+    'Tiinex portable tooling — compare source frontiers',
+    '',
+    'Two-way:',
+    `${command} compare --left-kind <local-workspace|local-frontier|handoff-package> --left <path> --right-kind <kind> --right <path> [--left-id <workspace-id>] [--right-id <workspace-id>] [--left-select <id,...>] [--right-select <id,...>]`,
+    'For local-frontier inputs use `--left-roots <id=path,...>` / `--right-roots <id=path,...>` instead of the side path.',
+    '',
+    'Three-way child-return reconciliation:',
+    `${command} compare --base-kind <kind> --base <path> --incoming-kind <kind> --incoming <path> --current-kind <kind> --current <path> [side ids/selectors/roots]`,
+    '',
+    'Input kind is mandatory and is never guessed from a path. Local source uses the exact deterministic Workspace enumeration contract shared with Handoff manufacture. Handoff packages are qualified by this current Tooling runtime; package bootstrap code is not executed. Password-sealed Workspaces remain `locked` unless a caller uses the public Node API with an already-authorized opened Workspace provider.',
+    'Default output is a compact path-bounded human/LLM projection; add `--full` for the complete machine receipt. Comparison is read-only source-byte evidence only: no merge, semantic diff, staging, commit, push, remote acquisition, authority, or acceptance inference.',
+    '',
+    `Advanced/internal catalog: ${command} operations`
+  ];
   if (surfaceCommand === 'ground') return [
     'Tiinex portable tooling — ground',
     '',
@@ -54,7 +70,7 @@ function commonCommandHelp(command, surfaceCommand) {
     '',
     `${command} handoff <workspace-dir>`,
     '',
-    'Infers the latest qualified authored Handoff, selected Workspace identity/target, received package parent, unchanged sibling Workspace providers, canonical projected filename, and return output directory. The default receipt keeps output identity, routing text, closure/workspace qualification, verification, and actionable findings compact; add `--full` for the complete manufacture receipt. Normal operator completion is exactly one Handoff package plus the adjacent exact routing text. In markdown-capable hosts render that routing in a fenced code block; do not emit canonical Workspace Evidence/Handoff markdown as additional loose transport files. Runtime-only `.tiinex` state is excluded from canonical manufacture.',
+    'Infers the latest qualified authored Handoff, selected Workspace identity/target, received package parent as carrier-lineage evidence, canonical projected filename, and return output directory. It does not implicitly carry sibling Workspaces from the received package; advanced manufacture must select exact reusable parent snapshots with `--package-parent-workspaces <id,...|all>`. The default receipt keeps output identity, routing text, closure/workspace qualification, verification, and actionable findings compact; add `--full` for the complete manufacture receipt. Normal operator completion is exactly one Handoff package plus the adjacent exact routing text. In markdown-capable hosts render that routing in a fenced code block; do not emit canonical Workspace Evidence/Handoff markdown as additional loose transport files. Runtime-only `.tiinex` state is excluded from canonical manufacture.',
     '',
     `Advanced/internal catalog: ${command} operations`
   ];

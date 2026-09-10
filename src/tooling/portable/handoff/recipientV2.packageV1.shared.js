@@ -12,7 +12,15 @@ export function oneFile(index, path) { const list = index.get(String(path || '')
 export function validCarrierDimension(value = '') { return /^\d{3}(?:-(?:[1-9]\d*))*$/.test(String(value || '')); }
 export function numericDimension(path = '') { return String(path || '').match(/^(\d{3}(?:-[1-9]\d*)*)-/)?.[1] || ''; }
 export function currentSchemaId(markdown = '') { return String(markdown || '').match(/^\s*-\s+Current Schema:\s*(?:\[)?(tiinex\.[A-Za-z0-9._-]+)(?:\])?/mi)?.[1] || ''; }
-export function sectionText(markdown = '', title = '') { const source = String(markdown || ''); const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); const match = source.match(new RegExp(`^##\\s+${escaped}\\s*$([\\s\\S]*?)(?=^##\\s+|^#\\s+Continuity Integrity\\s*$|\\Z)`, 'mi')); return match ? match[1] : ''; }
+export function sectionText(markdown = '', title = '') {
+  const source = String(markdown || '');
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const heading = new RegExp(`^##\\s+${escaped}\\s*$`, 'mi').exec(source);
+  if (!heading) return '';
+  const rest = source.slice(heading.index + heading[0].length);
+  const next = /^(?:##\s+|#\s+Continuity Integrity\s*$)/mi.exec(rest);
+  return next ? rest.slice(0, next.index) : rest;
+}
 export function field(section = '', label = '') { const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return String(section || '').match(new RegExp(`^\\s*-\\s+${escaped}:\\s*(.*?)\\s*$`, 'mi'))?.[1]?.trim() || ''; }
 export function markdownTarget(value = '') { const match = String(value || '').match(/\[[^\]]*\]\(([^)]+)\)/); return match ? match[1].trim() : ''; }
 export function unquote(value = '') { const text = String(value || '').trim(); return text.startsWith('`') && text.endsWith('`') ? text.slice(1, -1) : text; }

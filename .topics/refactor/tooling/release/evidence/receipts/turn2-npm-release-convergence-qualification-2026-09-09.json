@@ -1,0 +1,61 @@
+{
+  "schema": "tiinex.turn2.npm-release-convergence.qualification.v1",
+  "observedAt": "2026-09-09",
+  "scope": "Core shared npm release mechanics only",
+  "localQualification": {
+    "focused": {
+      "command": "node --test test/master-release.test.mjs test/release-integration.test.mjs",
+      "tests": 19,
+      "pass": 19,
+      "fail": 0
+    },
+    "core": {
+      "command": "npm test",
+      "tests": 44,
+      "pass": 44,
+      "fail": 0
+    }
+  },
+  "remoteReadOnlyObservations": [
+    {
+      "repository": "Tiinex/provider-native",
+      "workflowRun": 34384279828,
+      "ci": "success",
+      "publish": "failure",
+      "failureClass": "already-published-version observed by npm publish while prior packument read planned bootstrap"
+    },
+    {
+      "repository": "Tiinex/provider-github",
+      "workflowRun": 34384120905,
+      "ci": "success",
+      "publish": "failure",
+      "failureClass": "OIDC npm publish E404 / package absent-or-authorization failure"
+    },
+    {
+      "repository": "Tiinex/runtime-native",
+      "workflowRun": 34383526006,
+      "ci": "success",
+      "publish": "failure",
+      "failureClass": "OIDC npm publish E404 / package absent-or-authorization failure"
+    },
+    {
+      "repository": "Tiinex/verse-playthings",
+      "workflowRun": 34383076970,
+      "ci": "success",
+      "publish": "failure",
+      "failureClass": "OIDC npm publish E404 after runtime/package/release/adapter qualification passed"
+    }
+  ],
+  "behaviorProven": [
+    "GitHub Actions registry reads use bounded no-cache rechecks for transient 404 only.",
+    "401, 403, 429 and 5xx registry responses remain immediate failures.",
+    "Exact published archive, version collision and true absence are distinct states.",
+    "Failed npm publish rechecks registry and accepts idempotency only when dist.integrity exactly matches the prepared archive.",
+    "A mismatched version observed after publish failure remains a version collision, not success."
+  ],
+  "notProven": [
+    "Trusted Publisher configuration for every repository.",
+    "Successful automatic npm publication for every new package.",
+    "External npm registry propagation timing in production."
+  ]
+}

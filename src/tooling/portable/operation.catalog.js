@@ -38,10 +38,18 @@ import { describePortableColdStartIngress, groundPortableColdConsumer, projectPo
 import { projectPortableOperatingOverview } from './overview/operatingOverview.js';
 import { projectPortableGroundingReadiness } from './grounding/grounding.readiness.js';
 import { createPortablePackageOperationEntries } from './operation.catalog.package.js';
+import { compareOrReconcilePortableSourceFrontiers } from './comparison/sourceFrontierComparison.js';
 
 export const PORTABLE_OPERATION_CATALOG_SCHEMA_ID = 'tiinex.portable.operation.catalog.v1';
 
 export const portableOperationCatalog = Object.freeze({
+  'compare-source-frontiers': operation({
+    name: 'compare-source-frontiers',
+    description: 'Compare normalized exact Workspace source frontiers two-way or reconcile base/incoming/current three-way without merge, semantic inference, remote acquisition, or source mutation.',
+    safety: 'read-only',
+    inputSchema: 'tiinex.portable.source-frontier-comparison.request.v1',
+    handler: (input = {}) => wrapPortableResult('compare-source-frontiers', compareOrReconcilePortableSourceFrontiers(input))
+  }),
   'prepare-task': operation({
     name: 'prepare-task',
     description: 'Orchestrate host discovery, schema/provider resolution, schema guides, artifact planning, draft validation, lineage search, or asset analysis into one explicit next-action response.',

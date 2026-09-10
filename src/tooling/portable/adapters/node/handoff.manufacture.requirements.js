@@ -21,7 +21,7 @@ export async function projectManufacturingRequirements({ handoff, workspaceId, h
     if (!runtime) throw new Error(`portable.handoff-manufacture.route.workspace-unresolved:${routeWorkspaceId}`);
     const routeMarkdown = routeWorkspaceId === workspaceId && routePath === handoffPath
       ? handoff.markdown
-      : await readWorkspaceText(runtime.root, routePath, 'portable.handoff-manufacture.route.path');
+      : await readWorkspaceRuntimeText(runtime, routePath, 'portable.handoff-manufacture.route.path');
     const projected = routeWorkspaceId === workspaceId && routePath === handoffPath
       ? primary
       : projectHandoffMaterialRequirements({ id: routePath, path: routePath, semanticStatus: 'unknown', markdown: routeMarkdown });
@@ -75,7 +75,7 @@ export async function resolveWorkspaceRequirementMaterials(requirements, workspa
       const targetRuntime = workspaceRuntimeById.get(targetWorkspaceId);
       const entry = targetRuntime ? entryFromEnumeration(targetRuntime.enumeration, targetPath) : null;
       if (entry) {
-        out.push(materialCandidateFromWorkspaceEntry(requirement, targetWorkspaceId, targetPath, entry, targetRuntime.enumeration));
+        out.push(materialCandidateFromWorkspaceEntry(requirement, targetWorkspaceId, targetPath, entry, targetRuntime.enumeration, targetRuntime));
         continue;
       }
     }
@@ -85,20 +85,28 @@ export async function resolveWorkspaceRequirementMaterials(requirements, workspa
     if (workspaceQualified) {
       const targetRuntime = workspaceRuntimeById.get(workspaceQualified.workspaceId);
       const entry = targetRuntime ? entryFromEnumeration(targetRuntime.enumeration, workspaceQualified.path) : null;
-      if (entry) out.push(materialCandidateFromWorkspaceEntry(requirement, workspaceQualified.workspaceId, workspaceQualified.path, entry, targetRuntime.enumeration));
+      if (entry) out.push(materialCandidateFromWorkspaceEntry(requirement, workspaceQualified.workspaceId, workspaceQualified.path, entry, targetRuntime.enumeration, targetRuntime));
       continue;
     }
     if (isExternalReference(target) || target.startsWith('#')) continue;
     const routeWorkspaceId = String(requirement.routeWorkspaceId || [...workspaceRuntimeById.keys()][0] || '');
     const runtime = workspaceRuntimeById.get(routeWorkspaceId);
     if (!runtime) continue;
+    if (!runtime.root) {
+      const relative = resolveRelativeWorkspaceTarget(String(requirement.routePath || ''), target);
+      if (!relative) continue;
+      const entry = entryFromEnumeration(runtime.enumeration, relative);
+      if (!entry) continue;
+      out.push(materialCandidateFromWorkspaceEntry(requirement, routeWorkspaceId, relative, entry, runtime.enumeration, runtime));
+      continue;
+    }
     const handoffDir = path.dirname(path.resolve(runtime.root, String(requirement.routePath || '')));
     const absolute = path.resolve(handoffDir, decodeURIComponent(target.split('#')[0]));
     if (!inside(runtime.root, absolute)) continue;
     const relative = normalizeRelativePath(path.relative(runtime.root, absolute));
     const entry = entryFromEnumeration(runtime.enumeration, relative);
     if (!entry) continue;
-    out.push(materialCandidateFromWorkspaceEntry(requirement, routeWorkspaceId, relative, entry, runtime.enumeration));
+    out.push(materialCandidateFromWorkspaceEntry(requirement, routeWorkspaceId, relative, entry, runtime.enumeration, runtime));
   }
   return out;
 }
@@ -207,7 +215,7 @@ async function resolveDerivedDependencyMaterial(requirement, sourceMaterial, wor
   if (requirement.targetWorkspaceId && requirement.targetPath) {
     const runtime = workspaceRuntimeById.get(String(requirement.targetWorkspaceId));
     const entry = runtime ? entryFromEnumeration(runtime.enumeration, requirement.targetPath) : null;
-    if (entry) return materialCandidateFromWorkspaceEntry(requirement, requirement.targetWorkspaceId, requirement.targetPath, entry, runtime.enumeration);
+    if (entry) return materialCandidateFromWorkspaceEntry(requirement, requirement.targetWorkspaceId, requirement.targetPath, entry, runtime.enumeration, runtime);
   }
   const target = String(requirement.reference?.target || '');
   const sourcePath = String(sourceMaterial.provenance?.sourcePath || '').trim();
@@ -291,7 +299,19 @@ export function entryFromEnumeration(enumeration = {}, relative = '') {
   return matches.length === 1 ? matches[0] : null;
 }
 
-export function materialCandidateFromWorkspaceEntry(requirement, workspaceId, relative, entry, enumeration) {
+export function materialCandidateFromWorkspaceEntry(requirement, workspaceId, relative, entry, enumeration, runtime = {}) {
+  const packageParentProvider = String(runtime.provider || '').startsWith('qualified-package-parent-workspace');
+  const materializationSource = enumeration?.materialization?.source || {};
+  const provenance = packageParentProvider
+    ? Object.freeze({
+        workspaceId,
+        path: relative,
+        boundary: '.',
+        parentPackagePath: String(materializationSource.parentPackagePath || ''),
+        parentPackageSha256: String(materializationSource.parentPackageSha256 || ''),
+        parentWorkspaceArchivePath: String(materializationSource.parentWorkspaceArchivePath || '')
+      })
+    : Object.freeze({ workspaceId, path: relative, boundary: '.' });
   return Object.freeze({
     requirementId: requirement.id,
     referenceTarget: String(requirement.reference?.target || requirement.referenceTarget || ''),
@@ -300,10 +320,14 @@ export function materialCandidateFromWorkspaceEntry(requirement, workspaceId, re
     bytes: entry.bytes,
     sha256: entry.sha256,
     mediaType: entry.mediaType,
-    providerId: 'node-workspace-enumerator',
-    providerKind: 'qualified-local-workspace',
-    provenance: Object.freeze({ workspaceId, path: relative, boundary: '.' }),
-    authority: Object.freeze({ localIdentityQualified: true, completenessEvidenceFingerprint: enumeration.evidence.entriesFingerprint })
+    providerId: packageParentProvider ? 'package-parent-workspace-enumerator' : 'node-workspace-enumerator',
+    providerKind: packageParentProvider ? 'qualified-package-parent-workspace' : 'qualified-local-workspace',
+    provenance,
+    authority: Object.freeze({
+      localIdentityQualified: true,
+      packageParentWorkspaceQualified: packageParentProvider,
+      completenessEvidenceFingerprint: enumeration.evidence.entriesFingerprint
+    })
   });
 }
 
@@ -316,7 +340,7 @@ function materialCandidateFromWorkspaceBinding(requirement, binding, workspaceRu
   const runtime = workspaceRuntimeById.get(workspaceId);
   const entry = runtime ? entryFromEnumeration(runtime.enumeration, relative) : null;
   if (!entry) return null;
-  return materialCandidateFromWorkspaceEntry(requirement, workspaceId, relative, entry, runtime.enumeration);
+  return materialCandidateFromWorkspaceEntry(requirement, workspaceId, relative, entry, runtime.enumeration, runtime);
 }
 
 async function materialCandidateFromBinding(requirement, binding, workspaceRoot) {
@@ -341,6 +365,15 @@ async function readWorkspaceText(root, relative, code) {
   const absolute = path.resolve(root, relative);
   assertInside(root, absolute, `${code}.outside-workspace`);
   return readFile(absolute, 'utf8');
+}
+
+async function readWorkspaceRuntimeText(runtime, relative, code) {
+  if (runtime?.root) return readWorkspaceText(runtime.root, relative, code);
+  const entry = entryFromEnumeration(runtime?.enumeration, relative);
+  if (!entry) throw new Error(`${code}.unresolved`);
+  const markdown = decodeUtf8(entry.data);
+  if (!markdown) throw new Error(`${code}.non-text`);
+  return markdown;
 }
 
 
