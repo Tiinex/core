@@ -142,7 +142,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
 
 export async function materializeHandoffManufactureCliOutput(result = {}, flags = {}) {
   const workspaceMode = String(result.carrierProjection?.mode || '') === 'workspace';
-  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput(result) : projectHandoffHumanOutput({
+  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput(result, flags) : projectHandoffHumanOutput({
     projection: result.carrierProjection || {},
     route: flags.route || '',
     collisionInstance: flags['collision-instance'] || 1
@@ -191,11 +191,12 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   return { input, options: { verifyRoundtrip, packageInput: { builtAt: flags['built-at'] || undefined } } };
 }
 
-function projectWorkspaceCarrierHumanOutput(result = {}) {
+function projectWorkspaceCarrierHumanOutput(result = {}, flags = {}) {
   const projection = result.carrierProjection || {};
   const ready = result.status === 'ready' && projection.status === 'ready' && projection.mode === 'workspace' && (projection.routes || []).length === 0;
   const dimension = String(projection.lineage?.dimension || '001');
-  const filename = `tiinex-${dimension}.handoff-package.zip`;
+  const projectedFilename = String(flags['projected-filename'] || '').trim();
+  const filename = projectedFilename || `tiinex-${dimension}.handoff-package.zip`;
   return Object.freeze({
     schema: 'tiinex.portable.handoff-human-output.v1',
     status: ready ? 'ready' : 'blocked',
