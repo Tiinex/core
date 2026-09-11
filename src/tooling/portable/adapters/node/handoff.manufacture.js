@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { inferWorkspaceTitle, normalizeAdditionalWorkspaceDescriptors, normalizeTransportRoute, safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
 import { buildToolingBootstrapTransportFiles, PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID } from './handoff.manufacture.bootstrap.js';
+import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runtimeSource.js';
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
 import { enumerateNodeWorkspace, PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID } from './handoff.manufacture.enumeration.js';
@@ -153,6 +154,14 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   const toolingBootstrapResult = await toolingBootstrapPromise;
   if (toolingBootstrapResult.error) throw toolingBootstrapResult.error;
   const toolingBootstrap = toolingBootstrapResult.value;
+  const runtimeSourceAlignment = await qualifyToolingRuntimeSourceAlignment({
+    runtimeIdentity: toolingBootstrap.runtimeIdentity,
+    localWorkspaces: [
+      Object.freeze({ id: workspaceId, root: workspaceRoot, materialization: primaryMaterialization }),
+      ...additionalEnumerations.map(({ id, root, enumerated }) => Object.freeze({ id, root, materialization: enumerated.materialization }))
+    ],
+    maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
+  });
   const orientationBootstrap = input.transportBootstrapContent
     ? Object.freeze({ present: true, path: String(input.transportBootstrapPath || 'tiinex.package/bootstrap.md'), content: String(input.transportBootstrapContent), mediaType: 'text/markdown' })
     : Object.freeze({ present: false });
@@ -175,6 +184,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
       enumeration: enumeration.evidence,
       workspaceEnumerations: Object.freeze(workspaceEnumerations),
       toolingBootstrap: toolingBootstrap.summary,
+      runtimeSourceAlignment,
       packageParentWorkspaceReuse: Object.freeze({
         state: String(packageParentReuse.state || ''),
         providerState: String(packageParentReuse.providerState || ''),

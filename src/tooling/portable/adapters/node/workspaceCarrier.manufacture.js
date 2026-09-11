@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { enumerateNodeWorkspace } from './handoff.manufacture.enumeration.js';
 import { buildToolingBootstrapTransportFiles } from './handoff.manufacture.bootstrap.js';
+import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runtimeSource.js';
 import { inferWorkspaceTitle, normalizeAdditionalWorkspaceDescriptors, safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
 import { normalizeWorkspaceTargetBindings } from './handoff.manufacture.scope.js';
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
@@ -47,6 +48,11 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
     expected: input.expectedToolingBootstrap || null,
     maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
   });
+  const runtimeSourceAlignment = await qualifyToolingRuntimeSourceAlignment({
+    runtimeIdentity: toolingBootstrap.runtimeIdentity,
+    localWorkspaces: enumerations.map((item) => Object.freeze({ id: item.materialization.id, root: item.root, materialization: item.materialization })),
+    maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
+  });
   return Object.freeze({
     carrierMode: 'workspace',
     createdAt: String(input.createdAt || ''),
@@ -56,7 +62,7 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
     carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null),
     carrierProfile: normalizeHandoffCarrierProfile(input.carrierProfile || null),
     toolingBootstrap: toolingBootstrap.summary,
-    manufacturingEvidence: Object.freeze({ workspaceEnumerations: Object.freeze(enumerations.map((item) => Object.freeze({ id: item.materialization.id, root: item.root, evidence: item.evidence }))), toolingBootstrap: toolingBootstrap.summary }),
+    manufacturingEvidence: Object.freeze({ workspaceEnumerations: Object.freeze(enumerations.map((item) => Object.freeze({ id: item.materialization.id, root: item.root, evidence: item.evidence }))), toolingBootstrap: toolingBootstrap.summary, runtimeSourceAlignment }),
     verifyRoundtrip: input.verifyRoundtrip !== false
   });
 }

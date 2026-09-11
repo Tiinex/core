@@ -14,6 +14,7 @@ export async function buildToolingBootstrapTransportFiles(input = {}) {
   const delivery = normalizeDelivery(input.delivery);
   const runtimeRoot = path.resolve(String(input.runtimeRoot || DEFAULT_RUNTIME_ROOT));
   const runtime = await enumerateRuntimeDependencyGraph(runtimeRoot, { maxFiles: input.maxFiles });
+  const runtimeIdentity = runtimeIdentityFromEnumeration(runtime);
   const manifest = Object.freeze({
     schema: PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID,
     version: 1,
@@ -30,7 +31,42 @@ export async function buildToolingBootstrapTransportFiles(input = {}) {
   const summary = Object.freeze({ schema: 'tiinex.portable.tooling-bootstrap.summary.v1', delivery, manifestSha256, representationSha256: runtime.representationSha256, runtimeFiles: runtime.entries.length, runtimeBytes: runtime.totalBytes, status: delivery === 'embedded' ? 'embedded-qualified' : 'persistent-identity-verified', persistentVerification });
   const files = [transportFile('tiinex.bootstrap/manifest.json', manifestBytes, 'tooling-bootstrap-manifest', 'portable-tooling-bootstrap-control')];
   if (delivery === 'embedded') for (const entry of runtime.entries) files.push(transportFile(`tiinex.bootstrap/runtime/${entry.path}`, entry.data, 'tooling-bootstrap-runtime', 'portable-tooling-bootstrap-runtime'));
-  return Object.freeze({ manifest, summary, files: Object.freeze(files) });
+  return Object.freeze({ manifest, summary, files: Object.freeze(files), runtimeIdentity });
+}
+
+export async function buildToolingBootstrapRuntimeIdentity(input = {}) {
+  const runtimeRoot = path.resolve(String(input.runtimeRoot || DEFAULT_RUNTIME_ROOT));
+  const runtime = await enumerateRuntimeDependencyGraph(runtimeRoot, { maxFiles: input.maxFiles });
+  return runtimeIdentityFromEnumeration(runtime);
+}
+
+
+function runtimeIdentityFromEnumeration(runtime = {}) {
+  const runtimeEntries = runtime.entries || [];
+  const packageEntry = runtimeEntries.find((entry) => String(entry?.path || '') === 'package.json');
+  let packageName = '';
+  let packageVersion = '';
+  if (packageEntry?.data) {
+    try {
+      const parsed = JSON.parse(new TextDecoder().decode(packageEntry.data));
+      packageName = String(parsed?.name || '').trim();
+      packageVersion = String(parsed?.version || '').trim();
+    } catch {}
+  }
+  const shaFor = (entryPath) => String(runtimeEntries.find((entry) => String(entry?.path || '') === entryPath)?.sha256 || '');
+  const sourceEntries = runtimeEntries.filter((entry) => String(entry?.path || '') !== 'package.json');
+  const sourceRepresentationSha256 = sha256Text(stableJson(sourceEntries.map(({ path: entryPath, bytes, sha256 }) => ({ path: `runtime/${entryPath}`, bytes, sha256 }))));
+  return Object.freeze({
+    schema: 'tiinex.portable.tooling-runtime-identity.v1',
+    packageName,
+    packageVersion,
+    representationSha256: String(runtime.representationSha256 || ''),
+    sourceRepresentationSha256,
+    runtimeFiles: Number(runtimeEntries.length),
+    runtimeBytes: Number(runtime.totalBytes || 0),
+    entrypointSha256: shaFor('tools/tiinex-portable.mjs'),
+    enumerationPolicySha256: shaFor('src/tooling/portable/adapters/node/handoff.manufacture.enumeration.js')
+  });
 }
 
 function verifyExpectedPersistentBootstrap(expected, manifest, manifestSha256) {
