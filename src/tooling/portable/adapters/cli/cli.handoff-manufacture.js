@@ -172,6 +172,7 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   const additionalWorkspaces = [...splitFlag(flags['additional-workspaces']), ...descriptorArray(workspaceDescriptorValue, 'workspaces')];
   const verifyRoundtrip = !flags['no-roundtrip'];
   const carrierProfile = selectCarrierProfile({ operator: operatorCarrierProfile, runtime: runtime.defaultCarrierProfile || null });
+  const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || '').trim();
   const input = await prepareNodeWorkspaceCarrierManufacturingInput({
     workspaceRoot,
     additionalWorkspaces,
@@ -185,6 +186,7 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
     bootstrapMaxFiles: flags['bootstrap-max-files'],
     verifyRoundtrip,
     createdAt: flags['built-at'] || undefined,
+    projectedFilename,
     carrierLineage: Object.freeze({ ...initialHandoffCarrierLineage(), checkpointKind: 'progression', majorReason: '' }),
     carrierProfile
   }, runtime);
@@ -195,7 +197,7 @@ function projectWorkspaceCarrierHumanOutput(result = {}, flags = {}) {
   const projection = result.carrierProjection || {};
   const ready = result.status === 'ready' && projection.status === 'ready' && projection.mode === 'workspace' && (projection.routes || []).length === 0;
   const dimension = String(projection.lineage?.dimension || '001');
-  const projectedFilename = String(flags['projected-filename'] || '').trim();
+  const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || result?.input?.projectedFilename || '').trim();
   const filename = projectedFilename || `tiinex-${dimension}.handoff-package.zip`;
   return Object.freeze({
     schema: 'tiinex.portable.handoff-human-output.v1',
