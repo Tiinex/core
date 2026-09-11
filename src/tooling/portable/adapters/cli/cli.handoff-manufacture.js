@@ -195,7 +195,7 @@ function projectWorkspaceCarrierHumanOutput(result = {}) {
   const projection = result.carrierProjection || {};
   const ready = result.status === 'ready' && projection.status === 'ready' && projection.mode === 'workspace' && (projection.routes || []).length === 0;
   const dimension = String(projection.lineage?.dimension || '001');
-  const filename = `tiinex-workspace-${dimension}.handoff-package.zip`;
+  const filename = `tiinex-${dimension}.handoff-package.zip`;
   return Object.freeze({
     schema: 'tiinex.portable.handoff-human-output.v1',
     status: ready ? 'ready' : 'blocked',
