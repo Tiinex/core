@@ -199,6 +199,11 @@ function projectWorkspaceCarrierHumanOutput(result = {}, flags = {}) {
   const dimension = String(projection.lineage?.dimension || '001');
   const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || result?.input?.projectedFilename || '').trim();
   const filename = projectedFilename || `tiinex-${dimension}.handoff-package.zip`;
+  // This is a basename-only presentation label; it does not define carrier lineage.
+  if (filename !== filename.trim() || !filename.endsWith('.handoff-package.zip') ||
+      /[<>:"/\\|?*\x00-\x1f\x7f]/.test(filename) || /[. ]$/.test(filename) ||
+      /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(filename) ||
+      new TextEncoder().encode(filename).byteLength > 255) throw new Error('portable.cli.workspace-carrier.filename.invalid');
   return Object.freeze({
     schema: 'tiinex.portable.handoff-human-output.v1',
     status: ready ? 'ready' : 'blocked',

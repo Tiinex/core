@@ -4,13 +4,15 @@ import { sha256Hex } from '../../../../export/package.bytes.js';
 import { safeWorkspaceToken, serializableMetadata } from './handoff.manufacture.multiRoot.js';
 
 export const PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID = 'tiinex.portable.node-workspace-enumeration.v1';
-export const DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_DIRECTORIES = Object.freeze(['.git', '.tiinex', 'node_modules', '.site-publish']);
+export const DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_DIRECTORIES = Object.freeze(['.git', '.tiinex', 'node_modules', '.site-publish', '.release', '.outgoing-handoff-packages']);
+export const DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_RELATIVE_PATHS = Object.freeze(['.vscode/link']);
 const DEFAULT_MAX_FILES = 10000;
 
 export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
   const root = path.resolve(String(rootInput || '.'));
   const maxFiles = positiveInteger(options.maxFiles, DEFAULT_MAX_FILES);
   const excluded = new Set([...(options.excludeDirectories || DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_DIRECTORIES)].map(String));
+  const excludedPaths = new Set(options.excludeRelativePaths || DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_RELATIVE_PATHS);
   const queue = [root];
   const absoluteFiles = [];
   const skippedSymlinks = [];
@@ -21,6 +23,7 @@ export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
     for (const entry of entries) {
       if (entry.isDirectory() && excluded.has(entry.name)) continue;
       const absolute = path.join(current, entry.name);
+      if (excludedPaths.has(normalizeRelativePath(path.relative(root, absolute)))) continue;
       if (entry.isSymbolicLink()) { skippedSymlinks.push(normalizeRelativePath(path.relative(root, absolute))); continue; }
       if (entry.isDirectory()) queue.push(absolute);
       else if (entry.isFile()) absoluteFiles.push(absolute);
@@ -59,7 +62,7 @@ export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
     workspaceId,
     entryCount: includedEntries.length,
     totalBytes,
-    exclusions: Object.freeze({ directories: Object.freeze([...excluded].sort()), symbolicLinks: 'excluded-and-reported' }),
+    exclusions: Object.freeze({ directories: Object.freeze([...excluded].sort()), relativePaths: Object.freeze([...excludedPaths].sort()), symbolicLinks: 'excluded-and-reported' }),
     skippedSymlinks: Object.freeze(skippedSymlinks.sort()),
     entriesFingerprint: sha256Text(stableJson(includedEntries))
   });

@@ -1,0 +1,484 @@
+
+> @tiinex/core@0.1.1 validate
+> npm test && npm run test:portable && npm run test:bootstrap
+
+
+> @tiinex/core@0.1.1 test
+> node --test test/*.test.mjs
+
+TAP version 13
+# Subtest: projects exact parent identity without chronology or title inference
+ok 1 - projects exact parent identity without chronology or title inference
+  ---
+  duration_ms: 2.572248
+  type: 'test'
+  ...
+# Subtest: projects handoff endpoints from exact references and never names alone
+ok 2 - projects handoff endpoints from exact references and never names alone
+  ---
+  duration_ms: 2.268404
+  type: 'test'
+  ...
+# Subtest: produces Playthings-neutral records with unknown actions and exact ancestry
+ok 3 - produces Playthings-neutral records with unknown actions and exact ancestry
+  ---
+  duration_ms: 1.010784
+  type: 'test'
+  ...
+# Subtest: browser entry dependency src/public/index.js has no Node builtin import
+ok 4 - browser entry dependency src/public/index.js has no Node builtin import
+  ---
+  duration_ms: 2.261511
+  type: 'test'
+  ...
+# Subtest: browser entry dependency src/public/applicationProjection.js has no Node builtin import
+ok 5 - browser entry dependency src/public/applicationProjection.js has no Node builtin import
+  ---
+  duration_ms: 8.177429
+  type: 'test'
+  ...
+# Subtest: browser entry dependency src/public/companionResources.js has no Node builtin import
+ok 6 - browser entry dependency src/public/companionResources.js has no Node builtin import
+  ---
+  duration_ms: 0.81202
+  type: 'test'
+  ...
+# Subtest: browser entry dependency src/artifacts/artifact.parse.js has no Node builtin import
+ok 7 - browser entry dependency src/artifacts/artifact.parse.js has no Node builtin import
+  ---
+  duration_ms: 8.490508
+  type: 'test'
+  ...
+# Subtest: specificity resolves before provider precedence
+ok 8 - specificity resolves before provider precedence
+  ---
+  duration_ms: 4.227028
+  type: 'test'
+  ...
+# Subtest: same specificity uses deployment override precedence
+ok 9 - same specificity uses deployment override precedence
+  ---
+  duration_ms: 1.10978
+  type: 'test'
+  ...
+# Subtest: collection slots append distinct resource keys across provider layers
+ok 10 - collection slots append distinct resource keys across provider layers
+  ---
+  duration_ms: 3.226043
+  type: 'test'
+  ...
+# Subtest: equal single-value conflicts fail closed
+ok 11 - equal single-value conflicts fail closed
+  ---
+  duration_ms: 2.360827
+  type: 'test'
+  ...
+# Subtest: workspace artifact-local companion outranks schema defaults
+ok 12 - workspace artifact-local companion outranks schema defaults
+  ---
+  duration_ms: 4.573209
+  type: 'test'
+  ...
+# Subtest: manufacture excludes generated .release/old.tgz but preserves tasks and source
+ok 13 - manufacture excludes generated .release/old.tgz but preserves tasks and source
+  ---
+  duration_ms: 80.633613
+  type: 'test'
+  ...
+# Subtest: manufacture excludes generated .outgoing-handoff-packages/old.zip but preserves tasks and source
+ok 14 - manufacture excludes generated .outgoing-handoff-packages/old.zip but preserves tasks and source
+  ---
+  duration_ms: 20.983081
+  type: 'test'
+  ...
+# Subtest: manufacture excludes generated .vscode/link/state.json but preserves tasks and source
+ok 15 - manufacture excludes generated .vscode/link/state.json but preserves tasks and source
+  ---
+  duration_ms: 25.355384
+  type: 'test'
+  ...
+# Subtest: pointerless filename is a safe transport label and never invents route or lineage
+ok 16 - pointerless filename is a safe transport label and never invents route or lineage
+  ---
+  duration_ms: 3.883475
+  type: 'test'
+  ...
+# Subtest: bootstrap chooses explicit stable package floor
+ok 17 - bootstrap chooses explicit stable package floor
+  ---
+  duration_ms: 3.215693
+  type: 'test'
+  ...
+# Subtest: default patch needs no version edit or tag
+ok 18 - default patch needs no version edit or tag
+  ---
+  duration_ms: 3.073808
+  type: 'test'
+  ...
+# Subtest: features get minor
+ok 19 - features get minor
+  ---
+  duration_ms: 0.702067
+  type: 'test'
+  ...
+# Subtest: breaking marker before 1.0 gets minor, not an involuntary 1.0
+ok 20 - breaking marker before 1.0 gets minor, not an involuntary 1.0
+  ---
+  duration_ms: 0.414759
+  type: 'test'
+  ...
+# Subtest: explicit major opts in to 1.0
+ok 21 - explicit major opts in to 1.0
+  ---
+  duration_ms: 0.500501
+  type: 'test'
+  ...
+# Subtest: strongest batch signal wins
+ok 22 - strongest batch signal wins
+  ---
+  duration_ms: 0.34294
+  type: 'test'
+  ...
+# Subtest: surface removal is not downgraded by patch marker
+ok 23 - surface removal is not downgraded by patch marker
+  ---
+  duration_ms: 0.842902
+  type: 'test'
+  ...
+# Subtest: post-1.0 break yields major
+ok 24 - post-1.0 break yields major
+  ---
+  duration_ms: 0.396818
+  type: 'test'
+  ...
+# Subtest: retry of already released commit skips
+ok 25 - retry of already released commit skips
+  ---
+  duration_ms: 0.770334
+  type: 'test'
+  ...
+# Subtest: a prerelease of same commit does not suppress its stable promotion
+ok 26 - a prerelease of same commit does not suppress its stable promotion
+  ---
+  duration_ms: 0.841031
+  type: 'test'
+  ...
+# Subtest: only master can obtain permission
+ok 27 - only master can obtain permission
+  ---
+  duration_ms: 1.84392
+  type: 'test'
+  ...
+# Subtest: PR, fork, local invocation and disabled config cannot publish
+ok 28 - PR, fork, local invocation and disabled config cannot publish
+  ---
+  duration_ms: 0.371796
+  type: 'test'
+  ...
+# Subtest: registry auth/network/server failures never mean package absent
+ok 29 - registry auth/network/server failures never mean package absent
+  ---
+  duration_ms: 1.885374
+  type: 'test'
+  ...
+# Subtest: only actual 404 permits bootstrap
+ok 30 - only actual 404 permits bootstrap
+  ---
+  duration_ms: 8.252846
+  type: 'test'
+  ...
+# Subtest: registry 404 can settle to a visible package under an explicit bounded retry policy
+ok 31 - registry 404 can settle to a visible package under an explicit bounded retry policy
+  ---
+  duration_ms: 1.435826
+  type: 'test'
+  ...
+# Subtest: bounded registry retry still reports durable 404 as absence
+ok 32 - bounded registry retry still reports durable 404 as absence
+  ---
+  duration_ms: 0.642176
+  type: 'test'
+  ...
+# Subtest: authorization and server failures are never retried as propagation lag
+ok 33 - authorization and server failures are never retried as propagation lag
+  ---
+  duration_ms: 0.476274
+  type: 'test'
+  ...
+# Subtest: published archive state distinguishes exact idempotency, version collision and absence
+ok 34 - published archive state distinguishes exact idempotency, version collision and absence
+  ---
+  duration_ms: 0.244025
+  type: 'test'
+  ...
+# Subtest: published Core package excludes repository-only cases and fixtures
+ok 35 - published Core package excludes repository-only cases and fixtures
+  ---
+  duration_ms: 2858.752834
+  type: 'test'
+  ...
+# Subtest: missing material is not promoted to a semantic root
+ok 36 - missing material is not promoted to a semantic root
+  ---
+  duration_ms: 5.081696
+  type: 'test'
+  ...
+# Subtest: duplicate identity never silently selects last writer or enters story data
+ok 37 - duplicate identity never silently selects last writer or enters story data
+  ---
+  duration_ms: 10.007591
+  type: 'test'
+  ...
+# Subtest: schema fallback follows declarations, reports cycles and never invents ancestry
+ok 38 - schema fallback follows declarations, reports cycles and never invents ancestry
+  ---
+  duration_ms: 3.117892
+  type: 'test'
+  ...
+# Subtest: dotted artifact stems do not change companion namespace
+ok 39 - dotted artifact stems do not change companion namespace
+  ---
+  duration_ms: 1.573779
+  type: 'test'
+  ...
+# Subtest: provider path traversal and unknown owner kinds fail closed
+ok 40 - provider path traversal and unknown owner kinds fail closed
+  ---
+  duration_ms: 2.12584
+  type: 'test'
+  ...
+# Subtest: keyed append is stable across registration order and overrides only matching keys
+ok 41 - keyed append is stable across registration order and overrides only matching keys
+  ---
+  duration_ms: 3.668895
+  type: 'test'
+  ...
+# Subtest: directory-local continuation allocation does not import Parent filename lineage across directories
+ok 42 - directory-local continuation allocation does not import Parent filename lineage across directories
+  ---
+  duration_ms: 2.811997
+  type: 'test'
+  ...
+# Subtest: directory-local allocation advances only from the target directory namespace
+ok 43 - directory-local allocation advances only from the target directory namespace
+  ---
+  duration_ms: 1.04953
+  type: 'test'
+  ...
+# Subtest: same-directory continuation retains local child progression
+ok 44 - same-directory continuation retains local child progression
+  ---
+  duration_ms: 1.763664
+  type: 'test'
+  ...
+# Subtest: standalone directory allocation is isolated from sibling directories
+ok 45 - standalone directory allocation is isolated from sibling directories
+  ---
+  duration_ms: 1.447534
+  type: 'test'
+  ...
+# Subtest: Workspace-qualified Parent references remain addresses, not local path allocation authority
+ok 46 - Workspace-qualified Parent references remain addresses, not local path allocation authority
+  ---
+  duration_ms: 0.945911
+  type: 'test'
+  ...
+# Subtest: explicit package-parent Workspace aliases supersede renamed predecessor ids without treating carrier lineage as source authority
+ok 47 - explicit package-parent Workspace aliases supersede renamed predecessor ids without treating carrier lineage as source authority
+  ---
+  duration_ms: 1.48466
+  type: 'test'
+  ...
+# Subtest: package-parent carrier lineage does not implicitly select parent Workspace source
+ok 48 - package-parent carrier lineage does not implicitly select parent Workspace source
+  ---
+  duration_ms: 13.29709
+  type: 'test'
+  ...
+# Subtest: package-parent Workspace reuse requires exact explicit ids or all
+ok 49 - package-parent Workspace reuse requires exact explicit ids or all
+  ---
+  duration_ms: 1.143154
+  type: 'test'
+  ...
+# Subtest: qualified package-parent Workspace providers supply exact requirement bytes without local-root provenance
+ok 50 - qualified package-parent Workspace providers supply exact requirement bytes without local-root provenance
+  ---
+  duration_ms: 1.591984
+  type: 'test'
+  ...
+# Subtest: selected route Parent continuity crosses into provider-only Workspaces as detached exact dependencies
+ok 51 - selected route Parent continuity crosses into provider-only Workspaces as detached exact dependencies
+  ---
+  duration_ms: 5.696832
+  type: 'test'
+  ...
+# Subtest: package-v1 cache serialization preserves exact Parent-boundary Workspace coordinates and byte identity
+ok 52 - package-v1 cache serialization preserves exact Parent-boundary Workspace coordinates and byte identity
+  ---
+  duration_ms: 14.625479
+  type: 'test'
+  ...
+# {
+#   "policy": "tiinex.master-npm-release.v1",
+#   "action": "publish",
+#   "name": "@tiinex/fixture",
+#   "version": "0.1.0",
+#   "previousVersion": null,
+#   "previousCommit": null,
+#   "sourceCommit": "f9e5e1fe70596e51081eef8e489be00fc3e0e6be",
+#   "decision": {
+#     "bump": "bootstrap",
+#     "rawSeverity": "bootstrap",
+#     "targetVersion": "0.1.0",
+#     "reasons": [
+#       "First stable version: explicit source package floor."
+#     ]
+#   },
+#   "file": ".release/tiinex-fixture-0.1.0.tgz",
+#   "integrity": "sha512-HdU+KvCr1+Ke93gUlO6LzrT100rV3sUQCeDm9jbkBUZfW4wFRM3M6jtKp+PHMPS+dfiwAdr+QXNUfsKbmJuZzg==",
+#   "bytes": 423
+# }
+# {"policy":"tiinex.master-npm-release.v1","action":"skip","reason":"source-already-published","version":"0.1.0","sourceCommit":"f9e5e1fe70596e51081eef8e489be00fc3e0e6be"}
+# {
+#   "policy": "tiinex.master-npm-release.v1",
+#   "action": "publish",
+#   "name": "@tiinex/fixture",
+#   "version": "0.2.0",
+#   "previousVersion": "0.1.0",
+#   "previousCommit": "f9e5e1fe70596e51081eef8e489be00fc3e0e6be",
+#   "sourceCommit": "8ceb570220bf4ba2c33a2a7193c8d8033d8ddc5f",
+#   "decision": {
+#     "bump": "minor",
+#     "rawSeverity": "minor",
+#     "targetVersion": "0.2.0",
+#     "reasons": [
+#       "feature commit marker detected"
+#     ],
+#     "explicit": false
+#   },
+#   "file": ".release/tiinex-fixture-0.2.0.tgz",
+#   "integrity": "sha512-lwvlRRqSXXC6zujKqdJTA+FrU7cjRhfhaHq5Ikd6X5UweHuL6EGeHXqFpYgE873/q7rjgFHdlLI8ug8YN5FO7g==",
+#   "bytes": 432
+# }
+# Subtest: release prepares exact source, keeps canonical versions unchanged and detects archive tampering
+ok 53 - release prepares exact source, keeps canonical versions unchanged and detects archive tampering
+  ---
+  duration_ms: 3384.200452
+  type: 'test'
+  ...
+# Subtest: Secure Transport V1 profile gives independent password slots over one exact authenticated payload and rotates recipients without re-encryption
+ok 54 - Secure Transport V1 profile gives independent password slots over one exact authenticated payload and rotates recipients without re-encryption
+  ---
+  duration_ms: 5007.387679
+  type: 'test'
+  ...
+# Subtest: Secure Transport V1 rejects empty passwords before slot derivation/wrapping and empty open candidates remain locked as wrong-password
+ok 55 - Secure Transport V1 rejects empty passwords before slot derivation/wrapping and empty open candidates remain locked as wrong-password
+  ---
+  duration_ms: 472.750294
+  type: 'test'
+  ...
+# Subtest: Transport Envelope V1 renderer emits the plain schema id and no mutable branch locator
+ok 56 - Transport Envelope V1 renderer emits the plain schema id and no mutable branch locator
+  ---
+  duration_ms: 519.581228
+  type: 'test'
+  ...
+# Subtest: Secure Transport V1 authenticates profile/workspace metadata and fails closed for tamper, truncation, malformed metadata and unsupported profiles
+ok 57 - Secure Transport V1 authenticates profile/workspace metadata and fails closed for tamper, truncation, malformed metadata and unsupported profiles
+  ---
+  duration_ms: 1747.48564
+  type: 'test'
+  ...
+# Subtest: Secure Transport V1 uses fresh per-Workspace encryption state and envelope artifacts preserve only non-secret deterministic opening metadata
+ok 58 - Secure Transport V1 uses fresh per-Workspace encryption state and envelope artifacts preserve only non-secret deterministic opening metadata
+  ---
+  duration_ms: 664.331108
+  type: 'test'
+  ...
+# Subtest: sealed Handoff Package bindings reject mixed clear fields and clear package manufacture remains backward compatible
+ok 59 - sealed Handoff Package bindings reject mixed clear fields and clear package manufacture remains backward compatible
+  ---
+  duration_ms: 258.891315
+  type: 'test'
+  ...
+# Subtest: secure Handoff package keeps sealed Workspace provider inactive until authenticated open and ordinary Workspace qualification succeeds
+ok 60 - secure Handoff package keeps sealed Workspace provider inactive until authenticated open and ordinary Workspace qualification succeeds
+  ---
+  duration_ms: 3171.771808
+  type: 'test'
+  ...
+# Subtest: package open fails closed on unsafe recovered ZIP paths and on zero or multiple exact Workspace-artifact correlations
+ok 61 - package open fails closed on unsafe recovered ZIP paths and on zero or multiple exact Workspace-artifact correlations
+  ---
+  duration_ms: 3862.368364
+  type: 'test'
+  ...
+# Subtest: pure two-way comparison has deterministic exact fast path, add/remove/change deltas, and Workspace asymmetry
+ok 62 - pure two-way comparison has deterministic exact fast path, add/remove/change deltas, and Workspace asymmetry
+  ---
+  duration_ms: 43.084168
+  type: 'test'
+  ...
+# Subtest: three-way reconciliation classifies incoming-only, current-only, same-result concurrent, and conflict candidates without merging
+ok 63 - three-way reconciliation classifies incoming-only, current-only, same-result concurrent, and conflict candidates without merging
+  ---
+  duration_ms: 4.115676
+  type: 'test'
+  ...
+# Subtest: normalized comparison rejects absolute/traversal paths and compact summary bounds path projection
+ok 64 - normalized comparison rejects absolute/traversal paths and compact summary bounds path projection
+  ---
+  duration_ms: 10.46763
+  type: 'test'
+  ...
+# Subtest: local inputs reuse manufacture enumeration exclusions and do not compare local state, dependencies, publish output, or symlink targets
+ok 65 - local inputs reuse manufacture enumeration exclusions and do not compare local state, dependencies, publish output, or symlink targets
+  ---
+  duration_ms: 54.359168
+  type: 'test'
+  ...
+# Subtest: Node adapter supports package/package, local/package, and local multi-Workspace/package exact comparisons
+ok 66 - Node adapter supports package/package, local/package, and local multi-Workspace/package exact comparisons
+  ---
+  duration_ms: 391.31935
+  type: 'test'
+  ...
+# Subtest: invalid package/input fails closed with qualification state and no projected Workspace paths
+ok 67 - invalid package/input fails closed with qualification state and no projected Workspace paths
+  ---
+  duration_ms: 8.745998
+  type: 'test'
+  ...
+# Subtest: sealed package comparison remains opaque while locked and reveals exact paths only through a package-correlated authorized open result
+ok 68 - sealed package comparison remains opaque while locked and reveals exact paths only through a package-correlated authorized open result
+  ---
+  duration_ms: 1283.18864
+  type: 'test'
+  ...
+# Subtest: three-way Node adapter accepts the actual child-return shape with explicit base/incoming/current kinds
+ok 69 - three-way Node adapter accepts the actual child-return shape with explicit base/incoming/current kinds
+  ---
+  duration_ms: 18.631631
+  type: 'test'
+  ...
+1..69
+# tests 69
+# suites 0
+# pass 69
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19537.856665
+
+> @tiinex/core@0.1.1 test:portable
+> node test/portable-smoke.mjs
+
+portable node surface imports
+
+> @tiinex/core@0.1.1 test:bootstrap
+> node tools/check-bootstrap.mjs
+
+{"schema":"tiinex.portable.tooling-bootstrap.summary.v1","delivery":"embedded","manifestSha256":"b7c7313c5055d4445efe6e73266f594235d69d5992b95c10fa5845158f01fb22","representationSha256":"c040cc609838d6eccfa0023c93db3841756bc4e82af2ecfa7a8e9585b6785f09","runtimeFiles":488,"runtimeBytes":5340480,"status":"embedded-qualified","persistentVerification":{"state":"not-required"}}

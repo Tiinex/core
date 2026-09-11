@@ -1,0 +1,135 @@
+[
+  {
+    "workspace": "cli",
+    "path": ".release/plan.json",
+    "bytes": 598,
+    "sha256": "11726040ec4cd338f077c4b6117eba4bfa5fe856c06d7d714a641ad551e3a856",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "cli",
+    "path": ".release/tiinex-cli-0.1.0.tgz",
+    "bytes": 5455,
+    "sha256": "24da8bbabfeab8cdce3b3ee4074872a7f5407b3f9fea8267c8147cc859662e8a",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "extension-vscode",
+    "path": ".vscode/link/state.json",
+    "bytes": 501,
+    "sha256": "b0416c29cc8897f00f30a5642c87868cf1e10fe0bdee2b01a14983e9f3012a83",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "interop-native",
+    "path": ".release/plan.json",
+    "bytes": 620,
+    "sha256": "80d1e11f45e3c9dbdbbcd1181760c25e29281fb73a2e82ae876bdc737507a814",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "interop-native",
+    "path": ".release/tiinex-interop-native-0.1.0.tgz",
+    "bytes": 5415,
+    "sha256": "8f97b94c652e09d65ca37760a90e57e0581dec3b1fb338e5b0a3ecd53075e97a",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": ".release/plan.json",
+    "bytes": 620,
+    "sha256": "e3f8939a21243c0f93939df9912c0bf014751cce248f6a5e0a6edf19d8b0cc45",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": ".release/tiinex-interop-openai-0.1.0.tgz",
+    "bytes": 5415,
+    "sha256": "bcb593414b30ad43f9976808b19f25a571f4b9f594461ff6a32fabcb4e97638d",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "provider-github",
+    "path": ".release/plan.json",
+    "bytes": 622,
+    "sha256": "d8b86f756c6cfd858b08cbd1f99dff364a0c43a3edbe7741a7a250da25a83582",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "provider-github",
+    "path": ".release/tiinex-provider-github-0.1.0.tgz",
+    "bytes": 5384,
+    "sha256": "4f598ab49419968f8a29db25a62ecbf111aadee291ccdeb304f1e33d24f9a8b2",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "provider-native",
+    "path": ".release/plan.json",
+    "bytes": 622,
+    "sha256": "7dcf599e55ed81d47fd27f7cb5331a17b904e936303c9f9559b3312409961eff",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "provider-native",
+    "path": ".release/tiinex-provider-native-0.1.0.tgz",
+    "bytes": 5385,
+    "sha256": "7d42e1823e6c31babb2b1b478dd28fff48dbffd6709087093285a190acc4737a",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "runtime-native",
+    "path": ".release/plan.json",
+    "bytes": 620,
+    "sha256": "5b1736db0ecfe61d7995226403f55f3acafa3d1f8d15a47a368c5c45480c6ece",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "runtime-native",
+    "path": ".release/tiinex-runtime-native-0.1.0.tgz",
+    "bytes": 5458,
+    "sha256": "4daac5c1f2834693a7a7a5428408b5b59be31d9ac3ea8f18969f904a4fad2059",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "verse-atlas",
+    "path": ".release/plan.json",
+    "bytes": 614,
+    "sha256": "b3df3d38709349dd133e73fc8e621aca3d6fec4e9ee026eb83684053d6da5423",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "verse-atlas",
+    "path": ".release/tiinex-verse-atlas-0.1.0.tgz",
+    "bytes": 5405,
+    "sha256": "98b96f0a4f56a2cb5f78272eb7201c9481fdf81a4d960f8aa8f6d22e29f185ac",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "verse-native",
+    "path": ".release/plan.json",
+    "bytes": 616,
+    "sha256": "28f370fe3c849674a1e2d41ecb344aaf416e3fd6bc7283f8a6d5990a433cc3b6",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "verse-native",
+    "path": ".release/tiinex-verse-native-0.1.0.tgz",
+    "bytes": 5386,
+    "sha256": "64a095361fd7063cc3fda92b3fd009ec86a67a28b8ad16a123a81fb31727c5a7",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "verse-playthings",
+    "path": ".release/plan.json",
+    "bytes": 625,
+    "sha256": "3f42307b4cfb8eed5a6263b0ef583800b55ce09deabf39103e25c9a6bd0a7ca2",
+    "reason": "local-generated-state-not-source"
+  },
+  {
+    "workspace": "verse-playthings",
+    "path": ".release/tiinex-verse-playthings-0.1.0.tgz",
+    "bytes": 76776,
+    "sha256": "b63b130ac1fcfc73cd8b5e79b86d95ff48a37ec71cb3fc4a1fb169c3944873a7",
+    "reason": "local-generated-state-not-source"
+  }
+]
