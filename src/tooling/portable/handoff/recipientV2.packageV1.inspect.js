@@ -284,7 +284,7 @@ function qualifyParentBoundaryCacheRequirementIds(caches = [], workspaceByteProv
 function resolveRelativeWorkspacePath(sourcePath = '', target = '') {
   let raw;
   try { raw = decodeURIComponent(String(target || '').split('#')[0].split('?')[0]); } catch { return ''; }
-  if (!raw || raw.startsWith('/') || raw.startsWith('\\') || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('//')) return '';
+  if (!raw || raw.startsWith('/') || raw.startsWith('\\') || raw.includes('::') || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('//')) return '';
   const parts = normalizeWorkspacePath(sourcePath).split('/').slice(0, -1);
   for (const part of raw.replace(/\\/g, '/').split('/')) {
     if (!part || part === '.') continue;

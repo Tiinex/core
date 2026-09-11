@@ -9,6 +9,7 @@ import { resolveSchemaModule } from '../../../../schemas/resolver.js';
 import { loadNodePortableInput } from '../../input/node.input.js';
 import { runPortableOperation } from '../../operation.catalog.js';
 import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../../../../transitions/record.transitions.js';
+import { classifyParentRecoveryReference } from '../../../../lineage/parentRecoveryReference.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 
@@ -137,9 +138,16 @@ async function parentRecordFromArtifact(parentPath, parentRelativePath, context 
     currentCreatedAt: String(current.createdAt || ''),
     createdAt: String(current.createdAt || ''),
     markdown,
-    recoveryMode: 'local-relative',
+    recoveryMode: parentRecoveryMode(parentRelativePath),
     schemaReferenceAuthority
   });
+}
+
+export function parentRecoveryMode(reference = '') {
+  const classification = classifyParentRecoveryReference(reference);
+  if (classification.kind === 'workspace-qualified') return 'workspace-qualified';
+  if (classification.kind === 'malformed-workspace-qualified') throw new Error('portable.cli.author.parent.workspace-qualified.malformed');
+  return 'local-relative';
 }
 
 function exactDeclaredSchemaReferenceAuthority(schemaId, schemaTarget) {

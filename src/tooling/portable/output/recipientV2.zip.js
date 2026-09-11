@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { packageFileBytes } from '../../../export/package.bytes.js';
 import { inspectRecipientFacingV2Topology } from '../handoff/recipientV2.inspect.js';
@@ -38,15 +38,29 @@ export async function writeRecipientFacingV2PackageZip(bundle = {}, outputPath =
   if (!target.toLowerCase().endsWith('.zip')) throw new Error('portable.recipient-v2.zip.output.extension');
   await mkdir(path.dirname(target), { recursive: true });
   const buffer = recipientFacingV2PackageZipBuffer(bundle, options);
-  await writeFile(target, buffer);
+  const exactWrite = await writeExactRecipientTransportBytes(target, buffer);
   return Object.freeze({
     schema: 'tiinex.portable.recipient-facing-v2.zip-write.v1',
-    status: 'written',
+    status: exactWrite.status,
     path: target,
     bytes: buffer.length,
     transportFormat: RECIPIENT_V2_FORMAT_ID,
     boundary: Object.freeze({ localFilesystemWrite: true, remoteWrite: false, sourceMutation: false })
   });
+}
+
+export async function writeExactRecipientTransportBytes(outputPath = '', data = new Uint8Array()) {
+  const target = path.resolve(String(outputPath || '').trim());
+  const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+  try {
+    await writeFile(target, buffer, { flag: 'wx' });
+    return Object.freeze({ status: 'written', path: target, bytes: buffer.length });
+  } catch (error) {
+    if (error?.code !== 'EEXIST') throw error;
+    const existing = await readFile(target);
+    if (!existing.equals(buffer)) throw new Error('portable.recipient-v2.zip.output-collision-divergent');
+    return Object.freeze({ status: 'reused-identical', path: target, bytes: buffer.length });
+  }
 }
 
 function bufferViewOfPackageFile(file = {}) {

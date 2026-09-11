@@ -1,3 +1,5 @@
+import { isMalformedWorkspaceQualifiedRecoveryReference } from '../lineage/parentRecoveryReference.js';
+
 export function rootValidate(artifact) {
   const findings = [];
   const envelope = artifact?.envelope || {};
@@ -20,6 +22,13 @@ export function rootValidate(artifact) {
     const labels = originEntries.map((entry) => String(entry?.label || '').trim()).filter(Boolean);
     const duplicateLabels = [...new Set(labels.filter((label, index) => labels.indexOf(label) !== index))];
     for (const label of duplicateLabels) findings.push(error('root.parent.origin.label.duplicate', `Parent Origin recovery label is duplicated: ${label}.`));
+    const recoveryReferences = [
+      Object.freeze({ field: 'Trace', target: String(parent.trace || '').trim() }),
+      ...originEntries.map((entry) => Object.freeze({ field: `Origin:${String(entry?.label || '').trim() || 'unlabelled'}`, target: String(entry?.target || '').trim() }))
+    ].filter((entry) => entry.target);
+    for (const reference of recoveryReferences) {
+      if (isMalformedWorkspaceQualifiedRecoveryReference(reference.target)) findings.push(error('root.parent.recovery.workspace-qualified.malformed', `Parent ${reference.field} contains a malformed Workspace-qualified recovery locator: ${reference.target}.`));
+    }
   }
   if (envelope.repairsDeclared) findings.push(info('root.repairs.declared', 'Envelope declares repair notes; validators should preserve unknown repair fields.'));
   if (!findings.some((finding) => finding.severity === 'error')) findings.push(info('root.envelope.readable', 'Root envelope is readable at current validation depth.'));

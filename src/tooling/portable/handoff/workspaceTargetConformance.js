@@ -1,5 +1,6 @@
 import { validatedC14nV2PrimarySelfDigest } from '../../../integrity/integrity.c14nV2.js';
 import { qualifyTiinexRouteArtifact } from './routeArtifactConformance.js';
+import { classifyParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
 
 export const HANDOFF_WORKSPACE_TARGET_CONFORMANCE_SCHEMA_ID = 'tiinex.portable.handoff-workspace-target-conformance.v1';
 
@@ -48,7 +49,10 @@ function resolveWorkspaceParent({ entries = [], parentCandidates = [], targetPat
   const indexed = indexEntries(entries);
   const recoveryIndexed = indexEntries(parentCandidates);
   const localCandidates = new Map();
-  for (const reference of parentLocalReferences(parent)) {
+  for (const reference of parentRecoveryReferences(parent)) {
+    const classification = classifyParentRecoveryReference(reference);
+    if (classification.kind === 'malformed-workspace-qualified') return Object.freeze({ state: 'unavailable', reason: 'parent-workspace-qualified-reference-malformed' });
+    if (classification.kind !== 'local-relative') continue;
     const resolvedPath = resolveRelativeReference(targetPath, reference);
     if (!resolvedPath) continue;
     const entry = indexed.get(resolvedPath);
@@ -87,18 +91,18 @@ function indexEntries(entries = []) {
   return out;
 }
 
-function parentLocalReferences(parent = {}) {
+function parentRecoveryReferences(parent = {}) {
   const out = [];
-  if (parent.trace && !isExternalReference(parent.trace)) out.push(String(parent.trace));
+  if (parent.trace) out.push(String(parent.trace));
   for (const entry of parent.originEntries || []) {
-    if (String(entry?.label || '').trim() === 'relative' && entry?.target && !isExternalReference(entry.target)) out.push(String(entry.target));
+    if (String(entry?.label || '').trim() === 'relative' && entry?.target) out.push(String(entry.target));
   }
   return [...new Set(out)];
 }
 
 function resolveRelativeReference(fromPath = '', reference = '') {
   const base = normalizeInnerPath(fromPath);
-  if (!base || !reference || isExternalReference(reference)) return '';
+  if (!base || !reference || isExternalReference(reference) || String(reference).includes('::')) return '';
   let clean;
   try { clean = decodeURIComponent(String(reference).split('#')[0].split('?')[0]); } catch { return ''; }
   if (!clean || clean.startsWith('/') || clean.startsWith('\\') || /^[A-Za-z]:[\\/]/.test(clean)) return '';

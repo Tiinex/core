@@ -4,6 +4,7 @@ import { projectHandoffMaterialRequirements, projectParticipantRoleRequirements 
 import { qualifySelectedHandoffArtifact } from './routeArtifactConformance.js';
 import { listHandoffWorkspaceEntries, resolveHandoffWorkspaceEntry } from './workspaceByteProvider.js';
 import { parseWorkspaceQualifiedReference, SHARED_ROUTE_REQUIRED_CONTEXT_BOUNDARY } from './workspaceQualifiedReference.js';
+import { classifyParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
 import { decodeUtf8, deepFreeze, findFile, normalizeWorkspacePath } from './carrierProjection.shared.js';
 
 export function qualifyRoute(bundle, descriptor, byteProvider, workspace, spec = {}, options = {}) {
@@ -132,13 +133,27 @@ function resolveDescriptorMaterial(bundle, descriptor, byteProvider, target = ''
 }
 
 function resolveRouteParent(bundle, descriptor, byteProvider, workspace, routePath, parent = {}, targetEntry = {}) {
-  const localTargets = [];
-  if (parent.trace && !isExternalReference(parent.trace)) localTargets.push(String(parent.trace));
+  const recoveryTargets = [];
+  if (parent.trace) recoveryTargets.push(String(parent.trace));
   for (const entry of parent.originEntries || []) {
-    if (String(entry?.label || '').trim() === 'relative' && entry?.target && !isExternalReference(entry.target)) localTargets.push(String(entry.target));
+    if (String(entry?.label || '').trim() === 'relative' && entry?.target) recoveryTargets.push(String(entry.target));
   }
   const candidates = new Map();
-  for (const target of localTargets) {
+  for (const target of [...new Set(recoveryTargets)]) {
+    const classification = classifyParentRecoveryReference(target);
+    if (classification.kind === 'malformed-workspace-qualified') return Object.freeze({ state: 'unavailable', reason: 'parent-workspace-qualified-reference-malformed' });
+    if (classification.kind === 'external' || classification.kind === 'empty') continue;
+    if (classification.kind === 'workspace-qualified') {
+      const qualified = classification.workspaceQualified;
+      const resolved = resolveHandoffWorkspaceEntry(byteProvider, qualified.workspaceId, qualified.path);
+      if (resolved.state !== 'qualified') continue;
+      const data = packageFileBytes({ data: resolved.data });
+      if (Number(resolved.bytes || 0) !== data.byteLength || String(resolved.sha256 || '') !== sha256Hex(data)) continue;
+      const markdown = decodeUtf8(data);
+      if (!markdown) continue;
+      candidates.set(`${qualified.workspaceId}\u0000${qualified.path}`, Object.freeze({ state: 'qualified', markdown, basis: 'parent-workspace-qualified-reference', workspaceId: qualified.workspaceId, workspaceRelativePath: qualified.path, packagePath: String(resolved.packagePath || ''), sha256: sha256Hex(data) }));
+      continue;
+    }
     const resolvedPath = resolveWorkspaceReference(routePath, target);
     if (!resolvedPath) continue;
     const resolved = resolveHandoffWorkspaceEntry(byteProvider, workspace.id, resolvedPath);
@@ -192,7 +207,7 @@ function packageParentCandidates(bundle = {}, descriptor = {}, byteProvider = {}
 
 function resolveWorkspaceReference(routePath, target) {
   const raw = safeDecodeURIComponent(String(target || '').split('#')[0].split('?')[0]);
-  if (!raw || raw.startsWith('/') || raw.startsWith('\\')) return '';
+  if (!raw || raw.startsWith('/') || raw.startsWith('\\') || raw.includes('::')) return '';
   const base = normalizeWorkspacePath(routePath).split('/').slice(0, -1);
   for (const part of raw.replace(/\\/g, '/').split('/')) {
     if (!part || part === '.') continue;

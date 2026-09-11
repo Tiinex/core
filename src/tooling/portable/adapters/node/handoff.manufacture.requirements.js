@@ -273,7 +273,7 @@ function resolveCarriedWorkspaceQualifiedReference(target = '', workspaceRuntime
 
 export function resolveRelativeWorkspaceTarget(sourcePath = '', target = '') {
   const raw = safeDecodeURIComponent(String(target || '').split('#')[0].split('?')[0]);
-  if (!raw || path.posix.isAbsolute(raw) || raw.startsWith('\\')) return '';
+  if (!raw || path.posix.isAbsolute(raw) || raw.startsWith('\\') || raw.includes('::')) return '';
   const base = normalizeRelativePath(sourcePath).split('/').slice(0, -1);
   for (const part of raw.replace(/\\/g, '/').split('/')) {
     if (!part || part === '.') continue;

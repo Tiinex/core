@@ -85,7 +85,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
       parentPackagePath: resolvedParent,
       parentPackageSha256: provisionalLineage.parentPackageSha256,
       parentDimension: provisionalLineage.parentDimension,
-      enabled: !flags['package-major'] && Boolean(flags.output || flags['output-dir'])
+      enabled: !flags['package-major'] && Boolean(flags.output || flags['output-dir']),
+      siblingIndex: flags['package-sibling-index']
     });
     carrierLineage = flags['package-major'] ? provisionalLineage : carrierLineageFromCliParent({
       bundle: parentBundle,

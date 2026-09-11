@@ -3,6 +3,7 @@ import { validatedC14nV2PrimarySelfDigest } from '../../../integrity/integrity.c
 import { projectHandoffMaterialRequirements } from './materialClosure.requirements.js';
 import { deepFreeze, finding, normalizeRoutePath, sectionText, fieldValue, decodeUtf8 } from './recipientV2.artifactFirst.shared.js';
 import { parseWorkspaceQualifiedReference } from './workspaceQualifiedReference.js';
+import { classifyParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
 
 export function qualifyRecipientV2ArtifactFirstPhase1RequiredContextClosure(input = {}) {
   return qualifyPhase1RequiredContextClosure(input);
@@ -71,7 +72,23 @@ export function qualifyPhase1RequiredContextClosure({ markdown = '', routePath =
 export function resolveArchiveParent(routePath = '', entries = [], parent = {}, targetEntry = {}, parentCandidates = []) {
   const refs = [String(parent.trace || ''), ...(parent.originEntries || []).map((item) => String(item.target || '')), String(targetEntry.towards || '')].filter(Boolean);
   for (const ref of refs) {
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(ref)) continue;
+    const classification = classifyParentRecoveryReference(ref);
+    if (classification.kind === 'malformed-workspace-qualified') return Object.freeze({ state: 'unresolved', reason: 'parent-workspace-qualified-reference-malformed' });
+    if (classification.kind === 'external' || classification.kind === 'empty') continue;
+    if (classification.kind === 'workspace-qualified') {
+      const qualified = classification.workspaceQualified;
+      const matches = (parentCandidates || []).filter((candidate) => String(candidate.workspaceId || '') === qualified.workspaceId && String(candidate.workspaceRelativePath || '') === qualified.path);
+      if (matches.length > 1) return Object.freeze({ state: 'ambiguous', reason: 'multiple-parent-workspace-qualified-reference-candidates' });
+      if (matches.length === 1) {
+        const candidate = matches[0];
+        const data = packageFileBytes({ data: candidate.data });
+        if (data.byteLength && Number(candidate.bytes || data.byteLength) === data.byteLength && (!candidate.sha256 || String(candidate.sha256) === sha256Hex(data))) {
+          const markdown = decodeUtf8(data);
+          if (markdown) return Object.freeze({ state: 'qualified', markdown, basis: 'artifact-first-workspace-qualified-reference', workspaceId: qualified.workspaceId, workspaceRelativePath: qualified.path, archiveEntry: String(candidate.archiveEntry || ''), sha256: sha256Hex(data) });
+        }
+      }
+      continue;
+    }
     const resolved = resolveRelativeWorkspacePath(routePath, ref);
     if (!resolved) continue;
     const matches = entries.filter((entry) => String(entry.path || '') === resolved);
@@ -115,7 +132,7 @@ export function phase1CacheParentCandidates(cacheQualifications = []) {
 
 export function resolveRelativeWorkspacePath(fromPath = '', ref = '') {
   const value = String(ref || '').split('#')[0].replace(/\\/g, '/');
-  if (!value || value.startsWith('/') || /^[A-Za-z]:\//.test(value)) return '';
+  if (!value || value.startsWith('/') || /^[A-Za-z]:\//.test(value) || value.includes('::')) return '';
   const base = String(fromPath || '').replace(/\\/g, '/').split('/'); base.pop();
   const parts = value.startsWith('./') || value.startsWith('../') ? [...base, ...value.split('/')] : [...base, ...value.split('/')];
   const out = [];

@@ -3,6 +3,7 @@ import { schemaIdForRecord } from './schema.identity.js';
 import { canonicalRootCreatedAt } from './creation.rootMetadata.js';
 import { renderSchemaReference } from './schema.reference.js';
 import { C14N_V2_METHOD_ID, renderIntegrityMethodReference } from '../integrity/integrity.methodReference.js';
+import { parseWorkspaceQualifiedRecoveryReference } from '../lineage/parentRecoveryReference.js';
 
 export const GENERIC_ARTIFACT_CREATION_RENDERER_ID = 'tiinex.site.generic-artifact-creation-renderer.v1';
 
@@ -194,11 +195,16 @@ function parentEnvelope(record = {}, childPath = '') {
   const recoveryMode = normalizeParentRecoveryMode(record.recoveryMode || record.parentRecoveryMode || 'local-relative');
   const published = normalizePublishedReference(record.publishedReference || record.browseGitReference || record.browseGit || '');
   const publishedReference = published.state === 'qualified' ? published.target : '';
-  const relativeReference = recoveryMode === 'external-versioned' ? '' : String(record.relativeReference || relativePath(dirname(child), parentPath)).trim();
+  const relativeReference = recoveryMode === 'external-versioned'
+    ? ''
+    : recoveryMode === 'workspace-qualified'
+      ? String(record.relativeReference || parentPath).trim()
+      : String(record.relativeReference || relativePath(dirname(child), parentPath)).trim();
   const traceReference = recoveryMode === 'external-versioned' ? publishedReference : relativeReference;
   const schemaReferenceAuthority = normalizeParentSchemaReferenceAuthority(record.schemaReferenceAuthority || record.parentSchemaReferenceAuthority, schemaId);
   if (!schemaId || !parentPath || !child || !traceReference) throw new Error('creation-parent-identity-incomplete');
   if (recoveryMode === 'external-versioned' && !publishedReference) throw new Error('creation-parent-external-versioned-reference-required');
+  if (recoveryMode === 'workspace-qualified' && !parseWorkspaceQualifiedRecoveryReference(relativeReference)) throw new Error('creation-parent-workspace-qualified-reference-invalid');
   const parentSelf = validatedC14nV2PrimarySelfDigest(record.markdown || '');
   if (parentSelf.state !== 'verified') throw new Error(`creation-parent-primary-self-${parentSelf.reason || parentSelf.state}`);
   const integrityTarget = publishedReference || relativeReference;
@@ -217,7 +223,12 @@ function parentEnvelope(record = {}, childPath = '') {
   });
 }
 
-function normalizeParentRecoveryMode(value = '') { return String(value || '').trim() === 'external-versioned' ? 'external-versioned' : 'local-relative'; }
+function normalizeParentRecoveryMode(value = '') {
+  const mode = String(value || '').trim();
+  if (mode === 'external-versioned') return 'external-versioned';
+  if (mode === 'workspace-qualified') return 'workspace-qualified';
+  return 'local-relative';
+}
 function normalizePublishedReference(value) {
   if (typeof value === 'string') return Object.freeze({ target: value, state: value ? 'unresolved' : 'unavailable' });
   return Object.freeze({ target: String(value?.target || value?.url || ''), state: String(value?.state || value?.resolutionState || 'unresolved') });
