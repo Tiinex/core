@@ -8,6 +8,7 @@ import { sha256Hex, utf8Bytes } from '../../../../export/package.bytes.js';
 import { resolveSchemaModule } from '../../../../schemas/resolver.js';
 import { loadNodePortableInput } from '../../input/node.input.js';
 import { runPortableOperation } from '../../operation.catalog.js';
+import { markPortableBootstrapCanonicalSource } from '../../providers/schema.bootstrap.provenance.js';
 import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../../../../transitions/record.transitions.js';
 import { classifyParentRecoveryReference } from '../../../../lineage/parentRecoveryReference.js';
 
@@ -36,7 +37,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   const parentPath = parentReference ? (parentSource ? path.resolve(parentSource) : safeWorkspaceTarget(workspaceRoot, parentReference)) : '';
   const artifactRelativePath = requestedArtifactRelativePath || await allocateArtifactRelativePath({ workspaceRoot, targetDirectory, parentRelativePath: parentReference, schemaId, title });
   const artifactPath = safeWorkspaceTarget(workspaceRoot, artifactRelativePath);
-  const parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentReference, { workspaceRoot, childRelativePath: artifactRelativePath }) : {};
+  const parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentReference, { workspaceRoot, childRelativePath: artifactRelativePath, runtime }) : {};
   const transitionType = String(flags.transition || defaultTransition(schemaId, Boolean(parentPath))).trim();
   const contract = buildArtifactCreationContract({ schemaId, transitionType });
   const summary = String(flags.summary || title).trim();
@@ -128,7 +129,7 @@ async function parentRecordFromArtifact(parentPath, parentRelativePath, context 
   if (self.state !== 'verified') throw new Error(`portable.cli.author.parent.integrity.${self.reason || self.state}`);
   const schemaReferenceAuthority = schemaTarget
     ? exactDeclaredSchemaReferenceAuthority(schemaId, schemaTarget)
-    : await recoverQualifiedLocalSchemaReferenceAuthority(schemaId, context);
+    : await recoverQualifiedRuntimeSchemaReferenceAuthority(schemaId, context.runtime || {});
   if (!schemaReferenceAuthority) throw new Error('portable.cli.author.parent.schema-authority.required');
   return Object.freeze({
     id: parentRelativePath,
@@ -159,46 +160,113 @@ function exactDeclaredSchemaReferenceAuthority(schemaId, schemaTarget) {
   });
 }
 
-async function recoverQualifiedLocalSchemaReferenceAuthority(schemaId, context = {}) {
-  const workspaceRoot = path.resolve(String(context.workspaceRoot || '.'));
-  const childRelativePath = normalizeWorkspaceRelativePath(context.childRelativePath || '');
+export async function recoverQualifiedRuntimeSchemaReferenceAuthority(schemaId, runtime = {}) {
   const resolution = resolveSchemaModule({ schemaId });
   const module = resolution?.fallbackUsed ? null : resolution?.module || null;
   const source = module?.schemaSource || null;
   const qualification = typeof source?.qualify === 'function' ? source.qualify() : null;
   const materialIdentity = qualification?.materialIdentity || {};
-  const bundledPath = normalizeWorkspaceRelativePath(source?.bundledPath || '');
   const expectedSha256 = String(materialIdentity.sha256 || qualification?.checksum || '').trim().toLowerCase();
   if (!module || String(module.id || '') !== schemaId) return null;
   if (qualification?.state !== 'qualified' || materialIdentity?.state !== 'qualified' || String(materialIdentity.schemaId || '') !== schemaId) return null;
-  if (!bundledPath || !childRelativePath || !expectedSha256) return null;
+  if (!expectedSha256) return null;
 
-  let localMarkdown;
-  try { localMarkdown = await readFile(safeWorkspaceTarget(workspaceRoot, bundledPath), 'utf8'); }
-  catch { return null; }
-  if (sha256Hex(utf8Bytes(localMarkdown)).toLowerCase() !== expectedSha256) return null;
+  const runtimeMaterial = await loadQualifiedRuntimeSchemaMaterial(schemaId, runtime);
+  if (!runtimeMaterial) return null;
+  const markdown = String(runtimeMaterial.markdown || '');
+  const observedSha256 = markdown ? sha256Hex(utf8Bytes(markdown)).toLowerCase() : '';
+  const observedBytes = markdown ? utf8Bytes(markdown).byteLength : 0;
+  if (!observedSha256 || observedSha256 !== expectedSha256) return null;
+  if (Number(materialIdentity.bytes || 0) > 0 && observedBytes !== Number(materialIdentity.bytes)) return null;
+  if (!exactRuntimeSchemaSourceIdentity(runtimeMaterial.source || {}, materialIdentity)) return null;
 
-  let localParsed;
-  try { localParsed = parseArtifactMarkdown(localMarkdown); }
-  catch { return null; }
-  if (String(localParsed.envelope?.current?.schema?.id || '').trim() !== schemaId) return null;
-
-  const childDir = path.posix.dirname(childRelativePath);
-  const preferredTarget = path.posix.relative(childDir === '.' ? '' : childDir, bundledPath);
-  if (!preferredTarget || path.posix.isAbsolute(preferredTarget)) return null;
+  const preferredTarget = durableRuntimeSchemaTarget(runtimeMaterial.source || {}, materialIdentity, runtime.defaultSchemaSource || {});
+  if (!preferredTarget) return null;
   return Object.freeze({
     schemaId,
     exactTargets: Object.freeze([preferredTarget]),
     preferredTarget,
     resolutionState: 'qualified',
-    targetAuthority: 'qualified-local-bundled-schema-material',
+    targetAuthority: 'qualified-runtime-canonical-schema-material',
     resolutionEvidence: Object.freeze({
       state: 'qualified',
-      kind: 'workspace-bundled-schema-byte-match',
-      workspacePath: bundledPath,
-      sha256: expectedSha256
+      kind: 'runtime-canonical-schema-byte-match',
+      target: preferredTarget,
+      materialIdentity: Object.freeze({
+        state: 'qualified',
+        schemaId,
+        sha256: observedSha256,
+        bytes: observedBytes,
+        sourceRepository: String(materialIdentity.sourceRepository || ''),
+        sourceCommit: String(materialIdentity.sourceCommit || ''),
+        sourcePath: String(materialIdentity.sourcePath || ''),
+        sourceBlobSha: String(materialIdentity.sourceBlobSha || '')
+      })
     })
   });
+}
+
+async function loadQualifiedRuntimeSchemaMaterial(schemaId, runtime = {}) {
+  const targets = normalizeRuntimePaths(runtime.defaultSchemaMaterialPaths);
+  if (!targets.length) return null;
+  const loaded = await loadNodePortableInput(targets);
+  if ((loaded.findings || []).some((finding) => finding?.severity === 'error')) return null;
+  const decorated = decorateRuntimeSchemaMaterial(loaded, runtime.defaultSchemaSource || {});
+  const resolved = await runPortableOperation('resolve-schema-material', { ...decorated, schemaId }, {});
+  if (resolved?.status !== 'resolved' || !resolved?.material) return null;
+  const material = resolved.material;
+  if (String(material.schemaId || '') !== schemaId) return null;
+  if (material.qualification?.sourceQualified !== true || material.qualification?.representationIntegrity !== 'verified') return null;
+  return material;
+}
+
+function decorateRuntimeSchemaMaterial(material = {}, source = {}) {
+  const repository = String(source.repository || '');
+  const commit = String(source.commit || source.ref || '');
+  const sourcePathPrefix = String(source.sourcePathPrefix || '.topics/.schemas').replace(/\/$/, '');
+  if (!repository || !commit || !sourcePathPrefix) return material;
+  return Object.freeze({
+    ...material,
+    files: Object.freeze((material.files || []).map((file) => Object.freeze({
+      ...file,
+      sourceMode: 'portable-bootstrap-canonical-schema',
+      source: markPortableBootstrapCanonicalSource({
+        providerId: 'bootstrap-canonical-schema-pack',
+        repository,
+        ref: commit,
+        commit,
+        path: `${sourcePathPrefix}/${file.path}`,
+        authority: 'canonical-core',
+        qualification: 'bundled-byte-bound-canonical-snapshot',
+        remoteFetch: false,
+        cached: false
+      })
+    })))
+  });
+}
+
+function exactRuntimeSchemaSourceIdentity(source = {}, materialIdentity = {}) {
+  const expected = {
+    repository: String(materialIdentity.sourceRepository || ''),
+    commit: String(materialIdentity.sourceCommit || ''),
+    path: String(materialIdentity.sourcePath || '')
+  };
+  const observed = {
+    repository: String(source.repository || ''),
+    commit: String(source.commit || source.ref || ''),
+    path: String(source.path || '')
+  };
+  if (!expected.repository || !expected.commit || !expected.path) return false;
+  return expected.repository === observed.repository && expected.commit === observed.commit && normalizeWorkspaceRelativePath(expected.path) === normalizeWorkspaceRelativePath(observed.path);
+}
+
+function durableRuntimeSchemaTarget(source = {}, materialIdentity = {}, runtimeSource = {}) {
+  const explicitTarget = String(runtimeSource.referenceTarget || '').trim();
+  if (explicitTarget) return explicitTarget;
+  const workspaceId = String(runtimeSource.workspaceId || '').trim();
+  const sourcePath = normalizeWorkspaceRelativePath(materialIdentity.sourcePath || source.path || '');
+  if (workspaceId && /^[A-Za-z0-9._-]+$/.test(workspaceId) && sourcePath) return `${workspaceId}::${sourcePath}`;
+  return '';
 }
 
 async function allocateArtifactRelativePath({ workspaceRoot, targetDirectory, parentRelativePath, schemaId, title } = {}) {

@@ -1,17 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { buildArtifactCreationContract } from '../src/schemas/creation.contracts.js';
 import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.renderer.js';
 import { rootValidate } from '../src/schemas/tiinex.root.v1.validate.js';
-import { parentRecoveryMode } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
+import { parentRecoveryMode, recoverQualifiedRuntimeSchemaReferenceAuthority } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
 import { resolveArchiveParent } from '../src/tooling/portable/handoff/recipientV2.artifactFirst.closure.js';
 import { reserveHandoffSiblingIndex } from '../src/tooling/portable/adapters/cli/cli.handoff-sibling-allocation.js';
 import { writeExactRecipientTransportBytes } from '../src/tooling/portable/output/recipientV2.zip.js';
 import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integrity/integrity.c14nV2.js';
 import { sha256Hex } from '../src/export/package.bytes.js';
+import { portableCanonicalBootstrapRuntime } from '../src/tooling/portable/schema/bootstrap/canonical.pack.js';
 
 const encoder = new TextEncoder();
 
@@ -59,6 +60,39 @@ test('common author and renderer preserve a Workspace-qualified Parent as the tr
   assert.match(markdown, /- Trace: \[002-parent\.trace\.md\]\(business::\.topics\/initiatives\/002-parent\.trace\.md\)/);
   assert.match(markdown, /- \[relative\]\(business::\.topics\/initiatives\/002-parent\.trace\.md\)/);
   assert.doesNotMatch(markdown, /\.\.\/.*business::/);
+});
+
+test('common author recovers Parent schema authority only from exact qualified runtime schema material', async () => {
+  const authority = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.validation.report.v1', portableCanonicalBootstrapRuntime);
+  assert.equal(authority?.resolutionState, 'qualified');
+  assert.equal(authority?.targetAuthority, 'qualified-runtime-canonical-schema-material');
+  assert.equal(authority?.preferredTarget, 'docs::.topics/.schemas/validation/report/tiinex.validation.report.v1.schema.md');
+  assert.equal(authority?.resolutionEvidence?.kind, 'runtime-canonical-schema-byte-match');
+
+  const staleSameId = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.party.role.v1', portableCanonicalBootstrapRuntime);
+  assert.equal(staleSameId, null, 'same schema id with non-matching canonical bytes must not become authority');
+});
+
+test('runtime Parent schema recovery fails closed on ambiguous qualified representations and writes no Workspace schema copy', async () => {
+  const canonicalRoot = portableCanonicalBootstrapRuntime.defaultSchemaMaterialPaths[0];
+  const sourceRelative = 'validation/report/tiinex.validation.report.v1.schema.md';
+  const exact = await readFile(path.join(canonicalRoot, sourceRelative), 'utf8');
+  const alternateRoot = await mkdtemp(path.join(os.tmpdir(), 'tiinex-schema-runtime-alt-'));
+  const alternatePath = path.join(alternateRoot, sourceRelative);
+  await mkdir(path.dirname(alternatePath), { recursive: true });
+  const mutated = sealC14nV2Self(exact.replace('# Validation Report', '# Validation Report Alternate'));
+  assert.equal(mutated.state, 'sealed');
+  await writeFile(alternatePath, mutated.markdown, 'utf8');
+
+  const childWorkspace = await mkdtemp(path.join(os.tmpdir(), 'tiinex-author-child-'));
+  const before = await readdir(childWorkspace);
+  const authority = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.validation.report.v1', {
+    ...portableCanonicalBootstrapRuntime,
+    defaultSchemaMaterialPaths: [canonicalRoot, alternateRoot]
+  });
+  const after = await readdir(childWorkspace);
+  assert.equal(authority, null);
+  assert.deepEqual(after, before, 'schema authority recovery must not copy canonical schema material into the child Workspace');
 });
 
 test('Root validation rejects malformed mixed Workspace-qualified Parent recovery locators', () => {

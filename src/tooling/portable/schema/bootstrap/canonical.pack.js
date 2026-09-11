@@ -6,6 +6,7 @@ export const PORTABLE_CANONICAL_BOOTSTRAP_ROOT = fileURLToPath(new URL(`./docs-$
 export const portableCanonicalBootstrapRuntime = Object.freeze({
   defaultSchemaMaterialPaths: Object.freeze([PORTABLE_CANONICAL_BOOTSTRAP_ROOT]),
   defaultSchemaSource: Object.freeze({
+    workspaceId: 'docs',
     repository: 'Tiinex/docs',
     commit: PORTABLE_CANONICAL_BOOTSTRAP_DOCS_COMMIT,
     sourcePathPrefix: '.topics/.schemas'
