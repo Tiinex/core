@@ -15,6 +15,7 @@ import { buildRecipientFacingV2PackageV1 } from './recipientV2.packageV1.js';
 import { buildEndpointRolePointerChain, buildParticipantRolePointerChain } from './recipientV2.endpointRolePointers.js';
 import {
   bindingForWorkspace,
+  boundedWorkspaceClaimsDetachedRecovery,
   deepFreeze,
   detachedMaterial,
   duplicates,
@@ -46,9 +47,6 @@ export function buildRecipientFacingV2Topology(input = {}) {
   if (input.legacyRecipientV2Compatibility === true) return sourceSurface;
   if (input.artifactFirstDualProjectionPhase1 === true) return buildRecipientFacingV2ArtifactFirstPhase1({ ...input, sourceSurface });
   if (input.artifactFirstCleanCarrierPhase2 === true) return buildRecipientFacingV2ArtifactFirstPhase2Clean({ ...input, sourceSurface });
-  const hasIndependentBoundedWorkspaceRepresentation = (input.descriptor?.workspaceArchiveBindings || input.bundle?.handoffClosure?.workspaceArchiveBindings || [])
-    .some((binding) => String(binding.coverage || '') === 'bounded' || String(binding.representation?.kind || '') === 'bounded-workspace-snapshot');
-  if (hasIndependentBoundedWorkspaceRepresentation) return buildRecipientFacingV2ArtifactFirstPhase2Clean({ ...input, sourceSurface });
   const explicitRouteSelector = String(input.routeSelector || input.routeId || '').trim();
   if (!explicitRouteSelector && (sourceSurface.topology?.routes || []).length > 1) return sourceSurface;
   return buildRecipientFacingV2PackageV1({ ...input, sourceSurface });
@@ -145,7 +143,8 @@ function buildRecipientFacingV2TopologyLegacy(input = {}) {
     const workspace = workspaceById.get(workspacePlan.workspaceId);
     if (!workspace) continue;
     const workspaceRoutes = routePlans.filter((plan) => plan.workspace.workspaceId === workspace.workspaceId);
-    const materials = detached.filter((item) => workspaceRoutes.some((plan) => routeClaimsDetachedMaterial(plan.route, item)));
+    const binding = bindingForWorkspace(descriptor, workspace.workspaceId);
+    const materials = detached.filter((item) => workspaceRoutes.some((plan) => routeClaimsDetachedMaterial(plan.route, item)) || boundedWorkspaceClaimsDetachedRecovery(binding, item));
     if (!materials.length) continue;
     const artifactPath = `001-${workspacePlan.ordinal}-1-cache.trace.md`;
     const archivePath = `001-${workspacePlan.ordinal}-1-cache.zip`;

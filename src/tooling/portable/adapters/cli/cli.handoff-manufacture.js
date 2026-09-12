@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { prepareNodeHandoffManufacturingInput } from '../node/handoff.manufacture.js';
 import { prepareNodeWorkspaceCarrierManufacturingInput } from '../node/workspaceCarrier.manufacture.js';
+import { prepareNodeBootstrapCarrierManufacturingInput } from '../node/bootstrapCarrier.manufacture.js';
 import { projectHandoffHumanOutput } from '../../handoff/carrierProjection.js';
 import { writePortableRuntimePackageZip } from '../../output/node.zip.js';
 import { writeRecipientFacingV2PackageZip } from '../../output/recipientV2.zip.js';
@@ -16,8 +17,9 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   const flags = parsed.flags || {};
   const workspaceRoot = flags.workspace || parsed.positionals?.[0] || '.';
   const carrierMode = String(flags['carrier-mode'] || 'handoff').trim().toLowerCase();
-  if (!['handoff', 'workspace'].includes(carrierMode)) throw new Error(`portable.cli.handoff-carrier.carrier-mode.invalid:${carrierMode}`);
+  if (!['handoff', 'workspace', 'bootstrap'].includes(carrierMode)) throw new Error(`portable.cli.handoff-carrier.carrier-mode.invalid:${carrierMode}`);
   if (carrierMode === 'workspace') return prepareWorkspaceCarrierCliCommand(flags, workspaceRoot, runtime);
+  if (carrierMode === 'bootstrap') return prepareBootstrapCarrierCliCommand(flags, runtime);
   const continuationState = parsed.surfaceCommand === 'handoff'
     ? await readGroundContinuationState(workspaceRoot)
     : {};
@@ -146,13 +148,15 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
 }
 
 export async function materializeHandoffManufactureCliOutput(result = {}, flags = {}) {
-  const workspaceMode = String(result.carrierProjection?.mode || '') === 'workspace';
-  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput(result, flags) : projectHandoffHumanOutput({
+  const carrierMode = String(result.carrierProjection?.mode || '');
+  const workspaceMode = carrierMode === 'workspace';
+  const bootstrapMode = carrierMode === 'bootstrap';
+  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput(result, flags) : bootstrapMode ? projectBootstrapCarrierHumanOutput(result, flags) : projectHandoffHumanOutput({
     projection: result.carrierProjection || {},
     route: flags.route || '',
     collisionInstance: flags['collision-instance'] || 1
   });
-  if (!workspaceMode && result.bundle?.transportFormat) humanOutput = projectRecipientV2HumanOutput(humanOutput, result.inspection || {});
+  if (result.bundle?.transportFormat) humanOutput = projectRecipientV2HumanOutput(humanOutput, result.inspection || {});
   const wantsWrite = Boolean(flags.output || flags['output-dir']);
   const blocked = result.status === 'blocked' || result.transportExecutable === false || Number(result.findingSummary?.counts?.error || 0) > 0;
   if (!wantsWrite || blocked) return summarizeHandoffManufactureCliOutput(result, {}, humanOutput, null);
@@ -163,7 +167,6 @@ export async function materializeHandoffManufactureCliOutput(result = {}, flags 
   const writeReceipt = writeBundle?.transportFormat
     ? await writeRecipientFacingV2PackageZip(writeBundle, target, writeBundle === result.bundle ? { inspection: result.inspection } : {})
     : await writePortableRuntimePackageZip(writeBundle, target);
-  if (workspaceMode && flags['transport-text']) throw new Error('portable.cli.workspace-carrier.transport-text.unavailable');
   const transportTextReceipt = flags['transport-text'] ? await writeTransportTextSidecar(humanOutput, target, flags['transport-text']) : null;
   return summarizeHandoffManufactureCliOutput(result, writeReceipt, humanOutput, transportTextReceipt);
 }
@@ -174,6 +177,7 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   const expectedToolingBootstrap = await readOptionalJson(flags['tooling-bootstrap-manifest']);
   const workspaceDescriptorValue = await readOptionalJson(flags['workspace-roots'] || flags['workspace-descriptors']);
   const workspaceTargetValue = await readOptionalJson(flags['workspace-targets']);
+  const workspaceScopeValue = await readOptionalJson(flags['workspace-scopes']);
   const additionalWorkspaces = [...splitFlag(flags['additional-workspaces']), ...descriptorArray(workspaceDescriptorValue, 'workspaces')];
   const verifyRoundtrip = !flags['no-roundtrip'];
   const carrierProfile = selectCarrierProfile({ operator: operatorCarrierProfile, runtime: runtime.defaultCarrierProfile || null });
@@ -185,6 +189,8 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
     workspaceTitle: flags['workspace-title'] || flags.title || '',
     workspaceTargetPath: flags['workspace-target'] || flags['workspace-artifact'] || '',
     workspaceTargets: workspaceTargetValue,
+    workspaceScopes: descriptorArray(workspaceScopeValue, 'scopes').length ? descriptorArray(workspaceScopeValue, 'scopes') : workspaceScopeValue,
+    materialRepresentationWorkspaceIds: splitFlag(flags['material-representation-workspaces'] || flags['generic-material-workspaces']),
     toolingBootstrap: flags['tooling-bootstrap'] || 'embedded',
     expectedToolingBootstrap,
     maxFiles: flags['max-files'],
@@ -196,6 +202,37 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
     carrierProfile
   }, runtime);
   return { input, options: { verifyRoundtrip, packageInput: { builtAt: flags['built-at'] || undefined } } };
+}
+
+async function prepareBootstrapCarrierCliCommand(flags = {}, runtime = {}) {
+  if (flags.handoff || flags.route || flags.routes || flags['handoff-routes'] || flags['workspace-routes'] || flags.workspace || flags['workspace-target'] || flags['workspace-targets'] || flags['workspace-roots'] || flags['workspace-descriptors']) throw new Error('portable.cli.bootstrap-carrier.source-material-or-route.forbidden');
+  const operatorCarrierProfile = await readOptionalJson(flags['carrier-profile']);
+  const expectedToolingBootstrap = await readOptionalJson(flags['tooling-bootstrap-manifest']);
+  const verifyRoundtrip = !flags['no-roundtrip'];
+  const carrierProfile = selectCarrierProfile({ operator: operatorCarrierProfile, runtime: runtime.defaultCarrierProfile || null });
+  const input = await prepareNodeBootstrapCarrierManufacturingInput({
+    toolingBootstrap: flags['tooling-bootstrap'] || 'embedded', expectedToolingBootstrap, bootstrapMaxFiles: flags['bootstrap-max-files'], verifyRoundtrip, createdAt: flags['built-at'] || undefined,
+    carrierLineage: Object.freeze({ ...initialHandoffCarrierLineage(), checkpointKind: 'progression', majorReason: '' }), carrierProfile
+  }, runtime);
+  return { input, options: { verifyRoundtrip, packageInput: { builtAt: flags['built-at'] || undefined } } };
+}
+
+function projectBootstrapCarrierHumanOutput(result = {}, flags = {}) {
+  const projection = result.carrierProjection || {};
+  const ready = result.status === 'ready' && projection.status === 'ready' && projection.mode === 'bootstrap' && (projection.routes || []).length === 0 && (projection.workspaces || []).length === 0;
+  const dimension = String(projection.lineage?.dimension || '001');
+  const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || '').trim();
+  const filename = projectedFilename || `tiinex-${dimension}.handoff-package.zip`;
+  if (filename !== filename.trim() || !filename.endsWith('.handoff-package.zip') || /[<>:"/\\|?*\x00-\x1f\x7f]/.test(filename) || /[. ]$/.test(filename) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(filename) || new TextEncoder().encode(filename).byteLength > 255) throw new Error('portable.cli.bootstrap-carrier.filename.invalid');
+  return Object.freeze({
+    schema: 'tiinex.portable.handoff-human-output.v1', status: ready ? 'ready' : 'blocked',
+    primary: ready ? Object.freeze({ kind: 'bootstrap-package', filename, dimension, parentDimension: String(projection.lineage?.parentDimension || ''), checkpointKind: String(projection.lineage?.checkpointKind || ''), routeId: '', workspaceId: '', workspaceRelativeHandoffPath: '', collisionInstance: 1, singleHumanTransportChoice: true }) : null,
+    normalInlineRouting: ready ? Object.freeze({ kind: 'transport-text', content: '', normalEmission: true, requiredForHumanCompletion: true, placement: 'adjacent-to-primary', authority: 'none' }) : null, sharedRouting: null,
+    presentation: Object.freeze({ kind: 'bootstrap-only-carrier', label: 'Bootstrap carrier', authority: 'none', recipientLabel: '' }),
+    normalEmissionBoundary: Object.freeze({ allowed: Object.freeze(['package-file', 'generic-start-transport-text']), forbidden: Object.freeze(['workspace-label', 'route-specific-continue-from', 'recipient-label', 'holder-label', 'current-work-label']) }),
+    fallbackTransportText: ready ? Object.freeze({ supported: true, filename: filename.replace(/\.handoff-package\.zip$/i, '.transport.txt'), content: '', normalEmission: false, requiredForHumanCompletion: false, authority: 'none' }) : null, selectedRoute: null, findings: Object.freeze([]),
+    boundary: 'Bootstrap-only carrier output projection. Generic Start transport text only; no Workspace, Handoff route, recipient, holder, Role, or work projection exists.'
+  });
 }
 
 function projectWorkspaceCarrierHumanOutput(result = {}, flags = {}) {
@@ -213,11 +250,11 @@ function projectWorkspaceCarrierHumanOutput(result = {}, flags = {}) {
     schema: 'tiinex.portable.handoff-human-output.v1',
     status: ready ? 'ready' : 'blocked',
     primary: ready ? Object.freeze({ kind: 'workspace-package', filename, dimension, parentDimension: String(projection.lineage?.parentDimension || ''), checkpointKind: String(projection.lineage?.checkpointKind || ''), routeId: '', workspaceId: '', workspaceRelativeHandoffPath: '', collisionInstance: 1, singleHumanTransportChoice: true }) : null,
-    normalInlineRouting: null, sharedRouting: null,
-    presentation: Object.freeze({ kind: 'pointerless-workspace-carrier', label: 'Workspace carrier', authority: 'none' }),
-    normalEmissionBoundary: Object.freeze({ allowed: Object.freeze(['package-file']), forbidden: Object.freeze(['handoff-routing-text', 'continue-from-pointer']) }),
-    fallbackTransportText: null, selectedRoute: null, findings: Object.freeze([]),
-    boundary: 'Pointerless Workspace-carrier output projection only. No Handoff routing text exists because the package role declares no Handoff route.'
+    normalInlineRouting: ready ? Object.freeze({ kind: 'transport-text', content: '', normalEmission: true, requiredForHumanCompletion: true, placement: 'adjacent-to-primary', authority: 'none' }) : null, sharedRouting: null,
+    presentation: Object.freeze({ kind: 'pointerless-workspace-carrier', label: 'Workspace carrier', authority: 'none', recipientLabel: '' }),
+    normalEmissionBoundary: Object.freeze({ allowed: Object.freeze(['package-file', 'generic-start-transport-text']), forbidden: Object.freeze(['route-specific-continue-from', 'recipient-label-from-material']) }),
+    fallbackTransportText: ready ? Object.freeze({ supported: true, filename: filename.replace(/\.handoff-package\.zip$/i, '.transport.txt'), content: '', normalEmission: false, requiredForHumanCompletion: false, authority: 'none' }) : null, selectedRoute: null, findings: Object.freeze([]),
+    boundary: 'Pointerless Workspace-carrier output projection. Generic Start transport text is permitted; Handoff Continue-from and recipient projection remain absent.'
   });
 }
 

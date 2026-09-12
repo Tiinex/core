@@ -3,7 +3,7 @@ import { enumerateNodeWorkspace } from './handoff.manufacture.enumeration.js';
 import { buildToolingBootstrapTransportFiles } from './handoff.manufacture.bootstrap.js';
 import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runtimeSource.js';
 import { inferWorkspaceTitle, normalizeAdditionalWorkspaceDescriptors, safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
-import { normalizeWorkspaceTargetBindings } from './handoff.manufacture.scope.js';
+import { normalizeWorkspaceScopes, normalizeWorkspaceTargetBindings, projectBoundedWorkspaceMaterialization } from './handoff.manufacture.scope.js';
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
 
@@ -43,6 +43,15 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
     explicitBindings: input.workspaceTargets || input.workspaceTargetBindings || [],
     additionalWorkspaceDescriptors
   });
+  const workspaceScopes = normalizeWorkspaceScopes(input.workspaceScopes || input.workspaceScopeBindings || []);
+  const materializations = enumerations.map((item) => {
+    const materialization = item.materialization;
+    const scope = workspaceScopes.get(String(materialization.id || '')) || null;
+    if (!scope || scope.coverage !== 'bounded') return materialization;
+    const targets = workspaceTargets.filter((target) => String(target.workspaceId || '') === String(materialization.id || ''));
+    if (targets.length !== 1) throw new Error(`portable.workspace-carrier.workspace-scope.target-${targets.length ? 'ambiguous' : 'required'}:${materialization.id}`);
+    return projectBoundedWorkspaceMaterialization(materialization, scope, targets[0].path);
+  });
   const toolingBootstrap = await buildToolingBootstrapTransportFiles({
     delivery: input.toolingBootstrap || input.bootstrapDelivery || 'embedded',
     runtimeRoot: input.runtimeRoot || options.runtimeRoot,
@@ -51,13 +60,14 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
   });
   const runtimeSourceAlignment = await qualifyToolingRuntimeSourceAlignment({
     runtimeIdentity: toolingBootstrap.runtimeIdentity,
-    localWorkspaces: enumerations.map((item) => Object.freeze({ id: item.materialization.id, root: item.root, materialization: item.materialization })),
+    localWorkspaces: enumerations.map((item, index) => Object.freeze({ id: materializations[index].id, root: item.root, materialization: item.materialization })),
     maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
   });
   return Object.freeze({
     carrierMode: 'workspace',
     createdAt: String(input.createdAt || ''),
-    workspaceMaterializations: Object.freeze(enumerations.map((item) => item.materialization)),
+    workspaceMaterializations: Object.freeze(materializations),
+    materialRepresentationWorkspaceIds: Object.freeze([...(input.materialRepresentationWorkspaceIds || input.genericMaterialWorkspaceIds || [])].map(String)),
     workspaceTargets,
     additionalTransportFiles: toolingBootstrap.files,
     carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null),

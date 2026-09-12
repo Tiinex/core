@@ -14,9 +14,10 @@ import { indexRecipientFiles, recipientWorkspaceDescriptor, virtualCacheMaterial
 import { inspectPortableToolingBootstrap } from './toolingBootstrap.js';
 import { projectRecipientV2EndpointRoles, projectRecipientV2ParticipantRoles, projectRecipientV2Routes } from './recipientV2.inspect.projection.js';
 import { RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH, RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID } from './recipientV2.packageV1.constants.js';
-import { parseHandoffPackageV1, validatePackageFields, WORKSPACE_PACKAGE_ROLE } from './recipientV2.packageV1.contract.js';
+import { BOOTSTRAP_PACKAGE_ROLE, HANDOFF_PACKAGE_ROLE, parseHandoffPackageV1, validatePackageFields, WORKSPACE_PACKAGE_ROLE } from './recipientV2.packageV1.contract.js';
 import { deriveVisibleFacts, validateRouteClosure } from './recipientV2.packageV1.inspect.helpers.js';
-import { workspaceCarrierProjection } from './recipientV2.packageV1.workspaceProjection.js';
+import { bootstrapCarrierProjection, workspaceCarrierProjection } from './recipientV2.packageV1.workspaceProjection.js';
+import { inspectRecipientV2WorkspaceSurface } from './recipientV2.inspect.workspaces.js';
 import { byteEqual, currentSchemaId, decodeUtf8, dedupeFindings, deepFreeze, oneFile } from './recipientV2.packageV1.shared.js';
 import { parseTransportEnvelopeV1, qualifyTransportEnvelopeV1Artifact, TRANSPORT_ENVELOPE_V1_ROLE, TRANSPORT_ENVELOPE_V1_SCHEMA_ID } from './transportEnvelopeV1.js';
 
@@ -85,7 +86,6 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
       if (String(payloadArtifact.facts?.workspaceId || '') && String(payloadArtifact.facts.workspaceId) !== String(binding.workspaceId || '')) findings.push(finding('error', 'portable.handoff-package-v1.workspace-sealed-payload-workspace-mismatch', 'Protected payload descriptor Workspace Id diverges from package binding.', { workspaceId: binding.workspaceId }));
       workspaceParts.push({ workspaceId: binding.workspaceId, bindingState: 'sealed', artifact: Object.freeze({ path: workspaceFile.path, sha256: sha256Hex(workspaceData), markdown: workspaceMarkdown }), facts: { workspaceId: binding.workspaceId, sourceWorkspaceTargetInnerPath: '', sourceWorkspaceTargetSha256: sha256Hex(workspaceData) }, archiveFile: null, archive: null, targetQualification: null, protectedPayloadArtifact: payloadArtifact, protectedPayloadFile: payloadFile, transportEnvelopeArtifact: envelopeArtifact });
       sealedWorkspaceBindings.push(Object.freeze({ workspaceId: binding.workspaceId, workspaceArtifactPath: binding.workspaceArtifactPath, workspaceArtifactSha256: sha256Hex(workspaceData), protectedPayloadDescriptorPath: binding.protectedPayloadDescriptorPath, protectedPayloadPath: payload.location, protectedPayloadSha256: payload.integrityValue, protectedPayloadBytes: protectedBytes.byteLength, transportEnvelopePath: binding.transportEnvelopePath, envelope }));
-      virtualWorkspaceTargets.push(workspaceFile);
       continue;
     }
 
@@ -107,16 +107,36 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
     const descriptorPart = recipientWorkspaceDescriptor({ workspaceId: binding.workspaceId, facts: { providerKind: 'package-local-stored-zip-v1' }, representation: { workspaceArtifactInnerPath: binding.workspaceArtifactInnerPath, coverage: 'complete' }, payload: { location: binding.snapshotPath }, entries: parsed.entries || [], targetMarkdown: workspaceMarkdown, targetPackagePath: binding.workspaceArtifactPath, targetFile: { bytes: workspaceData.byteLength, sha256: sha256Hex(workspaceData) }, archiveFile: { path: archiveFile.path, bytes: archiveData.byteLength, sha256: archiveSha } });
     workspaceDescriptors.push(descriptorPart);
     workspaceParts.push({ workspaceId: binding.workspaceId, bindingState: 'verified', artifact: Object.freeze({ path: workspaceFile.path, sha256: sha256Hex(workspaceData), markdown: workspaceMarkdown }), facts: { workspaceId: binding.workspaceId, sourceWorkspaceTargetInnerPath: binding.workspaceArtifactInnerPath, sourceWorkspaceTargetSha256: sha256Hex(workspaceData) }, archiveFile, archive: { archive: parsed, sha256: archiveSha }, targetQualification });
-    virtualWorkspaceTargets.push(workspaceFile);
   }
 
   const payloadArtifacts = generatedArtifacts.filter((item) => item.schemaId === 'tiinex.external.payload.v1' && item.status === 'qualified');
   const bootstrapArtifacts = payloadArtifacts.filter((item) => item.facts?.role === 'portable Tooling bootstrap runtime for recipient orientation and verification');
   const cacheArtifacts = payloadArtifacts.filter((item) => item.facts?.role === 'workspace-scoped Handoff dependency cache');
   const protectedWorkspacePayloadArtifacts = payloadArtifacts.filter((item) => item.facts?.role === 'password-sealed Workspace protected payload');
-  const forbiddenWorkspacePayloads = payloadArtifacts.filter((item) => item.facts?.role === 'workspace-representation-payload');
-  if (forbiddenWorkspacePayloads.length) findings.push(finding('error', 'portable.handoff-package-v1.workspace-payload-redundant', 'Complete package-local Workspace bindings must not carry redundant Workspace External Payload companions.', { count: forbiddenWorkspacePayloads.length }));
-  if (generatedArtifacts.some((item) => item.schemaId === 'tiinex.workspace.representation.v1' || item.schemaId === 'tiinex.relation.v1')) findings.push(finding('error', 'portable.handoff-package-v1.workspace-representation-redundant', 'Complete package-local Workspace bindings must not carry redundant Workspace Representation/Relation companions.'));
+  const genericWorkspaceArtifacts = generatedArtifacts.filter((item) => item.schemaId === 'tiinex.workspace.v1' && item.facts?.role === 'workspace-node');
+  const genericRepresentationArtifacts = generatedArtifacts.filter((item) => item.schemaId === 'tiinex.workspace.representation.v1');
+  const genericWorkspacePayloadArtifacts = payloadArtifacts.filter((item) => item.facts?.role === 'workspace-representation-payload');
+  if (generatedArtifacts.some((item) => item.schemaId === 'tiinex.relation.v1')) findings.push(finding('error', 'portable.handoff-package-v1.relation-unowned', 'Package-v1 material carriage is selected through Workspace Representation bindings; detached Relation companions are not package-owned carrier truth.'));
+  const genericMaterialSurface = inspectRecipientV2WorkspaceSurface({
+    generatedArtifacts: [...genericWorkspaceArtifacts, ...genericRepresentationArtifacts, ...genericWorkspacePayloadArtifacts],
+    rootArtifact: null, index, findings, transportManifest: { identityByPath: new Map() }
+  });
+  const materialBindings = packageContract?.materialRepresentations || [];
+  const materialPartsByRepresentation = new Map((genericMaterialSurface.workspaceParts || []).map((part) => [String(part.representationArtifact?.path || ''), part]));
+  const selectedMaterialRepresentationPaths = new Set();
+  for (const binding of materialBindings) {
+    const representationPath = String(binding.workspaceRepresentationPath || '');
+    if (selectedMaterialRepresentationPaths.has(representationPath)) findings.push(finding('error', 'portable.handoff-package-v1.material-representation-binding-duplicate', 'Each carried Workspace Representation may be selected at most once by Material Representation Bindings.', { path: representationPath }));
+    selectedMaterialRepresentationPaths.add(representationPath);
+    const part = materialPartsByRepresentation.get(representationPath) || null;
+    if (!part) { findings.push(finding('error', 'portable.handoff-package-v1.material-representation-unresolved', 'Material Representation binding must resolve to one qualified carried tiinex.workspace.representation.v1 closure.', { materialId: binding.materialId || '', path: representationPath })); continue; }
+    if (String(binding.carriageState || '') !== 'verified') findings.push(finding('error', 'portable.handoff-package-v1.material-representation-unverified', 'A package ready for source-material use requires Carriage State verified.', { materialId: binding.materialId || '', carriageState: binding.carriageState || '' }));
+    if (String(part.representation?.bindingState || '') !== 'verified' || !['complete', 'bounded'].includes(String(part.representation?.coverage || '')) || part.targetQualification?.state !== 'qualified') findings.push(finding('error', 'portable.handoff-package-v1.material-representation-provider-unqualified', 'Selected Workspace Representation must independently qualify as a clear provider-ready complete/bounded binding.', { materialId: binding.materialId || '', workspaceId: part.workspaceId || '', coverage: part.representation?.coverage || '', bindingState: part.representation?.bindingState || '' }));
+  }
+  for (const part of genericMaterialSurface.workspaceParts || []) if (!selectedMaterialRepresentationPaths.has(String(part.representationArtifact?.path || ''))) findings.push(finding('error', 'portable.handoff-package-v1.material-representation-unselected', 'Carried generic Workspace Representation closure must be selected by exactly one Material Representation Binding.', { path: part.representationArtifact?.path || '', workspaceId: part.workspaceId || '' }));
+  workspaceParts.push(...(genericMaterialSurface.workspaceParts || []));
+  workspaceDescriptors.push(...(genericMaterialSurface.workspaceDescriptors || []));
+  virtualWorkspaceTargets.push(...(genericMaterialSurface.virtualWorkspaceTargetFiles || []));
 
   let bootstrapInspection = null;
   if (packageContract?.bootstrapPath) {
@@ -149,7 +169,7 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
   const virtualCache = { files: Object.freeze(virtualCacheParts.flatMap((item) => item.files || [])), materialized: Object.freeze(virtualCacheParts.flatMap((item) => item.materialized || [])) };
 
   const descriptor = deepFreeze({ schema: 'tiinex.transport.handoff-material-closure-descriptor.v2', version: 2, workspaceMaterializations: Object.freeze(workspaceDescriptors.map((item) => item.workspace)), workspaceArchiveBindings: Object.freeze(workspaceDescriptors.map((item) => item.binding)), materialized: Object.freeze(virtualCache.materialized), requirements: Object.freeze({ required: Object.freeze([]), reference: Object.freeze([]), endpointRoles: Object.freeze([]), participantRoles: Object.freeze([]), dependencies: Object.freeze([]) }) });
-  const semanticBundle = { ...bundle, files: Object.freeze([...files, ...virtualCache.files]) };
+  const semanticBundle = { ...bundle, files: Object.freeze([...files, ...virtualWorkspaceTargets, ...virtualCache.files]) };
   const workspaceByteProvider = buildHandoffWorkspaceByteProvider(semanticBundle, descriptor);
   findings.push(...(workspaceByteProvider.findings || []));
 
@@ -157,9 +177,19 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
   const endpointRolePointers = generatedArtifacts.filter((item) => item.schemaId === 'tiinex.pointer.v1' && item.facts?.role === 'endpoint-role' && item.status === 'qualified');
   const participantRolePointers = generatedArtifacts.filter((item) => item.schemaId === 'tiinex.pointer.v1' && item.facts?.role === 'participant-role' && item.status === 'qualified');
   const lineage = packageContract ? Object.freeze({ dimension: packageContract.carrierDimension, parentDimension: packageContract.parentCarrierDimension, checkpointKind: packageContract.carrierCheckpoint, majorReason: packageContract.majorReason || '' }) : null;
-  const workspaceMode = String(packageContract?.packageRole || '') === WORKSPACE_PACKAGE_ROLE;
+  const packageRole = String(packageContract?.packageRole || '');
+  const workspaceMode = packageRole === WORKSPACE_PACKAGE_ROLE;
+  const bootstrapMode = packageRole === BOOTSTRAP_PACKAGE_ROLE;
+  const carriedWorkspaceIds = new Set([...workspaceParts.map((part) => String(part.workspaceId || '').toLowerCase()), ...sealedWorkspaceBindings.map((part) => String(part.workspaceId || '').toLowerCase())].filter(Boolean));
+  if (packageContract?.carrierCheckpoint === 'major') {
+    const missingMajorWorkspaceIds = (packageContract.requiredMajorWorkspaceIds || []).filter((workspaceId) => !carriedWorkspaceIds.has(String(workspaceId || '').toLowerCase()));
+    if (missingMajorWorkspaceIds.length) findings.push(finding('error', 'portable.handoff-package-v1.major-source-closure-incomplete', 'Major package-v1 carrier is missing one or more Workspace source-material bindings required by its explicit carrier profile.', { carrierProfileId: String(packageContract.carrierProfileId || ''), missingWorkspaceIds: missingMajorWorkspaceIds }));
+  }
   let carrierProjection;
-  if (workspaceMode) {
+  if (bootstrapMode) {
+    if (workspaceParts.length || sealedWorkspaceBindings.length || routePointers.length || endpointRolePointers.length || participantRolePointers.length || caches.length) findings.push(finding('error', 'portable.handoff-package-v1.bootstrap-carrier.semantic-surface-present', 'Bootstrap-only carrier must not expose Workspace/material provider, Handoff route, Role pointer, or Handoff cache semantics.', { workspaces: workspaceParts.length, sealedWorkspaces: sealedWorkspaceBindings.length, routes: routePointers.length, endpointRoles: endpointRolePointers.length, participantRoles: participantRolePointers.length, caches: caches.length }));
+    carrierProjection = bootstrapCarrierProjection(lineage, bootstrapInspection?.status === 'valid');
+  } else if (workspaceMode) {
     if (routePointers.length || endpointRolePointers.length || participantRolePointers.length || caches.length) findings.push(finding('error', 'portable.handoff-package-v1.workspace-carrier.handoff-surface-present', 'Pointerless Workspace carrier must not expose Handoff route, Role pointer, or Handoff cache carriers.', { routes: routePointers.length, endpointRoles: endpointRolePointers.length, participantRoles: participantRolePointers.length, caches: caches.length }));
     carrierProjection = workspaceCarrierProjection(workspaceParts, lineage);
   } else {
@@ -196,6 +226,7 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
     packageFile?.path,
     packageContract?.startPath,
     ...(bindings || []).flatMap((binding) => [binding.workspaceArtifactPath, binding.snapshotPath, binding.protectedPayloadDescriptorPath, binding.transportEnvelopePath]),
+    ...(genericMaterialSurface.workspaceParts || []).flatMap((part) => [part.artifact?.path, part.representationArtifact?.path, part.payloadArtifact?.path, part.archiveFile?.path]),
     ...protectedWorkspacePayloadArtifacts.flatMap((artifact) => [artifact.path, parseRecipientV2ExternalPayload(artifact.markdown).location]),
     ...generatedArtifacts.filter((item) => ['recovery-orientation', 'handoff-route', 'endpoint-role', 'participant-role'].includes(String(item.facts?.role || ''))).map((item) => item.path),
     ...bootstrapArtifacts.flatMap((artifact) => [artifact.path, parseRecipientV2ExternalPayload(artifact.markdown).location]),
@@ -212,12 +243,12 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
   return deepFreeze({
     schema: 'tiinex.portable.recipient-facing-handoff-package-v1.inspection.v1', detected: Boolean(packageFile), status, format: RECIPIENT_V2_PACKAGE_V1_FORMAT_ID,
     rootArtifact: packageFile ? Object.freeze({ path: packageFile.path, schemaId: RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID, sha256: sha256Hex(packageFileBytes(packageFile)), carrierLineage: lineage }) : null,
-    readArtifact, workspaces: Object.freeze(workspaceParts.map((item) => Object.freeze({ workspaceId: item.workspaceId, coverage: 'complete', bindingState: item.bindingState || 'verified', workspaceArtifactPath: item.artifact.path, workspaceArchivePath: item.archiveFile?.path || '', sourceWorkspaceTargetInnerPath: item.facts.sourceWorkspaceTargetInnerPath, sourceWorkspaceTargetSha256: item.facts.sourceWorkspaceTargetSha256 }))), sealedWorkspaces: Object.freeze(sealedWorkspaceBindings),
+    readArtifact, workspaces: Object.freeze(workspaceParts.map((item) => Object.freeze({ workspaceId: item.workspaceId, coverage: String(item.representation?.coverage || item.facts?.coverage || 'complete'), bindingState: item.bindingState || String(item.representation?.bindingState || 'verified'), workspaceArtifactPath: item.artifact.path, workspaceArchivePath: item.archiveFile?.path || '', sourceWorkspaceTargetInnerPath: item.facts.sourceWorkspaceTargetInnerPath, sourceWorkspaceTargetSha256: item.facts.sourceWorkspaceTargetSha256 }))), sealedWorkspaces: Object.freeze(sealedWorkspaceBindings),
     routes: projectRecipientV2Routes(routePointers, endpointRolePointers, participantRolePointers), endpointRoles: projectRecipientV2EndpointRoles(endpointRolePointers), participantRoles: projectRecipientV2ParticipantRoles(participantRolePointers),
     caches: Object.freeze(caches.map((cache) => Object.freeze({ workspaceId: String(cache.facts?.workspaceId || ''), artifactPath: cache.artifact.path, archivePath: cache.file.path, materials: cache.facts.materials || [] }))),
     bootstrapInspection, transportManifest: null, artifactFacts: Object.freeze(generatedArtifacts.map((item) => Object.freeze({ path: item.path, facts: item.facts }))), descriptor, workspaceByteProvider, carrierProjection, coldConsumerProjection,
     packageContract, findings: Object.freeze(finalFindings), findingSummary: Object.freeze({ errors: finalFindings.filter((item) => item.severity === 'error').length, findings: finalFindings.length }),
-    boundary: 'Read-only qualification of tiinex.handoff.package.v1: visible package identity/discovery and complete package-local Workspace bindings are reverified from exact bytes; derived inventories have no authority.'
+    boundary: 'Read-only qualification of tiinex.handoff.package.v1: visible package identity/discovery, direct complete Workspace bindings, generic complete/bounded Workspace Representation bindings, and bootstrap/route projection rules are reverified from exact bytes; derived inventories have no authority.'
   });
 }
 
@@ -239,14 +270,22 @@ function qualifyParentBoundaryCacheRequirementIds(caches = [], workspaceByteProv
     const requirementId = String(item.requirementId || '');
     const routeWorkspaceId = String(item.routeWorkspaceId || '');
     const routePath = normalizeWorkspacePath(item.routePath || '');
-    const sourceWorkspaceId = String(item.sourceWorkspaceId || '');
-    const sourcePath = normalizeWorkspacePath(item.sourcePath || '');
+    const sourceWorkspaceId = String(item.sourceWorkspaceId || routeWorkspaceId || '');
+    const sourcePath = normalizeWorkspacePath(item.sourcePath || routePath || '');
     const targetWorkspaceId = String(item.targetWorkspaceId || '');
     const targetPath = normalizeWorkspacePath(item.targetPath || item.originalPath || '');
     const referenceTarget = String(item.referenceTarget || '').trim();
     const routeQualified = (carrierProjection.routes || []).some((route) => String(route.state || '') === 'qualified' && String(route.workspaceId || '') === routeWorkspaceId && normalizeWorkspacePath(route.workspaceRelativePath || '') === routePath);
+    const sourceRequirementId = String(item.sourceRequirementId || '');
+    const sourceWorkspace = (workspaceByteProvider.workspaces || []).find((workspace) => String(workspace.id || '') === sourceWorkspaceId) || null;
+    const boundedRecoveryQualified = Boolean(
+      sourceRequirementId.startsWith(`bounded-workspace:${sourceWorkspaceId}:`) &&
+      routeWorkspaceId === sourceWorkspaceId && routePath === sourcePath &&
+      String(sourceWorkspace?.materialization?.materialization || '') === 'bounded' &&
+      sourceWorkspace?.state === 'qualified'
+    );
     let reason = '';
-    if (!requirementId || !routeQualified || !sourceWorkspaceId || !sourcePath || !targetWorkspaceId || !targetPath || !referenceTarget || !candidate.entry) reason = 'parent-boundary-visible-facts-incomplete';
+    if (!requirementId || (!routeQualified && !boundedRecoveryQualified) || !sourceWorkspaceId || !sourcePath || !targetWorkspaceId || !targetPath || !referenceTarget || !candidate.entry) reason = 'parent-boundary-visible-facts-incomplete';
     if (!reason && targetIndex.get(candidate.targetKey)?.length !== 1) reason = 'parent-boundary-target-ambiguous';
     if (!reason) {
       const alreadyCarried = resolveHandoffWorkspaceEntry(workspaceByteProvider, targetWorkspaceId, targetPath);
@@ -276,7 +315,7 @@ function qualifyParentBoundaryCacheRequirementIds(caches = [], workspaceByteProv
       }
     }
     if (reason) findings.push(finding('error', 'portable.handoff-package-v1.cache-parent-boundary-unqualified', 'Workspace dependency cache Parent-boundary material is not independently justified by the selected route declared Parent chain.', { requirementId, reason }));
-    else allowed.add(requirementId);
+    else { allowed.add(requirementId); if (sourceRequirementId) allowed.add(sourceRequirementId); }
   }
   return allowed;
 }

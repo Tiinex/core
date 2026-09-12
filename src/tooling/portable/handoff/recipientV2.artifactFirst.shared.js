@@ -20,6 +20,14 @@ export function cacheMaterialBelongsToRoute(material = {}, workspaceId = '', rou
   return String(material.routeWorkspaceId || '') === String(workspaceId || '') && normalizeRoutePath(material.routePath || '') === normalizeRoutePath(routePath || '');
 }
 
+export function cacheMaterialIsBoundedWorkspaceRecovery(material = {}, workspaceId = '') {
+  const id = String(workspaceId || '').trim();
+  return Boolean(id
+    && String(material.classification || '') === 'parent-boundary'
+    && String(material.routeWorkspaceId || '') === id
+    && String(material.sourceRequirementId || '').startsWith(`bounded-workspace:${id}:`));
+}
+
 export function selectOne(items = [], selector = '', label = 'item', findings = [], selectorFn = (item) => String(item.workspaceId || '')) { const candidates = selector ? items.filter((item) => selectorFn(item) === String(selector)) : items; if (candidates.length !== 1) { findings.push(finding('error', `portable.handoff-v2-phase1.${label}.selection`, `Phase 1 specimen requires exactly one selected ${label}.`, { selector: String(selector || ''), count: candidates.length })); return null; } return candidates[0]; }
 
 export function oneFile(files = [], path = '') { const matches = files.filter((file) => String(file.path || '') === String(path || '')); return matches.length === 1 ? matches[0] : null; }

@@ -75,7 +75,7 @@ export function deriveRecipientV2ArtifactFirstPhase1Facts(files = []) {
           const matches = archive?.state === 'qualified' ? archive.entries.filter((entry) => String(entry.path || '') === String(material.archiveEntry || '')) : [];
           const entry = matches.length === 1 ? matches[0] : null;
           const bytes = entry ? packageFileBytes({ data: entry.data }) : new Uint8Array();
-          return Object.freeze({ requirementId: material.requirementId, classification: material.classification, referenceTarget: material.referenceTarget, routeWorkspaceId: parsed.workspaceId, routePath: '', sourceRequirementId: material.requirementId, originalPath: '', archiveEntry: material.archiveEntry, bytes: bytes.byteLength, sha256: bytes.byteLength ? sha256Hex(bytes) : '' });
+          return Object.freeze({ requirementId: material.requirementId, classification: material.classification, referenceTarget: material.referenceTarget, routeWorkspaceId: material.routeWorkspaceId || parsed.workspaceId, routePath: material.routePath || '', sourceRequirementId: material.sourceRequirementId || material.requirementId, sourceWorkspaceId: material.sourceWorkspaceId || '', sourcePath: material.sourcePath || '', targetWorkspaceId: material.targetWorkspaceId || '', targetPath: material.targetPath || '', originalPath: material.originalPath || '', archiveEntry: material.archiveEntry, bytes: bytes.byteLength, sha256: bytes.byteLength ? sha256Hex(bytes) : '' });
         });
         facts.set(path, recipientV2TransportFacts('workspace-dependency-cache', { workspaceId: parsed.workspaceId, archivePath: parsed.location || '', archiveBytes: Number(parsed.bytes || 0), archiveSha256: parsed.integrityValue || '', materials: Object.freeze(materials) }));
       }
@@ -115,16 +115,36 @@ function parsePhase1MaterialBindings(markdown = '') {
     const requirement = line.match(/^\s*-\s+Requirement Id:\s*(.*?)\s*$/i);
     if (requirement) {
       if (current) out.push(Object.freeze(current));
-      current = { requirementId: String(requirement[1] || '').trim(), classification: '', referenceTarget: '', archiveEntry: '' };
+      current = { requirementId: String(requirement[1] || '').trim(), classification: '', referenceTarget: '', routeWorkspaceId: '', routePath: '', sourceRequirementId: '', sourceWorkspaceId: '', sourcePath: '', targetWorkspaceId: '', targetPath: '', originalPath: '', archiveEntry: '', bytes: null, sha256: '' };
       continue;
     }
     if (!current) continue;
     const classification = line.match(/^\s+-\s+Classification:\s*(.*?)\s*$/i);
     const reference = line.match(/^\s+-\s+Material Reference:\s*(.*?)\s*$/i);
     const archiveEntry = line.match(/^\s+-\s+Archive Entry:\s*(.*?)\s*$/i);
+    const routeWorkspaceId = line.match(/^\s+-\s+Route Workspace Id:\s*(.*?)\s*$/i);
+    const routePath = line.match(/^\s+-\s+Route Path:\s*(.*?)\s*$/i);
+    const sourceRequirementId = line.match(/^\s+-\s+Source Requirement Id:\s*(.*?)\s*$/i);
+    const sourceWorkspaceId = line.match(/^\s+-\s+Source Workspace Id:\s*(.*?)\s*$/i);
+    const sourcePath = line.match(/^\s+-\s+Source Path:\s*(.*?)\s*$/i);
+    const targetWorkspaceId = line.match(/^\s+-\s+Target Workspace Id:\s*(.*?)\s*$/i);
+    const targetPath = line.match(/^\s+-\s+Target Path:\s*(.*?)\s*$/i);
+    const originalPath = line.match(/^\s+-\s+Original Path:\s*(.*?)\s*$/i);
+    const bytes = line.match(/^\s+-\s+Byte Size:\s*(.*?)\s*$/i);
+    const sha256 = line.match(/^\s+-\s+SHA256:\s*(.*?)\s*$/i);
     if (classification) current.classification = String(classification[1] || '').trim();
     else if (reference) current.referenceTarget = String(reference[1] || '').trim();
     else if (archiveEntry) current.archiveEntry = String(archiveEntry[1] || '').trim();
+    else if (routeWorkspaceId) current.routeWorkspaceId = String(routeWorkspaceId[1] || '').trim();
+    else if (routePath) current.routePath = String(routePath[1] || '').trim();
+    else if (sourceRequirementId) current.sourceRequirementId = String(sourceRequirementId[1] || '').trim();
+    else if (sourceWorkspaceId) current.sourceWorkspaceId = String(sourceWorkspaceId[1] || '').trim();
+    else if (sourcePath) current.sourcePath = String(sourcePath[1] || '').trim();
+    else if (targetWorkspaceId) current.targetWorkspaceId = String(targetWorkspaceId[1] || '').trim();
+    else if (targetPath) current.targetPath = String(targetPath[1] || '').trim();
+    else if (originalPath) current.originalPath = String(originalPath[1] || '').trim();
+    else if (bytes) current.bytes = Number(bytes[1] || 0);
+    else if (sha256) current.sha256 = String(sha256[1] || '').trim();
   }
   if (current) out.push(Object.freeze(current));
   return Object.freeze(out);
@@ -183,7 +203,6 @@ export function qualifyPhase1CachePayload(cachePayload = null, semanticFiles = [
     if (archive.state !== 'qualified') localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.archive-invalid', 'Selected-route cache payload is not a qualified deterministic stored-ZIP representation.', { path: location, findings: archive.findings || [] }));
   }
   const seenRequirements = new Set();
-  const seenReferences = new Set();
   const seenEntries = new Set();
   for (const material of cachePayload.parsed?.materials || []) {
     const requirementId = String(material.requirementId || '');
@@ -193,13 +212,16 @@ export function qualifyPhase1CachePayload(cachePayload = null, semanticFiles = [
       localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-binding-incomplete', 'Every selected-route cache material binding must visibly declare requirement id, material reference, and archive entry.'));
       continue;
     }
-    if (seenRequirements.has(requirementId) || seenReferences.has(referenceTarget) || seenEntries.has(archiveEntry)) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-binding-ambiguous', 'Selected-route cache material bindings must be one-to-one by requirement id, material reference, and archive entry.', { requirementId, referenceTarget, archiveEntry }));
-    seenRequirements.add(requirementId); seenReferences.add(referenceTarget); seenEntries.add(archiveEntry);
+    if (seenRequirements.has(requirementId) || seenEntries.has(archiveEntry)) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-binding-ambiguous', 'Cache material bindings must be one-to-one by requirement id and archive entry; multiple requirements may legitimately share the same Parent reference.', { requirementId, referenceTarget, archiveEntry }));
+    seenRequirements.add(requirementId); seenEntries.add(archiveEntry);
     const entryMatches = archive?.state === 'qualified' ? archive.entries.filter((entry) => String(entry.path || '') === archiveEntry) : [];
     if (archive?.state === 'qualified' && entryMatches.length !== 1) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-entry-unresolved', 'Selected-route cache material binding must resolve exactly one exact cache entry.', { requirementId, referenceTarget, archiveEntry, count: entryMatches.length }));
     const entry = entryMatches.length === 1 ? entryMatches[0] : null;
     const entryBytes = entry ? packageFileBytes({ data: entry.data }) : new Uint8Array();
-    materialQualifications.push(deepFreeze({ requirementId, classification: String(material.classification || ''), referenceTarget, archiveEntry, bytes: entryBytes.byteLength, sha256: entryBytes.byteLength ? sha256Hex(entryBytes) : '' }));
+    const entrySha256 = entryBytes.byteLength ? sha256Hex(entryBytes) : '';
+    if (material.bytes !== null && material.bytes !== undefined && Number(material.bytes) !== entryBytes.byteLength) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-byte-size-mismatch', 'Visible cache material Byte Size must equal the exact owned archive entry bytes.', { requirementId, archiveEntry, declaredBytes: Number(material.bytes), actualBytes: entryBytes.byteLength }));
+    if (material.sha256 && String(material.sha256) !== entrySha256) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-sha256-mismatch', 'Visible cache material SHA256 must equal the exact owned archive entry digest.', { requirementId, archiveEntry }));
+    materialQualifications.push(deepFreeze({ requirementId, classification: String(material.classification || ''), referenceTarget, routeWorkspaceId: String(material.routeWorkspaceId || ''), routePath: String(material.routePath || ''), sourceRequirementId: String(material.sourceRequirementId || ''), sourceWorkspaceId: String(material.sourceWorkspaceId || ''), sourcePath: String(material.sourcePath || ''), targetWorkspaceId: String(material.targetWorkspaceId || ''), targetPath: String(material.targetPath || ''), originalPath: String(material.originalPath || ''), archiveEntry, bytes: entryBytes.byteLength, sha256: entrySha256 }));
   }
   if (!(cachePayload.parsed?.materials || []).length) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-bindings-missing', 'Selected-route cache External Payload must visibly bind every owned detached material to one archive entry.'));
   findings.push(...localFindings);

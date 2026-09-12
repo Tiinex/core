@@ -34,7 +34,15 @@ export function inspectRecipientV2ArtifactFirstPhase1Specimen(bundle = {}) {
   if (!routes.length) findings.push(finding('error', 'portable.handoff-v2-phase1.route.count', 'Artifact-first specimen requires at least one visible Handoff route Pointer.', { count: routes.length }));
   if (!workspacePayloads.length) findings.push(finding('error', 'portable.handoff-v2-phase1.payload.workspace-count', 'Artifact-first full-source carriage requires at least one Workspace External Payload artifact.', { count: workspacePayloads.length }));
   if (bootstrapPayloads.length > 1) findings.push(finding('error', 'portable.handoff-v2-phase1.bootstrap.count', 'A carried portable Tooling bootstrap must have exactly one owning External Payload artifact.', { count: bootstrapPayloads.length }));
-  if (cachePayloads.length > 1) findings.push(finding('error', 'portable.handoff-v2-phase1.cache.count', 'A selected Workspace may expose at most one selected-route dependency cache External Payload.', { count: cachePayloads.length }));
+  const cachePayloadsByWorkspace = new Map();
+  for (const item of cachePayloads) {
+    const cacheWorkspaceId = String(item.parsed?.workspaceId || '');
+    if (!cacheWorkspaceId) findings.push(finding('error', 'portable.handoff-v2-phase1.cache.workspace-id-missing', 'Every dependency/recovery cache External Payload must visibly declare its owning Workspace Id.', { path: item.path }));
+    const list = cachePayloadsByWorkspace.get(cacheWorkspaceId) || [];
+    list.push(item);
+    cachePayloadsByWorkspace.set(cacheWorkspaceId, list);
+  }
+  for (const [cacheWorkspaceId, items] of cachePayloadsByWorkspace) if (cacheWorkspaceId && items.length > 1) findings.push(finding('error', 'portable.handoff-v2-phase1.cache.count', 'Each carried Workspace may expose at most one dependency/recovery cache External Payload.', { workspaceId: cacheWorkspaceId, count: items.length }));
   if (unknownPayloads.length) findings.push(finding('error', 'portable.handoff-v2-phase1.payload.unclassified', 'Phase 1 specimen contains an External Payload artifact outside the bounded Workspace/bootstrap/cache ownership subset.', { count: unknownPayloads.length }));
   if (!relations.length) findings.push(finding('error', 'portable.handoff-v2-phase1.relation.count', 'Artifact-first full-source carriage requires a typed material-representation Relation for every carried Workspace.', { count: relations.length }));
   if (markdownFiles.some((file) => factsByPath.get(String(file.path || ''))?.role === 'package-root')) findings.push(finding('error', 'portable.handoff-v2-phase1.package-root.present', 'Phase 1 specimen must not use a package-root Pointer as receiver semantic authority.'));

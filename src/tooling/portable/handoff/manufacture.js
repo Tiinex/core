@@ -4,9 +4,11 @@ import { upgradeRecipientRelativeHandoffTransportPackageV2 } from './materialClo
 import { buildRecipientRelativeHandoffV2DirectBaseline } from './materialClosure.archiveV2.direct.js';
 import { qualifyMajorCarrierReadiness } from './carrierLineage.js';
 import { manufactureRecipientRelativeWorkspacePackage } from './workspaceCarrier.manufacture.js';
+import { manufactureRecipientRelativeBootstrapPackage } from './bootstrapCarrier.manufacture.js';
 
 export function manufactureRecipientRelativeHandoffPackage(input = {}, options = {}) {
   if (String(input.carrierMode || '') === 'workspace') return manufactureRecipientRelativeWorkspacePackage(input, options);
+  if (String(input.carrierMode || '') === 'bootstrap') return manufactureRecipientRelativeBootstrapPackage(input, options);
   const baseline = buildRecipientRelativeHandoffV2DirectBaseline(input, options);
   const upgraded = upgradeRecipientRelativeHandoffTransportPackageV2(baseline, input, options);
   const toolingBootstrapInspection = upgraded.inspection?.bootstrapInspection || inspectPortableToolingBootstrap(baseline.bundle || upgraded.bundle || {});
@@ -91,6 +93,6 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
     baseline: Object.freeze({ schema: baseline.schema, status: baseline.status, packageRepresentationSha256: String(baseline.bundle?.packageRepresentationSha256 || ''), representation: 'semantic-control-plus-detached-material-without-exploded-workspace-carrier' }),
     findings,
     findingSummary: summarizePortableFindings(findings),
-    boundary: 'Canonical archive-backed Handoff manufacturing facade. It fails closed unless each carrier workspace is bound to one exact carried tiinex.workspace.v1 artifact and one independently verified complete workspace archive; the actively selected local Handoff candidate must satisfy prospective per-field exact schema-reference authority, and when reconciliation proof is required/supplied, the exact source selected for manufacture must also match the qualified candidate reconciled frontier.'
+    boundary: 'Canonical archive-backed Handoff manufacturing facade. It fails closed unless every selected source-material binding qualifies under tiinex.handoff.package.v1, the exact authoritative selected Handoff is contained by clear qualified carried material, the actively selected local Handoff candidate satisfies prospective per-field exact schema-reference authority, and any required reconciliation proof matches the exact source selected for manufacture.'
   });
 }

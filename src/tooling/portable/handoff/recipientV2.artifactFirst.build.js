@@ -9,7 +9,7 @@ import { buildPhase1WorkspaceCarriers } from './recipientV2.artifactFirst.worksp
 import { buildPhase1RolePointers } from './recipientV2.artifactFirst.roles.js';
 import { deriveRecipientV2ArtifactFirstPhase1Facts } from './recipientV2.artifactFirst.materials.js';
 import { inspectRecipientV2ArtifactFirstPhase1Specimen } from './recipientV2.artifactFirst.inspect.js';
-import { RECIPIENT_V2_READ_PATH, RECIPIENT_V2_ARTIFACT_FIRST_PHASE1_FORMAT_ID, RECIPIENT_V2_ARTIFACT_FIRST_PHASE1_SCHEMA_ID, RECIPIENT_V2_ARTIFACT_FIRST_PHASE2_CLEAN_FORMAT_ID, RECIPIENT_V2_ARTIFACT_FIRST_PHASE2_CLEAN_SCHEMA_ID, PHASE2_CLEAN_PROFILE, PHASE2_COMPATIBILITY_TRANSPORT, PHASE1_BOOTSTRAP_ROLE, PHASE1_CACHE_ROLE, normalizeRoutePath, cacheMaterialBelongsToRoute, sortedQualifiedCarrierRoutes, selectOne, oneFile, repathFinalizedFile, phase1RoutePointerPath, phase1RolePathPrefix, blocked, finding, deepFreeze } from './recipientV2.artifactFirst.shared.js';
+import { RECIPIENT_V2_READ_PATH, RECIPIENT_V2_ARTIFACT_FIRST_PHASE1_FORMAT_ID, RECIPIENT_V2_ARTIFACT_FIRST_PHASE1_SCHEMA_ID, RECIPIENT_V2_ARTIFACT_FIRST_PHASE2_CLEAN_FORMAT_ID, RECIPIENT_V2_ARTIFACT_FIRST_PHASE2_CLEAN_SCHEMA_ID, PHASE2_CLEAN_PROFILE, PHASE2_COMPATIBILITY_TRANSPORT, PHASE1_BOOTSTRAP_ROLE, PHASE1_CACHE_ROLE, normalizeRoutePath, cacheMaterialBelongsToRoute, cacheMaterialIsBoundedWorkspaceRecovery, safeToken, sortedQualifiedCarrierRoutes, selectOne, oneFile, repathFinalizedFile, phase1RoutePointerPath, phase1RolePathPrefix, blocked, finding, deepFreeze } from './recipientV2.artifactFirst.shared.js';
 
 export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
   const cleanCarrierPhase2 = input.cleanCarrierPhase2 === true;
@@ -103,60 +103,100 @@ export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
     })
   }) : null;
 
-  const sourceCache = (sourceInspection.caches || []).find((item) => String(item.workspaceId || '') === workspaceId) || null;
-  const selectedCacheMaterials = sourceCache ? (sourceCache.materials || []).filter((item) => cacheMaterialBelongsToRoute(item, workspaceId, route.workspaceRelativeHandoffPath)) : [];
+  const sourceCaches = [...(sourceInspection.caches || [])];
+  const sourceCache = sourceCaches.find((item) => String(item.workspaceId || '') === workspaceId) || null;
+  const selectedRouteCacheMaterials = sourceCache ? (sourceCache.materials || []).filter((item) => cacheMaterialBelongsToRoute(item, workspaceId, route.workspaceRelativeHandoffPath)) : [];
   const siblingDetachedMaterials = routePlans
     .filter((plan) => plan.routeId !== selectedRouteId)
-    .flatMap((plan) => (sourceInspection.caches || []).flatMap((cache) => (cache.materials || []).filter((item) => cacheMaterialBelongsToRoute(item, plan.workspaceId, plan.workspaceRelativeHandoffPath))));
-  if (siblingDetachedMaterials.length) return blocked('shared-route-detached-cache-unsupported', [finding('error', 'portable.handoff-v2-phase1.shared-route.detached-cache-unsupported', 'Shared artifact-first carriage currently supports detached cache material only for the explicitly selected route; sibling routes must resolve closure from carried Workspace source.', { count: siblingDetachedMaterials.length })]);
+    .flatMap((plan) => sourceCaches.flatMap((cache) => (cache.materials || []).filter((item) => cacheMaterialBelongsToRoute(item, plan.workspaceId, plan.workspaceRelativeHandoffPath) && !cacheMaterialIsBoundedWorkspaceRecovery(item, plan.workspaceId))));
+  if (siblingDetachedMaterials.length) return blocked('shared-route-detached-cache-unsupported', [finding('error', 'portable.handoff-v2-phase1.shared-route.detached-cache-unsupported', 'Shared artifact-first carriage currently supports route-specific detached cache material only for the explicitly selected route; bounded Workspace recovery remains independently carryable for every bounded Workspace.', { count: siblingDetachedMaterials.length })]);
+
+  const cacheBuilds = [];
   let cacheArtifact = null;
-  let cacheArchiveFile = null;
-  let cacheProjection = null;
-  if (selectedCacheMaterials.length) {
-    const sourceCacheArchive = oneFile(sourceBundle.files || [], sourceCache.archivePath);
-    if (!sourceCacheArchive) return blocked('cache-source-unresolved', [finding('error', 'portable.handoff-v2-phase1.cache.source-unresolved', 'Selected-route detached cache archive is unavailable in the qualified source carrier.', { path: sourceCache.archivePath })]);
+  let selectedCacheMaterials = [];
+  let auxiliaryCacheOrdinal = 0;
+  for (const candidateCache of sourceCaches) {
+    const cacheWorkspaceId = String(candidateCache.workspaceId || '');
+    const recoveryMaterials = (candidateCache.materials || []).filter((item) => cacheMaterialIsBoundedWorkspaceRecovery(item, cacheWorkspaceId));
+    const routeMaterials = cacheWorkspaceId === workspaceId ? selectedRouteCacheMaterials : [];
+    const byMaterialKey = new Map();
+    for (const material of [...routeMaterials, ...recoveryMaterials]) {
+      const key = `${String(material.requirementId || '')}\u0000${String(material.archiveEntry || '')}`;
+      if (!byMaterialKey.has(key)) byMaterialKey.set(key, material);
+    }
+    const carriedMaterials = [...byMaterialKey.values()];
+    if (!carriedMaterials.length) continue;
+
+    const sourceCacheArchive = oneFile(sourceBundle.files || [], candidateCache.archivePath);
+    if (!sourceCacheArchive) return blocked('cache-source-unresolved', [finding('error', 'portable.handoff-v2-phase1.cache.source-unresolved', 'Detached cache archive is unavailable in the qualified source carrier.', { workspaceId: cacheWorkspaceId, path: candidateCache.archivePath })]);
     const sourceCacheInspection = inspectStoredWorkspaceArchive(packageFileBytes(sourceCacheArchive), { ownedBytes: true });
-    if (sourceCacheInspection.state !== 'qualified') return blocked('cache-source-invalid', [finding('error', 'portable.handoff-v2-phase1.cache.source-invalid', 'Selected-route detached cache archive did not independently qualify.', { path: sourceCache.archivePath, findings: sourceCacheInspection.findings || [] })]);
+    if (sourceCacheInspection.state !== 'qualified') return blocked('cache-source-invalid', [finding('error', 'portable.handoff-v2-phase1.cache.source-invalid', 'Detached cache archive did not independently qualify.', { workspaceId: cacheWorkspaceId, path: candidateCache.archivePath, findings: sourceCacheInspection.findings || [] })]);
+
     const selectedEntries = [];
     const materialBindings = [];
-    for (const material of selectedCacheMaterials) {
+    for (const material of carriedMaterials) {
       const archiveEntry = String(material.archiveEntry || '');
       const matches = sourceCacheInspection.entries.filter((entry) => String(entry.path || '') === archiveEntry);
-      if (matches.length !== 1) return blocked('cache-material-unresolved', [finding('error', 'portable.handoff-v2-phase1.cache.material-unresolved', 'Selected-route cache material must resolve exactly one source cache entry.', { requirementId: String(material.requirementId || ''), referenceTarget: String(material.referenceTarget || ''), archiveEntry, count: matches.length })]);
+      if (matches.length !== 1) return blocked('cache-material-unresolved', [finding('error', 'portable.handoff-v2-phase1.cache.material-unresolved', 'Carried cache material must resolve exactly one source cache entry.', { workspaceId: cacheWorkspaceId, requirementId: String(material.requirementId || ''), referenceTarget: String(material.referenceTarget || ''), archiveEntry, count: matches.length })]);
       selectedEntries.push({ path: archiveEntry, data: matches[0].data });
-      materialBindings.push(Object.freeze({ requirementId: String(material.requirementId || ''), classification: String(material.classification || ''), referenceTarget: String(material.referenceTarget || ''), archiveEntry }));
+      materialBindings.push(Object.freeze({
+        requirementId: String(material.requirementId || ''),
+        classification: String(material.classification || ''),
+        referenceTarget: String(material.referenceTarget || ''),
+        routeWorkspaceId: String(material.routeWorkspaceId || ''),
+        routePath: String(material.routePath || ''),
+        sourceRequirementId: String(material.sourceRequirementId || ''),
+        sourceWorkspaceId: String(material.sourceWorkspaceId || ''),
+        sourcePath: String(material.sourcePath || ''),
+        targetWorkspaceId: String(material.targetWorkspaceId || ''),
+        targetPath: String(material.targetPath || ''),
+        originalPath: String(material.originalPath || ''),
+        archiveEntry,
+        bytes: Number(material.bytes || matches[0].bytes || 0),
+        sha256: String(material.sha256 || matches[0].sha256 || '')
+      }));
     }
-    const cacheArchivePath = '001-5-cache.zip';
-    const cacheArtifactPath = '001-5-cache.trace.md';
-    cacheArchiveFile = finalizeFile({
-      path: cacheArchivePath,
+
+    const selectedWorkspaceCache = cacheWorkspaceId === workspaceId;
+    auxiliaryCacheOrdinal += selectedWorkspaceCache ? 0 : 1;
+    const cacheStem = selectedWorkspaceCache ? '001-5-cache' : `001-5-${auxiliaryCacheOrdinal}-${safeToken(cacheWorkspaceId)}-recovery-cache`;
+    const builtArchivePath = `${cacheStem}.zip`;
+    const builtArtifactPath = `${cacheStem}.trace.md`;
+    const builtArchiveFile = finalizeFile({
+      path: builtArchivePath,
       kind: 'handoff-material-cache',
       logicalKind: 'recipient-v2-phase1-workspace-dependency-cache',
       mediaType: 'application/zip',
       data: exportFileMapZipUint8Array(selectedEntries, 'portable.handoff-v2-phase1.cache.path.invalid'),
-      boundary: 'Exact selected-route detached dependency bytes owned by the visible cache External Payload artifact. Cache location and compatibility JSON are not semantic authority.'
+      boundary: 'Exact route-scoped detached dependency and/or bounded Workspace Parent-recovery bytes owned by one visible cache External Payload artifact. Cache location and compatibility JSON are not semantic authority.'
     });
-    cacheArtifact = finalizeFile({
-      path: cacheArtifactPath,
+    const builtArtifact = finalizeFile({
+      path: builtArtifactPath,
       kind: 'tiinex-external-payload-artifact',
       logicalKind: 'recipient-v2-phase1-workspace-dependency-cache-reference',
       mediaType: 'text/markdown',
       content: renderRecipientV2ExternalPayload({
         artifactFirst: true,
         createdAt,
-        workspaceId,
-        title: `Workspace Dependency Cache — ${workspaceId}`,
-        summary: 'Artifact-first Phase 1 exact selected-route dependency bytes absent from the qualified Workspace payload.',
-        label: `${workspaceId} selected-route Handoff dependency cache`,
+        workspaceId: cacheWorkspaceId,
+        title: `Workspace Dependency Cache — ${cacheWorkspaceId}`,
+        summary: 'Artifact-first exact detached dependency and bounded Parent-recovery bytes absent from the qualified Workspace payload.',
+        label: `${cacheWorkspaceId} Handoff dependency and recovery cache`,
         kind: 'zip export',
         role: PHASE1_CACHE_ROLE,
-        location: cacheArchivePath,
-        bytes: cacheArchiveFile.bytes,
-        sha256: cacheArchiveFile.sha256,
+        location: builtArchivePath,
+        bytes: builtArchiveFile.bytes,
+        sha256: builtArchiveFile.sha256,
         materials: materialBindings
       })
     });
-    cacheProjection = Object.freeze({ workspaceId, artifactPath: cacheArtifactPath, archivePath: cacheArchivePath, materials: Object.freeze(materialBindings) });
+    const projection = Object.freeze({ workspaceId: cacheWorkspaceId, artifactPath: builtArtifactPath, archivePath: builtArchivePath, materials: Object.freeze(materialBindings) });
+    const built = Object.freeze({ workspaceId: cacheWorkspaceId, artifact: builtArtifact, archiveFile: builtArchiveFile, projection, sourceMaterials: Object.freeze(carriedMaterials) });
+    cacheBuilds.push(built);
+    if (selectedWorkspaceCache) {
+      cacheArtifact = builtArtifact;
+      selectedCacheMaterials = carriedMaterials;
+    }
   }
 
   const endpointRoleArtifacts = [];
@@ -257,7 +297,7 @@ export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
       destinations: [
         ...(bootstrapArtifact ? [{ label: 'Portable Tooling bootstrap payload', target: bootstrapArtifactPath }] : []),
         ...workspaceCarriers.map((item) => ({ label: `${item.workspaceId} Workspace payload`, target: item.payloadArtifactPath })),
-        ...(cacheArtifact ? [{ label: 'Selected-route dependency cache payload', target: cacheArtifact.path }] : []),
+        ...cacheBuilds.map((item) => ({ label: `Workspace dependency/recovery cache ${item.workspaceId}`, target: item.artifact.path })),
         ...workspaceCarriers.map((item) => ({ label: `${item.workspaceId} Workspace material representation`, target: item.relationArtifactPath })),
         ...endpointRoleArtifacts.map((item) => ({ label: 'Endpoint Role pointer', target: item.path })),
         ...participantRoleArtifacts.map((item) => ({ label: 'Participant Role pointer', target: item.path })),
@@ -267,7 +307,8 @@ export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
   });
 
   const workspaceFiles = workspaceCarriers.flatMap((item) => [item.payloadArtifact, item.archiveFile, item.relationArtifact]);
-  const semanticFiles = Object.freeze([ingressPointer, ...(bootstrapArtifact && bootstrapArchiveFile ? [bootstrapArtifact, bootstrapArchiveFile] : []), ...workspaceFiles, ...(cacheArtifact && cacheArchiveFile ? [cacheArtifact, cacheArchiveFile] : []), ...endpointRoleArtifacts, ...participantRoleArtifacts, ...routePointers]);
+  const cacheFiles = cacheBuilds.flatMap((item) => [item.artifact, item.archiveFile]);
+  const semanticFiles = Object.freeze([ingressPointer, ...(bootstrapArtifact && bootstrapArchiveFile ? [bootstrapArtifact, bootstrapArchiveFile] : []), ...workspaceFiles, ...cacheFiles, ...endpointRoleArtifacts, ...participantRoleArtifacts, ...routePointers]);
   const factsByPath = deriveRecipientV2ArtifactFirstPhase1Facts(semanticFiles);
   const manifestInputs = semanticFiles.map((file) => {
     const facts = factsByPath.get(String(file.path || '')) || null;
@@ -293,7 +334,7 @@ export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
       sourceWorkspaceTargetInnerPath: String(item.workspace.sourceWorkspaceTargetInnerPath || ''),
       sourceWorkspaceTargetSha256: String(item.workspace.sourceWorkspaceTargetSha256 || '')
     }))),
-    caches: Object.freeze(cacheProjection ? [cacheProjection] : []),
+    caches: Object.freeze(cacheBuilds.map((item) => item.projection)),
     endpointRoles: Object.freeze(endpointRoleProjections),
     participantRoles: Object.freeze(participantRoleProjections),
     routes: Object.freeze(routeTopology),

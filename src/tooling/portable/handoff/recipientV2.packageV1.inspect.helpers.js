@@ -1,8 +1,9 @@
 import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
-import { parseRecipientV2ExternalPayload, parseRecipientV2Pointer } from './recipientV2.artifacts.js';
+import { parseRecipientV2ExternalPayload, parseRecipientV2Pointer, parseRecipientV2WorkspaceRepresentation } from './recipientV2.artifacts.js';
 import { RECIPIENT_V2_READ_PATH } from './recipientV2.topology.js';
 import { RECIPIENT_V2_ROUTE_SELECTION_AUTHORITY, RECIPIENT_V2_SIBLING_ROUTE_INFERENCE } from './recipientV2.entryContract.js';
 import { inspectStoredWorkspaceArchive } from './workspaceByteProvider.js';
+import { recipientEntriesFingerprint } from './recipientV2.topology.helpers.js';
 import { parentTrace } from './recipientV2.lineage.js';
 import { finding } from './recipientV2.topology.materials.js';
 import { RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH } from './recipientV2.packageV1.constants.js';
@@ -62,16 +63,15 @@ export function deriveVisibleFacts({ file = null, markdown = '', schemaId = '', 
     const role = String(visible.role || '');
     if (!role) return null;
     const base = { factsFormat: 'portable-recipient-v2', factsVersion: 1, role };
-    if (role === 'recovery-orientation') { const workspaceMode = String(packageContract?.packageRole || '') === 'recipient-facing-workspace-carrier'; return { ...base, format: RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, packageRole: String(packageContract?.packageRole || ''), packageRootPath: RECIPIENT_V2_PACKAGE_V1_ROOT_PATH, entryArtifactPath: RECIPIENT_V2_READ_PATH, routeAuthority: workspaceMode ? 'none' : 'qualified-handoff-route-pointer-plus-exact-handoff-bytes', routeSelectionAuthority: workspaceMode ? 'none' : RECIPIENT_V2_ROUTE_SELECTION_AUTHORITY, siblingRouteInference: workspaceMode ? false : RECIPIENT_V2_SIBLING_ROUTE_INFERENCE }; }
+    if (role === 'recovery-orientation') { const routed = String(packageContract?.packageRole || '') === 'recipient-facing-handoff-carrier'; return { ...base, format: RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, packageRole: String(packageContract?.packageRole || ''), packageRootPath: RECIPIENT_V2_PACKAGE_V1_ROOT_PATH, entryArtifactPath: RECIPIENT_V2_READ_PATH, routeAuthority: routed ? 'qualified-handoff-route-pointer-plus-exact-handoff-bytes' : 'none', routeSelectionAuthority: routed ? RECIPIENT_V2_ROUTE_SELECTION_AUTHORITY : 'none', siblingRouteInference: routed ? RECIPIENT_V2_SIBLING_ROUTE_INFERENCE : false }; }
     if (role === 'handoff-route') {
       const workspaceId = String(visible.workspaceId || '');
-      const binding = (packageContract?.workspaces || []).find((item) => item.workspaceId === workspaceId) || null;
-      const archiveFile = binding ? oneFile(index, binding.snapshotPath) : null;
-      const workspaceFile = binding ? oneFile(index, binding.workspaceArtifactPath) : null;
-      const parsed = archiveFile ? inspectStoredWorkspaceArchive(packageFileBytes(archiveFile), { ownedBytes: true }) : null;
-      const handoffEntry = (parsed?.entries || []).find((entry) => entry.path === visible.handoffWorkspacePath) || null;
+      const direct = directWorkspaceClosure(index, packageContract, workspaceId);
+      const generic = direct ? null : genericWorkspaceClosure(index, packageContract, { workspaceId });
+      const closure = direct || generic;
+      const handoffEntry = (closure?.parsed?.entries || []).find((entry) => entry.path === visible.handoffWorkspacePath) || null;
       const current = sectionText(markdown, 'Current Read');
-      return { ...base, workspaceId, workspaceArtifactPath: binding?.workspaceArtifactPath || '', workspaceArtifactSha256: workspaceFile ? sha256Hex(packageFileBytes(workspaceFile)) : '', archivePath: binding?.snapshotPath || '', archiveSha256: archiveFile ? sha256Hex(packageFileBytes(archiveFile)) : '', sourceWorkspaceTargetInnerPath: binding?.workspaceArtifactInnerPath || '', sourceWorkspaceTargetSha256: workspaceFile ? sha256Hex(packageFileBytes(workspaceFile)) : '', workspaceRelativeHandoffPath: visible.handoffWorkspacePath, handoffBytes: Number(handoffEntry?.bytes || 0), handoffSha256: String(handoffEntry?.sha256 || ''), routeId: visible.routeId || unquote(field(current, 'Route Id')), cacheArtifactPath: markdownTarget(field(current, 'Workspace Dependency Cache')), requiredContextBindings: Object.freeze([]) };
+      return { ...base, workspaceId, workspaceArtifactPath: closure?.workspaceFile?.path || '', workspaceArtifactSha256: closure?.workspaceFile ? sha256Hex(packageFileBytes(closure.workspaceFile)) : '', archivePath: closure?.archiveFile?.path || '', archiveSha256: closure?.archiveFile ? sha256Hex(packageFileBytes(closure.archiveFile)) : '', sourceWorkspaceTargetInnerPath: closure?.workspaceArtifactInnerPath || '', sourceWorkspaceTargetSha256: closure?.sourceWorkspaceTargetSha256 || '', workspaceRelativeHandoffPath: visible.handoffWorkspacePath, handoffBytes: Number(handoffEntry?.bytes || 0), handoffSha256: String(handoffEntry?.sha256 || ''), routeId: visible.routeId || unquote(field(current, 'Route Id')), cacheArtifactPath: markdownTarget(field(current, 'Workspace Dependency Cache')), requiredContextBindings: Object.freeze([]) };
     }
     if (role === 'endpoint-role' || role === 'participant-role') {
       const targetPayload = visible.targetPayload || '';
@@ -90,15 +90,68 @@ export function deriveVisibleFacts({ file = null, markdown = '', schemaId = '', 
     const workspaceId = (packageContract?.workspaces || []).find((item) => item.transportEnvelopePath === file?.path)?.workspaceId || '';
     return { factsFormat: 'portable-recipient-v2', factsVersion: 1, role: TRANSPORT_ENVELOPE_V1_ROLE, workspaceId: String(workspaceId || ''), workspaceArtifactPath: visible.workspaceArtifactPath, protectedPayloadDescriptorPath: visible.protectedPayloadDescriptorPath, workspaceBindingValue: visible.workspaceBindingValue, profileId: visible.profile?.profileId || '', profileVersion: Number(visible.profile?.profileVersion || 0) };
   }
+  if (schemaId === 'tiinex.workspace.v1') {
+    const generic = genericWorkspaceClosure(index, packageContract, { workspaceArtifactPath: file?.path });
+    if (!generic) return null;
+    const entries = generic.parsed?.entries || [];
+    const totalBytes = entries.reduce((sum, entry) => sum + Number(entry.bytes || 0), 0);
+    return { factsFormat: 'portable-recipient-v2', factsVersion: 1, role: 'workspace-node', workspaceId: generic.workspaceId, archivePath: generic.archiveFile?.path || '', archiveBytes: generic.archiveFile ? packageFileBytes(generic.archiveFile).byteLength : 0, archiveSha256: generic.archiveFile ? sha256Hex(packageFileBytes(generic.archiveFile)) : '', representationArtifactPath: generic.representationFile?.path || '', payloadArtifactPath: generic.payloadFile?.path || '', sourceWorkspaceTargetInnerPath: generic.workspaceArtifactInnerPath || '', sourceWorkspaceTargetBytes: Number(generic.sourceWorkspaceTargetBytes || 0), sourceWorkspaceTargetSha256: generic.sourceWorkspaceTargetSha256 || '', entryCount: entries.length, totalBytes, entriesFingerprint: recipientEntriesFingerprint(entries), coverage: generic.representation?.coverage || '', coverageState: generic.representation?.bindingState === 'verified' ? 'qualified' : 'unresolved', completenessState: generic.representation?.coverage === 'complete' && generic.representation?.bindingState === 'verified' ? 'qualified' : '', archiveCodec: 'deterministic-stored-zip', providerKind: 'package-local-stored-zip-v1' };
+  }
+  if (schemaId === 'tiinex.workspace.representation.v1') {
+    const generic = genericWorkspaceClosure(index, packageContract, { representationArtifactPath: file?.path });
+    if (!generic) return null;
+    const entries = generic.parsed?.entries || [];
+    return { factsFormat: 'portable-recipient-v2', factsVersion: 1, role: 'workspace-representation', workspaceId: generic.workspaceId, workspaceArtifactPath: generic.workspaceFile?.path || '', payloadArtifactPath: generic.payloadFile?.path || '', sourceWorkspaceTargetInnerPath: generic.workspaceArtifactInnerPath || '', archivePath: generic.archiveFile?.path || '', archiveSha256: generic.archiveFile ? sha256Hex(packageFileBytes(generic.archiveFile)) : '', entryCount: entries.length, entriesFingerprint: recipientEntriesFingerprint(entries), coverage: generic.representation?.coverage || '', coverageState: generic.representation?.bindingState === 'verified' ? 'qualified' : 'unresolved', completenessState: generic.representation?.coverage === 'complete' && generic.representation?.bindingState === 'verified' ? 'qualified' : '' };
+  }
   if (schemaId === 'tiinex.external.payload.v1') {
     const visible = parseRecipientV2ExternalPayload(markdown);
-    const role = String(visible.payloadRole || '');
+    const rawRole = String(visible.payloadRole || '');
+    const role = /workspace archive representation payload$/i.test(rawRole) ? 'workspace-representation-payload' : rawRole;
     const parent = parentTraceFromMarkdown(markdown);
-    const workspaceId = String(visible.workspaceId || '') || (packageContract?.workspaces || []).find((item) => item.workspaceArtifactPath === parent)?.workspaceId || '';
+    const genericParent = genericWorkspaceClosure(index, packageContract, { workspaceArtifactPath: parent });
+    const workspaceId = String(visible.workspaceId || '') || (packageContract?.workspaces || []).find((item) => item.workspaceArtifactPath === parent)?.workspaceId || genericParent?.workspaceId || '';
     const materials = parsePayloadMaterials(sectionText(markdown, 'Payload Material Bindings'));
     return { factsFormat: 'portable-recipient-v2', factsVersion: 1, role, workspaceId, archivePath: visible.location, archiveBytes: visible.bytes, archiveSha256: visible.integrityValue, materials };
   }
   return null;
+}
+
+function directWorkspaceClosure(index, packageContract, workspaceId) {
+  const binding = (packageContract?.workspaces || []).find((item) => String(item.workspaceId || '') === String(workspaceId || '')) || null;
+  if (!binding || String(binding.snapshotKind || '') !== 'exact-workspace-byte-tree-archive') return null;
+  const archiveFile = oneFile(index, binding.snapshotPath);
+  const workspaceFile = oneFile(index, binding.workspaceArtifactPath);
+  const parsed = archiveFile ? inspectStoredWorkspaceArchive(packageFileBytes(archiveFile), { ownedBytes: true }) : null;
+  return archiveFile && workspaceFile && parsed ? { workspaceId: String(binding.workspaceId || ''), workspaceFile, archiveFile, parsed, workspaceArtifactInnerPath: String(binding.workspaceArtifactInnerPath || ''), sourceWorkspaceTargetSha256: sha256Hex(packageFileBytes(workspaceFile)) } : null;
+}
+
+function genericWorkspaceClosure(index, packageContract, selector = {}) {
+  for (const binding of packageContract?.materialRepresentations || []) {
+    const representationFile = oneFile(index, binding.workspaceRepresentationPath);
+    if (!representationFile) continue;
+    const representation = parseRecipientV2WorkspaceRepresentation(decodeUtf8(packageFileBytes(representationFile)));
+    if (selector.representationArtifactPath && String(representationFile.path || '') !== String(selector.representationArtifactPath)) continue;
+    const workspaceFile = oneFile(index, representation.workspaceArtifactPath);
+    const payloadFile = oneFile(index, representation.payloadArtifactPath);
+    if (!workspaceFile || !payloadFile) continue;
+    if (selector.workspaceArtifactPath && String(workspaceFile.path || '') !== String(selector.workspaceArtifactPath)) continue;
+    const workspaceMarkdown = decodeUtf8(packageFileBytes(workspaceFile));
+    const workspaceId = workspaceIdFromCarrierWorkspaceMarkdown(workspaceMarkdown);
+    if (selector.workspaceId && workspaceId !== String(selector.workspaceId || '')) continue;
+    const payload = parseRecipientV2ExternalPayload(decodeUtf8(packageFileBytes(payloadFile)));
+    const archiveFile = oneFile(index, payload.location);
+    const parsed = archiveFile ? inspectStoredWorkspaceArchive(packageFileBytes(archiveFile), { ownedBytes: true }) : null;
+    if (!archiveFile || !parsed) continue;
+    const target = (parsed.entries || []).find((entry) => String(entry.path || '') === String(representation.workspaceArtifactInnerPath || '')) || null;
+    return { binding, workspaceId, representationFile, representation, workspaceFile, payloadFile, payload, archiveFile, parsed, workspaceArtifactInnerPath: String(representation.workspaceArtifactInnerPath || ''), sourceWorkspaceTargetBytes: Number(target?.bytes || 0), sourceWorkspaceTargetSha256: String(target?.sha256 || '') };
+  }
+  return null;
+}
+
+function workspaceIdFromCarrierWorkspaceMarkdown(markdown = '') {
+  const summary = String(markdown).match(/^\s*-\s+Summary:\s+Package-local Workspace node for\s+(.+?);/mi)?.[1]?.trim();
+  if (summary) return summary;
+  return String(markdown).match(/^#\s+(.+?)\s+—\s+Handoff Workspace\s*$/m)?.[1]?.trim() || '';
 }
 
 function workspaceIdForRoute(index = new Map(), routeId = '') {

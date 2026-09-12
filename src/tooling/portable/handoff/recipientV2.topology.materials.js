@@ -1,6 +1,20 @@
 import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
 
 export function bindingForWorkspace(descriptor = {}, workspaceId = '') { return (descriptor.workspaceArchiveBindings || []).find((binding) => String(binding.workspaceId || '') === String(workspaceId || '')) || null; }
+export function boundedWorkspaceClaimsDetachedRecovery(binding = {}, material = {}) {
+  const workspaceId = String(binding.workspaceId || '').trim();
+  if (!workspaceId || String(binding.coverage || '') !== 'bounded') return false;
+  if (String(material.classification || '') !== 'parent-boundary') return false;
+  if (String(material.routeWorkspaceId || '') !== workspaceId) return false;
+  if (!String(material.sourceRequirementId || '').startsWith(`bounded-workspace:${workspaceId}:`)) return false;
+  const targetWorkspaceId = String(material.targetWorkspaceId || workspaceId);
+  if (targetWorkspaceId !== workspaceId) return false;
+  const included = new Set((binding.entryMap?.entries || []).map((entry) => normalizeWorkspacePath(entry.path || '')));
+  const sourcePath = normalizeWorkspacePath(material.sourcePath || material.routePath || '');
+  const targetPath = normalizeWorkspacePath(material.targetPath || material.originalPath || '');
+  return Boolean(sourcePath && targetPath && included.has(sourcePath) && !included.has(targetPath));
+}
+
 export function routeClaimsDetachedMaterial(route = {}, material = {}) {
   const scopedWorkspace = String(material.routeWorkspaceId || '').trim();
   const scopedPath = normalizeWorkspacePath(material.routePath || '');

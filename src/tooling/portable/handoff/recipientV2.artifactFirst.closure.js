@@ -124,7 +124,7 @@ export function phase1CacheParentCandidates(cacheQualifications = []) {
       const entry = matches[0];
       const data = packageFileBytes({ data: entry.data });
       if (Number(material.bytes || 0) !== data.byteLength || String(material.sha256 || '') !== sha256Hex(data)) continue;
-      candidates.push(Object.freeze({ workspaceId: String(cache.workspaceId || ''), workspaceRelativePath: normalizeRoutePath(material.referenceTarget || ''), archiveEntry: String(material.archiveEntry || ''), bytes: data.byteLength, sha256: sha256Hex(data), data }));
+      candidates.push(Object.freeze({ workspaceId: String(material.targetWorkspaceId || cache.workspaceId || ''), workspaceRelativePath: normalizeRoutePath(material.originalPath || material.targetPath || material.referenceTarget || ''), archiveEntry: String(material.archiveEntry || ''), bytes: data.byteLength, sha256: sha256Hex(data), data }));
     }
   }
   return Object.freeze(candidates);

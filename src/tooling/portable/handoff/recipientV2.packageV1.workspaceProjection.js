@@ -1,4 +1,4 @@
-import { WORKSPACE_PACKAGE_ROLE } from './recipientV2.packageV1.contract.js';
+import { BOOTSTRAP_PACKAGE_ROLE, WORKSPACE_PACKAGE_ROLE } from './recipientV2.packageV1.contract.js';
 import { deepFreeze } from './recipientV2.packageV1.shared.js';
 
 export function workspaceCarrierProjection(workspaceParts = [], lineage = null) {
@@ -17,6 +17,19 @@ export function workspaceCarrierProjection(workspaceParts = [], lineage = null) 
     selection: Object.freeze({ policy: 'none', qualifiedRouteCount: 0, implicitRouteId: '', packageRole: WORKSPACE_PACKAGE_ROLE }),
     routes: Object.freeze([]),
     authority: Object.freeze({ semanticAuthority: 'none', filenameAuthority: false, dimensionalParentAuthority: false, routeSelectionAuthority: 'none' }),
+    findings: Object.freeze([])
+  });
+}
+
+export function bootstrapCarrierProjection(lineage = null, bootstrapQualified = false) {
+  return deepFreeze({
+    schema: 'tiinex.portable.handoff-carrier-projection.v1', version: 1,
+    status: bootstrapQualified ? 'ready' : 'blocked', mode: 'bootstrap', lineage,
+    workspaces: Object.freeze([]),
+    workspace: Object.freeze({ id: '', title: '', slug: '', qualification: 'unresolved' }),
+    selection: Object.freeze({ policy: 'none', qualifiedRouteCount: 0, implicitRouteId: '', packageRole: BOOTSTRAP_PACKAGE_ROLE }),
+    routes: Object.freeze([]),
+    authority: Object.freeze({ semanticAuthority: 'none', filenameAuthority: false, dimensionalParentAuthority: false, routeSelectionAuthority: 'none', holderAuthority: 'none', workAuthority: 'none' }),
     findings: Object.freeze([])
   });
 }
