@@ -2,17 +2,25 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { sha256Hex } from '../../../../export/package.bytes.js';
 import { safeWorkspaceToken, serializableMetadata } from './handoff.manufacture.multiRoot.js';
+import {
+  DEFAULT_PORTABLE_SOURCE_EXCLUDED_DIRECTORIES,
+  DEFAULT_PORTABLE_SOURCE_EXCLUDED_RELATIVE_PATHS,
+  portableSourceEligibilityPolicy,
+  qualifyPortableSourcePath
+} from '../../source/sourceEligibility.js';
 
 export const PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID = 'tiinex.portable.node-workspace-enumeration.v1';
-export const DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_DIRECTORIES = Object.freeze(['.git', '.tiinex', 'node_modules', '.site-publish', '.release', '.outgoing-handoff-packages']);
-export const DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_RELATIVE_PATHS = Object.freeze(['.vscode/link']);
+export const DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_DIRECTORIES = DEFAULT_PORTABLE_SOURCE_EXCLUDED_DIRECTORIES;
+export const DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_RELATIVE_PATHS = DEFAULT_PORTABLE_SOURCE_EXCLUDED_RELATIVE_PATHS;
 const DEFAULT_MAX_FILES = 10000;
 
 export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
   const root = path.resolve(String(rootInput || '.'));
   const maxFiles = positiveInteger(options.maxFiles, DEFAULT_MAX_FILES);
-  const excluded = new Set([...(options.excludeDirectories || DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_DIRECTORIES)].map(String));
-  const excludedPaths = new Set(options.excludeRelativePaths || DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_RELATIVE_PATHS);
+  const sourceEligibility = portableSourceEligibilityPolicy({
+    excludeDirectories: options.excludeDirectories == null ? DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_DIRECTORIES : options.excludeDirectories,
+    excludeRelativePaths: options.excludeRelativePaths == null ? DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_RELATIVE_PATHS : options.excludeRelativePaths
+  });
   const queue = [root];
   const absoluteFiles = [];
   const skippedSymlinks = [];
@@ -21,10 +29,15 @@ export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
     const entries = await readdir(current, { withFileTypes: true });
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
-      if (entry.isDirectory() && excluded.has(entry.name)) continue;
       const absolute = path.join(current, entry.name);
-      if (excludedPaths.has(normalizeRelativePath(path.relative(root, absolute)))) continue;
-      if (entry.isSymbolicLink()) { skippedSymlinks.push(normalizeRelativePath(path.relative(root, absolute))); continue; }
+      const relative = normalizeRelativePath(path.relative(root, absolute));
+      const eligibility = qualifyPortableSourcePath(relative, {
+        excludeDirectories: sourceEligibility.excludedDirectories,
+        excludeRelativePaths: sourceEligibility.excludedRelativePaths,
+        entryKind: entry.isDirectory() ? 'directory' : 'file'
+      });
+      if (!eligibility.eligible) continue;
+      if (entry.isSymbolicLink()) { skippedSymlinks.push(relative); continue; }
       if (entry.isDirectory()) queue.push(absolute);
       else if (entry.isFile()) absoluteFiles.push(absolute);
       if (absoluteFiles.length > maxFiles) {
@@ -62,7 +75,13 @@ export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
     workspaceId,
     entryCount: includedEntries.length,
     totalBytes,
-    exclusions: Object.freeze({ directories: Object.freeze([...excluded].sort()), relativePaths: Object.freeze([...excludedPaths].sort()), symbolicLinks: 'excluded-and-reported' }),
+    exclusions: Object.freeze({
+      directories: sourceEligibility.excludedDirectories,
+      relativePaths: sourceEligibility.excludedRelativePaths,
+      fileSuffixes: sourceEligibility.excludedFileSuffixes,
+      symbolicLinks: 'excluded-and-reported',
+      sourceEligibilitySchema: sourceEligibility.schema
+    }),
     skippedSymlinks: Object.freeze(skippedSymlinks.sort()),
     entriesFingerprint: sha256Text(stableJson(includedEntries))
   });

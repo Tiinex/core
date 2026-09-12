@@ -3,18 +3,27 @@ import { inspectCreationRepresentation } from './creation.representation.js';
 import { qualifySchemaReferenceMaterialCoherence, qualifySchemaReferenceValue, schemaReferenceAuthorityFromBinding } from './schema.reference.js';
 
 export function schemaReferenceAuthoritiesForCreation(targetModule = null, explicit = null) {
-  const root = resolveRegisteredSchemaModule({ schemaId: 'tiinex.root.v1' });
-  const rootModule = root?.fallbackUsed ? null : root?.module || null;
-  const rootQualification = qualifiedSourceQualification(rootModule);
-  const targetQualification = qualifiedSourceQualification(targetModule);
   const defaults = {
-    envelope: schemaReferenceAuthorityFromBinding('tiinex.root.v1', rootModule?.binding || {}, rootQualification?.authority || null, rootQualification),
-    current: schemaReferenceAuthorityFromBinding(String(targetModule?.id || ''), targetModule?.binding || {}, targetQualification?.authority || null, targetQualification)
+    envelope: schemaReferenceAuthorityForRegisteredSchema('tiinex.root.v1'),
+    current: schemaReferenceAuthorityForModule(targetModule)
   };
   return Object.freeze({
     envelope: explicitSchemaReferenceAuthority(explicit?.envelope, defaults.envelope),
     current: explicitSchemaReferenceAuthority(explicit?.current, defaults.current)
   });
+}
+
+export function schemaReferenceAuthorityForRegisteredSchema(schemaId = '') {
+  const id = String(schemaId || '').trim();
+  const resolution = resolveRegisteredSchemaModule({ schemaId: id });
+  const module = resolution?.fallbackUsed ? null : resolution?.module || null;
+  return schemaReferenceAuthorityForModule(module, id);
+}
+
+function schemaReferenceAuthorityForModule(module = null, fallbackSchemaId = '') {
+  const id = String(module?.id || fallbackSchemaId || '').trim();
+  const qualification = qualifiedSourceQualification(module);
+  return schemaReferenceAuthorityFromBinding(id, module?.binding || {}, qualification?.authority || null, qualification);
 }
 
 export function explicitSchemaReferenceAuthority(value = null, fallback = {}) {
@@ -27,7 +36,7 @@ export function explicitSchemaReferenceAuthority(value = null, fallback = {}) {
   const preferredTarget = String(value.preferredTarget || value.target || exactTargets[0] || '').trim();
   const fallbackTargets = Object.freeze([...(fallback.exactTargets || [])]);
   const materialBoundTarget = Boolean(preferredTarget && fallback?.materialBoundTarget === true && fallbackTargets.includes(preferredTarget));
-  return Object.freeze({
+  const candidate = Object.freeze({
     ...fallback,
     schemaId,
     exactTargets: Object.freeze(exactTargets),
@@ -38,6 +47,17 @@ export function explicitSchemaReferenceAuthority(value = null, fallback = {}) {
     semanticSourceTargets: fallbackTargets,
     materialBoundTarget,
     semanticMaterialIdentity: fallback.semanticMaterialIdentity || Object.freeze({ state: 'unavailable' })
+  });
+  if (!preferredTarget) return candidate;
+  const coherence = qualifySchemaReferenceMaterialCoherence(candidate);
+  if (coherence.state === 'qualified') return candidate;
+  return Object.freeze({
+    ...candidate,
+    exactTargets: Object.freeze([]),
+    preferredTarget: '',
+    resolutionState: 'unresolved',
+    rejectedExactTargets: Object.freeze(exactTargets),
+    resolutionFindings: Object.freeze([...(coherence.findings || [])])
   });
 }
 
@@ -53,7 +73,7 @@ export function qualifyCreationSchemaReferences(markdown = '', contract = {}) {
 }
 
 function qualifyResolvedSchemaReference(value, authority) {
-  const lexical = qualifySchemaReferenceValue(value, authority);
+  const lexical = qualifySchemaReferenceValue(value, authority, { requireExactTargetWhenQualified: true });
   const material = qualifySchemaReferenceMaterialCoherence(authority);
   const findings = [...(lexical.findings || []), ...(material.findings || [])];
   return Object.freeze({ ...lexical, state: findings.length ? 'unavailable' : 'qualified', resolutionState: authority?.resolutionState || '', materialCoherence: material, findings: Object.freeze(findings) });

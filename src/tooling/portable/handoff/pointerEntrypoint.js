@@ -1,6 +1,8 @@
 import { packageFileBytes, sha256Hex, utf8Bytes } from '../../../export/package.bytes.js';
 import { canonicalC14nV2SelfState, sealC14nV2Self } from '../../../integrity/integrity.c14nV2.js';
 import { C14N_V2_VALIDATOR_TARGET } from '../../../integrity/integrity.methodReference.js';
+import { schemaReferenceAuthorityForRegisteredSchema } from '../../../schemas/creation.schemaReferences.js';
+import { renderSchemaReference } from '../../../schemas/schema.reference.js';
 import { inspectHandoffCarrierProjection } from './carrierProjection.js';
 import { qualifyTiinexRouteArtifact } from './routeArtifactConformance.js';
 
@@ -8,6 +10,7 @@ export const HANDOFF_POINTER_ENTRYPOINT_PROJECTION_SCHEMA_ID = 'tiinex.portable.
 export const HANDOFF_POINTER_ENTRYPOINT_INSPECTION_SCHEMA_ID = 'tiinex.portable.handoff-pointer-entrypoints.inspection.v1';
 export const HANDOFF_POINTER_ENTRYPOINT_PREFIX = 'handoff-entrypoint-';
 export const CANONICAL_POINTER_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/core/pointer/tiinex.pointer.v1.schema.md';
+const CANONICAL_ROOT_SCHEMA_REFERENCE = renderSchemaReference(schemaReferenceAuthorityForRegisteredSchema('tiinex.root.v1'));
 
 const BOUNDARY = 'Generated package-root tiinex.pointer.v1 orientation only. Pointer filename, prose, and placement have no Parent, assignment, acceptance, completion, source, package-identity, or route-selection authority; qualified package carrier/closure truth remains controlling.';
 
@@ -83,7 +86,7 @@ export function isHandoffPointerEntrypointPath(value = '') {
 function buildPointerEntry(route = {}, createdAt = '') {
   const path = pointerPath(route);
   const title = `Handoff route pointer — ${String(route.parties?.to || route.workspaceId || 'recipient')}`;
-  const unsigned = `# Continuity Context\n\n- Envelope Schema: tiinex.root.v1\n- Current\n  - Current Schema: [tiinex.pointer.v1](${CANONICAL_POINTER_SCHEMA_TARGET})\n  - Created At: ${createdAt}\n  - Summary: Thin package-local pointer to one qualified Handoff route.\n\n---\n\n# ${title}\n\nThis generated pointer exposes one next hop only. Package carrier and closure controls remain the authority for whether that Handoff route is qualified.\n\n## Destinations\n\n- Qualified Handoff route: [${route.workspaceRelativePath}](${route.pointerTarget || route.packagePath})\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`;
+  const unsigned = `# Continuity Context\n\n- Envelope Schema: ${CANONICAL_ROOT_SCHEMA_REFERENCE}\n- Current\n  - Current Schema: [tiinex.pointer.v1](${CANONICAL_POINTER_SCHEMA_TARGET})\n  - Created At: ${createdAt}\n  - Summary: Thin package-local pointer to one qualified Handoff route.\n\n---\n\n# ${title}\n\nThis generated pointer exposes one next hop only. Package carrier and closure controls remain the authority for whether that Handoff route is qualified.\n\n## Destinations\n\n- Qualified Handoff route: [${route.workspaceRelativePath}](${route.pointerTarget || route.packagePath})\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`;
   const sealed = sealC14nV2Self(unsigned);
   if (sealed.state !== 'sealed') throw new Error(`portable.handoff-pointer.integrity.seal-failed:${sealed.reason || sealed.state}`);
   return deepFreeze({

@@ -29,6 +29,7 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
       workspaceTitle: descriptor.title,
       sourceMetadata: descriptor.source || descriptor.sourceMetadata || {},
       excludeDirectories: descriptor.excludeDirectories || input.excludeDirectories || options.excludeDirectories,
+      excludeRelativePaths: descriptor.excludeRelativePaths || input.excludeRelativePaths || options.excludeRelativePaths,
       maxFiles: descriptor.maxFiles || input.maxFiles || options.maxFiles
     });
     if (enumeration.status !== 'qualified-complete') throw new Error(`portable.workspace-carrier.workspace-enumeration.${descriptor.id}.${enumeration.status}`);

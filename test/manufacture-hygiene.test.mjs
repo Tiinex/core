@@ -5,18 +5,20 @@ import { tmpdir } from 'node:os';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { enumerateNodeWorkspace } from '../src/tooling/portable/adapters/node/handoff.manufacture.enumeration.js';
 
-for (const excluded of ['.release/old.tgz', '.outgoing-handoff-packages/old.zip', '.vscode/link/state.json']) {
+for (const excluded of ['.release/old.tgz', '.outgoing-handoff-packages/old.zip', '.vscode/link/state.json', 'tools/__pycache__/browser-smoke.cpython-313.pyc', 'tools/browser-smoke.pyc', 'tools/legacy.pyo']) {
   test(`manufacture excludes generated ${excluded} but preserves tasks and source`, async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'tiinex-hygiene-'));
     try {
-      for (const p of [excluded, '.vscode/tasks.json', 'src/code.js', 'link/real-source.js']) {
+      for (const p of [excluded, '.vscode/tasks.json', 'src/code.js', 'link/real-source.js', 'tools/browser-smoke.py', 'tools/_author_return.mjs']) {
         await mkdir(path.dirname(path.join(root, p)), {recursive: true});
         await writeFile(path.join(root, p), '{}');
       }
       const result = await enumerateNodeWorkspace(root);
       assert.equal(result.status, 'qualified-complete');
-      assert.deepEqual(result.materialization.entries.map(e => e.path).sort(), ['.vscode/tasks.json','link/real-source.js','src/code.js']);
+      assert.deepEqual(result.materialization.entries.map(e => e.path).sort(), ['.vscode/tasks.json','link/real-source.js','src/code.js','tools/_author_return.mjs','tools/browser-smoke.py']);
       assert.deepEqual(result.evidence.exclusions.relativePaths, ['.vscode/link']);
+      assert.ok(result.evidence.exclusions.directories.includes('__pycache__'));
+      assert.deepEqual(result.evidence.exclusions.fileSuffixes, ['.pyc', '.pyo']);
     } finally {await rm(root, {recursive: true, force: true});}
   });
 }

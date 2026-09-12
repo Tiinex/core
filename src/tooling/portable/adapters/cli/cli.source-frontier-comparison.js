@@ -9,20 +9,20 @@ export async function prepareSourceFrontierComparisonCliInput(parsed = {}, flags
   };
   if (threeWay) {
     const request = {
-      base: descriptorFromFlags('base', flags),
-      incoming: descriptorFromFlags('incoming', flags),
-      current: descriptorFromFlags('current', flags)
+      base: sourceFrontierDescriptorFromFlags('base', flags),
+      incoming: sourceFrontierDescriptorFromFlags('incoming', flags),
+      current: sourceFrontierDescriptorFromFlags('current', flags)
     };
     return { input: await prepareNodeSourceFrontierComparisonInput(request, descriptorOptions), options: {} };
   }
   const request = {
-    left: descriptorFromFlags('left', flags),
-    right: descriptorFromFlags('right', flags)
+    left: sourceFrontierDescriptorFromFlags('left', flags),
+    right: sourceFrontierDescriptorFromFlags('right', flags)
   };
   return { input: await prepareNodeSourceFrontierComparisonInput(request, descriptorOptions), options: {} };
 }
 
-function descriptorFromFlags(prefix, flags) {
+export function sourceFrontierDescriptorFromFlags(prefix, flags) {
   const kind = String(flags[`${prefix}-kind`] || '').trim();
   const root = String(flags[prefix] || '').trim();
   const workspaceId = String(flags[`${prefix}-id`] || flags[`${prefix}-workspace-id`] || '').trim();

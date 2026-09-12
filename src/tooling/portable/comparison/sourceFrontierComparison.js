@@ -1,5 +1,6 @@
 import { sha256Hex, utf8Bytes } from '../../../export/package.bytes.js';
 import { portableFinding, summarizePortableFindings } from '../findings.js';
+import { portableSourceEligibilityPolicy, qualifyPortableSourcePath } from '../source/sourceEligibility.js';
 
 export const PORTABLE_SOURCE_FRONTIER_SCHEMA_ID = 'tiinex.portable.source-frontier.v1';
 export const PORTABLE_SOURCE_FRONTIER_COMPARISON_SCHEMA_ID = 'tiinex.portable.source-frontier-comparison.v1';
@@ -45,16 +46,34 @@ export function createPortableSourceFrontier(input = {}) {
     workspaces: Object.freeze(workspaces),
     findings: normalizedFindings,
     findingSummary: summarizePortableFindings(normalizedFindings),
-    boundary: String(input.boundary || 'Exact source-byte frontier only. Workspace/path equality does not establish semantic equivalence, authority, acceptance, or merge disposition.')
+    boundary: String(input.boundary || 'Eligible durable source-byte frontier only. Source-ineligible transport/runtime/cache bytes are outside frontier identity; Workspace/path equality does not establish semantic equivalence, authority, acceptance, deletion, or merge disposition.')
   });
 }
 
 export function createPortableWorkspaceSnapshot(entries = [], evidence = {}) {
   const findings = [];
-  const normalized = normalizeEntries(entries, findings);
+  const selection = normalizeEntries(entries, findings);
   if (findings.length) return deepFreeze({ state: 'qualification-error', entries: Object.freeze([]), findings: Object.freeze(findings) });
+  const normalized = selection.entries;
   const totalBytes = normalized.reduce((sum, entry) => sum + entry.bytes, 0);
   const fingerprint = snapshotFingerprint(normalized);
+  const inheritedEvidence = serializableObject(evidence);
+  const priorEligibility = inheritedEvidence?.sourceEligibility && typeof inheritedEvidence.sourceEligibility === 'object'
+    ? inheritedEvidence.sourceEligibility
+    : null;
+  const upstreamSelection = priorEligibility?.upstreamSelection || (priorEligibility && Number(priorEligibility.excludedEntryCount || 0) > 0 ? portableSourceSelectionReceipt(priorEligibility) : null);
+  const sourceEligibility = Object.freeze({
+    schema: selection.policy.schema,
+    inputEntryCount: selection.inputEntryCount,
+    eligibleEntryCount: normalized.length,
+    excludedEntryCount: selection.excludedEntryCount,
+    excludedByReason: Object.freeze({ ...selection.excludedByReason }),
+    excludedDirectories: selection.policy.excludedDirectories,
+    excludedRelativePaths: selection.policy.excludedRelativePaths,
+    excludedFileSuffixes: selection.policy.excludedFileSuffixes,
+    ...(upstreamSelection ? { upstreamSelection: Object.freeze(upstreamSelection) } : {}),
+    boundary: selection.policy.boundary
+  });
   return deepFreeze({
     state: QUALIFIED,
     entryCount: normalized.length,
@@ -62,7 +81,7 @@ export function createPortableWorkspaceSnapshot(entries = [], evidence = {}) {
     fingerprint,
     fingerprintMethod: 'sha256-path-bytes-sha256-v1',
     entries: Object.freeze(normalized),
-    evidence: Object.freeze(serializableObject(evidence)),
+    evidence: Object.freeze({ ...inheritedEvidence, sourceEligibility }),
     findings: Object.freeze([])
   });
 }
@@ -181,11 +200,26 @@ function normalizeWorkspace(raw, workspaceId, findings) {
 function normalizeEntries(entries, findings) {
   const out = [];
   const seen = new Set();
+  const policy = portableSourceEligibilityPolicy();
+  const excludedByReason = {};
+  let inputEntryCount = 0;
+  let excludedEntryCount = 0;
   for (const raw of entries || []) {
+    inputEntryCount += 1;
     const rawPath = String(raw?.path || raw?.innerPath || '').trim();
     const path = normalizePath(rawPath);
     if (unsafeRawPath(rawPath) || !path || unsafePath(path)) {
       findings.push(portableFinding('error', 'portable.source-frontier.entry.path-invalid', 'Comparable source entry has an unsafe or empty Workspace-relative path.', { path: rawPath }));
+      continue;
+    }
+    const eligibility = qualifyPortableSourcePath(path, {
+      excludeDirectories: policy.excludedDirectories,
+      excludeRelativePaths: policy.excludedRelativePaths,
+      entryKind: 'file'
+    });
+    if (!eligibility.eligible) {
+      excludedEntryCount += 1;
+      excludedByReason[eligibility.reason] = Number(excludedByReason[eligibility.reason] || 0) + 1;
       continue;
     }
     if (seen.has(path)) {
@@ -202,7 +236,23 @@ function normalizeEntries(entries, findings) {
     out.push(Object.freeze({ path, bytes, sha256 }));
   }
   out.sort((a, b) => a.path.localeCompare(b.path));
-  return out;
+  return Object.freeze({
+    entries: Object.freeze(out),
+    policy,
+    inputEntryCount,
+    excludedEntryCount,
+    excludedByReason: Object.freeze(Object.fromEntries(Object.entries(excludedByReason).sort(([a], [b]) => a.localeCompare(b))))
+  });
+}
+
+function portableSourceSelectionReceipt(value = {}) {
+  return {
+    schema: String(value.schema || ''),
+    inputEntryCount: Number(value.inputEntryCount || 0),
+    eligibleEntryCount: Number(value.eligibleEntryCount || 0),
+    excludedEntryCount: Number(value.excludedEntryCount || 0),
+    excludedByReason: Object.freeze({ ...serializableObject(value.excludedByReason || {}) })
+  };
 }
 
 function compareWorkspaceUnion(left, right) {

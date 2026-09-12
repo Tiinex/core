@@ -18,7 +18,7 @@ export function validatePortableDraft(input = {}, options = {}) {
   const parsed = safeParse(markdown);
   const declaredSchema = String(parsed.envelope?.current?.schema?.id || record.schemaId || '').trim();
   const runtimeProjection = portableRuntimeValidationContractForSchema(requestedSchema || declaredSchema);
-  const audit = runAudit({ record, markdown, schemaReferenceAuthorities: input.schemaReferenceAuthorities || null, validationContractOverride: runtimeProjection.state === 'qualified' ? runtimeProjection.compiledContract : null });
+  const audit = runAudit({ record, markdown, schemaReferenceAuthorities: input.schemaReferenceAuthorities || null, schemaReferenceContext: 'candidate', validationContractOverride: runtimeProjection.state === 'qualified' ? runtimeProjection.compiledContract : null });
   if (requestedSchema && declaredSchema !== requestedSchema) findings.push(portableFinding('error', 'portable.draft.schema.mismatch', 'Draft Current Schema does not match the requested schema.', { requestedSchema, declaredSchema, ref: path }));
   const sharedParserQuirks = detectSharedParserQuirks(markdown, parsed, audit, path);
   const suppressedAuditCodes = new Set(sharedParserQuirks.flatMap((quirk) => quirk.suppressedCodes || []));

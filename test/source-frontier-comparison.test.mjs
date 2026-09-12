@@ -8,9 +8,14 @@ import {
   comparePortableSourceFrontiers,
   createPortableSourceFrontier,
   projectPortableSourceFrontierComparisonSummary,
-  reconcilePortableSourceFrontiers
+  reconcilePortableSourceFrontiers,
+  provePortableSourceReconciliation,
+  projectPortableSourceReconciliationProofSummary,
+  qualifyPortableSourceReconciliationProofForManufacture,
+  qualifyPortableSourcePath
 } from '../src/public/index.js';
-import { compareNodeSourceFrontiers } from '../src/public/node.js';
+import { compareNodeSourceFrontiers, proveNodeSourceReconciliation } from '../src/public/node.js';
+import { prepareNodeHandoffManufacturingInput } from '../src/tooling/portable/adapters/node/handoff.manufacture.js';
 import { packageFileByteView, sha256Hex } from '../src/export/package.bytes.js';
 import { exportFileMapZipUint8Array } from '../src/export/package.zip.js';
 import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
@@ -46,7 +51,7 @@ function minimalBootstrapFiles() {
   ];
 }
 
-function packageFixtureSource({ includeAux = false, sealed = false } = {}) {
+function packageFixtureSource({ includeAux = false, sealed = false, coreFiles = {} } = {}) {
   const routeMarkdown = qualifiedHandoffFixture(sealed ? {
     requiredContext: `- Secret Context\n  - Material: sealed workspace material\n  - Purpose: verify locked comparison opacity\n  - Availability: unavailable\n  - Material Reference: [Secret](sealed::${SECRET_PATH})`
   } : {});
@@ -56,7 +61,8 @@ function packageFixtureSource({ includeAux = false, sealed = false } = {}) {
   const secretBytes = encoder.encode('# secret-name-do-not-leak\nclassified fixture bytes\n');
   const archives = [{
     workspaceId: 'core', archivePath: 'source-core.zip', data: exportFileMapZipUint8Array([
-      { path: WORKSPACE_INNER_PATH, data: WORKSPACE_BYTES }, { path: ROUTE_PATH, data: routeBytes }, { path: 'README.md', data: coreReadme }
+      { path: WORKSPACE_INNER_PATH, data: WORKSPACE_BYTES }, { path: ROUTE_PATH, data: routeBytes }, { path: 'README.md', data: coreReadme },
+      ...Object.entries(coreFiles).map(([entryPath, data]) => ({ path: entryPath, data }))
     ])
   }];
   if (includeAux) archives.push({
@@ -108,6 +114,32 @@ function localWorkspaceFiles(routeBytes, readme) {
 }
 
 function auxWorkspaceFiles(readme) { return { [WORKSPACE_INNER_PATH]: WORKSPACE_BYTES, 'README.md': readme }; }
+
+
+test('host-neutral source eligibility excludes Python cache bytes without treating ordinary Python or operator-authored scripts as disposable', () => {
+  const pycache = qualifyPortableSourcePath('tools/__pycache__/browser-smoke.cpython-313.pyc');
+  const compiled = qualifyPortableSourcePath('tools/browser-smoke.pyc');
+  const python = qualifyPortableSourcePath('tools/browser-smoke.py');
+  const authored = qualifyPortableSourcePath('tools/_author_site-return.mjs');
+  assert.equal(pycache.eligible, false);
+  assert.equal(pycache.reason, 'excluded-directory');
+  assert.equal(compiled.eligible, false);
+  assert.equal(compiled.reason, 'compiled-python-cache');
+  assert.equal(python.eligible, true);
+  assert.equal(authored.eligible, true);
+
+  const normalized = frontier('eligible-source', [{ workspaceId: 'core', entries: [
+    entry('tools/__pycache__/browser-smoke.cpython-313.pyc', 'cache'),
+    entry('tools/browser-smoke.pyc', 'compiled-cache'),
+    entry('tools/browser-smoke.py', 'print("source")'),
+    entry('tools/_author_site-return.mjs', 'export const authored = true;')
+  ] }]);
+  const snapshot = normalized.workspaces[0].snapshot;
+  assert.deepEqual(snapshot.entries.map((item) => item.path), ['tools/_author_site-return.mjs', 'tools/browser-smoke.py']);
+  assert.equal(snapshot.evidence.sourceEligibility.inputEntryCount, 4);
+  assert.equal(snapshot.evidence.sourceEligibility.excludedEntryCount, 2);
+  assert.deepEqual(snapshot.evidence.sourceEligibility.excludedByReason, { 'compiled-python-cache': 1, 'excluded-directory': 1 });
+});
 
 
 test('pure two-way comparison has deterministic exact fast path, add/remove/change deltas, and Workspace asymmetry', () => {
@@ -223,6 +255,79 @@ test('Node adapter supports package/package, local/package, and local multi-Work
 });
 
 
+test('real Site-return cache shape stays transport evidence but is excluded from reconciliation and manufacture source identity', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-frontier-site-cache-return-'));
+  const baseRoot = path.join(root, 'base');
+  const incomingSanitizedRoot = path.join(root, 'incoming-sanitized');
+  const currentRoot = path.join(root, 'current');
+  const reconciledRoot = path.join(root, 'reconciled');
+  const durableBase = {
+    'site/index.html': encoder.encode('<main>site</main>\n'),
+    'tools/browser-smoke.py': encoder.encode('print("smoke")\n')
+  };
+  const durableIncoming = { 'site/returned.txt': encoder.encode('specialist durable return\n') };
+  const cachePath = 'tools/__pycache__/browser-smoke.cpython-313.pyc';
+  const currentOnly = { '.topics/current-only-ancestry.trace.md': encoder.encode('current ancestry\n') };
+  try {
+    const fixture = packageFixtureSource({
+      coreFiles: {
+        ...durableBase,
+        ...durableIncoming,
+        [cachePath]: new Uint8Array([0x42, 0x0d, 0x0d, 0x0a, 0x00, 0x01])
+      }
+    });
+    const built = buildRecipientFacingV2PackageV1(fixture);
+    assert.equal(built.status, 'ready', JSON.stringify(built.findings || []));
+    const incomingPackage = await writePackageZip(root, 'site-return.handoff-package.zip', built);
+    const controls = localWorkspaceFiles(fixture.routeBytes, fixture.coreReadme);
+    await writeWorkspace(baseRoot, { ...controls, ...durableBase });
+    await writeWorkspace(incomingSanitizedRoot, { ...controls, ...durableBase, ...durableIncoming });
+    await writeWorkspace(currentRoot, { ...controls, ...durableBase, ...currentOnly });
+    await writeWorkspace(reconciledRoot, { ...controls, ...durableBase, ...durableIncoming, ...currentOnly });
+
+    const packageVsSanitized = await compareNodeSourceFrontiers({
+      left: { kind: 'handoff-package', path: incomingPackage, workspaceIds: ['core'] },
+      right: { kind: 'local-workspace', path: incomingSanitizedRoot, workspaceId: 'core' }
+    });
+    assert.equal(packageVsSanitized.status, 'ready');
+    assert.equal(packageVsSanitized.state, 'exact');
+    const carriedSnapshot = packageVsSanitized.inputs.left.workspaces[0].snapshot;
+    assert.equal(carriedSnapshot.evidence.sourceEligibility.excludedEntryCount, 0);
+    assert.equal(carriedSnapshot.evidence.sourceEligibility.upstreamSelection.excludedEntryCount, 1);
+    assert.equal(carriedSnapshot.evidence.sourceEligibility.upstreamSelection.excludedByReason['excluded-directory'], 1);
+    assert.equal(carriedSnapshot.entryCount + 1, carriedSnapshot.evidence.sourceEligibility.upstreamSelection.inputEntryCount);
+
+    const proof = await proveNodeSourceReconciliation({
+      base: { kind: 'local-workspace', path: baseRoot, workspaceId: 'core' },
+      incoming: { kind: 'handoff-package', path: incomingPackage, workspaceIds: ['core'] },
+      current: { kind: 'local-workspace', path: currentRoot, workspaceId: 'core' },
+      reconciled: { kind: 'local-workspace', path: reconciledRoot, workspaceId: 'core' }
+    });
+    assert.equal(proof.status, 'ready', JSON.stringify(proof.findings || []));
+    assert.equal(proof.state, 'manufacture-ready');
+    assert.equal(proof.dispositions.length, 0);
+    assert.equal(proof.counts.incomingOnly, 1);
+    assert.equal(proof.counts.currentOnly, 1);
+    assert.equal(proof.counts.deletionCandidate, 0);
+    assert.equal(proof.workspaces[0].paths.some((item) => item.path === cachePath), false);
+    assert.deepEqual(proof.preservation.incomingOnly, { accepted: 1, preserved: 1, failed: 0 });
+    assert.deepEqual(proof.preservation.currentOnly, { accepted: 1, preserved: 1, failed: 0 });
+
+    const manufacture = await prepareNodeHandoffManufacturingInput({
+      workspaceRoot: reconciledRoot,
+      workspaceId: 'core',
+      handoffPath: ROUTE_PATH,
+      reconciliationProof: proof,
+      requireReconciliationProof: true
+    });
+    assert.equal(manufacture.reconciliationProofQualification.state, 'qualified');
+    assert.equal(manufacture.workspaceMaterializations[0].includedEntries.some((item) => item.path === cachePath), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+
 test('invalid package/input fails closed with qualification state and no projected Workspace paths', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'tiinex-frontier-invalid-'));
   try {
@@ -302,3 +407,198 @@ test('three-way Node adapter accepts the actual child-return shape with explicit
     assert.deepEqual(result.workspaces[0].paths.map((item) => item.classification), ['incoming-only', 'current-only']);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+
+
+test('manufacture reconciliation proof classifies exact/non-overlap/concurrent/deletion/conflict paths and requires explicit risky dispositions', () => {
+  const base = frontier('base', [{ workspaceId: 'core', entries: [
+    entry('exact.txt', 'base-exact'),
+    entry('incoming.txt', 'base-incoming'),
+    entry('current.txt', 'base-current'),
+    entry('same.txt', 'base-same'),
+    entry('delete.txt', 'base-delete'),
+    entry('conflict.txt', 'base-conflict')
+  ] }]);
+  const incoming = frontier('incoming', [{ workspaceId: 'core', entries: [
+    entry('exact.txt', 'base-exact'),
+    entry('incoming.txt', 'incoming-change'),
+    entry('current.txt', 'base-current'),
+    entry('same.txt', 'same-result'),
+    entry('conflict.txt', 'incoming-conflict')
+  ] }]);
+  const current = frontier('current', [{ workspaceId: 'core', entries: [
+    entry('exact.txt', 'base-exact'),
+    entry('incoming.txt', 'base-incoming'),
+    entry('current.txt', 'current-change'),
+    entry('same.txt', 'same-result'),
+    entry('delete.txt', 'base-delete'),
+    entry('conflict.txt', 'current-conflict')
+  ] }]);
+  const reconciled = frontier('reconciled', [{ workspaceId: 'core', entries: [
+    entry('exact.txt', 'base-exact'),
+    entry('incoming.txt', 'incoming-change'),
+    entry('current.txt', 'current-change'),
+    entry('same.txt', 'same-result'),
+    entry('conflict.txt', 'manual-conflict-resolution')
+  ] }]);
+
+  const blocked = provePortableSourceReconciliation({ base, incoming, current, reconciled });
+  assert.equal(blocked.status, 'blocked');
+  assert.equal(blocked.state, 'disposition-required');
+  assert.equal(blocked.counts.deletionCandidate, 1);
+  assert.equal(blocked.counts.conflictingOverlap, 1);
+  assert.equal(blocked.counts.unresolvedDisposition, 2);
+  assert.deepEqual(blocked.workspaces[0].paths.map((item) => [item.path, item.classification]), [
+    ['conflict.txt', 'conflicting-overlap'],
+    ['current.txt', 'current-only'],
+    ['delete.txt', 'deletion-candidate'],
+    ['exact.txt', 'exact'],
+    ['incoming.txt', 'incoming-only'],
+    ['same.txt', 'same-result-concurrent']
+  ]);
+
+  const ready = provePortableSourceReconciliation({
+    base,
+    incoming,
+    current,
+    reconciled,
+    dispositions: [
+      { workspaceId: 'core', path: 'delete.txt', action: 'delete', note: 'owner explicitly accepted deletion' },
+      { workspaceId: 'core', path: 'conflict.txt', action: 'reconciled', note: 'owner explicitly accepted manual resolution bytes' }
+    ]
+  });
+  assert.equal(ready.status, 'ready');
+  assert.equal(ready.state, 'manufacture-ready');
+  assert.equal(ready.counts.resolvedDisposition, 2);
+  assert.deepEqual(ready.preservation.incomingOnly, { accepted: 1, preserved: 1, failed: 0 });
+  assert.deepEqual(ready.preservation.currentOnly, { accepted: 1, preserved: 1, failed: 0 });
+  assert.equal(ready.operationBoundary.automaticMerge, false);
+  assert.equal(ready.operationBoundary.semanticDisposition, false);
+  assert.ok(/^[0-9a-f]{64}$/.test(ready.proofFingerprint));
+
+  const summary = projectPortableSourceReconciliationProofSummary(ready, { maxPaths: 2 });
+  assert.equal(summary.workspaces[0].paths.length, 2);
+  assert.equal(summary.workspaces[0].pathsOmitted, 4);
+  assert.equal(summary.fullReceiptRequiredForManufacture, true);
+
+  const qualification = qualifyPortableSourceReconciliationProofForManufacture({
+    proof: ready,
+    requireProof: true,
+    requiredWorkspaceIds: ['core'],
+    workspaceMaterializations: [{ id: 'core', includedEntries: reconciled.workspaces[0].snapshot.entries }]
+  });
+  assert.equal(qualification.state, 'qualified');
+
+  const drifted = reconciled.workspaces[0].snapshot.entries.map((item, index) => index ? item : { ...item, sha256: '0'.repeat(64) });
+  const stale = qualifyPortableSourceReconciliationProofForManufacture({
+    proof: ready,
+    requireProof: true,
+    requiredWorkspaceIds: ['core'],
+    workspaceMaterializations: [{ id: 'core', includedEntries: drifted }]
+  });
+  assert.equal(stale.state, 'blocked');
+  assert.ok(stale.findings.some((item) => item.code === 'portable.handoff-manufacture.reconciliation-proof.source-drift'));
+
+  const compactRejected = qualifyPortableSourceReconciliationProofForManufacture({
+    proof: { schema: 'tiinex.portable.operation.result.v1', resultSchema: ready.schema, status: ready.status, state: ready.state, proofFingerprint: ready.proofFingerprint, manufactureBinding: ready.manufactureBinding },
+    requireProof: true,
+    requiredWorkspaceIds: ['core'],
+    workspaceMaterializations: [{ id: 'core', includedEntries: reconciled.workspaces[0].snapshot.entries }]
+  });
+  assert.equal(compactRejected.state, 'blocked');
+  assert.ok(compactRejected.findings.some((item) => item.code === 'portable.handoff-manufacture.reconciliation-proof.full-receipt-required'));
+});
+
+
+test('reconciliation proof catches the complete-return overlay failure by requiring current-only source preservation', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-reconciliation-overlay-'));
+  const baseRoot = path.join(root, 'base');
+  const incomingRoot = path.join(root, 'incoming');
+  const currentRoot = path.join(root, 'current');
+  const badRoot = path.join(root, 'bad-overlay');
+  const goodRoot = path.join(root, 'reconciled');
+  try {
+    await writeWorkspace(baseRoot, { 'shared.txt': encoder.encode('base\n') });
+    await writeWorkspace(incomingRoot, { 'shared.txt': encoder.encode('base\n'), '.topics/incoming-return.trace.md': encoder.encode('incoming\n') });
+    await writeWorkspace(currentRoot, { 'shared.txt': encoder.encode('base\n'), '.topics/current-only-ancestry.trace.md': encoder.encode('current\n') });
+    await writeWorkspace(badRoot, { 'shared.txt': encoder.encode('base\n'), '.topics/incoming-return.trace.md': encoder.encode('incoming\n') });
+    await writeWorkspace(goodRoot, {
+      'shared.txt': encoder.encode('base\n'),
+      '.topics/incoming-return.trace.md': encoder.encode('incoming\n'),
+      '.topics/current-only-ancestry.trace.md': encoder.encode('current\n')
+    });
+
+    const common = {
+      base: { kind: 'local-workspace', path: baseRoot, workspaceId: 'core' },
+      incoming: { kind: 'local-workspace', path: incomingRoot, workspaceId: 'core' },
+      current: { kind: 'local-workspace', path: currentRoot, workspaceId: 'core' }
+    };
+    const bad = await proveNodeSourceReconciliation({ ...common, reconciled: { kind: 'local-workspace', path: badRoot, workspaceId: 'core' } });
+    assert.equal(bad.status, 'blocked');
+    assert.equal(bad.state, 'reconciled-frontier-mismatch');
+    const currentOnly = bad.workspaces[0].paths.find((item) => item.path === '.topics/current-only-ancestry.trace.md');
+    assert.equal(currentOnly.classification, 'current-only');
+    assert.equal(currentOnly.reconciledMatch, 'mismatch');
+    assert.deepEqual(bad.preservation.currentOnly, { accepted: 1, preserved: 0, failed: 1 });
+
+    const good = await proveNodeSourceReconciliation({ ...common, reconciled: { kind: 'local-workspace', path: goodRoot, workspaceId: 'core' } });
+    assert.equal(good.status, 'ready');
+    assert.equal(good.state, 'manufacture-ready');
+    assert.deepEqual(good.preservation.incomingOnly, { accepted: 1, preserved: 1, failed: 0 });
+    assert.deepEqual(good.preservation.currentOnly, { accepted: 1, preserved: 1, failed: 0 });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+
+test('manufacture proof fails closed when required proof is missing or candidate adds ungrounded source', () => {
+  const base = frontier('base', [{ workspaceId: 'core', entries: [entry('a.txt', 'base')] }]);
+  const incoming = frontier('incoming', [{ workspaceId: 'core', entries: [entry('a.txt', 'incoming')] }]);
+  const current = frontier('current', [{ workspaceId: 'core', entries: [entry('a.txt', 'base')] }]);
+  const reconciled = frontier('reconciled', [{ workspaceId: 'core', entries: [entry('a.txt', 'incoming'), entry('extra.txt', 'ungrounded')] }]);
+  const proof = provePortableSourceReconciliation({ base, incoming, current, reconciled });
+  assert.equal(proof.status, 'blocked');
+  assert.ok(proof.findings.some((item) => item.code === 'portable.source-frontier.reconciliation.reconciled-path-unexpected'));
+
+  const missing = qualifyPortableSourceReconciliationProofForManufacture({ requireProof: true, requiredWorkspaceIds: ['core'], workspaceMaterializations: [] });
+  assert.equal(missing.state, 'blocked');
+  assert.ok(missing.findings.some((item) => item.code === 'portable.handoff-manufacture.reconciliation-proof.required'));
+});
+
+test('handoff manufacture preflight consumes the full reconciliation receipt and rejects source drift before carriage', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-reconciliation-manufacture-'));
+  try {
+    await writeWorkspace(root, {
+      'handoff.trace.md': encoder.encode('# Handoff\n\n## Required Context\n\nNone\n\n## Reference Context\n\nNone\n'),
+      'source.txt': encoder.encode('qualified candidate\n')
+    });
+    const source = { kind: 'local-workspace', path: root, workspaceId: 'core' };
+    const proof = await proveNodeSourceReconciliation({ base: source, incoming: source, current: source, reconciled: source });
+    assert.equal(proof.status, 'ready');
+
+    const qualified = await prepareNodeHandoffManufacturingInput({
+      workspaceRoot: root,
+      workspaceId: 'core',
+      handoffPath: 'handoff.trace.md',
+      reconciliationProof: proof,
+      requireReconciliationProof: true
+    });
+    assert.equal(qualified.reconciliationProofQualification.state, 'qualified');
+    assert.equal(qualified.manufacturingEvidence.reconciliationProof.proofFingerprint, proof.proofFingerprint);
+
+    await writeFile(path.join(root, 'source.txt'), 'drift after proof\n');
+    const drifted = await prepareNodeHandoffManufacturingInput({
+      workspaceRoot: root,
+      workspaceId: 'core',
+      handoffPath: 'handoff.trace.md',
+      reconciliationProof: proof,
+      requireReconciliationProof: true
+    });
+    assert.equal(drifted.reconciliationProofQualification.state, 'blocked');
+    assert.ok(drifted.reconciliationProofQualification.findings.some((item) => item.code === 'portable.handoff-manufacture.reconciliation-proof.source-drift'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+

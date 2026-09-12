@@ -1,10 +1,11 @@
 import { parseArtifactMarkdown } from '../artifacts/artifact.parse.js';
 import { normalizeArtifact } from '../artifacts/artifact.normalize.js';
 import { resolveSchemaModule } from '../schemas/resolver.js';
+import { schemaRegistry } from '../schemas/registry.js';
 import { rootValidate, rootFallbackFinding } from '../schemas/tiinex.root.v1.validate.js';
 import { validateIntegrity } from '../integrity/integrity.validate.js';
 import { validatePortableContractInstance } from '../tooling/portable/schema/contract.validate.js';
-import { qualifySchemaReferenceValue, schemaReferenceAuthorityFromBinding } from '../schemas/schema.reference.js';
+import { qualifySchemaReferenceValue, qualifiedExactSchemaReferenceTarget, schemaReferenceAuthorityFromBinding } from '../schemas/schema.reference.js';
 import { normalizeFindings, normalizeFinding } from './findings.js';
 
 export const ARTIFACT_VALIDATION_PIPELINE_ID = 'tiinex.artifact.validation.pipeline.v1';
@@ -18,7 +19,7 @@ export function validateArtifact(input = {}, options = {}) {
   const schemaValidationAuthority = input.schemaValidationAuthority || null;
   const machineContract = runMachineContractValidation({ markdown: markdown || parsed?.markdown || '', schemaId, resolution, validationContractOverride: input.validationContractOverride || null, schemaValidationAuthority });
   const contractFindings = normalizeFindings(machineContract.findings, { schemaId: machineContract.schemaId || schemaId, qualification: 'machine-contract' });
-  const schemaReferenceFindings = normalizeFindings(validateDeclaredSchemaReferences(parsed, input.schemaReferenceAuthorities || null), { qualification: 'schema-reference' });
+  const schemaReferenceFindings = normalizeFindings(validateDeclaredSchemaReferences(parsed, input.schemaReferenceAuthorities || null, { context: input.schemaReferenceContext || 'historical' }), { qualification: 'schema-reference' });
   const integrityFindings = normalizeFindings(validateIntegrity(parsed, options.integrity), { schemaId: 'tiinex.root.v1', qualification: 'integrity' });
   const schemaAuthorityFindings = normalizeFindings(schemaValidationAuthorityFindings(schemaValidationAuthority, schemaId), { schemaId, qualification: 'schema-validation-authority' });
   const childValidation = runExactSchemaValidator({ parsed, schemaId, resolution, schemaValidationAuthority });
@@ -39,7 +40,7 @@ export function validateArtifact(input = {}, options = {}) {
   });
 }
 
-function validateDeclaredSchemaReferences(parsed = {}, contextualAuthorities = null) {
+function validateDeclaredSchemaReferences(parsed = {}, contextualAuthorities = null, options = {}) {
   const references = [
     { role: 'Envelope Schema', value: parsed?.envelope?.envelopeSchema?.raw || '', schemaId: parsed?.envelope?.envelopeSchema?.id || '' },
     { role: 'Current Schema', value: parsed?.envelope?.current?.schema?.raw || '', schemaId: parsed?.envelope?.current?.schema?.id || '' }
@@ -59,18 +60,73 @@ function validateDeclaredSchemaReferences(parsed = {}, contextualAuthorities = n
     const contextualAuthority = contextualSchemaReferenceAuthority(contextualAuthorities, reference.role, reference.schemaId);
     const authority = contextualAuthority || registeredAuthority;
     const qualification = qualifySchemaReferenceValue(reference.value, authority);
+    const context = String(options?.context || 'historical').trim() === 'candidate' ? 'candidate' : 'historical';
+    const exactTarget = qualifiedExactSchemaReferenceTarget(authority);
+    if (qualification.schemaIdState === 'qualified' && qualification.observed?.form === 'plain-schema-id' && exactTarget) {
+      const prospective = context === 'candidate';
+      findings.push({
+        severity: prospective ? 'error' : 'warning',
+        code: 'schema.reference.exact-target-omitted',
+        message: prospective
+          ? `${reference.role}: qualified immutable exact schema-reference authority exists for ${reference.schemaId}; a new candidate must use Markdown Link form targeting ${exactTarget} before sealing, staging, acceptance, or manufacture.`
+          : `${reference.role}: a qualified immutable exact schema-reference target is currently available for ${reference.schemaId}, but this existing artifact uses only the schema id. Preserve the historical bytes; treat this as reference-quality debt rather than an in-place rewrite instruction.`,
+        source: 'tiinex.schema.reference.validation.v1',
+        state: prospective ? 'blocking-prospective-reference-omission' : 'historical-reference-debt',
+        params: { field: reference.role, schemaId: reference.schemaId, exactTarget, context }
+      });
+      continue;
+    }
     if (qualification.state === 'qualified') continue;
     if (qualification.schemaIdState !== 'qualified') {
-      findings.push({ severity: 'error', code: 'schema.reference.identity-contradiction', message: `${reference.role}: Declared schema identifier contradicts current semantic schema identity authority. ${qualification.findings.join(' ')}`, source: 'tiinex.schema.reference.validation.v1', params: { field: reference.role } });
+      findings.push({ severity: 'error', code: 'schema.reference.identity-contradiction', message: `${reference.role}: Declared schema identifier contradicts current semantic schema identity authority. ${qualification.findings.join(' ')}`, source: 'tiinex.schema.reference.validation.v1', params: { field: reference.role, schemaId: reference.schemaId, context } });
       continue;
     }
     if (qualification.observed?.form === 'markdown-link' && qualification.targetState === 'unqualified') {
-      findings.push({ severity: 'info', code: 'schema.reference.locator.unresolved', message: `${reference.role}: Declared schema representation locator is preserved but is not resolved by current exact material authority. Locator resolution is separate from semantic schema identity.`, source: 'tiinex.schema.reference.validation.v1' });
+      const observedTarget = String(qualification.observed?.target || '');
+      const targetIdentity = qualifiedRegisteredSchemaIdentitiesForTarget(observedTarget);
+      const contradictory = targetIdentity.length > 0 && !targetIdentity.includes(reference.schemaId);
+      if (contradictory) {
+        findings.push({
+          severity: 'error',
+          code: 'schema.reference.material-identity-contradiction',
+          message: `${reference.role}: the declared schema representation locator is positively qualified as ${targetIdentity.join(', ')}, not ${reference.schemaId}; resolved material identity contradictions are blocking even for preserved historical artifacts.`,
+          source: 'tiinex.schema.reference.validation.v1',
+          state: 'blocking-resolved-material-identity-contradiction',
+          params: { field: reference.role, schemaId: reference.schemaId, observedTarget, resolvedSchemaIds: targetIdentity, context }
+        });
+        continue;
+      }
+      const prospective = context === 'candidate';
+      findings.push({
+        severity: prospective ? 'error' : 'info',
+        code: prospective ? 'schema.reference.target-unqualified' : 'schema.reference.locator.unresolved',
+        message: prospective
+          ? `${reference.role}: the declared schema representation locator is not qualified for the exact governing schema material and cannot be carried into a new candidate unchanged.`
+          : `${reference.role}: Declared schema representation locator is preserved but is not resolved by current exact material authority. Locator resolution is separate from semantic schema identity.`,
+        source: 'tiinex.schema.reference.validation.v1',
+        state: prospective ? 'blocking-prospective-reference-contradiction' : 'historical-locator-unresolved',
+        params: { field: reference.role, schemaId: reference.schemaId, observedTarget, exactTarget, context }
+      });
       continue;
     }
-    findings.push({ severity: 'error', code: 'schema.reference.unqualified', message: `${reference.role}: ${qualification.findings.join(' ')}`, source: 'tiinex.schema.reference.validation.v1', params: { field: reference.role } });
+    findings.push({ severity: 'error', code: 'schema.reference.unqualified', message: `${reference.role}: ${qualification.findings.join(' ')}`, source: 'tiinex.schema.reference.validation.v1', params: { field: reference.role, schemaId: reference.schemaId, context } });
   }
   return findings;
+}
+
+
+function qualifiedRegisteredSchemaIdentitiesForTarget(target = '') {
+  const observedTarget = String(target || '').trim();
+  if (!observedTarget) return Object.freeze([]);
+  const schemaIds = [];
+  for (const module of schemaRegistry.modules || []) {
+    const schemaId = String(module?.id || '').trim();
+    if (!schemaId) continue;
+    const sourceQualification = typeof module?.schemaSource?.qualify === 'function' ? module.schemaSource.qualify() : null;
+    const authority = schemaReferenceAuthorityFromBinding(schemaId, module?.binding || {}, sourceQualification?.authority || null, sourceQualification);
+    if (qualifiedExactSchemaReferenceTarget(authority) === observedTarget) schemaIds.push(schemaId);
+  }
+  return Object.freeze([...new Set(schemaIds)]);
 }
 
 

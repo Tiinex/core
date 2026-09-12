@@ -11,6 +11,7 @@ import { reductionPreflightCliInput } from './cli.reduction-input.js';
 import {land} from './cli.land.js';
 import { OPERATIONS_WITHOUT_EXPLICIT_MATERIAL } from './cli.material-policy.js';
 import { prepareSourceFrontierComparisonCliInput } from './cli.source-frontier-comparison.js';
+import { prepareSourceFrontierReconciliationCliInput } from './cli.source-frontier-reconciliation.js';
 
 export async function commandInput(parsed, runtime = {}) {
   const flags = parsed.flags;
@@ -140,6 +141,10 @@ export async function commandInput(parsed, runtime = {}) {
   }
 
   if (parsed.command === 'compare-source-frontiers') return prepareSourceFrontierComparisonCliInput(parsed, flags);
+  if (parsed.command === 'prove-source-reconciliation') {
+    const dispositions = await readOptionalJson(flags.dispositions || flags['disposition-file']);
+    return prepareSourceFrontierReconciliationCliInput(flags, dispositions);
+  }
 
   if (parsed.command === 'manufacture-handoff-package') {
     return prepareHandoffManufactureCliCommand(parsed, runtime);

@@ -179,7 +179,7 @@ export function validateArtifactCreationResult(draft = {}, parentRecord = {}, op
     findings.push(...(representation.findings || []).map((message, index) => error(`creation.continuation-representation.${index + 1}`, message)));
     findings.push(...validateParentTargetIntegrity(parsed, parentRecord, parentIntegrityTarget));
     const parentSchemaAuthority = parentRecord.schemaReferenceAuthority || {};
-    const parentSchemaReference = qualifySchemaReferenceValue(parent.schema?.raw || '', parentSchemaAuthority);
+    const parentSchemaReference = qualifySchemaReferenceValue(parent.schema?.raw || '', parentSchemaAuthority, { requireExactTargetWhenQualified: true });
     for (const [index, message] of (parentSchemaReference.findings || []).entries()) findings.push(error(`creation.parent-schema-reference.${index + 1}`, message));
     if (parentSchemaAuthority.resolutionState !== 'qualified') findings.push(error('creation.parent-schema-reference.unresolved', 'Exact continuation requires the declared Parent Schema reference authority to be resolver-qualified.'));
   } else if (!rootCreation) findings.push(error('creation.parent.required', 'Continuation creation requires an exact supplied Parent authority.'));

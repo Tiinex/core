@@ -28,8 +28,7 @@ function projectDocument(record = {}, records = [], lineageInspection = null) {
   const markdown = String(record.markdown || '');
   const recordPath = norm(record.path || record.id || '');
   const lineageFindings = findingsForPath(lineageInspection?.findings || [], recordPath);
-  const referenceFindings = schemaReferenceCompositionFindings(audit, recordPath);
-  const sharedFindings = [...(audit.findings || []), ...lineageFindings, ...referenceFindings];
+  const sharedFindings = [...(audit.findings || []), ...lineageFindings];
   const diagnostics = sharedFindings
     .filter((item) => item.severity === 'error' || item.severity === 'warning')
     .map((finding) => projectDiagnostic(finding, markdown));
@@ -68,28 +67,6 @@ function projectDocument(record = {}, records = [], lineageInspection = null) {
   });
 }
 
-function schemaReferenceCompositionFindings(audit = {}, recordPath = '') {
-  const envelope = audit?.parsed?.envelope || {};
-  const references = [
-    { field: 'Envelope Schema', value: envelope.envelopeSchema || {} },
-    { field: 'Current Schema', value: envelope.current?.schema || {} },
-    { field: 'Parent Schema', value: envelope.parent?.schema || {} }
-  ].filter((entry) => String(entry.value?.id || '').trim());
-  const exactPublishedStyle = references.some((entry) => entry.value?.form === 'markdown-link' && /^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/[0-9a-f]{40}\//i.test(String(entry.value?.target || '')));
-  if (!exactPublishedStyle) return [];
-  const findings = [];
-  for (const entry of references) {
-    if (entry.value?.form !== 'plain-schema-id') continue;
-    const schemaId = String(entry.value?.id || '').trim();
-    findings.push(portableFinding('warning', 'portable.editor.schema-reference.canonical-target-available', `${entry.field} uses only a schema id while the same artifact otherwise uses exact immutable schema locators. This mixed representation requires explicit qualification instead of being treated as clean.`, {
-      ref: recordPath,
-      params: { field: entry.field, schemaId },
-      fixability: 'manual-or-holistic-repair-required'
-    }));
-  }
-  return findings;
-}
-
 function findingsForPath(findings = [], path = '') {
   const wanted = norm(path);
   return (findings || []).filter((finding) => norm(finding?.evidencePath || finding?.ref || '') === wanted);
@@ -102,7 +79,7 @@ function qualifyReplacementAgainstSharedGuardrails(record = {}, records = [], re
   const replacementRecord = replacedRecords.find((item) => norm(item.path || item.id || '') === focusPath);
   if (!replacementRecord) return freeze({ state: 'unavailable', reason: 'focused-record-unavailable' });
   const replacementAudit = auditPortableRecord(replacementRecord, { requireExactSchemaAuthority: true });
-  const auditBlockers = [...(replacementAudit.findings || []), ...schemaReferenceCompositionFindings(replacementAudit, focusPath)].filter((item) => item.severity === 'error' || item.severity === 'warning');
+  const auditBlockers = [...(replacementAudit.findings || [])].filter((item) => item.severity === 'error' || item.severity === 'warning');
   if (auditBlockers.length) return freeze({ state: 'blocked', reason: 'replacement-shared-audit-not-clean', blockerCodes: auditBlockers.map((item) => String(item.code || '')) });
 
   const before = inspectPortableLineageIntegrity({ records });

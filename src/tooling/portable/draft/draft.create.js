@@ -265,6 +265,9 @@ function renderBody({ title, plan, document, values, sections, allowIncomplete }
 }
 
 function renderGenericDraft({ schemaId, title, summary, createdAt, why, currentStatus, parentRecord, bodyMarkdown }) {
+  // Bounded exception: this renderer creates local drafts from explicitly supplied readable
+  // schema material, so its schema links are truthful draft-local relative locators rather
+  // than claims that an immutable published canonical target exists.
   const lines = [
     '# Continuity Context',
     '',

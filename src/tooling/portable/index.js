@@ -54,3 +54,4 @@ export * from './handoff/transportEnvelopeV1.js';
 export * from './handoff/recipientV2.packageV1.js';
 
 export * from './comparison/sourceFrontierComparison.js';
+export * from './comparison/sourceFrontierReconciliationProof.js';

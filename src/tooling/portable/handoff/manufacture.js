@@ -15,8 +15,14 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
     carrierProfile: input.carrierProfile || null
   }, input.carrierLineage || upgraded.carrierProjection?.lineage || baseline.carrierProjection?.lineage || {});
   const majorFindings = majorReadiness.state === 'blocked' ? [Object.freeze({ severity: 'error', code: 'portable.handoff-carrier-lineage.major.not-self-contained', message: 'Major Handoff carrier requires complete replacement-capable carried Workspace snapshots.' })] : [];
+  const reconciliationProofQualification = input.reconciliationProofQualification || input.manufacturingEvidence?.reconciliationProof || null;
+  const reconciliationBlocked = String(reconciliationProofQualification?.state || '') === 'blocked';
+  const schemaReferencePreflight = input.schemaReferencePreflight || input.manufacturingEvidence?.schemaReferencePreflight || null;
+  const schemaReferenceBlocked = String(schemaReferencePreflight?.state || '') === 'blocked';
   const findings = Object.freeze([
     ...majorFindings,
+    ...(schemaReferencePreflight?.findings || []),
+    ...(reconciliationProofQualification?.findings || []),
     ...(baseline.findings || []),
     ...(upgraded.findings || []),
     ...(upgraded.inspection?.findings || []),
@@ -28,7 +34,7 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
     ...(upgraded.roundtrip?.findings || []),
     ...(toolingBootstrapInspection?.findings || [])
   ]);
-  const status = baseline.status !== 'blocked' && upgraded.status !== 'blocked' && toolingBootstrapInspection?.status === 'valid' && majorReadiness.state !== 'blocked' ? upgraded.status : 'blocked';
+  const status = baseline.status !== 'blocked' && upgraded.status !== 'blocked' && toolingBootstrapInspection?.status === 'valid' && majorReadiness.state !== 'blocked' && !schemaReferenceBlocked && !reconciliationBlocked ? upgraded.status : 'blocked';
   return Object.freeze({
     schema: 'tiinex.portable.handoff-manufacturing.v2',
     status,
@@ -45,7 +51,9 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
       coldConsumerEntrypointInspection: String(upgraded.coldConsumerEntrypointInspection?.status || 'unavailable'),
       companionInspection: String(upgraded.companionInspection?.status || 'unavailable'),
       roundtrip: upgraded.roundtrip ? String(upgraded.roundtrip.status || 'unknown') : 'not-requested',
-      toolingBootstrap: String(toolingBootstrapInspection?.status || 'unavailable')
+      toolingBootstrap: String(toolingBootstrapInspection?.status || 'unavailable'),
+      schemaReferencePreflight: String(schemaReferencePreflight?.state || 'not-run'),
+      reconciliationProof: String(reconciliationProofQualification?.state || 'not-required')
     }),
     plan: baseline.plan,
     bundle: upgraded.bundle || baseline.bundle,
@@ -63,6 +71,8 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
     roundtrip: upgraded.roundtrip || null,
     toolingBootstrap: input.toolingBootstrap || null,
     manufacturingEvidence: input.manufacturingEvidence || null,
+    schemaReferencePreflight,
+    reconciliationProofQualification,
     toolingBootstrapInspection,
     carrierLineage: upgraded.carrierProjection?.lineage || baseline.carrierProjection?.lineage || input.carrierLineage || null,
     majorReadiness,
@@ -73,12 +83,14 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
       sourceMutation: false,
       remoteMutation: false,
       physicalRoundtripVerification: upgraded.roundtrip ? String(upgraded.roundtrip.status || 'unknown') : 'not-requested',
+      schemaReferencePreflight: String(schemaReferencePreflight?.state || 'not-run'),
+      reconciliationProof: String(reconciliationProofQualification?.state || 'not-required'),
       hostBehaviorAuthority: 'none'
     }),
     migration: upgraded.migration || null,
     baseline: Object.freeze({ schema: baseline.schema, status: baseline.status, packageRepresentationSha256: String(baseline.bundle?.packageRepresentationSha256 || ''), representation: 'semantic-control-plus-detached-material-without-exploded-workspace-carrier' }),
     findings,
     findingSummary: summarizePortableFindings(findings),
-    boundary: 'Canonical archive-backed Handoff manufacturing facade. It fails closed unless each carrier workspace is bound to one exact carried tiinex.workspace.v1 artifact and one independently verified complete workspace archive.'
+    boundary: 'Canonical archive-backed Handoff manufacturing facade. It fails closed unless each carrier workspace is bound to one exact carried tiinex.workspace.v1 artifact and one independently verified complete workspace archive; the actively selected local Handoff candidate must satisfy prospective per-field exact schema-reference authority, and when reconciliation proof is required/supplied, the exact source selected for manufacture must also match the qualified candidate reconciled frontier.'
   });
 }

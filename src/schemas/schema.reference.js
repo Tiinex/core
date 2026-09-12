@@ -6,13 +6,14 @@ export const SCHEMA_REFERENCE_MATERIAL_COHERENCE_SCHEMA_ID = 'tiinex.site.schema
 export function schemaReferenceAuthorityFromBinding(schemaId = '', binding = {}, sourceAuthority = null, sourceQualification = null) {
   const id = String(schemaId || binding?.schemaId || '').trim();
   const localUnpublished = String(binding?.publicationState || '').toLowerCase().includes('unpublished');
-  const exactSourceTargets = localUnpublished
+  const referencePublished = qualifiedImmutableReferencePublication(binding, sourceQualification);
+  const exactSourceTargets = localUnpublished && !referencePublished
     ? Object.freeze({ state: 'unavailable', targets: Object.freeze([]), findings: Object.freeze(['Binding is explicitly unpublished; remote source targets are not creation reference authority.']) })
     : canonicalGithubSchemaSourceTargets(sourceAuthority);
   const exactTargets = exactSourceTargets.state === 'qualified' ? [...exactSourceTargets.targets] : [];
   const semanticMaterialIdentity = normalizeMaterialIdentity(sourceQualification?.materialIdentity || {});
   const sourceQualified = sourceQualification?.state === 'qualified' && semanticMaterialIdentity.state === 'qualified';
-  const materialBoundTarget = Boolean(exactTargets.length && sourceQualified && sourceQualification?.bindingMaterialCoherence?.state === 'qualified');
+  const materialBoundTarget = Boolean(exactTargets.length && sourceQualified && (sourceQualification?.bindingMaterialCoherence?.state === 'qualified' || referencePublished));
   const preferredTarget = exactTargets[0] || '';
   return Object.freeze({
     schema: SCHEMA_REFERENCE_AUTHORITY_SCHEMA_ID,
@@ -27,6 +28,17 @@ export function schemaReferenceAuthorityFromBinding(schemaId = '', binding = {},
     semanticMaterialIdentity,
     exactSourceTargets
   });
+}
+
+function qualifiedImmutableReferencePublication(binding = {}, sourceQualification = null) {
+  if (String(binding?.schemaReferencePublicationState || '').trim() !== 'published-immutable-canonical') return false;
+  if (sourceQualification?.state !== 'qualified' || sourceQualification?.materialIdentity?.state !== 'qualified') return false;
+  if (sourceQualification?.authority?.providerQualification?.state !== 'qualified') return false;
+  const bindingBlobSha = String(binding?.sourceBlobSha || '').trim().toLowerCase();
+  const loadedBlobSha = String(sourceQualification?.materialIdentity?.sourceBlobSha || '').trim().toLowerCase();
+  const expectedChecksum = String(binding?.checksum?.value || binding?.checksum || '').trim().toLowerCase();
+  const loadedChecksum = String(sourceQualification?.materialIdentity?.sha256 || '').trim().toLowerCase();
+  return Boolean(bindingBlobSha && loadedBlobSha && bindingBlobSha === loadedBlobSha && expectedChecksum && loadedChecksum && expectedChecksum === loadedChecksum);
 }
 
 export function qualifySchemaReferenceMaterialCoherence(authority = {}) {
@@ -105,14 +117,24 @@ export function parseSchemaReferenceValue(value = '') {
 export function renderSchemaReference(authority = {}) {
   const schemaId = String(authority?.schemaId || '').trim();
   if (!schemaId) throw new Error('schema-reference-id-missing');
-  const target = String(authority?.preferredTarget || '').trim();
+  const target = qualifiedExactSchemaReferenceTarget(authority);
   return target ? `[${schemaId}](${target})` : schemaId;
 }
 
-export function qualifySchemaReferenceValue(value = '', authority = {}) {
+export function qualifiedExactSchemaReferenceTarget(authority = {}) {
+  const preferredTarget = String(authority?.preferredTarget || '').trim();
+  const exactTargets = new Set([...(authority?.exactTargets || [])].map((item) => String(item ?? '')).filter(Boolean));
+  if (String(authority?.resolutionState || authority?.state || '') !== 'qualified') return '';
+  if (!preferredTarget || !exactTargets.has(preferredTarget)) return '';
+  return preferredTarget;
+}
+
+export function qualifySchemaReferenceValue(value = '', authority = {}, options = {}) {
   const observed = parseSchemaReferenceValue(value);
   const expectedSchemaId = String(authority?.schemaId || '').trim();
   const exactTargets = new Set([...(authority?.exactTargets || [])].map((item) => String(item ?? '')).filter(Boolean));
+  const qualifiedExactTarget = qualifiedExactSchemaReferenceTarget(authority);
+  const requireExactTargetWhenQualified = options?.requireExactTargetWhenQualified === true;
   const findings = [];
   if (!expectedSchemaId) findings.push('Expected schema identifier authority is unavailable.');
   if (observed.schemaId !== expectedSchemaId) findings.push(`Schema identifier must be exactly ${expectedSchemaId}; observed ${observed.schemaId || '(empty)'}.`);
@@ -120,12 +142,16 @@ export function qualifySchemaReferenceValue(value = '', authority = {}) {
   if (observed.form === 'markdown-link') {
     targetState = exactTargets.has(observed.target) ? 'qualified' : 'unqualified';
     if (targetState !== 'qualified') findings.push(`Schema reference target is not qualified for ${expectedSchemaId}: ${observed.target || '(empty)'}.`);
+  } else if (observed.form === 'plain-schema-id' && requireExactTargetWhenQualified && qualifiedExactTarget) {
+    targetState = 'qualified-exact-target-omitted';
+    findings.push(`Qualified exact schema-reference authority requires Markdown Link form targeting ${qualifiedExactTarget}; a plain schema id is not sufficient for this new candidate.`);
   }
   if (observed.form === 'empty') findings.push('Schema reference value is empty.');
   return Object.freeze({
     state: findings.length ? 'unavailable' : 'qualified',
     schemaIdState: observed.schemaId === expectedSchemaId && expectedSchemaId ? 'qualified' : 'unavailable',
     targetState,
+    qualifiedExactTarget,
     observed,
     authority,
     findings: Object.freeze(findings)

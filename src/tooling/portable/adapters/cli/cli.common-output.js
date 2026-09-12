@@ -1,4 +1,5 @@
 import { projectPortableSourceFrontierComparisonSummary } from '../../comparison/sourceFrontierComparison.js';
+import { projectPortableSourceReconciliationProofSummary } from '../../comparison/sourceFrontierReconciliationProof.js';
 
 const COMMON_DEFAULT_PROJECTION = 'common-default';
 
@@ -8,7 +9,29 @@ export function projectCommonCliDefaultOutput(result = {}, parsed = {}) {
   if (parsed?.command === 'project-grounding-readiness') return projectGroundDefault(result, parsed);
   if (parsed?.command === 'manufacture-handoff-package' && parsed?.surfaceCommand === 'handoff') return projectHandoffDefault(result, parsed);
   if (parsed?.command === 'compare-source-frontiers') return projectCompareDefault(result, parsed);
+  if (parsed?.command === 'prove-source-reconciliation') return projectReconciliationProofDefault(result, parsed);
   return result;
+}
+
+function projectReconciliationProofDefault(result = {}, parsed = {}) {
+  const summary = projectPortableSourceReconciliationProofSummary({ ...result, schema: result.resultSchema || result.schema || '' }, { maxPaths: parsed?.flags?.['max-paths'] || 20 });
+  return Object.freeze({
+    schema: result.schema,
+    operation: result.operation || 'prove-source-reconciliation',
+    resultSchema: result.resultSchema,
+    projection: COMMON_DEFAULT_PROJECTION,
+    status: summary.status,
+    state: summary.state,
+    counts: summary.counts,
+    preservation: summary.preservation,
+    workspaces: summary.workspaces,
+    proofFingerprint: summary.proofFingerprint,
+    manufactureBinding: summary.manufactureBinding,
+    findingSummary: summary.findingSummary,
+    actionableFindings: summary.actionableFindings,
+    detail: Object.freeze({ fullReceipt: Object.freeze({ command: String(parsed.surfaceCommand || 'reconcile'), flag: '--full', requiredForManufacture: true }) }),
+    boundary: summary.boundary
+  });
 }
 
 function projectCompareDefault(result = {}, parsed = {}) {

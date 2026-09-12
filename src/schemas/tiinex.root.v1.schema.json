@@ -20,5 +20,6 @@
   "bindingVersion": "tiinex.web.schema-binding.v1",
   "originId": "tiinex-docs-39889512-accepted-local",
   "originTrustRole": "canonical-core",
-  "publicationState": "accepted-local-unpublished"
+  "publicationState": "accepted-local-unpublished",
+  "schemaReferencePublicationState": "published-immutable-canonical"
 }

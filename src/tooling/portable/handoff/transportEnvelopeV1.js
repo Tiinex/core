@@ -7,6 +7,11 @@ import { qualifySecureTransportV1Envelope } from '../../../transport/secureTrans
 export const TRANSPORT_ENVELOPE_V1_SCHEMA_ID = 'tiinex.transport.envelope.v1';
 export const TRANSPORT_ENVELOPE_V1_ROLE = 'password-sealed-workspace-transport-envelope';
 
+// Bounded exception: the Transport Envelope schema is intentionally not assigned a
+// published immutable canonical locator. Keep the plain schema id until such authority
+// exists; do not substitute a mutable branch/latest URL. Secure-transport regressions
+// lock this fail-closed representation choice.
+
 export function renderTransportEnvelopeV1(input = {}) {
   const envelope = input.envelope || {};
   const q = qualifySecureTransportV1Envelope(envelope);

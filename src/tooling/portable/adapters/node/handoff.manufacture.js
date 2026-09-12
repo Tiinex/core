@@ -7,6 +7,8 @@ import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js'
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
 import { enumerateNodeWorkspace, PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID } from './handoff.manufacture.enumeration.js';
 import { preparePackageParentWorkspaceReuse } from './handoff.manufacture.packageParent.js';
+import { qualifyPortableSourceReconciliationProofForManufacture } from '../../comparison/sourceFrontierReconciliationProof.js';
+import { qualifyPortableManufactureSchemaReferenceCandidate } from '../../handoff/schemaReferencePreflight.js';
 import {
   assertInside,
   expandPointerDependencyClosure,
@@ -48,6 +50,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     workspaceTitle: requestedWorkspaceTitle,
     sourceMetadata: input.workspaceSource || input.sourceMetadata || {},
     excludeDirectories: input.excludeDirectories || options.excludeDirectories,
+    excludeRelativePaths: input.excludeRelativePaths || options.excludeRelativePaths,
     maxFiles: input.maxFiles || options.maxFiles
   });
   const additionalWorkspaceDescriptors = normalizeAdditionalWorkspaceDescriptors(input.additionalWorkspaces || input.workspaceRoots || input.workspaceDescriptors || []);
@@ -79,6 +82,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
       workspaceTitle: requestedTitle,
       sourceMetadata: descriptor.source || descriptor.sourceMetadata || {},
       excludeDirectories: descriptor.excludeDirectories || input.excludeDirectories || options.excludeDirectories,
+      excludeRelativePaths: descriptor.excludeRelativePaths || input.excludeRelativePaths || options.excludeRelativePaths,
       maxFiles: descriptor.maxFiles || input.maxFiles || options.maxFiles
     });
     if (enumerated.status !== 'qualified-complete') throw new Error(`portable.handoff-manufacture.workspace-enumeration.${id}.${enumerated.status}`);
@@ -96,6 +100,8 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     semanticStatus: String(input.handoffSemanticStatus || 'unknown'),
     markdown: handoffMarkdown
   });
+
+  const schemaReferencePreflight = qualifyPortableManufactureSchemaReferenceCandidate(handoff);
 
   if (enumeration.status !== 'qualified-complete') throw new Error(`portable.handoff-manufacture.workspace-enumeration.${enumeration.status}`);
   const workspaceTitle = requestedWorkspaceTitle || inferWorkspaceTitle(enumeration) || workspaceId;
@@ -138,6 +144,13 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     if (targets.length !== 1) throw new Error(`portable.handoff-manufacture.workspace-scope.target-${targets.length ? 'ambiguous' : 'required'}:${materialization.id}`);
     workspaceMaterializations[index] = projectBoundedWorkspaceMaterialization(materialization, scope, targets[0].path);
   }
+  const hasReconciliationProof = Boolean(input.reconciliationProof && typeof input.reconciliationProof === 'object' && Object.keys(input.reconciliationProof).length);
+  const reconciliationProofQualification = qualifyPortableSourceReconciliationProofForManufacture({
+    proof: input.reconciliationProof || null,
+    requireProof: input.requireReconciliationProof === true,
+    workspaceMaterializations,
+    requiredWorkspaceIds: hasReconciliationProof || input.requireReconciliationProof === true ? [workspaceId] : []
+  });
 
   const routeSpecs = transportRoutes.length ? transportRoutes : Object.freeze([{ workspaceId, path: handoffPath }]);
   let requirements = await projectManufacturingRequirements({ handoff, workspaceId, handoffPath, routeSpecs, workspaceRuntimeById });
@@ -180,11 +193,15 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null),
     carrierProfile: normalizeHandoffCarrierProfile(input.carrierProfile || null),
     toolingBootstrap: toolingBootstrap.summary,
+    reconciliationProofQualification,
+    schemaReferencePreflight,
     manufacturingEvidence: Object.freeze({
       enumeration: enumeration.evidence,
       workspaceEnumerations: Object.freeze(workspaceEnumerations),
       toolingBootstrap: toolingBootstrap.summary,
       runtimeSourceAlignment,
+      reconciliationProof: reconciliationProofQualification,
+      schemaReferencePreflight,
       packageParentWorkspaceReuse: Object.freeze({
         state: String(packageParentReuse.state || ''),
         providerState: String(packageParentReuse.providerState || ''),

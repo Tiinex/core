@@ -16,7 +16,8 @@ export function auditPortableRecord(record = {}, options = {}) {
       record,
       markdown: record.markdown,
       validationContractOverride: runtimeProjection?.state === 'qualified' ? runtimeProjection.compiledContract : null,
-      schemaValidationAuthority: requireExactSchemaAuthority ? runtimeAuthority : null
+      schemaValidationAuthority: requireExactSchemaAuthority ? runtimeAuthority : null,
+      schemaReferenceContext: options.schemaReferenceContext || 'historical'
     });
   } catch (error) {
     const finding = portableFinding('error', 'portable.audit.exception', error?.message || 'Audit failed.', {

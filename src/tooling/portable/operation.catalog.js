@@ -39,10 +39,18 @@ import { projectPortableOperatingOverview } from './overview/operatingOverview.j
 import { projectPortableGroundingReadiness } from './grounding/grounding.readiness.js';
 import { createPortablePackageOperationEntries } from './operation.catalog.package.js';
 import { compareOrReconcilePortableSourceFrontiers } from './comparison/sourceFrontierComparison.js';
+import { provePortableSourceReconciliation } from './comparison/sourceFrontierReconciliationProof.js';
 
 export const PORTABLE_OPERATION_CATALOG_SCHEMA_ID = 'tiinex.portable.operation.catalog.v1';
 
 export const portableOperationCatalog = Object.freeze({
+  'prove-source-reconciliation': operation({
+    name: 'prove-source-reconciliation',
+    description: 'Fail closed unless qualified base/incoming/current source plus explicit conflict/deletion dispositions are preserved by one exact candidate reconciled frontier suitable for manufacture requalification.',
+    safety: 'read-only-mechanical-proof',
+    inputSchema: 'tiinex.portable.source-frontier-reconciliation-proof.request.v1',
+    handler: (input = {}) => wrapPortableResult('prove-source-reconciliation', provePortableSourceReconciliation(input))
+  }),
   'compare-source-frontiers': operation({
     name: 'compare-source-frontiers',
     description: 'Compare normalized exact Workspace source frontiers two-way or reconcile base/incoming/current three-way without merge, semantic inference, remote acquisition, or source mutation.',

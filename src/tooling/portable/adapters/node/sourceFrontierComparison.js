@@ -59,7 +59,7 @@ async function frontierFromLocalWorkspace(descriptor, options) {
       id: descriptor.label || `${options.side || 'input'}:${workspaceId}`,
       source: { kind: 'local-workspace', ref: root, snapshotContract: 'shared-handoff-manufacture-node-enumeration-v1' },
       workspaces: [workspaceFromEnumeration(workspaceId, enumeration, root)],
-      boundary: 'Local source is enumerated by the same deterministic Node Workspace enumerator used by Handoff manufacture; excluded directories and symlink policy therefore remain shared.'
+      boundary: 'Local source is enumerated by the same deterministic Node Workspace enumerator used by Handoff manufacture; durable-source eligibility, generated-cache exclusions, configured path exclusions, and symlink policy therefore remain shared.'
     });
   } catch (error) {
     return createPortableSourceFrontier({ id: descriptor.label || options.side || '', state: 'qualification-error', source: { kind: 'local-workspace', ref: root }, workspaces: [{ workspaceId, state: 'unavailable', reason: 'local-workspace-read-failed', source: { kind: 'local-workspace', ref: root } }], findings: [portableFinding('error', 'portable.source-frontier.node.local-read-failed', 'Local Workspace source could not be enumerated.', { workspaceId, ref: root, detail: String(error?.message || error || '') })] });
@@ -180,6 +180,7 @@ function enumerationOptions(descriptor, options, workspaceId) {
     workspaceTitle: String(descriptor.workspaceTitle || descriptor.title || workspaceId),
     sourceMetadata: descriptor.sourceMetadata || {},
     excludeDirectories: descriptor.excludeDirectories || options.excludeDirectories,
+    excludeRelativePaths: descriptor.excludeRelativePaths || options.excludeRelativePaths,
     maxFiles: descriptor.maxFiles || options.maxFiles
   };
 }

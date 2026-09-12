@@ -425,7 +425,7 @@ function withCliPhaseTiming(result = {}, timing = {}) {
 function parseArgs(argv=[]) {
   const args=[...argv],first=args.shift()||'';
   if(first==='--help'||first==='-h') return {command:'help',flags:{help:true},positionals:[]};
-  const command=({orient:'orient-handoff-package',ground:'project-grounding-readiness',receive:'qualify-cold-start',validate:'audit-handoff-package-context',handoff:'manufacture-handoff-package',author:'author',compare:'compare-source-frontiers'})[first]||first;
+  const command=({orient:'orient-handoff-package',ground:'project-grounding-readiness',receive:'qualify-cold-start',validate:'audit-handoff-package-context',handoff:'manufacture-handoff-package',author:'author',compare:'compare-source-frontiers',reconcile:'prove-source-reconciliation'})[first]||first;
   const flags={},positionals=[];
   while(args.length){const token=args.shift();if(!token.startsWith('--')){positionals.push(token);continue;}const key=token.slice(2);flags[key]=!args.length||args[0].startsWith('--')?true:args.shift();}
   return {command,flags,positionals,surfaceCommand:first};

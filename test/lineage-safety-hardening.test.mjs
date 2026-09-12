@@ -13,8 +13,12 @@ import { writeExactRecipientTransportBytes } from '../src/tooling/portable/outpu
 import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integrity/integrity.c14nV2.js';
 import { sha256Hex } from '../src/export/package.bytes.js';
 import { portableCanonicalBootstrapRuntime } from '../src/tooling/portable/schema/bootstrap/canonical.pack.js';
+import { buildHandoffPointerEntrypoints } from '../src/tooling/portable/handoff/pointerEntrypoint.js';
+import { projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
 
 const encoder = new TextEncoder();
+const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
+const TASK_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/053d46ce082d4ec261b82abc44ecca403d61e240/.topics/.schemas/core/task/tiinex.task.v1.schema.md';
 
 function sealedParentMarkdown() {
   const unsigned = `# Continuity Context\n\n- Envelope Schema: tiinex.root.v1\n- Current\n  - Current Schema: tiinex.task.v1\n  - Created At: 2026-09-11 18:00:00\n  - Summary: Parent\n\n---\n\n# Parent\n\nParent body.\n\n---\n\n# Continuity Integrity\n\n- sha256-base64url-c14n-v2\n  - Towards: self\n  - Value: pending`;
@@ -60,6 +64,70 @@ test('common author and renderer preserve a Workspace-qualified Parent as the tr
   assert.match(markdown, /- Trace: \[002-parent\.trace\.md\]\(business::\.topics\/initiatives\/002-parent\.trace\.md\)/);
   assert.match(markdown, /- \[relative\]\(business::\.topics\/initiatives\/002-parent\.trace\.md\)/);
   assert.doesNotMatch(markdown, /\.\.\/.*business::/);
+});
+
+test('common creation rendering uses the qualified immutable Root schema target instead of generating mixed bare/exact schema references', () => {
+  const contract = buildArtifactCreationContract({ schemaId: 'tiinex.task.v1', transitionType: 'create-artifact' });
+  assert.equal(contract.schemaReferences.envelope.resolutionState, 'qualified');
+  assert.equal(contract.schemaReferences.envelope.preferredTarget, ROOT_SCHEMA_TARGET);
+  const markdown = renderArtifactCreationDraftMarkdown(contract, {
+    currentSchemaId: 'tiinex.task.v1',
+    childPath: '.topics/initiatives/001-new-task.trace.md',
+    bodyMarkdown: '# New Task\n\nTask body.',
+    title: 'New Task',
+    summary: 'New Task',
+    createdAt: '2026-09-12 01:00:00'
+  });
+  assert.match(markdown, new RegExp(`- Envelope Schema: \\[tiinex\\.root\\.v1\\]\\(${ROOT_SCHEMA_TARGET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
+  assert.match(markdown, new RegExp(`- Current Schema: \\[tiinex\\.task\\.v1\\]\\(${TASK_SCHEMA_TARGET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
+  assert.doesNotMatch(markdown, /- Envelope Schema: tiinex\.root\.v1\s*$/m);
+});
+
+test('local/unpublished Current schema references remain truthful while editor diagnostics only warn when canonical target authority is actually qualified', () => {
+  const evidenceContract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
+  assert.equal(evidenceContract.schemaReferences.envelope.resolutionState, 'qualified');
+  assert.equal(evidenceContract.schemaReferences.current.resolutionState, 'unavailable');
+  assert.equal(evidenceContract.schemaReferences.current.preferredTarget, '');
+  const localMarkdown = renderArtifactCreationDraftMarkdown(evidenceContract, {
+    currentSchemaId: 'tiinex.evidence.v1',
+    childPath: '.topics/evidence/001-local-evidence.trace.md',
+    bodyMarkdown: '# Local Evidence\n\nLocal evidence body.',
+    title: 'Local Evidence',
+    summary: 'Local Evidence',
+    createdAt: '2026-09-12 01:00:00'
+  });
+  assert.match(localMarkdown, new RegExp(`- Envelope Schema: \\[tiinex\\.root\\.v1\\]\\(${ROOT_SCHEMA_TARGET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
+  assert.match(localMarkdown, /^  - Current Schema: tiinex\.evidence\.v1$/m);
+  const localAssistance = projectPortableEditorAssistance({ records: [{ path: '.topics/evidence/001-local-evidence.trace.md', markdown: localMarkdown }] });
+  assert.equal(localAssistance.documents[0].diagnostics.some((item) => item.code === 'schema.reference.exact-target-omitted'), false);
+
+  const historicalMixed = sealC14nV2Self(`# Continuity Context\n\n- Envelope Schema: tiinex.root.v1\n- Current\n  - Current Schema: [tiinex.task.v1](${TASK_SCHEMA_TARGET})\n  - Created At: 2026-09-12 01:00:00\n  - Summary: Historical mixed\n\n---\n\n# Historical mixed\n\nHistorical body.\n\n---\n\n# Continuity Integrity\n\n- sha256-base64url-c14n-v2\n  - Towards: self\n  - Value: pending`);
+  assert.equal(historicalMixed.state, 'sealed');
+  const mixedAssistance = projectPortableEditorAssistance({ records: [{ path: '.topics/initiatives/001-historical.trace.md', markdown: historicalMixed.markdown }] });
+  assert.ok(mixedAssistance.documents[0].diagnostics.some((item) => item.code === 'schema.reference.exact-target-omitted' && item.severity === 'warning' && item.line === 3));
+});
+
+test('portable Handoff route Pointer renderer uses the same qualified immutable Root schema target', () => {
+  const projection = buildHandoffPointerEntrypoints({
+    createdAt: '2026-09-12 01:00:00',
+    carrierProjection: {
+      status: 'ready',
+      routes: [{
+        id: 'core:.topics/handoffs/001-return.trace.md',
+        state: 'qualified',
+        workspaceId: 'core',
+        dimension: '004-1',
+        workspaceRelativePath: '.topics/handoffs/001-return.trace.md',
+        pointerTarget: 'workspaces/core/.topics/handoffs/001-return.trace.md',
+        packagePath: 'workspaces/core/.topics/handoffs/001-return.trace.md',
+        parties: { to: 'Anchor' }
+      }]
+    }
+  });
+  assert.equal(projection.status, 'ready');
+  assert.equal(projection.entries.length, 1);
+  assert.match(projection.entries[0].markdown, new RegExp(`- Envelope Schema: \\[tiinex\\.root\\.v1\\]\\(${ROOT_SCHEMA_TARGET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
+  assert.doesNotMatch(projection.entries[0].markdown, /- Envelope Schema: tiinex\.root\.v1\s*$/m);
 });
 
 test('common author recovers Parent schema authority only from exact qualified runtime schema material', async () => {
