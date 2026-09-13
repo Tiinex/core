@@ -1,4 +1,4 @@
-import { canonicalPath, normalizeRef, normalizeRepoKey } from './lineage.targetKeys.js';
+import { canonicalPath, githubFileIdentityFromUrl, normalizeRef, normalizeRepoKey } from './lineage.targetKeys.js';
 
 export function exactPathMatches(path, index, constraint = {}, strictSource = false) {
   const source = [
@@ -27,18 +27,47 @@ export function findPathSuffixMatches(targetPath, pathIndex = new Map(), constra
 }
 
 export function sourceConstraintFromNode(node = {}) {
-  const source = node?.record?.source || {};
-  const adapterId = String(source.adapterId || '').trim().toLowerCase();
+  const record = node?.record || node || {};
+  const source = record.source || {};
+  const provenance = sourceIdentityFromRecord(record);
   const sourceId = String(source.id || '').trim();
-  if (adapterId === 'local' || sourceId === 'local' || source.kind === 'local-session') return { hasConstraint: false, sourceId: '', repo: '', ref: '', adapterId: '' };
-  const repo = normalizeRepoKey(source.repo || source.repository || source.config?.repo || '');
-  const ref = normalizeRef(source.ref || source.config?.ref || '');
-  return { hasConstraint: Boolean(sourceId || repo || adapterId), sourceId, repo, ref, adapterId };
+  const adapterId = String(source.adapterId || source.adapter || provenance.adapterId || '').trim().toLowerCase();
+  const repo = normalizeRepoKey(source.repo || source.repository || source.config?.repo || provenance.repo || '');
+  const ref = normalizeRef(source.commit || source.ref || source.config?.commit || source.config?.ref || provenance.ref || '');
+  const isLocal = adapterId === 'local' || sourceId === 'local' || source.kind === 'local-session';
+  if (isLocal && !repo && !ref) return { hasConstraint: false, sourceId: '', repo: '', ref: '', adapterId: '', exactRef: false };
+  return { hasConstraint: Boolean(sourceId || repo || adapterId || ref), sourceId, repo, ref, adapterId, exactRef: Boolean(ref) };
 }
 
-export function sourceConstraintFromTarget(repo = '') {
-  const key = normalizeRepoKey(repo);
-  return { hasConstraint: Boolean(key), repo: key, sourceId: '', ref: '', adapterId: 'github' };
+export function sourceConstraintFromTarget(value = '') {
+  const identity = githubFileIdentityFromUrl(value);
+  if (identity.repo) return { hasConstraint: true, repo: identity.repo, ref: identity.ref, sourceId: '', adapterId: 'github', exactRef: Boolean(identity.ref) };
+  const key = normalizeRepoKey(value);
+  return { hasConstraint: Boolean(key), repo: key, ref: '', sourceId: '', adapterId: key ? 'github' : '', exactRef: false };
+}
+
+function sourceIdentityFromRecord(record = {}) {
+  const sourceTarget = record.sourceTarget || {};
+  const snapshot = record.snapshot || {};
+  const target = snapshot.target || {};
+  const values = [
+    record.recoveredFromUrl,
+    record.sourceOrigin,
+    record.rawUrl,
+    record.browseUrl,
+    sourceTarget.inputTarget,
+    sourceTarget.rawUrl,
+    sourceTarget.browseUrl,
+    snapshot.sourceUrl,
+    target.canonicalUrl,
+    target.html_url,
+    target.url
+  ];
+  for (const value of values) {
+    const identity = githubFileIdentityFromUrl(value);
+    if (identity.repo) return { ...identity, adapterId: 'github' };
+  }
+  return { repo: '', ref: '', path: '', adapterId: '' };
 }
 
 function filterBySource(nodes = [], constraint = {}, strictSource = false) {
@@ -46,7 +75,7 @@ function filterBySource(nodes = [], constraint = {}, strictSource = false) {
   if (!constraint?.hasConstraint) return items;
   const filtered = items.filter((node) => nodeMatchesSourceConstraint(node, constraint));
   if (filtered.length) return filtered;
-  if (strictSource && items.length && items.every((node) => !sourceConstraintFromNode(node).hasConstraint)) return items;
+  if (strictSource && !constraint.ref && items.length && items.every((node) => !sourceConstraintFromNode(node).hasConstraint)) return items;
   return [];
 }
 
@@ -55,7 +84,7 @@ function nodeMatchesSourceConstraint(node = {}, constraint = {}) {
   if (constraint.sourceId && candidate.sourceId && constraint.sourceId !== candidate.sourceId) return false;
   if (constraint.adapterId && candidate.adapterId && constraint.adapterId !== candidate.adapterId) return false;
   if (constraint.repo && candidate.repo !== constraint.repo) return false;
-  if (constraint.ref && candidate.ref && constraint.ref !== candidate.ref) return false;
+  if (constraint.ref && candidate.ref !== constraint.ref) return false;
   if (constraint.repo && !candidate.repo) return false;
   if (constraint.adapterId && !candidate.adapterId) return false;
   return true;

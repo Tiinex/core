@@ -3,7 +3,7 @@ import { issueLocalPathKeysForNode, issueLocalPathMatches } from './lineage.gith
 import { filterGitHubIssueCommentCandidatesForTarget, githubIssueCommentIdFromValue, githubIssueCommentIdsForNode } from './lineage.githubIssueComment.js';
 import { filterExactGitHubIssueCandidatesForTarget } from './lineage.githubIssueTarget.js';
 import { isDotRelativeReference, isSimpleRelativeReference, isUrlLike, relativeCandidatePath, resolveCandidateNodes } from './lineage.candidateResolution.js';
-import { canonicalIntegrityValue, parentIntegrityValuesForTarget, selfIntegrityValuesForNode, verifiedIntegrityMatch, withParentIntegrityStatus } from './lineage.integrity.js';
+import { canonicalIntegrityValue, parentIntegrityExpectationsForTarget, parentIntegrityValuesForTarget, selfIntegrityValuesForNode, withParentIntegrityStatus } from './lineage.integrity.js';
 import { canonicalPath, canonicalToken, githubRepoRelativePathFromUrl, provenanceTargetKeysForValue, sourceKeyFromTarget } from './lineage.targetKeys.js';
 import { declaredParentBindingTargetValuesForNode, isSyntheticPublicationLineageNode } from './lineage.parentBinding.js';
 import { exactUnloadedParent } from './lineage.parentAuthority.js';
@@ -22,7 +22,7 @@ export function resolveLineage(artifacts = [], options = {}) {
     }
     const traceTarget = targets.find((target) => target.kind === LineageEdgeKind.parent);
     const originTarget = targets.find((target) => target.kind === LineageEdgeKind.origin);
-    const parentMatch = traceTarget ? resolveTarget(traceTarget.value, index, node, { expectedIntegrityValues: traceTarget.integrityValues, targetKind: LineageEdgeKind.parent }) : null;
+    const parentMatch = traceTarget ? resolveTarget(traceTarget.value, index, node, { expectedIntegrityValues: traceTarget.integrityValues, expectedIntegrity: traceTarget.integrityExpectations, targetKind: LineageEdgeKind.parent }) : null;
     const originMatch = originTarget ? resolveTarget(originTarget.value, index, node, { targetKind: LineageEdgeKind.origin }) : null;
     if (parentMatch?.selfReference) {
       findings.push(createLineageFinding('lineage.parent.selfReference', 'Declared Parent Trace resolves to the declaring artifact itself; no parent edge was created.', 'warning', { nodeId: node.id, target: traceTarget.value }));
@@ -170,7 +170,10 @@ export function resolveLineage(artifacts = [], options = {}) {
 }
 function declaredTargetsFor(node = {}) {
   const targets = [];
-  if (node.trace) targets.push({ kind: LineageEdgeKind.parent, value: node.trace, integrityValues: parentIntegrityValuesForTarget(node, node.trace) });
+  if (node.trace) {
+    const integrityExpectations = parentIntegrityExpectationsForTarget(node, node.trace);
+    targets.push({ kind: LineageEdgeKind.parent, value: node.trace, integrityExpectations, integrityValues: integrityExpectations.length ? integrityExpectations.map((entry) => entry.value) : parentIntegrityValuesForTarget(node, node.trace) });
+  }
   if (node.origin) targets.push({ kind: LineageEdgeKind.origin, value: node.origin });
   return targets;
 }
@@ -228,23 +231,27 @@ function resolveTarget(target, index, declaringNode = null, options = {}) {
   const raw = String(target || '').trim();
   if (!raw) return null;
 
-  const expectedIntegrityValues = Array.isArray(options.expectedIntegrityValues) ? options.expectedIntegrityValues.map(canonicalIntegrityValue).filter(Boolean) : [];
-  if (expectedIntegrityValues.length) {
-    const integrityMatch = resolveIntegrityTarget(expectedIntegrityValues, index, declaringNode);
-    if (integrityMatch) return integrityMatch;
-  }
-
+  const expectedIntegrity = Array.isArray(options.expectedIntegrity) && options.expectedIntegrity.length
+    ? options.expectedIntegrity
+    : Array.isArray(options.expectedIntegrityValues) ? options.expectedIntegrityValues : [];
+  const expectedIntegrityValues = expectedIntegrity.map((entry) => canonicalIntegrityValue(entry && typeof entry === 'object' ? entry.value : entry)).filter(Boolean);
   const token = canonicalToken(raw);
   const path = canonicalPath(raw);
   const urlFilePath = githubRepoRelativePathFromUrl(raw);
   const urlSourceKey = sourceKeyFromTarget(raw);
+  const targetSourceConstraint = urlSourceKey ? sourceConstraintFromTarget(raw) : null;
+  if (expectedIntegrityValues.length && !targetSourceConstraint?.ref) {
+    const integrityMatch = resolveIntegrityTarget(expectedIntegrityValues, index, declaringNode);
+    if (integrityMatch) return withParentIntegrityStatus(integrityMatch, expectedIntegrity);
+  }
+
   const declaringConstraint = sourceConstraintFromNode(declaringNode);
   const relative = relativeCandidatePath(raw, declaringNode);
   const simpleRelative = isSimpleRelativeReference(raw);
   const dotRelative = isDotRelativeReference(raw);
   const urlLike = isUrlLike(raw);
   const recordToken = /^record:/i.test(raw);
-  const finalize = (match) => withParentIntegrityStatus(match, expectedIntegrityValues);
+  const finalize = (match) => withParentIntegrityStatus(match, expectedIntegrity);
 
   const resolveDirectToken = () => {
     const directTokenCandidates = [
@@ -297,7 +304,7 @@ function resolveTarget(target, index, declaringNode = null, options = {}) {
         continue;
       }
       const sourceKey = sourceKeyFromTarget(binding.raw);
-      const constraint = sourceKey ? sourceConstraintFromTarget(sourceKey) : declaringConstraint;
+      const constraint = sourceKey ? sourceConstraintFromTarget(binding.raw) : declaringConstraint;
       const exact = exactPathMatches(binding.filePath, index, constraint, Boolean(constraint.hasConstraint));
       const resolvedExact = resolveCandidateNodes(exact, 'declared-parent-path', declaringNode);
       if (resolvedExact) return finalize(resolvedExact);
@@ -357,12 +364,12 @@ function resolveTarget(target, index, declaringNode = null, options = {}) {
   const direct = resolveDirectToken();
   if (direct) return finalize(direct);
 
-  const pathConstraint = urlSourceKey ? sourceConstraintFromTarget(urlSourceKey) : declaringConstraint;
+  const pathConstraint = targetSourceConstraint || declaringConstraint;
   const exact = exactPathMatches(path, index, pathConstraint, Boolean(pathConstraint.hasConstraint));
   const resolvedExact = resolveCandidateNodes(exact, 'path', declaringNode);
   if (resolvedExact) return finalize(resolvedExact);
 
-  const suffixConstraint = urlSourceKey ? sourceConstraintFromTarget(urlSourceKey) : declaringConstraint;
+  const suffixConstraint = targetSourceConstraint || declaringConstraint;
   const suffixCandidates = [
     ['path-suffix', findPathSuffixMatches(path, index.byPath, suffixConstraint, Boolean(urlSourceKey))],
     ['source-path-suffix', findPathSuffixMatches(path, index.bySourcePath, suffixConstraint, Boolean(urlSourceKey))]
@@ -384,5 +391,5 @@ function resolveIntegrityTarget(expectedIntegrityValues = [], index = {}, declar
   }
   const resolved = resolveCandidateNodes(nodes, 'integrity-self-hash', declaringNode);
   if (!resolved || resolved.ambiguous || resolved.selfReference || resolved.blocked) return resolved;
-  return verifiedIntegrityMatch(resolved);
+  return resolved;
 }

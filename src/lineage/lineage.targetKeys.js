@@ -31,14 +31,29 @@ export function provenanceTargetKeysForValue(value = '') {
   }
   return keys;
 }
-export function githubRepoRelativePathFromUrl(value = '') {
-  try { const u = new URL(String(value || '').trim()), p = u.pathname.split('/').filter(Boolean), h = u.hostname.toLowerCase();
-    if (h === 'raw.githubusercontent.com' && p.length >= 4) return p.slice(3).join('/');
-    if ((h === 'github.com' || h.endsWith('.github.com')) && p.length >= 5 && p[2] === 'blob') return p.slice(4).join('/');
+
+export function githubFileIdentityFromUrl(value = '') {
+  try {
+    const url = new URL(String(value || '').trim());
+    const host = url.hostname.toLowerCase();
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (host === 'raw.githubusercontent.com' && parts.length >= 4) {
+      return Object.freeze({ repo: normalizeRepoKey(`${parts[0]}/${parts[1]}`), ref: normalizeRef(parts[2]), path: normalizePathParts(parts.slice(3)) });
+    }
+    if ((host === 'github.com' || host.endsWith('.github.com')) && parts.length >= 5 && parts[2] === 'blob') {
+      return Object.freeze({ repo: normalizeRepoKey(`${parts[0]}/${parts[1]}`), ref: normalizeRef(parts[3]), path: normalizePathParts(parts.slice(4)) });
+    }
   } catch (_) {}
-  return '';
+  return Object.freeze({ repo: '', ref: '', path: '' });
 }
+
+export function githubRepoRelativePathFromUrl(value = '') {
+  return githubFileIdentityFromUrl(value).path;
+}
+
 export function sourceKeyFromTarget(value = '') {
+  const identity = githubFileIdentityFromUrl(value);
+  if (identity.repo) return identity.repo;
   try {
     const url = new URL(String(value || ''));
     const parts = url.pathname.split('/').filter(Boolean);
@@ -53,7 +68,7 @@ export function normalizeRepoKey(value = '') {
   return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : '';
 }
 export function normalizeRef(value = '') {
-  return String(value || '').trim().toLowerCase();
+  return String(value || '').trim();
 }
 export function canonicalToken(value = '') {
   return String(value || '').trim().replace(/^record:/i, 'record:').replace(/\s+/g, '');
@@ -70,8 +85,12 @@ export function canonicalPath(value = '') {
       raw = url.pathname.replace(/^\/+/, '');
     } catch (e) {}
   }
+  return normalizePathParts(raw.replace(/\\/g, '/').split('/'));
+}
+
+function normalizePathParts(parts = []) {
   const out = [];
-  for (const part of raw.replace(/\\/g, '/').split('/')) {
+  for (const part of parts) {
     if (!part || part === '.') continue;
     if (part === '..') out.pop();
     else out.push(part);
