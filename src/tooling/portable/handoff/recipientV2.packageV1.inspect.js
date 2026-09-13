@@ -16,6 +16,7 @@ import { projectRecipientV2EndpointRoles, projectRecipientV2ParticipantRoles, pr
 import { RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH, RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID } from './recipientV2.packageV1.constants.js';
 import { BOOTSTRAP_PACKAGE_ROLE, HANDOFF_PACKAGE_ROLE, parseHandoffPackageV1, validatePackageFields, WORKSPACE_PACKAGE_ROLE } from './recipientV2.packageV1.contract.js';
 import { deriveVisibleFacts, validateRouteClosure } from './recipientV2.packageV1.inspect.helpers.js';
+import { qualifyDelegationReturnReservation } from './delegationReturnReservation.js';
 import { bootstrapCarrierProjection, workspaceCarrierProjection } from './recipientV2.packageV1.workspaceProjection.js';
 import { inspectRecipientV2WorkspaceSurface } from './recipientV2.inspect.workspaces.js';
 import { byteEqual, currentSchemaId, decodeUtf8, dedupeFindings, deepFreeze, oneFile } from './recipientV2.packageV1.shared.js';
@@ -195,7 +196,19 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
   } else {
     inspectEndpointRolePointers(endpointRolePointers, workspaceParts, caches, findings);
     inspectParticipantRolePointers(participantRolePointers, workspaceParts, caches, findings);
-    const routeSpecs = routePointers.map((pointer) => ({ workspaceId: String(pointer.facts?.workspaceId || ''), path: String(pointer.facts?.workspaceRelativeHandoffPath || ''), purpose: '' }));
+    const routeSpecs = routePointers.map((pointer) => {
+      const workspaceId = String(pointer.facts?.workspaceId || '');
+      const path = String(pointer.facts?.workspaceRelativeHandoffPath || '');
+      let returnCarrierReservation = pointer.facts?.returnCarrierReservation || null;
+      if (!returnCarrierReservation && workspaceId && path) {
+        const entry = resolveHandoffWorkspaceEntry(workspaceByteProvider, workspaceId, path);
+        if (entry.state === 'qualified') {
+          const preflight = qualifyDelegationReturnReservation({ markdown: decodeUtf8(entry.data) });
+          if (preflight.state === 'qualified' && preflight.returnExpected) returnCarrierReservation = Object.freeze({ carrierKind: preflight.carrierKind, siblingIndex: preflight.siblingIndex });
+        }
+      }
+      return { workspaceId, path, purpose: '', returnCarrierReservation };
+    });
     carrierProjection = buildHandoffCarrierProjection({ bundle: semanticBundle, descriptor, workspaceByteProvider, carrierLineage: lineage, routes: routeSpecs });
     if (carrierProjection.status !== 'ready') findings.push(finding('error', 'portable.handoff-package-v1.routes-unqualified', 'Selected Handoff Pointer does not independently resolve to qualified authoritative Handoff bytes.', { causes: carrierProjection.findings || [] }));
     inspectRoutePointers(routePointers, carrierProjection, workspaceParts, endpointRolePointers, participantRolePointers, index, findings);
@@ -244,7 +257,7 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
     schema: 'tiinex.portable.recipient-facing-handoff-package-v1.inspection.v1', detected: Boolean(packageFile), status, format: RECIPIENT_V2_PACKAGE_V1_FORMAT_ID,
     rootArtifact: packageFile ? Object.freeze({ path: packageFile.path, schemaId: RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID, sha256: sha256Hex(packageFileBytes(packageFile)), carrierLineage: lineage }) : null,
     readArtifact, workspaces: Object.freeze(workspaceParts.map((item) => Object.freeze({ workspaceId: item.workspaceId, coverage: String(item.representation?.coverage || item.facts?.coverage || 'complete'), bindingState: item.bindingState || String(item.representation?.bindingState || 'verified'), workspaceArtifactPath: item.artifact.path, workspaceArchivePath: item.archiveFile?.path || '', sourceWorkspaceTargetInnerPath: item.facts.sourceWorkspaceTargetInnerPath, sourceWorkspaceTargetSha256: item.facts.sourceWorkspaceTargetSha256 }))), sealedWorkspaces: Object.freeze(sealedWorkspaceBindings),
-    routes: projectRecipientV2Routes(routePointers, endpointRolePointers, participantRolePointers), endpointRoles: projectRecipientV2EndpointRoles(endpointRolePointers), participantRoles: projectRecipientV2ParticipantRoles(participantRolePointers),
+    routes: projectRecipientV2Routes(routePointers, endpointRolePointers, participantRolePointers, carrierProjection?.routes || []), endpointRoles: projectRecipientV2EndpointRoles(endpointRolePointers), participantRoles: projectRecipientV2ParticipantRoles(participantRolePointers),
     caches: Object.freeze(caches.map((cache) => Object.freeze({ workspaceId: String(cache.facts?.workspaceId || ''), artifactPath: cache.artifact.path, archivePath: cache.file.path, materials: cache.facts.materials || [] }))),
     bootstrapInspection, transportManifest: null, artifactFacts: Object.freeze(generatedArtifacts.map((item) => Object.freeze({ path: item.path, facts: item.facts }))), descriptor, workspaceByteProvider, carrierProjection, coldConsumerProjection,
     packageContract, findings: Object.freeze(finalFindings), findingSummary: Object.freeze({ errors: finalFindings.filter((item) => item.severity === 'error').length, findings: finalFindings.length }),

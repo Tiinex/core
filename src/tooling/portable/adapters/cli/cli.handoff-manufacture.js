@@ -26,6 +26,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   const handoffPath = flags.handoff || parsed.positionals?.[1] || continuationState.returnHandoffPath || '';
   if (!flags['workspace-id'] && continuationState.workspaceId) flags['workspace-id'] = continuationState.workspaceId;
   if (!flags['workspace-target'] && continuationState.workspaceTarget) flags['workspace-target'] = continuationState.workspaceTarget;
+  if (!flags['package-sibling-index'] && continuationState.returnPackageSiblingIndex) flags['package-sibling-index'] = continuationState.returnPackageSiblingIndex;
   if (!flags['package-parent'] && continuationState.packageParentPath) flags['package-parent'] = continuationState.packageParentPath;
   if (!flags.route && handoffPath) flags.route = handoffPath;
   if (!flags.output && !flags['output-dir'] && parsed.surfaceCommand === 'handoff' && continuationState.returnOutputDir) flags['output-dir'] = continuationState.returnOutputDir;
@@ -135,7 +136,9 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     packageParentWorkspaceIds,
     packageParentWorkspaceAliases,
     reconciliationProof,
-    requireReconciliationProof
+    requireReconciliationProof,
+    returnPackageSiblingIndex: flags['return-package-sibling-index'],
+    returnPackageMajor: Boolean(flags['return-package-major'])
   }, runtime);
   return {
     input,

@@ -1,13 +1,17 @@
 import { parentTrace } from './recipientV2.lineage.js';
 
-export function projectRecipientV2Routes(routePointers = [], endpointPointers = [], participantPointers = []) {
-  return Object.freeze(routePointers.map((item) => Object.freeze({
+export function projectRecipientV2Routes(routePointers = [], endpointPointers = [], participantPointers = [], qualifiedRoutes = []) {
+  return Object.freeze(routePointers.map((item) => {
+    const qualified = (qualifiedRoutes || []).find((route) => String(route.workspaceId || '') === String(item.facts?.workspaceId || '') && String(route.workspaceRelativePath || '') === String(item.facts?.workspaceRelativeHandoffPath || '')) || null;
+    return Object.freeze({
     pointerPath: item.path,
     workspaceId: String(item.facts?.workspaceId || ''),
     workspaceRelativeHandoffPath: String(item.facts?.workspaceRelativeHandoffPath || ''),
+    returnCarrierReservation: item.facts?.returnCarrierReservation || qualified?.returnCarrierReservation || null,
     endpointRolePointers: Object.freeze(rolePointerAncestors(item, endpointPointers, participantPointers).filter((path) => endpointPointers.some((pointer) => pointer.path === path))),
     participantRolePointers: Object.freeze(rolePointerAncestors(item, endpointPointers, participantPointers).filter((path) => participantPointers.some((pointer) => pointer.path === path)))
-  })));
+  });
+  }));
 }
 
 export function projectRecipientV2EndpointRoles(pointers = []) {

@@ -136,7 +136,8 @@
     "./node/release-policy": "./src/release/policy.mjs",
     "./tooling/portable/source/sourceEligibility.js": "./src/tooling/portable/source/sourceEligibility.js",
     "./tooling/portable/comparison/sourceFrontierComparison.js": "./src/tooling/portable/comparison/sourceFrontierComparison.js",
-    "./tooling/portable/adapters/node/sourceFrontierComparison.js": "./src/tooling/portable/adapters/node/sourceFrontierComparison.js"
+    "./tooling/portable/adapters/node/sourceFrontierComparison.js": "./src/tooling/portable/adapters/node/sourceFrontierComparison.js",
+    "./tooling/portable/handoff/recoveryAcceptanceAudit.js": "./src/tooling/portable/handoff/recoveryAcceptanceAudit.js"
   },
   "files": [
     "src",

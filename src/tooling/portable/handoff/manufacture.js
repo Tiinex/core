@@ -21,9 +21,12 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
   const reconciliationBlocked = String(reconciliationProofQualification?.state || '') === 'blocked';
   const schemaReferencePreflight = input.schemaReferencePreflight || input.manufacturingEvidence?.schemaReferencePreflight || null;
   const schemaReferenceBlocked = String(schemaReferencePreflight?.state || '') === 'blocked';
+  const returnCarrierReservationPreflight = input.returnCarrierReservationPreflight || input.manufacturingEvidence?.returnCarrierReservationPreflight || null;
+  const returnCarrierReservationBlocked = String(returnCarrierReservationPreflight?.state || '') === 'blocked';
   const findings = Object.freeze([
     ...majorFindings,
     ...(schemaReferencePreflight?.findings || []),
+    ...(returnCarrierReservationPreflight?.findings || []),
     ...(reconciliationProofQualification?.findings || []),
     ...(baseline.findings || []),
     ...(upgraded.findings || []),
@@ -36,7 +39,7 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
     ...(upgraded.roundtrip?.findings || []),
     ...(toolingBootstrapInspection?.findings || [])
   ]);
-  const status = baseline.status !== 'blocked' && upgraded.status !== 'blocked' && toolingBootstrapInspection?.status === 'valid' && majorReadiness.state !== 'blocked' && !schemaReferenceBlocked && !reconciliationBlocked ? upgraded.status : 'blocked';
+  const status = baseline.status !== 'blocked' && upgraded.status !== 'blocked' && toolingBootstrapInspection?.status === 'valid' && majorReadiness.state !== 'blocked' && !schemaReferenceBlocked && !returnCarrierReservationBlocked && !reconciliationBlocked ? upgraded.status : 'blocked';
   return Object.freeze({
     schema: 'tiinex.portable.handoff-manufacturing.v2',
     status,
@@ -55,6 +58,7 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
       roundtrip: upgraded.roundtrip ? String(upgraded.roundtrip.status || 'unknown') : 'not-requested',
       toolingBootstrap: String(toolingBootstrapInspection?.status || 'unavailable'),
       schemaReferencePreflight: String(schemaReferencePreflight?.state || 'not-run'),
+      returnCarrierReservationPreflight: String(returnCarrierReservationPreflight?.state || 'not-run'),
       reconciliationProof: String(reconciliationProofQualification?.state || 'not-required')
     }),
     plan: baseline.plan,
@@ -74,6 +78,7 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
     toolingBootstrap: input.toolingBootstrap || null,
     manufacturingEvidence: input.manufacturingEvidence || null,
     schemaReferencePreflight,
+    returnCarrierReservationPreflight,
     reconciliationProofQualification,
     toolingBootstrapInspection,
     carrierLineage: upgraded.carrierProjection?.lineage || baseline.carrierProjection?.lineage || input.carrierLineage || null,
@@ -86,6 +91,7 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
       remoteMutation: false,
       physicalRoundtripVerification: upgraded.roundtrip ? String(upgraded.roundtrip.status || 'unknown') : 'not-requested',
       schemaReferencePreflight: String(schemaReferencePreflight?.state || 'not-run'),
+      returnCarrierReservationPreflight: String(returnCarrierReservationPreflight?.state || 'not-run'),
       reconciliationProof: String(reconciliationProofQualification?.state || 'not-required'),
       hostBehaviorAuthority: 'none'
     }),

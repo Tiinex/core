@@ -7,6 +7,7 @@ import { projectPortableHandoffCarrierOutputFromPackage } from './handoff/recipi
 import { orientColdConsumerFromHandoffPackage } from './handoff/coldConsumerEntrypoint.js';
 import { auditHandoffPackageContextCarriage } from './handoff/contextAudit.js';
 import { projectPortableWorkspaceLandingPlan } from './handoff/workspaceLandingPlan.js';
+import { auditPortableRecoveryAcceptance } from './handoff/recoveryAcceptanceAudit.js';
 import { projectPortableEditorAssistance } from './editor/editor.assistance.js';
 import { projectQualifiedHandoffLeaves } from './handoff/handoffLeafProjection.js';
 import { projectPortableAuthoringParent } from './editor/authoring.parent.js';
@@ -62,10 +63,17 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
   }),
   'project-workspace-landing': operation({
     name: 'project-workspace-landing',
-    description: 'Project qualified carried Workspaces onto explicit local Git repository facts for one fail-closed human landing confirmation without extracting, writing, committing, pushing, or creating semantic authority.',
+    description: 'Project qualified carried Workspaces onto explicit local Git repository facts plus exact target source-byte snapshots, failing closed on any target divergence before extraction or mutation.',
     safety: 'planning-only-read-only',
     inputSchema: 'tiinex.portable.workspace-landing-plan.request.v1',
     handler: (input = {}) => wrapPortableResult('project-workspace-landing', projectPortableWorkspaceLandingPlan(input))
+  }),
+  'audit-recovery-acceptance': operation({
+    name: 'audit-recovery-acceptance',
+    description: 'Audit one qualified candidate Recovery carrier against one explicit accepted-basis carrier for complete Workspace re-materialization and unexplained source removals without granting acceptance.',
+    safety: 'read-only-mechanical-audit',
+    inputSchema: 'tiinex.portable.recovery-acceptance-audit.request.v1',
+    handler: (input = {}) => wrapPortableResult('audit-recovery-acceptance', auditPortableRecoveryAcceptance(input))
   }),
   'project-editor-assistance': operation({
     name: 'project-editor-assistance',

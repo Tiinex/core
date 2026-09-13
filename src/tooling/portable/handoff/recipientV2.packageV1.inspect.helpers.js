@@ -71,7 +71,13 @@ export function deriveVisibleFacts({ file = null, markdown = '', schemaId = '', 
       const closure = direct || generic;
       const handoffEntry = (closure?.parsed?.entries || []).find((entry) => entry.path === visible.handoffWorkspacePath) || null;
       const current = sectionText(markdown, 'Current Read');
-      return { ...base, workspaceId, workspaceArtifactPath: closure?.workspaceFile?.path || '', workspaceArtifactSha256: closure?.workspaceFile ? sha256Hex(packageFileBytes(closure.workspaceFile)) : '', archivePath: closure?.archiveFile?.path || '', archiveSha256: closure?.archiveFile ? sha256Hex(packageFileBytes(closure.archiveFile)) : '', sourceWorkspaceTargetInnerPath: closure?.workspaceArtifactInnerPath || '', sourceWorkspaceTargetSha256: closure?.sourceWorkspaceTargetSha256 || '', workspaceRelativeHandoffPath: visible.handoffWorkspacePath, handoffBytes: Number(handoffEntry?.bytes || 0), handoffSha256: String(handoffEntry?.sha256 || ''), routeId: visible.routeId || unquote(field(current, 'Route Id')), cacheArtifactPath: markdownTarget(field(current, 'Workspace Dependency Cache')), requiredContextBindings: Object.freeze([]) };
+      const returnCarrierReservation = visible.returnPackageCarrierKind
+        ? Object.freeze({
+            carrierKind: String(visible.returnPackageCarrierKind || ''),
+            ...(String(visible.returnPackageCarrierKind || '') === 'non-major' ? { siblingIndex: Number(visible.returnPackageSiblingIndex || 0) } : {})
+          })
+        : null;
+      return { ...base, workspaceId, workspaceArtifactPath: closure?.workspaceFile?.path || '', workspaceArtifactSha256: closure?.workspaceFile ? sha256Hex(packageFileBytes(closure.workspaceFile)) : '', archivePath: closure?.archiveFile?.path || '', archiveSha256: closure?.archiveFile ? sha256Hex(packageFileBytes(closure.archiveFile)) : '', sourceWorkspaceTargetInnerPath: closure?.workspaceArtifactInnerPath || '', sourceWorkspaceTargetSha256: closure?.sourceWorkspaceTargetSha256 || '', workspaceRelativeHandoffPath: visible.handoffWorkspacePath, handoffBytes: Number(handoffEntry?.bytes || 0), handoffSha256: String(handoffEntry?.sha256 || ''), routeId: visible.routeId || unquote(field(current, 'Route Id')), cacheArtifactPath: markdownTarget(field(current, 'Workspace Dependency Cache')), returnCarrierReservation, requiredContextBindings: Object.freeze([]) };
     }
     if (role === 'endpoint-role' || role === 'participant-role') {
       const targetPayload = visible.targetPayload || '';

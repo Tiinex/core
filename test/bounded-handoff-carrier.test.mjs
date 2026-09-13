@@ -14,6 +14,8 @@ import { orientColdConsumerFromHandoffPackage } from '../src/tooling/portable/ha
 import { projectPortableHandoffCarrierOutputFromPackage } from '../src/tooling/portable/handoff/recipientV2.humanOutput.js';
 import { groundPortableColdConsumer } from '../src/tooling/portable/handoff/coldStartQualification.grounding.js';
 import { inspectStoredWorkspaceArchive } from '../src/tooling/portable/handoff/workspaceByteProvider.js';
+import { projectPortableWorkspaceLandingPlan } from '../src/tooling/portable/handoff/workspaceLandingPlan.js';
+import { prepareNodeSourceFrontier } from '../src/tooling/portable/adapters/node/sourceFrontierComparison.js';
 
 const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
 const WORKSPACE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.workspace.v1.schema.md';
@@ -66,6 +68,7 @@ test('bounded Handoff carrier isolates unrelated answer history while qualifying
     to: 'Loom',
     fromReference: `business::${ANCHOR_ROLE_PATH}`,
     toReference: `business::${LOOM_ROLE_PATH}`,
+    signalKind: 'acknowledgement',
     requiredContext: `- Business Governance\n  - Material: current governing Business artifact\n  - Purpose: bounded carrier isolation regression\n  - Availability: available\n  - Material Reference: [Business Governance](business::${GOVERNANCE_PATH})`
   });
 
@@ -135,6 +138,48 @@ test('bounded Handoff carrier isolates unrelated answer history while qualifying
   assert.equal(result.inspection.packageContract.materialRepresentations.length, 2);
   assert.match(result.inspection.packageContract.materialRepresentations[0].workspaceRepresentationPath, /workspace-representation\.trace\.md$/);
   assert.equal(result.inspection.workspaces.find((workspace) => workspace.workspaceId === 'business')?.coverage, 'bounded');
+
+  const exactCoreFrontier = await prepareNodeSourceFrontier({ kind: 'local-workspace', path: coreRoot, workspaceId: 'core' });
+  assert.equal(exactCoreFrontier.state, 'qualified');
+  const exactLanding = projectPortableWorkspaceLandingPlan({
+    bundle: result.bundle,
+    workspaceIds: ['core'],
+    repositories: [{ id: 'core-target', root: coreRoot, repository: 'Tiinex/core', clean: false, sourceSnapshot: exactCoreFrontier.workspaces[0].snapshot }]
+  });
+  assert.equal(exactLanding.status, 'ready');
+  assert.equal(exactLanding.workspaces[0].state, 'ready');
+  assert.equal(exactLanding.workspaces[0].preflight.state, 'exact-safe');
+  assert.equal(exactLanding.workspaces[0].preflight.outcome, 'land');
+  assert.equal(exactLanding.findings.some((item) => item.code === 'portable.workspace-landing.local-repository-dirty'), false);
+
+  const cleanOnlyLanding = projectPortableWorkspaceLandingPlan({
+    bundle: result.bundle,
+    workspaceIds: ['core'],
+    repositories: [{ id: 'core-target', root: coreRoot, repository: 'Tiinex/core', clean: true }]
+  });
+  assert.equal(cleanOnlyLanding.status, 'blocked');
+  assert.equal(cleanOnlyLanding.workspaces[0].preflight.state, 'unresolved');
+  assert.ok(cleanOnlyLanding.findings.some((item) => item.code === 'portable.workspace-landing.target-source-snapshot-required'));
+
+  await writeWorkspaceFile(coreRoot, 'src/current-only-wip.txt', 'current-only WIP\n');
+  await writeWorkspaceFile(coreRoot, ROUTE_PATH, `${route}\ncurrent target edit\n`);
+  const divergentCoreFrontier = await prepareNodeSourceFrontier({ kind: 'local-workspace', path: coreRoot, workspaceId: 'core' });
+  assert.equal(divergentCoreFrontier.state, 'qualified');
+  const divergentLanding = projectPortableWorkspaceLandingPlan({
+    bundle: result.bundle,
+    workspaceIds: ['core'],
+    repositories: [{ id: 'core-target', root: coreRoot, repository: 'Tiinex/core', clean: true, sourceSnapshot: divergentCoreFrontier.workspaces[0].snapshot }]
+  });
+  assert.equal(divergentLanding.status, 'blocked');
+  assert.equal(divergentLanding.workspaces[0].state, 'blocked');
+  assert.equal(divergentLanding.workspaces[0].preflight.state, 'reconciliation-required');
+  assert.equal(divergentLanding.workspaces[0].preflight.outcome, 'stop');
+  assert.equal(divergentLanding.workspaces[0].preflight.counts.currentOnly, 2);
+  assert.deepEqual(divergentLanding.workspaces[0].preflight.paths.map((item) => [item.path, item.classification, item.currentChange]), [
+    [ROUTE_PATH, 'current-only', 'byte-changed'],
+    ['src/current-only-wip.txt', 'current-only', 'added']
+  ]);
+  assert.ok(divergentLanding.findings.some((item) => item.code === 'portable.workspace-landing.reconciliation-required'));
 
   const humanProjection = projectPortableHandoffCarrierOutputFromPackage({ bundle: result.bundle, route: result.carrierProjection.routes[0].id });
   assert.equal(humanProjection.status, 'ready');

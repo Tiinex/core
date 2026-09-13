@@ -53,6 +53,7 @@ export function qualifyRoute(bundle, descriptor, byteProvider, workspace, spec =
     materialRequirements,
     participantRoles,
     participantRoleSpecs,
+    returnCarrierReservation: spec.returnCarrierReservation ? deepFreeze({ ...(spec.returnCarrierReservation || {}) }) : null,
     requiredClosure,
     reasons: Object.freeze(reasons),
     authority: Object.freeze({ artifactPartiesAuthoritative: true, dimensionSemanticAuthority: false, filenameSemanticAuthority: false })

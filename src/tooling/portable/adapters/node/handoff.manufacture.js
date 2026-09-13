@@ -9,6 +9,7 @@ import { enumerateNodeWorkspace, PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID }
 import { preparePackageParentWorkspaceReuse } from './handoff.manufacture.packageParent.js';
 import { qualifyPortableSourceReconciliationProofForManufacture } from '../../comparison/sourceFrontierReconciliationProof.js';
 import { qualifyPortableManufactureSchemaReferenceCandidate } from '../../handoff/schemaReferencePreflight.js';
+import { qualifyDelegationReturnReservation } from '../../handoff/delegationReturnReservation.js';
 import {
   assertInside,
   expandPointerDependencyClosure,
@@ -102,6 +103,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   });
 
   const schemaReferencePreflight = qualifyPortableManufactureSchemaReferenceCandidate(handoff);
+  const returnCarrierReservationPreflight = qualifyDelegationReturnReservation({ markdown: handoffMarkdown, returnPackageSiblingIndex: input.returnPackageSiblingIndex, returnPackageMajor: input.returnPackageMajor === true });
 
   if (enumeration.status !== 'qualified-complete') throw new Error(`portable.handoff-manufacture.workspace-enumeration.${enumeration.status}`);
   const workspaceTitle = requestedWorkspaceTitle || inferWorkspaceTitle(enumeration) || workspaceId;
@@ -128,7 +130,11 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     if (!id || workspaceRuntimeById.has(id)) continue;
     workspaceRuntimeById.set(id, Object.freeze({ id, root: '', enumeration: provided.enumeration, provider: 'qualified-package-parent-workspace-material-provider' }));
   }
-  const transportRoutes = Object.freeze([...(input.transportRoutes || input.handoffRoutes || [])].map((route) => normalizeTransportRoute(route, workspaceId)).filter(Boolean));
+  const suppliedTransportRoutes = [...(input.transportRoutes || input.handoffRoutes || [])].map((route) => normalizeTransportRoute(route, workspaceId)).filter(Boolean);
+  const reservationProjection = returnCarrierReservationPreflight.state === 'qualified' && returnCarrierReservationPreflight.returnExpected
+    ? Object.freeze({ carrierKind: returnCarrierReservationPreflight.carrierKind, siblingIndex: returnCarrierReservationPreflight.siblingIndex })
+    : null;
+  const transportRoutes = Object.freeze((suppliedTransportRoutes.length ? suppliedTransportRoutes : [Object.freeze({ workspaceId, path: handoffPath })]).map((route) => Object.freeze({ ...route, ...(route.path === handoffPath && String(route.workspaceId || '') === workspaceId && reservationProjection ? { returnCarrierReservation: reservationProjection } : {}) })));
   const workspaceTargets = mergeWorkspaceTargetBindings(normalizeWorkspaceTargetBindings({
     primaryWorkspaceId: workspaceId,
     primaryTargetPath: input.workspaceTargetPath || input.workspaceArtifactPath || '',
@@ -195,6 +201,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     toolingBootstrap: toolingBootstrap.summary,
     reconciliationProofQualification,
     schemaReferencePreflight,
+    returnCarrierReservationPreflight,
     manufacturingEvidence: Object.freeze({
       enumeration: enumeration.evidence,
       workspaceEnumerations: Object.freeze(workspaceEnumerations),
@@ -202,6 +209,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
       runtimeSourceAlignment,
       reconciliationProof: reconciliationProofQualification,
       schemaReferencePreflight,
+      returnCarrierReservationPreflight,
       packageParentWorkspaceReuse: Object.freeze({
         state: String(packageParentReuse.state || ''),
         providerState: String(packageParentReuse.providerState || ''),

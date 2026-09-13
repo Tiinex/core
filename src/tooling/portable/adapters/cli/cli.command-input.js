@@ -141,6 +141,17 @@ export async function commandInput(parsed, runtime = {}) {
   }
 
   if (parsed.command === 'compare-source-frontiers') return prepareSourceFrontierComparisonCliInput(parsed, flags);
+  if (parsed.command === 'audit-recovery-acceptance') {
+    const basisPath = String(flags.basis || parsed.positionals[0] || '').trim();
+    const candidatePath = String(flags.candidate || parsed.positionals[1] || '').trim();
+    if (!basisPath || !candidatePath) throw new Error('portable.cli.recovery-acceptance.basis-candidate-required');
+    const [basis, candidate, expectedValue] = await Promise.all([
+      loadNodePortableInput([basisPath], { maxFiles: flags['max-carrier-files'] || 10000, maxTextBytes: flags['max-text-bytes'] || 16 * 1024 * 1024 }),
+      loadNodePortableInput([candidatePath], { maxFiles: flags['max-carrier-files'] || 10000, maxTextBytes: flags['max-text-bytes'] || 16 * 1024 * 1024 }),
+      readOptionalJson(flags['expected-removals'])
+    ]);
+    return { input: { basis, candidate, workspaceIds: splitFlag(flags.workspaces || flags['workspace-ids']), expectedRemovals: expectedValue.expectedRemovals || expectedValue || {} }, options: {} };
+  }
   if (parsed.command === 'prove-source-reconciliation') {
     const dispositions = await readOptionalJson(flags.dispositions || flags['disposition-file']);
     return prepareSourceFrontierReconciliationCliInput(flags, dispositions);

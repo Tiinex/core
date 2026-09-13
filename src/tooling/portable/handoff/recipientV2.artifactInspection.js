@@ -24,6 +24,17 @@ export function correlatePointerFacts(markdown, facts, findings, path) {
   if (facts.role !== 'handoff-route' || !facts.archivePath) return;
   const targets = [...sectionText(markdown, 'Destinations').matchAll(/\[[^\]]*\]\(([^)]+)\)/g)].map((match) => match[1]);
   if (targets.length !== 1 || targets[0] !== String(facts.archivePath)) findings.push(finding('error', 'portable.handoff-v2-surface.pointer.visible-destination-mismatch', 'Route Pointer visible Destination diverges from its sealed machine facts.', { path }));
+  if (facts.returnCarrierReservation) {
+    const current = sectionText(markdown, 'Current Read');
+    const visibleKind = unquoteCode(fieldValue(current, 'Return Package Carrier Kind'));
+    const expectedKind = String(facts.returnCarrierReservation.carrierKind || '');
+    if (visibleKind !== expectedKind) findings.push(finding('error', 'portable.handoff-v2-surface.pointer.visible-return-carrier-kind-mismatch', 'Route Pointer visible return-carrier kind diverges from its sealed machine facts.', { path }));
+    if (expectedKind === 'non-major') {
+      const visibleSiblingIndex = Number(unquoteCode(fieldValue(current, 'Return Package Sibling Index')) || 0);
+      const expectedSiblingIndex = Number(facts.returnCarrierReservation.siblingIndex || 0);
+      if (visibleSiblingIndex !== expectedSiblingIndex) findings.push(finding('error', 'portable.handoff-v2-surface.pointer.visible-return-sibling-index-mismatch', 'Route Pointer visible return package sibling index diverges from its sealed machine facts.', { path }));
+    }
+  }
 }
 export function markdownTarget(value = '') { return String(value || '').match(/\[[^\]]*\]\(([^)]+)\)/)?.[1] || String(value || '').trim(); }
 export function inspectExternalPayloadShape(markdown, findings, path) {

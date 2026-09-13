@@ -50,6 +50,8 @@ export async function materializeGroundWorkspaceCliOutput(result = {}, input = {
     workspaceTarget: String(workspaceInspection.sourceWorkspaceTargetInnerPath || ''),
     roleLabel: String(result?.authority?.role?.label || ''),
     returnOutputDir: path.dirname(path.resolve(String(input.packageSourcePath || outputDir))),
+    returnPackageCarrierKind: String((inspection.routes || []).find((item) => String(item.pointerPath || '') === String(result?.authority?.route?.pointerPath || input.route || ''))?.returnCarrierReservation?.carrierKind || ''),
+    returnPackageSiblingIndex: String((inspection.routes || []).find((item) => String(item.pointerPath || '') === String(result?.authority?.route?.pointerPath || input.route || ''))?.returnCarrierReservation?.siblingIndex || ''),
     boundary: 'Runtime-only continuation state carried forward from one qualified ground --continue receipt. It is excluded from canonical Workspace manufacture and is not semantic authority.'
   });
   const continuationStatePath = path.join(outputDir, '.tiinex', 'continuation.json');

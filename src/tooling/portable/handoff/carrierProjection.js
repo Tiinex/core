@@ -58,7 +58,7 @@ export function inspectHandoffCarrierProjection(bundle = {}, options = {}) {
   if (projection && projection.schema !== HANDOFF_CARRIER_PROJECTION_SCHEMA_ID) findings.push(finding('error', 'portable.handoff-carrier.schema.invalid', 'Handoff carrier projection schema/version is unsupported.'));
   if (projection && projection.boundary !== BOUNDARY) findings.push(finding('error', 'portable.handoff-carrier.boundary.invalid', 'Handoff carrier projection lost its disposable non-authoritative boundary.'));
   if (projection) {
-    const expected = buildHandoffCarrierProjection({ bundle, workspaceByteProvider: options.workspaceByteProvider || null, carrierLineage: projection.lineage || null, routes: (projection.routes || []).map((route) => ({ workspaceId: route.workspaceId, path: route.workspaceRelativePath, purpose: route.purpose, participantRoles: route.participantRoleSpecs || [] })) });
+    const expected = buildHandoffCarrierProjection({ bundle, workspaceByteProvider: options.workspaceByteProvider || null, carrierLineage: projection.lineage || null, routes: (projection.routes || []).map((route) => ({ workspaceId: route.workspaceId, path: route.workspaceRelativePath, purpose: route.purpose, participantRoles: route.participantRoleSpecs || [], returnCarrierReservation: route.returnCarrierReservation || null })) });
     for (const field of ['status', 'mode', 'lineage', 'workspaces', 'workspace', 'selection', 'routes', 'authority']) {
       if (stableJson(expected[field]) !== stableJson(projection[field])) findings.push(finding('error', `portable.handoff-carrier.${field}.mismatch`, `Handoff carrier ${field} diverges from current package/workspace truth.`));
     }
@@ -162,7 +162,7 @@ function normalizeRouteSpecs(value, descriptor, defaultWorkspace = null) {
     const path = normalizeWorkspacePath(spec.path || spec.workspaceRelativePath || '');
     const workspaceId = String(spec.workspaceId || spec.workspace || defaultWorkspaceId || '');
     const key = `${workspaceId}\u0000${path}`;
-    if (path && !map.has(key)) map.set(key, Object.freeze({ workspaceId, path, purpose: String(spec.purpose || ''), participantRoles: Object.freeze([...(spec.participantRoles || spec.roles || [])].map((entry) => typeof entry === 'string' ? entry : Object.freeze({ ...(entry || {}) }))) }));
+    if (path && !map.has(key)) map.set(key, Object.freeze({ workspaceId, path, purpose: String(spec.purpose || ''), participantRoles: Object.freeze([...(spec.participantRoles || spec.roles || [])].map((entry) => typeof entry === 'string' ? entry : Object.freeze({ ...(entry || {}) }))), returnCarrierReservation: spec.returnCarrierReservation ? Object.freeze({ ...(spec.returnCarrierReservation || {}) }) : null }));
   }
   return [...map.values()].sort((a, b) => a.workspaceId.localeCompare(b.workspaceId) || a.path.localeCompare(b.path));
 }

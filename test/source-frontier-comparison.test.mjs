@@ -19,6 +19,7 @@ import { prepareNodeHandoffManufacturingInput } from '../src/tooling/portable/ad
 import { packageFileByteView, sha256Hex } from '../src/export/package.bytes.js';
 import { exportFileMapZipUint8Array } from '../src/export/package.zip.js';
 import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
+import { auditPortableRecoveryAcceptance } from '../src/tooling/portable/handoff/recoveryAcceptanceAudit.js';
 import {
   buildRecipientFacingV2PackageV1,
   buildRecipientFacingV2PackageV1Secure,
@@ -141,6 +142,52 @@ test('host-neutral source eligibility excludes Python cache bytes without treati
   assert.deepEqual(snapshot.evidence.sourceEligibility.excludedByReason, { 'compiled-python-cache': 1, 'excluded-directory': 1 });
 });
 
+
+
+test('Recovery acceptance audit re-materializes qualified candidate bytes and blocks unexplained removals from the accepted basis', () => {
+  const basisSource = packageFixtureSource({ coreFiles: {
+    'src/keep.txt': encoder.encode('accepted basis keep\n'),
+    'src/remove.txt': encoder.encode('accepted basis remove\n')
+  } });
+  const candidateSource = packageFixtureSource({ coreFiles: {
+    'src/keep.txt': encoder.encode('candidate changed keep\n'),
+    'src/add.txt': encoder.encode('candidate addition\n')
+  } });
+  const basisBuilt = buildRecipientFacingV2PackageV1(basisSource);
+  const candidateBuilt = buildRecipientFacingV2PackageV1(candidateSource);
+  assert.equal(basisBuilt.status, 'ready', JSON.stringify(basisBuilt.findings || []));
+  assert.equal(candidateBuilt.status, 'ready', JSON.stringify(candidateBuilt.findings || []));
+
+  const blocked = auditPortableRecoveryAcceptance({
+    basis: { files: basisBuilt.files },
+    candidate: { files: candidateBuilt.files },
+    workspaceIds: ['core']
+  });
+  assert.equal(blocked.status, 'blocked');
+  assert.equal(blocked.state, 'acceptance-audit-blocked');
+  assert.equal(blocked.workspaces[0].materialization.state, 'qualified');
+  assert.equal(blocked.workspaces[0].coverage, 'complete');
+  assert.equal(blocked.workspaces[0].counts.removals, 1);
+  assert.equal(blocked.workspaces[0].counts.unexplainedRemovals, 1);
+  assert.deepEqual(blocked.workspaces[0].unexplainedRemovals, ['src/remove.txt']);
+  assert.equal(blocked.suitability.state, 'blocked');
+  assert.equal(blocked.suitability.gitCommitStateProven, false);
+  assert.equal(blocked.suitability.semanticAcceptanceGranted, false);
+
+  const explicitlyDisposed = auditPortableRecoveryAcceptance({
+    basis: { files: basisBuilt.files },
+    candidate: { files: candidateBuilt.files },
+    workspaceIds: ['core'],
+    expectedRemovals: { core: ['src/remove.txt'] }
+  });
+  assert.equal(explicitlyDisposed.status, 'ready');
+  assert.equal(explicitlyDisposed.state, 'acceptance-audit-ready');
+  assert.equal(explicitlyDisposed.workspaces[0].counts.unexplainedRemovals, 0);
+  assert.equal(explicitlyDisposed.workspaces[0].counts.additions, 1);
+  assert.equal(explicitlyDisposed.workspaces[0].counts.byteChanged, 1);
+  assert.equal(explicitlyDisposed.suitability.state, 'restart-source-ready');
+  assert.equal(explicitlyDisposed.suitability.semanticAcceptanceGranted, false);
+});
 
 test('pure two-way comparison has deterministic exact fast path, add/remove/change deltas, and Workspace asymmetry', () => {
   const exactLeft = frontier('left', [{ workspaceId: 'core', entries: [entry('b.txt', 'b'), entry('a.txt', 'a')] }]);

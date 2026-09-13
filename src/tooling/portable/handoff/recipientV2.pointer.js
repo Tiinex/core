@@ -6,6 +6,8 @@ export function parseRecipientV2Pointer(markdown = '') {
     workspaceId: unquoteCode(fieldValue(current, 'Workspace Id')),
     workspacePayload: markdownTarget(fieldValue(current, 'Workspace Payload')),
     handoffWorkspacePath: unquoteCode(fieldValue(current, 'Handoff Workspace Path')),
+    returnPackageCarrierKind: unquoteCode(fieldValue(current, 'Return Package Carrier Kind')),
+    returnPackageSiblingIndex: unquoteCode(fieldValue(current, 'Return Package Sibling Index')),
     routeId: unquoteCode(fieldValue(current, 'Route Id')),
     routeSelection: fieldValue(current, 'Route Selection'),
     selectedRouteId: unquoteCode(fieldValue(current, 'Selected Route Id')),
