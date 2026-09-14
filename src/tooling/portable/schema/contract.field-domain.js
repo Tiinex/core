@@ -52,12 +52,13 @@ export function validatePortableFieldDomains(input = {}) {
       }));
 
       if (qualification === 'invalid') {
+        const contractGuidance = fieldDomainContractGuidance(results);
         findings.push(fieldDomainFinding(
           'error',
           'portable.contract.field-domain.value.invalid',
-          `Value is outside the allowed field domain for ${bucket.group}.${bucket.field}: ${occurrence.value}.`,
+          invalidFieldDomainMessage(bucket.group, bucket.field, occurrence.value, contractGuidance),
           'structurally-invalid',
-          { group: bucket.group, field: bucket.field, value: occurrence.value, owner: occurrence.owner, contributions: results }
+          { group: bucket.group, field: bucket.field, value: occurrence.value, owner: occurrence.owner, contributions: results, contractGuidance }
         ));
       } else if (qualification === 'extension-candidate') {
         findings.push(fieldDomainFinding(
@@ -240,6 +241,46 @@ function coreMatch(value, contribution) {
 
 function fieldDomainFinding(severity, code, message, state, extra = {}) {
   return portableFinding(severity, code, message, { ...extra, state });
+}
+
+function fieldDomainContractGuidance(results = []) {
+  const contributions = (results || []).map((item) => Object.freeze({
+    sourceSchemaId: String(item.sourceSchemaId || ''),
+    sourceGroup: String(item.sourceGroup || ''),
+    field: String(item.field || ''),
+    allowedValues: Object.freeze([...(item.allowedValues || [])].map(String)),
+    allowedShapes: Object.freeze([...(item.allowedShapes || [])].map(String)),
+    domainPolicy: String(item.domainPolicy || ''),
+    declarationLine: Number(item.declarationLine || 0),
+    contractPath: [
+      String(item.sourceSchemaId || ''),
+      String(item.sourceGroup || ''),
+      'Field Value Constraints',
+      String(item.field || '')
+    ].filter(Boolean).join(' :: ')
+  }));
+  return Object.freeze({
+    contributions: Object.freeze(contributions),
+    nextAction: contributions.length === 1
+      ? `Use one value/shape allowed by ${contributions[0].contractPath || 'the cited field-domain contract'}; do not invent an extension unless the declared domain policy authorizes one.`
+      : 'Satisfy every contributing field-domain authority. Review each exact contractPath below; do not treat values from separate contributions as a union unless the contracts themselves establish that.'
+  });
+}
+
+function invalidFieldDomainMessage(group, field, value, guidance = {}) {
+  const contributions = guidance.contributions || [];
+  if (contributions.length === 1) {
+    const item = contributions[0];
+    const allowed = item.allowedValues || [];
+    const shapes = item.allowedShapes || [];
+    const domain = [
+      allowed.length ? `Allowed values: ${allowed.join(', ')}` : '',
+      shapes.length ? `Allowed shapes: ${shapes.join(', ')}` : ''
+    ].filter(Boolean).join('; ');
+    const path = item.contractPath ? ` Contract: ${item.contractPath}${item.declarationLine ? ` (line ${item.declarationLine})` : ''}.` : '';
+    return `Value is outside the allowed field domain for ${group}.${field}: ${value}.${domain ? ` ${domain}.` : ''}${path}`;
+  }
+  return `Value is outside the allowed field domain for ${group}.${field}: ${value}. Multiple field-domain authorities apply; see contractGuidance for each exact contract path and allowed values/shapes.`;
 }
 
 function exact(value = '') {

@@ -2,6 +2,8 @@ import { projectParticipantAuthority } from './grounding.participantAuthority.js
 import { projectWorkProvenance } from './grounding.workProvenance.js';
 import { projectGroundingSourceEvidence } from './grounding.sourceEvidence.js';
 import { projectGroundingPlanningContext } from './grounding.planningContext.js';
+import { projectGroundingParticipantContext } from './grounding.participantContext.js';
+import { projectGroundingProcessApplicability } from './grounding.processApplicability.js';
 
 export const PORTABLE_GROUNDING_CAPSULE_SCHEMA_ID = 'tiinex.portable.grounding-capsule.v1';
 
@@ -12,12 +14,15 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
   const routeRecords = selectedRouteRecords(authority, records);
   const workProvenance = projectWorkProvenance({ records, topology });
   const participantAuthority = projectParticipantAuthority(authority);
+  const participantContext = projectGroundingParticipantContext(authority);
+  const processApplicability = projectGroundingProcessApplicability(authority);
+  const sourceEvidence = projectGroundingSourceEvidence({ records, contextAudit, continuation, requiredContext });
   return Object.freeze({
     schema: PORTABLE_GROUNDING_CAPSULE_SCHEMA_ID,
     semanticReductions: Object.freeze(requiredContext.slice(0, MAX_CONTEXT).map(reduceRequiredContext)),
     frontier: projectFrontier(topology, blockers),
     exclusions: Object.freeze(routeRecords.flatMap((record) => parseExclusions(record.markdown || '')).slice(0, MAX_EXCLUSIONS)),
-    sourceEvidence: projectGroundingSourceEvidence({ records, contextAudit, continuation }),
+    sourceEvidence,
     planningContext: projectGroundingPlanningContext(requiredContext),
     roleState: Object.freeze({
       recipient: String(authority?.role?.endpoint?.label || authority?.handoff?.to || ''),
@@ -27,8 +32,15 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
       compatibility: String(authority?.holderBinding?.recipientCompatibility || 'unresolved')
     }),
     participantAuthority,
+    participantContext,
+    processApplicability,
     workProvenance,
-    unresolved: Object.freeze([...workProvenance.unresolved]),
+    unresolved: Object.freeze([
+      ...workProvenance.unresolved,
+      ...participantContext.unresolved,
+      ...processApplicability.unresolved,
+      ...sourceEvidence.blockers.map((item) => ({ code: item.code, detail: item.request }))
+    ]),
     boundary: 'Full Required Context bodies remain selector-gated.'
   });
 }

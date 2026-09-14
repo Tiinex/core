@@ -6,7 +6,7 @@ import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runt
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
 import { enumerateNodeWorkspace, PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID } from './handoff.manufacture.enumeration.js';
-import { preparePackageParentWorkspaceReuse } from './handoff.manufacture.packageParent.js';
+import { preparePackageParentWorkspaceReuse, projectRequiredContextWorkspaceSelectionPreflight } from './handoff.manufacture.packageParent.js';
 import { qualifyPortableSourceReconciliationProofForManufacture } from '../../comparison/sourceFrontierReconciliationProof.js';
 import { qualifyPortableManufactureSchemaReferenceCandidate } from '../../handoff/schemaReferencePreflight.js';
 import { qualifyDelegationReturnReservation } from '../../handoff/delegationReturnReservation.js';
@@ -46,14 +46,6 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     (value) => Object.freeze({ value, error: null }),
     (error) => Object.freeze({ value: null, error })
   );
-  const enumerationPromise = enumerateNodeWorkspace(workspaceRoot, {
-    workspaceId,
-    workspaceTitle: requestedWorkspaceTitle,
-    sourceMetadata: input.workspaceSource || input.sourceMetadata || {},
-    excludeDirectories: input.excludeDirectories || options.excludeDirectories,
-    excludeRelativePaths: input.excludeRelativePaths || options.excludeRelativePaths,
-    maxFiles: input.maxFiles || options.maxFiles
-  });
   const additionalWorkspaceDescriptors = normalizeAdditionalWorkspaceDescriptors(input.additionalWorkspaces || input.workspaceRoots || input.workspaceDescriptors || []);
   const seenWorkspaceIds = new Set([workspaceId]);
   const additionalWorkspaceInputs = additionalWorkspaceDescriptors.map((descriptor) => {
@@ -77,6 +69,23 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     workspaceIds: input.packageParentWorkspaceIds || input.reusePackageParentWorkspaceIds || [],
     workspaceAliases: input.packageParentWorkspaceAliases || input.workspaceAliases || {}
   });
+  const handoffMarkdown = await handoffMarkdownPromise;
+  const requiredContextWorkspaceSelectionPreflight = projectRequiredContextWorkspaceSelectionPreflight({
+    handoffMarkdown,
+    currentWorkspaceIds: [...seenWorkspaceIds],
+    packageParentReuse
+  });
+  if (requiredContextWorkspaceSelectionPreflight.state === 'action-required') {
+    throw new Error(`portable.handoff-manufacture.required-context.workspace-selection.required: ${requiredContextWorkspaceSelectionPreflight.nextAction} Missing Workspace ids: ${requiredContextWorkspaceSelectionPreflight.missingWorkspaceIds.join(',')}. Tooling will not auto-select package-parent Workspace source from carrier lineage.`);
+  }
+  const enumerationPromise = enumerateNodeWorkspace(workspaceRoot, {
+    workspaceId,
+    workspaceTitle: requestedWorkspaceTitle,
+    sourceMetadata: input.workspaceSource || input.sourceMetadata || {},
+    excludeDirectories: input.excludeDirectories || options.excludeDirectories,
+    excludeRelativePaths: input.excludeRelativePaths || options.excludeRelativePaths,
+    maxFiles: input.maxFiles || options.maxFiles
+  });
   const additionalEnumerationsPromise = Promise.all(additionalWorkspaceInputs.map(async ({ descriptor, id, root, requestedTitle }) => {
     const enumerated = await enumerateNodeWorkspace(root, {
       workspaceId: id,
@@ -90,8 +99,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     return Object.freeze({ descriptor, id, root, requestedTitle, enumerated });
   }));
 
-  const [handoffMarkdown, enumeration, additionalEnumerations] = await Promise.all([
-    handoffMarkdownPromise,
+  const [enumeration, additionalEnumerations] = await Promise.all([
     enumerationPromise,
     additionalEnumerationsPromise
   ]);
@@ -217,10 +225,12 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
         selectionMode: String(packageParentReuse.selectionMode || ''),
         requestedWorkspaceIds: Object.freeze([...(packageParentReuse.requestedWorkspaceIds || [])].map(String)),
         providerWorkspaceIds: Object.freeze([...(packageParentReuse.providerWorkspaceIds || [])].map(String)),
+        providerWorkspaceTargets: Object.freeze([...(packageParentReuse.providerWorkspaceTargets || [])].map((item) => Object.freeze({ ...item }))),
         inheritedWorkspaceIds: Object.freeze((packageParentReuse.inherited || []).map((item) => String(item.id || ''))),
         workspaceAliases: Object.freeze([...(packageParentReuse.workspaceAliases || [])].map((item) => Object.freeze({ ...item }))),
         boundary: String(packageParentReuse.boundary || '')
       }),
+      requiredContextWorkspaceSelectionPreflight,
       carrierProjection: Object.freeze({ requestedRoutes: transportRoutes.length || 1, carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null), carrierProfile: normalizeHandoffCarrierProfile(input.carrierProfile || null), boundary: 'Routes are qualified later against packaged workspace bytes; adapter text is not authority.' })
     }),
     verifyRoundtrip: input.verifyRoundtrip !== false

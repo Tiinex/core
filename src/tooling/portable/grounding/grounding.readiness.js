@@ -9,6 +9,7 @@ import { auditHandoffPackageContextCarriage } from '../handoff/contextAudit.js';
 import { acceptedRecoveryMaterial, projectColdStartContinuity } from './grounding.continuity.js';
 import { projectGroundingAuthority } from './grounding.readiness.authority.js';
 import { projectGroundingCapsule } from './grounding.capsule.js';
+import { projectGroundingOrchestrationReadiness } from './grounding.orchestrationReadiness.js';
 
 export const PORTABLE_GROUNDING_READINESS_SCHEMA_ID = 'tiinex.portable.grounding-readiness.v1';
 
@@ -190,6 +191,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   if (missingEvidence.length) state = 'insufficient-grounding';
   else if (!handoffMode || !holderBindingActReady || !topology.currentFrontier.length || humanOnly.length) state = 'grounded-to-discuss';
   if (state === 'grounded-to-act') reasons.push(reason('bounded-act-ready', 'Selected Handoff authority, explicit consuming-session holder Role binding, Required Context, carried Workspace coverage, cold-start continuity to a qualified semantic root, the selected-route Parent-lineage leaf, and declared current-work frontier evidence are all resolved enough for the next bounded action.'));
+  const orchestrationReadiness = projectGroundingOrchestrationReadiness({ readinessState: state, participantContext: capsule.participantContext, processApplicability: capsule.processApplicability, sourceEvidence: capsule.sourceEvidence, topology });
 
   return Object.freeze({
     schema: PORTABLE_GROUNDING_READINESS_SCHEMA_ID,
@@ -240,6 +242,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
       boundary: 'Leaf/root roles are derived only from loaded declared Parent edges produced by the shared lineage resolver. Filename numbering, carrier dimensions, directory depth, branch names, and Task lifecycle labels are never substituted for Parent topology.'
     }),
     continuity,
+    orchestrationReadiness,
     capsule,
     currentWork: Object.freeze({
       state: topology.currentFrontier.length ? 'current-frontier-resolved' : topology.currentTasks.length ? 'current-candidates-without-frontier' : 'unresolved',

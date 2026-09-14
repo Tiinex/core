@@ -1,6 +1,8 @@
 import { packageFileBytes, sha256Hex } from '../../../../export/package.bytes.js';
 import { inspectRecipientFacingV2Topology } from '../../handoff/recipientV2.inspect.js';
 import { parseHandoffPackageV1, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH } from '../../handoff/recipientV2.packageV1.js';
+import { projectHandoffMaterialRequirements } from '../../handoff/materialClosure.requirements.js';
+import { parseWorkspaceQualifiedReference } from '../../handoff/workspaceQualifiedReference.js';
 
 export function preparePackageParentWorkspaceReuse(input = {}) {
   const bundle = input.bundle || null;
@@ -63,6 +65,7 @@ export function preparePackageParentWorkspaceReuse(input = {}) {
     providers: Object.freeze(providers),
     providerState: 'qualified',
     providerWorkspaceIds: Object.freeze(providers.map((item) => normalizeId(item.id))),
+    providerWorkspaceTargets: Object.freeze([...providerTargetById.entries()].map(([workspaceId, targetPath]) => Object.freeze({ workspaceId, path: targetPath }))),
     inherited: Object.freeze(inherited),
     workspaceTargets: Object.freeze(workspaceTargets),
     inspectionStatus: inspection.status,
@@ -71,6 +74,44 @@ export function preparePackageParentWorkspaceReuse(input = {}) {
     requestedWorkspaceIds: selection.ids,
     workspaceAliases: Object.freeze([...workspaceAliases.entries()].map(([parentWorkspaceId, currentWorkspaceId]) => Object.freeze({ parentWorkspaceId, currentWorkspaceId }))),
     boundary: 'Qualified package-parent Workspace snapshots may serve as read-only exact material providers, but complete Workspace carriage is reused only for explicitly selected package-parent Workspace ids. Package-parent carrier lineage alone never selects Workspace source. Explicit current Workspace roots take precedence by id, and explicit qualified workspace aliases may supersede a renamed parent-carrier Workspace without carrying stale duplicate source. Parent-carrier placement and lineage remain non-semantic.'
+  });
+}
+
+export function projectRequiredContextWorkspaceSelectionPreflight(input = {}) {
+  const reuse = input.packageParentReuse || input.reuse || {};
+  const currentWorkspaceIds = new Set([...(input.currentWorkspaceIds || [])].map(normalizeId).filter(Boolean));
+  const inheritedWorkspaceIds = new Set((reuse.inherited || []).map((item) => normalizeId(item.id || item.enumeration?.materialization?.id || '')).filter(Boolean));
+  const providerTargets = new Map((reuse.providerWorkspaceTargets || []).map((item) => [normalizeId(item.workspaceId), normalizeWorkspacePath(item.path)]));
+  const requirements = projectHandoffMaterialRequirements({ markdown: String(input.handoffMarkdown || '') }).required || [];
+  const missing = [];
+  for (const requirement of requirements) {
+    const target = parseWorkspaceQualifiedReference(String(requirement.reference?.target || requirement.materialReference || ''));
+    if (!target) continue;
+    const workspaceId = normalizeId(target.workspaceId);
+    if (!workspaceId || currentWorkspaceIds.has(workspaceId) || inheritedWorkspaceIds.has(workspaceId)) continue;
+    const providerTarget = providerTargets.get(workspaceId) || '';
+    if (!providerTarget || providerTarget !== normalizeWorkspacePath(target.path)) continue;
+    if (!/\bworkspace\b/i.test(String(requirement.material || ''))) continue;
+    missing.push(Object.freeze({
+      requirementId: String(requirement.id || ''),
+      name: String(requirement.name || ''),
+      workspaceId,
+      material: String(requirement.material || ''),
+      purpose: String(requirement.purpose || ''),
+      referenceTarget: String(requirement.reference?.target || requirement.materialReference || ''),
+      providerWorkspaceTarget: providerTarget,
+      basis: 'explicit-required-context-workspace-material-matches-qualified-package-parent-workspace-target'
+    }));
+  }
+  const missingWorkspaceIds = Object.freeze([...new Set(missing.map((item) => item.workspaceId))].sort());
+  return Object.freeze({
+    state: missingWorkspaceIds.length ? 'action-required' : 'ready',
+    missingWorkspaceIds,
+    requirements: Object.freeze(missing),
+    nextAction: missingWorkspaceIds.length
+      ? `Re-run manufacture with --package-parent-workspaces ${missingWorkspaceIds.join(',')} to carry the explicitly required Workspace material from the qualified package parent.`
+      : 'No mechanically required package-parent Workspace carriage selection is missing.',
+    boundary: 'This preflight fires only when exact Handoff Required Context explicitly describes Workspace material and its workspace-qualified Material Reference exactly matches a qualified package-parent Workspace target. It never auto-selects source, infers Workspace intent from filenames alone, or treats carrier lineage as source authority.'
   });
 }
 
@@ -205,6 +246,7 @@ function emptyReuse(state, options = {}) {
     providers: Object.freeze([]),
     providerState: String(options.providerState || 'unavailable'),
     providerWorkspaceIds: Object.freeze([]),
+    providerWorkspaceTargets: Object.freeze([]),
     inherited: Object.freeze([]),
     workspaceTargets: Object.freeze([]),
     inspectionStatus: String(options.inspectionStatus || ''),
@@ -218,6 +260,7 @@ function emptyReuse(state, options = {}) {
   });
 }
 function normalizeId(value = '') { return String(value || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, ''); }
+function normalizeWorkspacePath(value = '') { return String(value || '').trim().replace(/\\/g, '/').replace(/^\/+/, ''); }
 function mediaTypeForPath(value = '') { const lower = String(value || '').toLowerCase(); if (lower.endsWith('.md')) return 'text/markdown'; if (lower.endsWith('.json')) return 'application/json'; if (/\.(?:m?js|cjs)$/.test(lower)) return 'text/javascript'; if (lower.endsWith('.ts')) return 'text/typescript'; if (lower.endsWith('.css')) return 'text/css'; if (lower.endsWith('.html')) return 'text/html'; if (/\.(?:yml|yaml)$/.test(lower)) return 'text/yaml'; if (lower.endsWith('.txt')) return 'text/plain'; return 'application/octet-stream'; }
 function stableJson(value) { return JSON.stringify(sortJson(value)); }
 function sortJson(value) { if (Array.isArray(value)) return value.map(sortJson); if (!value || typeof value !== 'object') return value; return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortJson(value[key])])); }

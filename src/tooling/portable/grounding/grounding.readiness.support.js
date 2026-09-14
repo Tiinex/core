@@ -122,12 +122,16 @@ export function projectRequiredContext(requiredContext = [], selectors = []) {
     return Object.freeze({
       requirementId: entry.requirementId || '',
       name: entry.name || '',
+      material: entry.material || '',
+      purpose: entry.purpose || '',
+      declaredAvailability: entry.declaredAvailability || '',
       state: entry.state || '',
       workspaceId: entry.workspaceId || '',
       innerPath: entry.innerPath || entry.workspaceRelativePath || '',
       referenceTarget: entry.referenceTarget || '',
       bytes: Number(entry.bytes || entry.actualBytes || 0),
       sha256: entry.sha256 || entry.actualSha256 || '',
+      provenance: entry.provenance ? Object.freeze({ ...entry.provenance }) : null,
       contentProjected,
       ...(contentProjected ? { content: entry.content } : {})
     });

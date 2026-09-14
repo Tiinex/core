@@ -134,6 +134,9 @@ function cliColdStartQualificationSummary(result = {}, flags = {}) {
     return Object.freeze({
       requirementId: item.requirementId,
       name: item.name,
+      material: item.material,
+      purpose: item.purpose,
+      declaredAvailability: item.declaredAvailability,
       state: item.state,
       referenceTarget: item.referenceTarget,
       kind: item.kind,
@@ -147,6 +150,7 @@ function cliColdStartQualificationSummary(result = {}, flags = {}) {
       actualBytes: item.actualBytes,
       actualSha256: item.actualSha256,
       contentState: item.contentState,
+      provenance: item.provenance,
       contentProjected,
       ...(contentProjected ? { content: item.content } : {})
     });

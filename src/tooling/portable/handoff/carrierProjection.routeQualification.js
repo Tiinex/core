@@ -76,7 +76,18 @@ function qualifyRequiredRequirement(bundle, descriptor, byteProvider, workspace,
   if (!resolution&&!reasons.length) resolution=resolveDescriptorMaterial(bundle,descriptor,byteProvider,target,requirementId,workspace.id,routePath);
   if (!resolution&&!reasons.length) reasons.push('required-material-not-carried');
   if (resolution?.state!=='qualified'&&resolution?.reason) reasons.push(resolution.reason);
-  return deepFreeze({requirementId:String(requirement.id||''),name:String(requirement.name||''),referenceTarget:target,state:!reasons.length&&resolution?.state==='qualified'?'qualified':'blocked',resolution:resolution?.state==='qualified'?resolution:null,reasons:Object.freeze([...new Set(reasons)])});
+  return deepFreeze({
+    requirementId:String(requirement.id||''),
+    name:String(requirement.name||''),
+    material:String(requirement.material||''),
+    purpose:String(requirement.purpose||''),
+    declaredAvailability:String(requirement.availability||''),
+    referenceTarget:target,
+    declarationSource:requirement.source||null,
+    state:!reasons.length&&resolution?.state==='qualified'?'qualified':'blocked',
+    resolution:resolution?.state==='qualified'?resolution:null,
+    reasons:Object.freeze([...new Set(reasons)])
+  });
 }
 
 function resolveWorkspaceRequiredMaterial(byteProvider, workspace, resolvedPath) {

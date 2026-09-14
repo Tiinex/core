@@ -1,19 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { projectApplicationData, toPlaythingsStoryRecords, projectSchemaAncestry, defineCompanionProvider, resolveCompanionResources, parseCompanionFilename } from '../src/public/index.js';
 import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../src/transitions/record.transitions.js';
-import { normalizeParentReference } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
+import { normalizeParentReference, runCommonAuthorCli } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
 import {
  normalizePackageParentWorkspaceAliases,
  normalizePackageParentWorkspaceSelection,
  packageParentWorkspaceSupersededByCurrent,
  preparePackageParentWorkspaceReuse,
+ projectRequiredContextWorkspaceSelectionPreflight,
  selectDeclaredPackageParentWorkspaceBindings
 } from '../src/tooling/portable/adapters/node/handoff.manufacture.packageParent.js';
 import { resolveWorkspaceRequirementMaterials } from '../src/tooling/portable/adapters/node/handoff.manufacture.requirements.js';
 import { expandRouteParentBoundaryClosure } from '../src/tooling/portable/adapters/node/handoff.manufacture.scope.js';
 import { renderRecipientV2ExternalPayload } from '../src/tooling/portable/handoff/recipientV2.artifacts.js';
 import { deriveVisibleFacts } from '../src/tooling/portable/handoff/recipientV2.packageV1.inspect.helpers.js';
+import { validatePortableFieldDomains } from '../src/tooling/portable/schema/contract.field-domain.js';
 const root = '# Continuity Context\n\n- Current\n  - Current Schema: tiinex.task.v1\n  - Created At: 2026-09-08 10:00:00\n\n---\n\n# Root\n';
 test('missing material is not promoted to a semantic root', () => {
  const data=projectApplicationData({workspaces:[{id:'w',records:[{path:'x.md',createdAt:'2026-09-08 10:00:00'}]}]});
@@ -103,6 +108,53 @@ test('package-parent Workspace reuse requires exact explicit ids or all',()=>{
  assert.equal(all.mode,'all');
  assert.deepEqual(selectDeclaredPackageParentWorkspaceBindings(declared,all).map((item)=>item.workspaceId),['business','docs','extension-vscode']);
  assert.throws(()=>selectDeclaredPackageParentWorkspaceBindings(declared,normalizePackageParentWorkspaceSelection('missing')),/workspace-selection\.unresolved:missing/);
+});
+
+test('Required Context Workspace preflight names exact package-parent selections without auto-selecting them',()=>{
+ const handoffMarkdown=`# Return\n\n## Required Context\n\n- docs-workspace\n  - Material: current integrated Docs Workspace containing semantic authority.\n  - Material Reference: [Docs Workspace](docs::.topics/.workspaces/tiinex-docs.workspace.md)\n  - Purpose: read-only semantic boundary.\n  - Availability: available\n\n- exact-doc\n  - Material: one exact schema artifact.\n  - Material Reference: [Schema](docs::.topics/.schemas/x.schema.md)\n  - Purpose: exact reference only.\n  - Availability: available\n`;
+ const packageParentReuse={
+  providerWorkspaceTargets:[{workspaceId:'docs',path:'.topics/.workspaces/tiinex-docs.workspace.md'}],
+  inherited:[]
+ };
+ const projected=projectRequiredContextWorkspaceSelectionPreflight({handoffMarkdown,currentWorkspaceIds:['core'],packageParentReuse});
+ assert.equal(projected.state,'action-required');
+ assert.deepEqual(projected.missingWorkspaceIds,['docs']);
+ assert.equal(projected.requirements.length,1);
+ assert.equal(projected.requirements[0].requirementId,'required:docs-workspace');
+ assert.match(projected.nextAction,/--package-parent-workspaces docs/);
+ assert.match(projected.boundary,/never auto-selects source/);
+ const satisfied=projectRequiredContextWorkspaceSelectionPreflight({handoffMarkdown,currentWorkspaceIds:['core'],packageParentReuse:{...packageParentReuse,inherited:[{id:'docs'}]}});
+ assert.equal(satisfied.state,'ready');
+ assert.deepEqual(satisfied.missingWorkspaceIds,[]);
+});
+
+test('invalid field-domain findings expose exact allowed values and contract path',()=>{
+ const result=validatePortableFieldDomains({
+  constraints:[{
+   kind:'field-domain',authorityQualification:'valid',targetGroup:'Exclusions And Dependencies',field:'Kind',
+   sourceSchemaId:'tiinex.handoff.v1',sourceGroup:'Handoff Exclusions And Dependencies',allowedValues:['excluded-scope','dependency'],allowedShapes:[],allowedShapeAuthorities:[],domainPolicy:'closed',declarationLine:42
+  }],
+  parsedDeclarations:[],
+  ordinary:{groups:[{group:'Exclusions And Dependencies',target:{heading:'Exclusions And Dependencies'},fields:[{label:'Kind',occurrences:[{value:'dependency-ish',line:7}]}]}]}
+ });
+ const finding=result.findings.find((item)=>item.code==='portable.contract.field-domain.value.invalid');
+ assert.ok(finding);
+ assert.match(finding.message,/Allowed values: excluded-scope, dependency/);
+ assert.match(finding.message,/tiinex\.handoff\.v1 :: Handoff Exclusions And Dependencies :: Field Value Constraints :: Kind/);
+ assert.deepEqual(finding.contractGuidance.contributions[0].allowedValues,['excluded-scope','dependency']);
+ assert.match(finding.contractGuidance.nextAction,/Use one value\/shape allowed/);
+});
+
+test('cross-Workspace Parent authoring error names the missing explicit Parent-byte action',async()=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'tiinex-author-parent-'));
+ try {
+  const bodyPath=path.join(dir,'body.md');
+  await writeFile(bodyPath,'# Child\n','utf8');
+  await assert.rejects(
+   runCommonAuthorCli({flags:{workspace:dir,schema:'tiinex.task.v1',path:'.topics/child.trace.md',body:bodyPath,parent:'business::.topics/parent.trace.md'}},{}),
+   (error)=>/portable\.cli\.author\.parent-source\.required/.test(String(error?.message||'')) && /Supply --parent-source <local-file> containing the exact qualified Parent bytes/.test(String(error?.message||'')) && /will not discover or fetch/.test(String(error?.message||''))
+  );
+ } finally { await rm(dir,{recursive:true,force:true}); }
 });
 
 test('qualified package-parent Workspace providers supply exact requirement bytes without local-root provenance',async()=>{

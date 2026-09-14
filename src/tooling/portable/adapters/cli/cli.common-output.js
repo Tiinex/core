@@ -103,6 +103,7 @@ function projectGroundDefault(result = {}, parsed = {}) {
     status: result.status,
     readiness: compactReadiness(result.readiness),
     authority: compactGroundAuthority(result.authority),
+    orchestrationReadiness: compactOrchestrationReadiness(result.orchestrationReadiness),
     requiredContext: Object.freeze({
       declared: Number(required.declared || 0),
       matchedInWorkspaceSnapshots: Number(required.matchedInWorkspaceSnapshots || 0),
@@ -254,13 +255,18 @@ function compactGroundAuthority(authority = {}) {
     route: Object.freeze({
       id: String(route.id || ''),
       pointerPath: String(route.pointerPath || ''),
-      workspaceId: String(route.workspaceId || '')
+      workspaceId: String(route.workspaceId || ''),
+      workspaceRelativePath: String(route.workspaceRelativePath || ''),
+      sha256: String(route.sha256 || ''),
+      provenance: route.provenance ? Object.freeze({ ...route.provenance }) : null
     }),
     handoff: Object.freeze({
       purpose: String(handoff.purpose || ''),
       from: String(handoff.from || ''),
       to: String(handoff.to || ''),
-      completionExpectation: handoff.completionExpectation || null
+      completionExpectation: handoff.completionExpectation || null,
+      transfers: Object.freeze((handoff.transfers || []).map((item) => Object.freeze({ ...item }))),
+      provenance: handoff.provenance ? Object.freeze({ ...handoff.provenance }) : null
     }),
     role: Object.freeze({
       state: String(role.state || ''),
@@ -275,7 +281,8 @@ function compactGroundAuthority(authority = {}) {
       recipientCompatibility: String(holderBinding.recipientCompatibility || ''),
       source: String(holderBinding.source || ''),
       explicit: Boolean(holderBinding.explicit),
-      inferredFromTransport: Boolean(holderBinding.inferredFromTransport)
+      inferredFromTransport: Boolean(holderBinding.inferredFromTransport),
+      provenance: holderBinding.provenance ? Object.freeze({ ...holderBinding.provenance }) : null
     }),
     operationBoundary: Object.freeze({
       sourceMutation: Boolean(operationBoundary.sourceMutation),
@@ -286,14 +293,35 @@ function compactGroundAuthority(authority = {}) {
   });
 }
 
+function compactOrchestrationReadiness(value = {}) {
+  if (!value || typeof value !== 'object') return null;
+  const wider = value.widerOrchestration || {};
+  return Object.freeze({
+    state: String(value.state || ''),
+    boundedActionReadiness: String(value.boundedActionReadiness || ''),
+    widerOrchestration: Object.freeze({
+      state: String(wider.state || ''),
+      blockers: Object.freeze((wider.blockers || []).slice(0, 8).map((item) => Object.freeze({ ...item })))
+    }),
+    participantMap: String(value.participantMap || ''),
+    sourceScope: String(value.sourceScope || ''),
+    processApplicability: value.processApplicability ? Object.freeze({ ...value.processApplicability, unresolved: Object.freeze([...(value.processApplicability.unresolved || [])].map((item) => Object.freeze({ ...item }))) }) : null,
+    boundary: String(value.boundary || '')
+  });
+}
+
 function projectRequiredContextItem(item = {}) {
   const contentProjected = Boolean(item.contentProjected && typeof item.content === 'string');
   return Object.freeze({
     requirementId: String(item.requirementId || ''),
     name: String(item.name || ''),
+    material: String(item.material || ''),
+    purpose: String(item.purpose || ''),
+    declaredAvailability: String(item.declaredAvailability || ''),
     state: String(item.state || ''),
     workspaceId: String(item.workspaceId || ''),
     innerPath: String(item.innerPath || ''),
+    provenance: item.provenance ? Object.freeze({ ...item.provenance }) : null,
     contentProjected,
     ...(contentProjected ? { content: item.content } : {})
   });

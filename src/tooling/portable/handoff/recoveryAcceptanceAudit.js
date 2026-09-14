@@ -8,8 +8,8 @@ export function auditPortableRecoveryAcceptance(input = {}) {
   const basisInspection = inspectRecipientFacingV2Topology(input.basis?.bundle || input.basis || {});
   const candidateInspection = inspectRecipientFacingV2Topology(input.candidate?.bundle || input.candidate || {});
   const findings = [];
-  if (String(basisInspection.status || '') !== 'valid') findings.push(finding('error', 'portable.recovery-acceptance.basis-unqualified', 'Recovery acceptance audit requires one independently qualified accepted-basis Handoff package.'));
-  if (String(candidateInspection.status || '') !== 'valid') findings.push(finding('error', 'portable.recovery-acceptance.candidate-unqualified', 'Recovery acceptance audit requires one independently qualified candidate Handoff package.'));
+  if (String(basisInspection.status || '') !== 'valid') findings.push(finding('error', 'portable.recovery-acceptance.basis-unqualified', 'Recovery acceptance audit requires one independently qualified accepted-basis recipient-facing carrier. A qualified pointerless Workspace package is permitted; Handoff routing is not required for the accepted basis.'));
+  if (String(candidateInspection.status || '') !== 'valid') findings.push(finding('error', 'portable.recovery-acceptance.candidate-unqualified', 'Recovery acceptance audit requires one independently qualified candidate recipient-facing carrier. Candidate restart suitability still requires complete selected Workspace coverage.'));
   if (findings.some((item) => item.severity === 'error')) return auditResult('blocked', [], findings, basisInspection, candidateInspection, input);
 
   const candidateIds = [...new Set((candidateInspection.workspaces || []).map((item) => normalizeId(item.workspaceId)).filter(Boolean))].sort();
@@ -92,7 +92,9 @@ function auditResult(status, workspaces, findings, basisInspection, candidateIns
     status,
     state: status === 'ready' && allReady ? 'acceptance-audit-ready' : 'acceptance-audit-blocked',
     basisQualification: String(basisInspection.status || 'invalid'),
+    basisCarrierRole: String(basisInspection.packageContract?.packageRole || ''),
     candidateQualification: String(candidateInspection.status || 'invalid'),
+    candidateCarrierRole: String(candidateInspection.packageContract?.packageRole || ''),
     selectionMode: (input.workspaceIds || input.selectedWorkspaceIds || []).length ? 'explicit-workspace-set' : 'all-candidate-workspaces',
     workspaces: freeze(workspaces),
     counts: freeze({ workspaces: workspaces.length, readyWorkspaces: workspaces.filter((item) => item.state === 'ready').length, completeWorkspaces: completeWorkspaceCount, unexplainedRemovals: unexplainedRemovalCount }),
@@ -106,7 +108,7 @@ function auditResult(status, workspaces, findings, basisInspection, candidateIns
       semanticAcceptanceGranted: false
     }),
     findings: freeze(findings),
-    boundary: 'Coarse Recovery acceptance audit over already-qualified carrier bytes. It decodes the exact candidate Workspace representations, compares them to one explicit accepted basis, and fails on unexplained source removals or incomplete coverage. It does not inspect a live checkout, prove Git cleanliness/committability, decide semantic correctness, authorize deletion, or grant Master Recovery acceptance; target landing still requires the separate exact source preflight.'
+    boundary: 'Coarse Recovery acceptance audit over already-qualified recipient-facing carrier bytes. The accepted basis may be a routed Handoff carrier or a qualified pointerless Workspace carrier; route authority is not required merely to establish exact basis bytes. It decodes the exact candidate Workspace representations, compares them to one explicit accepted basis, and fails on unexplained source removals or incomplete candidate coverage. It does not inspect a live checkout, prove Git cleanliness/committability, decide semantic correctness, authorize deletion, or grant Master Recovery acceptance; target landing still requires the separate exact source preflight.'
   });
 }
 

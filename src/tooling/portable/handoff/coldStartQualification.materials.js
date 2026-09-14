@@ -232,6 +232,9 @@ function hydrateRequiredContextEntry(bundle = {}, entry = {}, context = null) {
   const base = {
     requirementId: String(entry.requirementId || ''),
     name: String(entry.name || ''),
+    material: String(entry.material || ''),
+    purpose: String(entry.purpose || ''),
+    declaredAvailability: String(entry.declaredAvailability || ''),
     state: String(entry.state || resolution.state || 'unresolved'),
     referenceTarget: String(entry.referenceTarget || ''),
     kind: String(resolution.kind || ''),
@@ -241,7 +244,14 @@ function hydrateRequiredContextEntry(bundle = {}, entry = {}, context = null) {
     packagePath: String(resolution.packagePath || ''),
     providerMode: String(resolution.providerMode || ''),
     bytes: Number(resolution.bytes || 0),
-    sha256: String(resolution.sha256 || '')
+    sha256: String(resolution.sha256 || ''),
+    provenance: Object.freeze({
+      basis: 'selected-handoff-required-context-declaration',
+      declarationSource: entry.declarationSource ? Object.freeze({ ...(entry.declarationSource || {}) }) : null,
+      resolutionKind: String(resolution.kind || ''),
+      providerMode: String(resolution.providerMode || ''),
+      boundary: 'Material/Purpose/Availability are copied from the exact selected Handoff Required Context declaration; qualification and bytes come from exact route closure resolution.'
+    })
   };
   if (base.state !== 'qualified') return Object.freeze({ ...base, contentState: 'unavailable', content: '' });
   const hydrated = resolveQualifiedMaterialBytes(bundle, resolution, context);

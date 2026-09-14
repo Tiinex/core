@@ -16,6 +16,8 @@ import {
 } from '../src/public/index.js';
 import { compareNodeSourceFrontiers, proveNodeSourceReconciliation } from '../src/public/node.js';
 import { prepareNodeHandoffManufacturingInput } from '../src/tooling/portable/adapters/node/handoff.manufacture.js';
+import { prepareNodeWorkspaceCarrierManufacturingInput } from '../src/tooling/portable/adapters/node/workspaceCarrier.manufacture.js';
+import { manufactureRecipientRelativeHandoffPackage } from '../src/tooling/portable/handoff/manufacture.js';
 import { packageFileByteView, sha256Hex } from '../src/export/package.bytes.js';
 import { exportFileMapZipUint8Array } from '../src/export/package.zip.js';
 import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
@@ -187,6 +189,30 @@ test('Recovery acceptance audit re-materializes qualified candidate bytes and bl
   assert.equal(explicitlyDisposed.workspaces[0].counts.byteChanged, 1);
   assert.equal(explicitlyDisposed.suitability.state, 'restart-source-ready');
   assert.equal(explicitlyDisposed.suitability.semanticAcceptanceGranted, false);
+});
+
+test('Recovery acceptance accepts a qualified pointerless Workspace carrier as exact accepted basis for a routed candidate', async (t) => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-pointerless-recovery-basis-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const fixture = packageFixtureSource({ coreFiles: { 'src/keep.txt': encoder.encode('same bytes\n') } });
+  await writeWorkspace(root, { ...localWorkspaceFiles(fixture.routeBytes, fixture.coreReadme), 'src/keep.txt': encoder.encode('same bytes\n') });
+  const runtimeRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  const prepared = await prepareNodeWorkspaceCarrierManufacturingInput({
+    workspaceRoot: root, workspaceId: 'core', workspaceTargetPath: WORKSPACE_INNER_PATH, runtimeRoot,
+    carrierLineage: { mode: 'new', dimension: '001', parentDimension: '', checkpointKind: 'progression', majorReason: '' }, verifyRoundtrip: true
+  });
+  const basisBuilt = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
+  const candidateBuilt = buildRecipientFacingV2PackageV1(fixture);
+  assert.equal(basisBuilt.status, 'ready', JSON.stringify(basisBuilt.findings || []));
+  assert.equal(candidateBuilt.status, 'ready', JSON.stringify(candidateBuilt.findings || []));
+  assert.equal(basisBuilt.inspection.routes.length, 0);
+  assert.equal(candidateBuilt.inspection.routes.length, 1);
+
+  const audit = auditPortableRecoveryAcceptance({ basis: { files: basisBuilt.bundle.files }, candidate: { files: candidateBuilt.files }, workspaceIds: ['core'] });
+  assert.equal(audit.status, 'ready', JSON.stringify(audit.findings || []));
+  assert.match(audit.basisCarrierRole, /workspace/i);
+  assert.match(audit.candidateCarrierRole, /handoff/i);
+  assert.equal(audit.suitability.state, 'restart-source-ready');
 });
 
 test('pure two-way comparison has deterministic exact fast path, add/remove/change deltas, and Workspace asymmetry', () => {

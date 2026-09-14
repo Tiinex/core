@@ -31,8 +31,8 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
 
   const parentReference = resolveParentReference(flags, state);
   const parentSource = String(flags['parent-source'] || flags['parent-file'] || '').trim();
-  if (isWorkspaceQualifiedReference(parentReference) && !parentSource) throw new Error('portable.cli.author.parent-source.required');
-  if (parentSource && !parentReference) throw new Error('portable.cli.author.parent.required');
+  if (isWorkspaceQualifiedReference(parentReference) && !parentSource) throw new Error(`portable.cli.author.parent-source.required: --parent ${parentReference} names an explicit cross-Workspace Parent. Supply --parent-source <local-file> containing the exact qualified Parent bytes; Tooling will not discover or fetch that Parent automatically.`);
+  if (parentSource && !parentReference) throw new Error('portable.cli.author.parent.required: --parent-source supplies Parent bytes but no semantic Parent reference. Supply --parent <workspace::path|relative-path> explicitly; Tooling will not infer Parent identity from the source file.');
   if (isWorkspaceQualifiedReference(parentReference) && !requestedArtifactRelativePath && !targetDirectory) throw new Error('portable.cli.author.cross-workspace-parent.target-required');
   const parentPath = parentReference ? (parentSource ? path.resolve(parentSource) : safeWorkspaceTarget(workspaceRoot, parentReference)) : '';
   const artifactRelativePath = requestedArtifactRelativePath || await allocateArtifactRelativePath({ workspaceRoot, targetDirectory, parentRelativePath: parentReference, schemaId, title });
@@ -80,6 +80,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
     }, {});
     const blocking = Number(audit?.findingSummary?.counts?.error || 0) + Number(stage?.findingSummary?.counts?.error || 0);
     if (blocking) {
+      const actionableFindings = projectAuthorActionableFindings(audit, stage);
       await rm(artifactPath, { force: true });
       wrote = false;
       return Object.freeze({
@@ -90,7 +91,8 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
         audit,
         stage,
         findingSummary: mergeFindingSummaries(audit?.findingSummary, stage?.findingSummary),
-        nextAction: 'Resolve the reported schema/continuity finding, then rerun the same author command. No invalid durable artifact was retained.',
+        actionableFindings,
+        nextAction: actionableFindings[0]?.nextAction || 'Resolve the reported schema/continuity finding, then rerun the same author command. No invalid durable artifact was retained.',
         boundary: 'Common-path authoring composes the shared renderer, c14n-v2 sealing, runtime audit, and staging qualification. It may write only the requested local Workspace artifact and runtime-only .tiinex continuation state; it performs no remote mutation.'
       });
     }
@@ -125,12 +127,12 @@ async function parentRecordFromArtifact(parentPath, parentRelativePath, context 
   const schemaId = String(current.schema?.id || '').trim();
   const schemaTarget = String(current.schema?.target || '').trim();
   const self = canonicalC14nV2SelfState(markdown);
-  if (!schemaId) throw new Error('portable.cli.author.parent.schema-authority.required');
+  if (!schemaId) throw new Error('portable.cli.author.parent.schema-authority.required: the supplied Parent does not declare a Current Schema. Supply exact qualified Parent bytes with an explicit Current Schema reference; Tooling will not infer Parent schema authority from path or filename.');
   if (self.state !== 'verified') throw new Error(`portable.cli.author.parent.integrity.${self.reason || self.state}`);
   const schemaReferenceAuthority = schemaTarget
     ? exactDeclaredSchemaReferenceAuthority(schemaId, schemaTarget)
     : await recoverQualifiedRuntimeSchemaReferenceAuthority(schemaId, context.runtime || {});
-  if (!schemaReferenceAuthority) throw new Error('portable.cli.author.parent.schema-authority.required');
+  if (!schemaReferenceAuthority) throw new Error(`portable.cli.author.parent.schema-authority.required: Parent schema ${schemaId} lacks an exact qualified schema-reference authority. Supply Parent bytes with an exact Current Schema target or qualified runtime canonical schema material; Tooling will not invent the schema target.`);
   return Object.freeze({
     id: parentRelativePath,
     path: parentRelativePath,
@@ -142,6 +144,28 @@ async function parentRecordFromArtifact(parentPath, parentRelativePath, context 
     recoveryMode: parentRecoveryMode(parentRelativePath),
     schemaReferenceAuthority
   });
+}
+
+function projectAuthorActionableFindings(audit = {}, stage = {}) {
+  const findings = [
+    ...(audit.findings || audit.actionableFindings || []),
+    ...(stage.findings || stage.actionableFindings || [])
+  ].filter((item) => item && (item.severity === 'error' || item.severity === 'warning'));
+  const seen = new Set();
+  const out = [];
+  for (const item of findings) {
+    const code = String(item.code || '');
+    const key = `${code}\u0000${String(item.message || '')}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(Object.freeze({
+      code,
+      message: String(item.message || ''),
+      ...(item.contractGuidance ? { contractGuidance: Object.freeze({ ...item.contractGuidance }) } : {}),
+      nextAction: String(item.contractGuidance?.nextAction || 'Resolve this exact finding using its cited authority/evidence, then rerun the same author command. No invalid durable artifact was retained.')
+    }));
+  }
+  return Object.freeze(out.slice(0, 20));
 }
 
 export function parentRecoveryMode(reference = '') {

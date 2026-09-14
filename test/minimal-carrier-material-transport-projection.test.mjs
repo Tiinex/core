@@ -12,6 +12,8 @@ import { manufactureRecipientRelativeHandoffPackage } from '../src/tooling/porta
 import { orientColdConsumerFromHandoffPackage } from '../src/tooling/portable/handoff/coldConsumerEntrypoint.js';
 import { projectPortableHandoffCarrierOutputFromPackage } from '../src/tooling/portable/handoff/recipientV2.humanOutput.js';
 import { BOOTSTRAP_PACKAGE_ROLE, WORKSPACE_PACKAGE_ROLE } from '../src/tooling/portable/handoff/recipientV2.packageV1.contract.js';
+import { auditHandoffPackageContextCarriage } from '../src/tooling/portable/handoff/contextAudit.js';
+import { auditPortableRecoveryAcceptance } from '../src/tooling/portable/handoff/recoveryAcceptanceAudit.js';
 
 const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
 const WORKSPACE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.workspace.v1.schema.md';
@@ -95,6 +97,9 @@ test('pointerless bounded Workspace package uses generic material representation
   assert.equal(result.inspection.workspaces.length, 1);
   assert.equal(result.inspection.workspaces[0].coverage, 'bounded');
   assert.equal(result.inspection.routes.length, 0);
+  const contextAudit = auditHandoffPackageContextCarriage({ bundle: result.bundle });
+  assert.equal(contextAudit.workspaceMaterializations[0].coverage, 'bounded');
+  assert.equal(contextAudit.workspaceMaterializations[0].reason, 'bounded-workspace-archive-representation');
 
   const orientation = orientColdConsumerFromHandoffPackage({ bundle: result.bundle });
   assert.equal(orientation.status, 'ready');
@@ -140,4 +145,10 @@ test('pointerless Workspace package may mix direct complete and generic complete
   assert.equal(output.status, 'ready');
   assert.equal(output.humanOutput.normalInlineRouting.content.includes('Continue from'), false);
   assert.equal(output.humanOutput.presentation.recipientLabel, '');
+
+  const acceptance = auditPortableRecoveryAcceptance({ basis: { files: result.bundle.files }, candidate: { files: result.bundle.files }, workspaceIds: ['direct'] });
+  assert.equal(acceptance.status, 'ready');
+  assert.equal(acceptance.basisCarrierRole, WORKSPACE_PACKAGE_ROLE);
+  assert.equal(acceptance.candidateCarrierRole, WORKSPACE_PACKAGE_ROLE);
+  assert.equal(acceptance.suitability.state, 'restart-source-ready');
 });
