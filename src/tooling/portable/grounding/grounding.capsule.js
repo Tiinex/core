@@ -4,6 +4,7 @@ import { projectGroundingSourceEvidence } from './grounding.sourceEvidence.js';
 import { projectGroundingPlanningContext } from './grounding.planningContext.js';
 import { projectGroundingParticipantContext } from './grounding.participantContext.js';
 import { projectGroundingProcessApplicability } from './grounding.processApplicability.js';
+import { projectGroundingImplementationSourceAuthority } from './grounding.implementationSourceAuthority.js';
 
 export const PORTABLE_GROUNDING_CAPSULE_SCHEMA_ID = 'tiinex.portable.grounding-capsule.v1';
 
@@ -16,6 +17,7 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
   const participantAuthority = projectParticipantAuthority(authority);
   const participantContext = projectGroundingParticipantContext(authority);
   const processApplicability = projectGroundingProcessApplicability(authority);
+  const implementationSourceAuthority = projectGroundingImplementationSourceAuthority({ authority, records, contextAudit, requiredContext });
   const sourceEvidence = projectGroundingSourceEvidence({ records, contextAudit, continuation, requiredContext });
   return Object.freeze({
     schema: PORTABLE_GROUNDING_CAPSULE_SCHEMA_ID,
@@ -29,16 +31,21 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
       recipientState: String(authority?.role?.state || 'unresolved'),
       holder: String(authority?.holderBinding?.roleLabel || ''),
       holderState: String(authority?.holderBinding?.state || 'unresolved'),
-      compatibility: String(authority?.holderBinding?.recipientCompatibility || 'unresolved')
+      compatibility: String(authority?.holderBinding?.recipientCompatibility || 'unresolved'),
+      authorizationState: String(authority?.holderBinding?.authorization?.state || (String(authority?.holderBinding?.state || '') === 'not-applicable' ? 'not-applicable' : 'unresolved')),
+      authorizationSource: String(authority?.holderBinding?.authorization?.source || ''),
+      durableIdentityState: String(authority?.holderBinding?.durableIdentity?.state || 'not-established')
     }),
     participantAuthority,
     participantContext,
     processApplicability,
+    implementationSourceAuthority,
     workProvenance,
     unresolved: Object.freeze([
       ...workProvenance.unresolved,
       ...participantContext.unresolved,
       ...processApplicability.unresolved,
+      ...implementationSourceAuthority.unresolved,
       ...sourceEvidence.blockers.map((item) => ({ code: item.code, detail: item.request }))
     ]),
     boundary: 'Full Required Context bodies remain selector-gated.'

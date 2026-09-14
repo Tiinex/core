@@ -13,6 +13,7 @@ import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifi
 import { orientColdConsumerFromHandoffPackage } from '../src/tooling/portable/handoff/coldConsumerEntrypoint.js';
 import { projectPortableHandoffCarrierOutputFromPackage } from '../src/tooling/portable/handoff/recipientV2.humanOutput.js';
 import { groundPortableColdConsumer } from '../src/tooling/portable/handoff/coldStartQualification.grounding.js';
+import { auditHandoffPackageContextCarriage } from '../src/tooling/portable/handoff/contextAudit.js';
 import { inspectStoredWorkspaceArchive } from '../src/tooling/portable/handoff/workspaceByteProvider.js';
 import { projectPortableWorkspaceLandingPlan } from '../src/tooling/portable/handoff/workspaceLandingPlan.js';
 import { prepareNodeSourceFrontier } from '../src/tooling/portable/adapters/node/sourceFrontierComparison.js';
@@ -40,7 +41,7 @@ function workspaceFixture(title, repository) {
 }
 
 function roleFixture(label) {
-  return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE_SCHEMA_TARGET})\n  - Created At: 2026-09-12 12:00:00\n  - Authors: Fixture\n  - Why: Exercise bounded Handoff endpoint Role projection.\n  - Summary: ${label} Role fixture.\n  - Status: active/local\n\n---\n\n# ${label}\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: operational\n\n## Role Boundary\n\n- In Scope: bounded Handoff regression\n- Out Of Scope: all other authority\n\n## Authority And Responsibility Boundary\n\n- May Do: exercise the fixture route\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: explicitly bound by test input\n\n## Interpretation Limits\n\n- Does Not Prove: human identity or authority beyond the fixture\n- Must Not Be Treated As: semantic authority outside the declared boundary\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
+  return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE_SCHEMA_TARGET})\n  - Created At: 2026-09-12 12:00:00\n  - Authors: Fixture\n  - Why: Exercise bounded Handoff endpoint Role projection.\n  - Summary: ${label} Role fixture.\n  - Status: active/local\n\n---\n\n# ${label}\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: operational\n\n## Role Boundary\n\n- In Scope: bounded Handoff regression\n- Out Of Scope: all other authority\n\n## Authority And Responsibility Boundary\n\n- May Do: exercise the fixture route\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session or Handoff\n\n## Interpretation Limits\n\n- Does Not Prove: human identity or authority beyond the fixture\n- Must Not Be Treated As: semantic authority outside the declared boundary\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
 }
 
 async function writeWorkspaceFile(root, relativePath, data) {
@@ -129,6 +130,12 @@ test('bounded Handoff carrier isolates unrelated answer history while qualifying
   assert.equal(result.verification.carrierInspection, 'valid');
   assert.equal(result.verification.selectedHandoffConformance, 'qualified');
   assert.equal(result.verification.pointerEntrypointInspection, 'valid');
+
+  const contextAudit = auditHandoffPackageContextCarriage({ bundle: result.bundle });
+  assert.equal(contextAudit.status, 'ready');
+  assert.equal(contextAudit.coverage.state, 'qualified');
+  assert.equal(contextAudit.workspaceMaterializations.find((workspace) => workspace.workspaceId === 'business')?.coverage, 'bounded');
+  assert.equal(contextAudit.findings.some((item) => item.code === 'portable.handoff-context.v2.coverage.incomplete'), false);
   assert.equal(result.verification.coldConsumerEntrypointInspection, 'valid');
   assert.equal(result.verification.companionInspection, 'valid');
   assert.equal(result.verification.roundtrip, 'passed');
@@ -225,5 +232,9 @@ test('bounded Handoff carrier isolates unrelated answer history while qualifying
   assert.equal(grounding.status, 'ready');
   assert.equal(grounding.role.state, 'qualified');
   assert.equal(grounding.holderBinding.state, 'qualified');
+  assert.equal(grounding.holderBinding.authorization.state, 'qualified');
+  assert.equal(grounding.holderBinding.authorization.assignmentMode, 'explicit-session-or-handoff');
+  assert.equal(grounding.holderBinding.authorization.provenance.roleArtifactPath.endsWith(LOOM_ROLE_PATH), true);
+  assert.equal(grounding.holderBinding.durableIdentity.state, 'not-established');
   assert.equal(grounding.findingSummary.status, 'clean');
 });

@@ -140,7 +140,8 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   }
   const suppliedTransportRoutes = [...(input.transportRoutes || input.handoffRoutes || [])].map((route) => normalizeTransportRoute(route, workspaceId)).filter(Boolean);
   const reservationProjection = returnCarrierReservationPreflight.state === 'qualified' && returnCarrierReservationPreflight.returnExpected
-    ? Object.freeze({ carrierKind: returnCarrierReservationPreflight.carrierKind, siblingIndex: returnCarrierReservationPreflight.siblingIndex })
+    && (returnCarrierReservationPreflight.carrierKind === 'major' || Number.isInteger(returnCarrierReservationPreflight.siblingIndex))
+    ? Object.freeze({ carrierKind: returnCarrierReservationPreflight.carrierKind, ...(Number.isInteger(returnCarrierReservationPreflight.siblingIndex) ? { siblingIndex: returnCarrierReservationPreflight.siblingIndex } : {}) })
     : null;
   const transportRoutes = Object.freeze((suppliedTransportRoutes.length ? suppliedTransportRoutes : [Object.freeze({ workspaceId, path: handoffPath })]).map((route) => Object.freeze({ ...route, ...(route.path === handoffPath && String(route.workspaceId || '') === workspaceId && reservationProjection ? { returnCarrierReservation: reservationProjection } : {}) })));
   const workspaceTargets = mergeWorkspaceTargetBindings(normalizeWorkspaceTargetBindings({
@@ -205,6 +206,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     transportRoutes,
     workspaceTargets,
     carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null),
+    carrierAllocation: input.carrierAllocation ? Object.freeze({ ...input.carrierAllocation }) : null,
     carrierProfile: normalizeHandoffCarrierProfile(input.carrierProfile || null),
     toolingBootstrap: toolingBootstrap.summary,
     reconciliationProofQualification,
@@ -218,6 +220,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
       reconciliationProof: reconciliationProofQualification,
       schemaReferencePreflight,
       returnCarrierReservationPreflight,
+      carrierAllocation: input.carrierAllocation ? Object.freeze({ ...input.carrierAllocation }) : null,
       packageParentWorkspaceReuse: Object.freeze({
         state: String(packageParentReuse.state || ''),
         providerState: String(packageParentReuse.providerState || ''),

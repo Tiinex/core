@@ -10,7 +10,7 @@ import { projectRecipientV2HumanOutput } from '../../handoff/recipientV2.humanOu
 import { inspectRecipientFacingV2Topology } from '../../handoff/recipientV2.inspect.js';
 import { carrierLineageFromCliParent, initialHandoffCarrierLineage, parentHandoffCarrierLineageFromBundle, parentHandoffCarrierProfileFromBundle } from '../../handoff/carrierLineage.js';
 import { loadNodePortableInput } from '../../input/node.input.js';
-import { reserveHandoffSiblingIndex } from './cli.handoff-sibling-allocation.js';
+import { resolveHandoffSiblingAllocation } from './cli.handoff-sibling-allocation.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
 
 export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime = {}) {
@@ -26,7 +26,6 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   const handoffPath = flags.handoff || parsed.positionals?.[1] || continuationState.returnHandoffPath || '';
   if (!flags['workspace-id'] && continuationState.workspaceId) flags['workspace-id'] = continuationState.workspaceId;
   if (!flags['workspace-target'] && continuationState.workspaceTarget) flags['workspace-target'] = continuationState.workspaceTarget;
-  if (!flags['package-sibling-index'] && continuationState.returnPackageSiblingIndex) flags['package-sibling-index'] = continuationState.returnPackageSiblingIndex;
   if (!flags['package-parent'] && continuationState.packageParentPath) flags['package-parent'] = continuationState.packageParentPath;
   if (!flags.route && handoffPath) flags.route = handoffPath;
   if (!flags.output && !flags['output-dir'] && parsed.surfaceCommand === 'handoff' && continuationState.returnOutputDir) flags['output-dir'] = continuationState.returnOutputDir;
@@ -55,6 +54,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   let packageParentSha256 = '';
   let carrierLineage = initialHandoffCarrierLineage();
   let inheritedCarrierProfile = normalizeHandoffCarrierProfile(null);
+  let carrierAllocation = Object.freeze({ state: 'root', allocationMode: 'initial-root', siblingIndex: null, provenance: Object.freeze({ basis: 'initial-carrier-root' }) });
   if (parentPackagePath) {
     const resolvedParent = path.resolve(parentPackagePath);
     const parentBytes = new Uint8Array(await readFile(resolvedParent));
@@ -86,21 +86,35 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
       major: Boolean(flags['package-major']),
       majorReason: flags['major-reason'] || ''
     });
-    const siblingAllocation = await reserveHandoffSiblingIndex({
-      parentPackagePath: resolvedParent,
-      parentPackageSha256: provisionalLineage.parentPackageSha256,
-      parentDimension: provisionalLineage.parentDimension,
-      enabled: !flags['package-major'] && Boolean(flags.output || flags['output-dir']),
-      siblingIndex: flags['package-sibling-index']
-    });
-    carrierLineage = flags['package-major'] ? provisionalLineage : carrierLineageFromCliParent({
-      bundle: parentBundle,
-      parentPath: resolvedParent,
-      parentBytes,
-      routeDimensions,
-      qualifiedParentLineage: parentLineage,
-      siblingIndex: siblingAllocation.siblingIndex
-    });
+    if (flags['package-major']) {
+      carrierLineage = provisionalLineage;
+      carrierAllocation = Object.freeze({
+        state: 'qualified', allocationMode: 'explicit-major', siblingIndex: null,
+        provenance: Object.freeze({ basis: 'explicit-major-request', parentPackagePath: resolvedParent, parentPackageSha256: provisionalLineage.parentPackageSha256, parentDimension: provisionalLineage.parentDimension }),
+        boundary: 'Carrier Major creation remains explicit and separate from non-Major pointer-order allocation.'
+      });
+    } else {
+      const parentInspection = inspectRecipientFacingV2Topology(parentBundle);
+      const siblingAllocation = await resolveHandoffSiblingAllocation({
+        parentInspection,
+        parentPackagePath: resolvedParent,
+        parentPackageSha256: provisionalLineage.parentPackageSha256,
+        parentDimension: provisionalLineage.parentDimension,
+        selectedRoutePointer: continuationState.selectedRoutePointer || flags['package-parent-route-pointer'] || '',
+        selectedRouteId: continuationState.selectedRouteId || flags['package-parent-route-id'] || '',
+        explicitSiblingIndex: flags['package-sibling-index'],
+        enabled: Boolean(flags.output || flags['output-dir'])
+      });
+      carrierAllocation = siblingAllocation;
+      carrierLineage = carrierLineageFromCliParent({
+        bundle: parentBundle,
+        parentPath: resolvedParent,
+        parentBytes,
+        routeDimensions,
+        qualifiedParentLineage: parentLineage,
+        siblingIndex: siblingAllocation.siblingIndex
+      });
+    }
     packageParentSha256 = String(carrierLineage.parentPackageSha256 || '');
   } else if (flags['package-major']) {
     throw new Error('portable.cli.handoff-carrier.package-major.parent-required');
@@ -129,6 +143,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     verifyRoundtrip,
     recipientRouteSelector: flags.route || '',
     carrierLineage,
+    carrierAllocation,
     carrierProfile,
     packageParentBundle,
     packageParentPath: parentPackagePath ? path.resolve(parentPackagePath) : '',
@@ -329,6 +344,7 @@ export function summarizeHandoffManufactureCliOutput(result = {}, writeReceipt =
     }) : null,
     toolingBootstrap: result.toolingBootstrap || null,
     carrierLineage: result.carrierLineage || projection.lineage || null,
+    carrierAllocation: result.carrierAllocation || result.manufacturingEvidence?.carrierAllocation || null,
     majorReadiness: result.majorReadiness || null,
     operationBoundary: result.operationBoundary ? Object.freeze({ ...result.operationBoundary }) : null,
     manufacturingEvidence: result.manufacturingEvidence || null,

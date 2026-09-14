@@ -8,7 +8,9 @@ import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.ren
 import { rootValidate } from '../src/schemas/tiinex.root.v1.validate.js';
 import { parentRecoveryMode, recoverQualifiedRuntimeSchemaReferenceAuthority } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
 import { resolveArchiveParent } from '../src/tooling/portable/handoff/recipientV2.artifactFirst.closure.js';
-import { reserveHandoffSiblingIndex } from '../src/tooling/portable/adapters/cli/cli.handoff-sibling-allocation.js';
+import { deriveHandoffSiblingAllocation, reserveHandoffSiblingIndex } from '../src/tooling/portable/adapters/cli/cli.handoff-sibling-allocation.js';
+import { continueHandoffCarrierLineage } from '../src/tooling/portable/handoff/carrierLineage.js';
+import { qualifyDelegationReturnReservation } from '../src/tooling/portable/handoff/delegationReturnReservation.js';
 import { writeExactRecipientTransportBytes } from '../src/tooling/portable/output/recipientV2.zip.js';
 import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integrity/integrity.c14nV2.js';
 import { sha256Hex } from '../src/export/package.bytes.js';
@@ -206,21 +208,86 @@ test('artifact-first Parent recovery cannot use matching Parent bytes to rescue 
   assert.equal(good.basis, 'artifact-first-workspace-qualified-reference');
 });
 
-test('parallel carrier manufacture requires an explicit sibling index instead of local next-slot discovery', async () => {
-  const first = await mkdtemp(path.join(os.tmpdir(), 'tiinex-sibling-a-'));
-  const second = await mkdtemp(path.join(os.tmpdir(), 'tiinex-sibling-b-'));
-  const common = { parentPackageSha256: 'a'.repeat(64), parentDimension: '002-2-2', enabled: true };
-  await assert.rejects(() => reserveHandoffSiblingIndex({ ...common, parentPackagePath: path.join(first, 'parent.zip') }), /explicit-index-required/);
-  await assert.rejects(() => reserveHandoffSiblingIndex({ ...common, parentPackagePath: path.join(second, 'parent.zip') }), /explicit-index-required/);
+test('qualified selected Handoff Pointer topology derives dense non-Major carrier siblings without manual reservation', () => {
+  const oneRoute = { detected: true, status: 'valid', routes: [
+    { pointerPath: '001-4-1-1-1-handoff-pointer.trace.md', routeId: 'route:only', workspaceId: 'core', workspaceRelativeHandoffPath: '.topics/handoffs/only.trace.md' }
+  ] };
+  const single = deriveHandoffSiblingAllocation({ parentInspection: oneRoute, parentDimension: '001-7', parentPackagePath: '/tmp/core-parent.zip', parentPackageSha256: 'a'.repeat(64) });
+  assert.equal(single.state, 'qualified');
+  assert.equal(single.siblingIndex, 1);
+  assert.equal(single.childDimension, '001-7-1');
+  assert.equal(single.provenance.basis, 'qualified-parent-route-pointer-ordinal');
+  assert.equal(single.provenance.qualifiedRouteCount, 1);
 
-  const one = await reserveHandoffSiblingIndex({ ...common, parentPackagePath: path.join(first, 'parent.zip'), siblingIndex: 1 });
-  const two = await reserveHandoffSiblingIndex({ ...common, parentPackagePath: path.join(second, 'parent.zip'), siblingIndex: 2 });
-  assert.equal(one.siblingIndex, 1);
-  assert.equal(two.siblingIndex, 2);
+  const parallel = { detected: true, status: 'valid', routes: [
+    { pointerPath: '001-4-2-handoff-pointer.trace.md', routeId: 'route:b', workspaceId: 'core', workspaceRelativeHandoffPath: '.topics/handoffs/b.trace.md' },
+    { pointerPath: '001-4-1-handoff-pointer.trace.md', routeId: 'route:a', workspaceId: 'core', workspaceRelativeHandoffPath: '.topics/handoffs/a.trace.md' },
+    { pointerPath: '001-4-3-handoff-pointer.trace.md', routeId: 'route:c', workspaceId: 'core', workspaceRelativeHandoffPath: '.topics/handoffs/c.trace.md' }
+  ] };
+  const a = deriveHandoffSiblingAllocation({ parentInspection: parallel, selectedRoutePointer: '001-4-1-handoff-pointer.trace.md', parentDimension: '001' });
+  const b = deriveHandoffSiblingAllocation({ parentInspection: parallel, selectedRouteId: 'route:b', parentDimension: '001' });
+  const c = deriveHandoffSiblingAllocation({ parentInspection: parallel, selectedRoutePointer: '001-4-3-handoff-pointer.trace.md', parentDimension: '001' });
+  assert.deepEqual([a.siblingIndex, b.siblingIndex, c.siblingIndex], [1, 2, 3]);
+  assert.deepEqual(b.provenance.pointerOrder.map((item) => item.routeId), ['route:a', 'route:b', 'route:c']);
+});
+
+test('parallel branches return by appending their own dense -1 continuation and prefix families remain independent', () => {
+  assert.equal(continueHandoffCarrierLineage({ dimension: '001-1' }, 1).dimension, '001-1-1');
+  assert.equal(continueHandoffCarrierLineage({ dimension: '001-2' }, 1).dimension, '001-2-1');
+  assert.equal(continueHandoffCarrierLineage({ dimension: '001-1-1' }, 1).dimension, '001-1-1-1');
+
+  const topology = { detected: true, status: 'valid', routes: [
+    { pointerPath: '001-3-1-handoff-pointer.trace.md', routeId: 'route:a' },
+    { pointerPath: '001-3-2-handoff-pointer.trace.md', routeId: 'route:b' }
+  ] };
+  const business = deriveHandoffSiblingAllocation({ parentInspection: topology, selectedRouteId: 'route:b', parentDimension: '004-9', parentPackagePath: '/tmp/business-parent.zip' });
+  const core = deriveHandoffSiblingAllocation({ parentInspection: topology, selectedRouteId: 'route:b', parentDimension: '004-9', parentPackagePath: '/tmp/tiinex-core-parent.zip' });
+  assert.equal(business.siblingIndex, 2);
+  assert.equal(core.siblingIndex, 2);
+  assert.notEqual(business.provenance.parentPackagePath, core.provenance.parentPackagePath);
+});
+
+test('explicit carrier sibling override is accepted only when it matches qualified topology and ambiguity fails visible', () => {
+  const parallel = { detected: true, status: 'valid', routes: [
+    { pointerPath: '001-4-1-handoff-pointer.trace.md', routeId: 'route:a' },
+    { pointerPath: '001-4-2-handoff-pointer.trace.md', routeId: 'route:b' }
+  ] };
+  const matched = deriveHandoffSiblingAllocation({ parentInspection: parallel, selectedRouteId: 'route:b', explicitSiblingIndex: 2, parentDimension: '001' });
+  assert.equal(matched.state, 'qualified');
+  assert.equal(matched.explicitOverride, 'matched-derived-value');
+  const conflict = deriveHandoffSiblingAllocation({ parentInspection: parallel, selectedRouteId: 'route:b', explicitSiblingIndex: 1, parentDimension: '001' });
+  assert.equal(conflict.state, 'blocked');
+  assert.equal(conflict.reasonCode, 'explicit-sibling-index-conflicts-with-qualified-topology');
+  const noSelection = deriveHandoffSiblingAllocation({ parentInspection: parallel, parentDimension: '001' });
+  assert.equal(noSelection.state, 'blocked');
+  assert.equal(noSelection.reasonCode, 'selected-parent-route-required-for-parallel-topology');
+  const invalid = deriveHandoffSiblingAllocation({ parentInspection: { detected: true, status: 'invalid', routes: [] }, explicitSiblingIndex: 1, parentDimension: '001' });
+  assert.equal(invalid.state, 'blocked');
+  assert.equal(invalid.reasonCode, 'qualified-parent-route-topology-invalid');
+});
+
+test('legacy explicit sibling reservation remains available only when qualified topology is unavailable', async () => {
+  const first = await mkdtemp(path.join(os.tmpdir(), 'tiinex-sibling-legacy-'));
+  const common = { parentPackageSha256: 'a'.repeat(64), parentDimension: '002-2-2', enabled: true, parentPackagePath: path.join(first, 'parent.zip') };
+  await assert.rejects(() => reserveHandoffSiblingIndex(common), /explicit-index-required/);
+  const one = await reserveHandoffSiblingIndex({ ...common, siblingIndex: 1 });
   assert.equal(one.state, 'reserved-explicit');
-  assert.equal(two.state, 'reserved-explicit');
-  const repeated = await reserveHandoffSiblingIndex({ ...common, parentPackagePath: path.join(first, 'parent.zip'), siblingIndex: 1 });
+  const repeated = await reserveHandoffSiblingIndex({ ...common, siblingIndex: 1 });
   assert.equal(repeated.state, 'reused-explicit');
+});
+
+test('return Handoff transport no longer requires a semantic or CLI sibling reservation', () => {
+  const markdown = '# Return\n\n## Completion Expectation\n\n- Signal Kind: return\n- Signal Meaning: return the qualified result\n- Return To: Anchor\n';
+  const derived = qualifyDelegationReturnReservation({ markdown });
+  assert.equal(derived.state, 'qualified');
+  assert.equal(derived.carrierKind, 'non-major');
+  assert.equal(derived.siblingIndex, null);
+  assert.equal(derived.allocationMode, 'derive-from-qualified-recipient-selected-pointer');
+  const explicit = qualifyDelegationReturnReservation({ markdown, returnPackageSiblingIndex: 2 });
+  assert.equal(explicit.state, 'qualified');
+  assert.equal(explicit.siblingIndex, 2);
+  const invalid = qualifyDelegationReturnReservation({ markdown, returnPackageSiblingIndex: 'x' });
+  assert.equal(invalid.state, 'blocked');
 });
 
 test('exact carrier output is idempotent for identical bytes and fails closed on divergent bytes', async () => {

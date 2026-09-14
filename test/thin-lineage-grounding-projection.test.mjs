@@ -5,8 +5,15 @@ import { projectGroundingParticipantContext } from '../src/tooling/portable/grou
 import { projectGroundingSourceEvidence } from '../src/tooling/portable/grounding/grounding.sourceEvidence.js';
 import { projectGroundingOrchestrationReadiness } from '../src/tooling/portable/grounding/grounding.orchestrationReadiness.js';
 import { projectGroundingProcessApplicability } from '../src/tooling/portable/grounding/grounding.processApplicability.js';
+import { projectGroundingImplementationSourceAuthority } from '../src/tooling/portable/grounding/grounding.implementationSourceAuthority.js';
 import { projectGroundingAuthority } from '../src/tooling/portable/grounding/grounding.readiness.authority.js';
+import { projectHolderBindingAuthorization } from '../src/tooling/portable/grounding/grounding.holderBindingAuthorization.js';
 import { projectCommonCliDefaultOutput } from '../src/tooling/portable/adapters/cli/cli.common-output.js';
+import { composeGroundingReadiness } from '../src/tooling/portable/grounding/grounding.readiness.js';
+import { normalizePortableInput } from '../src/tooling/portable/input/portable.input.js';
+import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
+import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integrity/integrity.c14nV2.js';
+import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodReference.js';
 
 test('package-carried Role grounding never becomes semantic participation', () => {
   const projected = projectGroundingParticipantContext({
@@ -170,4 +177,220 @@ test('common ground projection keeps bounded action and wider orchestration sepa
   assert.equal(output.orchestrationReadiness.widerOrchestration.state, 'not-established');
   assert.equal(output.requiredContext.items[0].purpose, 'read-only semantic boundary');
   assert.equal(output.requiredContext.items[0].provenance.basis, 'selected-handoff-required-context-declaration');
+});
+
+
+const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
+const TASK_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/053d46ce082d4ec261b82abc44ecca403d61e240/.topics/.schemas/core/task/tiinex.task.v1.schema.md';
+const ROLE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/party/role/tiinex.party.role.v1.schema.md';
+
+function boundedActionReadinessFixture({ workspaceQualification = 'qualified', requiredState = 'qualified', holderState = 'qualified', holderAuthorization = 'qualified' } = {}) {
+  const seal = (markdown) => {
+    const sealed = sealC14nV2Self(markdown);
+    assert.equal(sealed.state, 'sealed');
+    return `${sealed.markdown}\n`;
+  };
+  const task = seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.task.v1](${TASK_SCHEMA_TARGET})\n  - Created At: 2026-09-14 10:00:00\n  - Authors: Fixture\n  - Why: Exercise bounded readiness.\n  - Summary: Bounded readiness task.\n  - Status: ready/local\n\n---\n\n# Bounded readiness task\n\n## Objective\n\nAct only on exact qualified carried material.\n\n## Done Criteria\n\nThe bounded route is actionable without claiming complete Workspace authority.\n\n## Scope\n\nPortable grounding readiness only.\n\n## Dependencies\n\nNone.\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
+  const taskDigest = validatedC14nV2PrimarySelfDigest(task).value;
+  const role = seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE_SCHEMA_TARGET})\n  - Created At: 2026-09-14 10:00:00\n  - Authors: Fixture\n  - Why: Exercise bounded recipient authority.\n  - Summary: Anchor Role fixture.\n  - Status: active/local\n\n---\n\n# Anchor\n\n## Role Identity\n\n- Role Label: Anchor\n- Role Kind: operational\n\n## Role Boundary\n\n- In Scope: bounded readiness fixture\n- Out Of Scope: wider authority\n\n## Authority And Responsibility Boundary\n\n- May Do: exercise exact bounded action\n- Does Not Authorize: whole-program authority\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session or Handoff\n\n## Interpretation Limits\n\n- Does Not Prove: human identity\n- Must Not Be Treated As: broader semantic authority\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
+  const handoff = qualifiedHandoffFixture({
+    from: 'Anchor',
+    to: 'Anchor',
+    parent: { trace: 'task.trace.md', relative: 'task.trace.md', includeBrowseGit: false, targetValue: taskDigest },
+    requiredContext: '- Anchor Role\n  - Material: qualified Anchor Role\n  - Purpose: bounded recipient authority\n  - Availability: available\n  - Material Reference: [Anchor](role.trace.md)'
+  });
+  const material = normalizePortableInput({ files: [
+    { path: 'business/task.trace.md', content: task },
+    { path: 'business/role.trace.md', content: role },
+    { path: 'business/handoff.trace.md', content: handoff }
+  ] });
+  return composeGroundingReadiness({
+    mode: 'routed-handoff-package',
+    authority: {
+      status: 'ready',
+      selectedRoute: { id: 'bounded-route', pointerPath: '001-pointer.trace.md', workspaceId: 'business', workspaceRelativeHandoffPath: 'handoff.trace.md' },
+      handoff: { purpose: 'bounded readiness', from: 'Anchor', to: 'Anchor', transfers: [] },
+      role: { state: 'qualified', endpoint: { label: 'Anchor', kind: 'role' } },
+      holderBinding: {
+        state: holderState,
+        roleLabel: holderState === 'qualified' || holderState === 'blocked' ? 'Anchor' : '',
+        authorization: {
+          state: holderAuthorization,
+          holderState: holderAuthorization === 'qualified' ? 'assignable per explicit session or Handoff' : '',
+          provenance: { roleArtifactPath: 'business/role.trace.md' }
+        }
+      }
+    },
+    continuation: { state: 'ready' },
+    contextAudit: {
+      status: 'ready',
+      coverage: { state: 'qualified' },
+      workspaceMaterializations: [{ workspaceId: 'business', coverage: 'bounded', reason: 'bounded-workspace-archive-representation', qualification: workspaceQualification }]
+    },
+    material,
+    requiredContext: [{
+      requirementId: 'required:anchor-role',
+      name: 'Anchor Role',
+      material: 'qualified Anchor Role',
+      purpose: 'bounded recipient authority',
+      declaredAvailability: 'available',
+      state: requiredState,
+      providerMode: 'archive',
+      kind: 'workspace-archive-entry',
+      workspaceId: 'business',
+      innerPath: 'role.trace.md',
+      referenceTarget: 'business::role.trace.md'
+    }]
+  });
+}
+
+test('qualified bounded Workspace carriage can become grounded-to-act without becoming complete or whole-program authority', () => {
+  const result = boundedActionReadinessFixture();
+  assert.equal(result.readiness.state, 'grounded-to-act');
+  assert.equal(result.coverage.workspaceSnapshots.qualified, true);
+  assert.equal(result.coverage.workspaceSnapshots.completeCount, 0);
+  assert.equal(result.coverage.workspaceSnapshots.boundedCount, 1);
+  assert.match(result.coverage.workspaceSnapshots.boundary, /never implies whole-Workspace or whole-program authority/);
+  assert.equal(result.orchestrationReadiness.state, 'bounded-route-only');
+  assert.equal(result.orchestrationReadiness.widerOrchestration.state, 'not-established');
+  assert.ok(result.orchestrationReadiness.widerOrchestration.blockers.some((item) => item.code === 'source-authority-scope-bounded'));
+  assert.equal(result.capsule.implementationSourceAuthority.state, 'unresolved');
+  assert.equal(result.capsule.implementationSourceAuthority.unresolved[0].code, 'implementation-source-authority-not-established');
+  assert.equal(result.readiness.missingEvidence.some((item) => item.code === 'workspace-snapshot-coverage-unqualified'), false);
+});
+
+
+test('matching holder assertion stays discussion-only when exact Role assignment authorization is unresolved', () => {
+  const result = boundedActionReadinessFixture({ holderAuthorization: 'unresolved' });
+  assert.equal(result.readiness.state, 'grounded-to-discuss');
+  assert.ok(result.readiness.reasons.some((item) => item.code === 'session-holder-role-binding-authorization-unresolved'));
+  assert.equal(result.readiness.nextAction.kind, 'resolve-session-holder-binding-authorization');
+  assert.equal(result.readiness.nextAction.target, 'business/role.trace.md');
+});
+
+test('authorized Role assignment still requires an explicit matching session assertion', () => {
+  const result = boundedActionReadinessFixture({ holderState: 'unresolved', holderAuthorization: 'qualified' });
+  assert.equal(result.readiness.state, 'grounded-to-discuss');
+  assert.ok(result.readiness.reasons.some((item) => item.code === 'session-holder-role-binding-unresolved'));
+  assert.equal(result.readiness.nextAction.kind, 'declare-explicit-session-holder-role-binding');
+});
+
+test('holder Role mismatch remains blocking even when Role material authorizes the assignment mode', () => {
+  const result = boundedActionReadinessFixture({ holderState: 'blocked', holderAuthorization: 'qualified' });
+  assert.equal(result.readiness.state, 'insufficient-grounding');
+  assert.ok(result.readiness.missingEvidence.some((item) => item.code === 'session-holder-role-binding-blocked'));
+});
+
+test('holder-binding authorization accepts only exact qualified Role Holder Relationship authority', () => {
+  const baseRole = {
+    state: 'qualified',
+    endpoint: { label: 'Loom', kind: 'role' },
+    material: { state: 'qualified', artifact: { path: 'business/.topics/roles/loom.trace.md', sha256: 'a'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Loom' } }
+  };
+  const authorized = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: 'assignable per explicit session or Handoff' } });
+  assert.equal(authorized.state, 'qualified');
+  assert.equal(authorized.assignmentMode, 'explicit-session-or-handoff');
+  assert.equal(authorized.provenance.basis, 'exact-qualified-role-holder-relationship');
+  assert.equal(authorized.provenance.roleArtifactPath, 'business/.topics/roles/loom.trace.md');
+
+  const currentRoleWording = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: 'assignable per explicit session, role invocation, or Handoff; no permanent holder asserted' } });
+  assert.equal(currentRoleWording.state, 'qualified');
+  const anchorRoleWording = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: 'assignable per explicit session or Handoff; no permanent holder asserted' } });
+  assert.equal(anchorRoleWording.state, 'qualified');
+  assert.equal(currentRoleWording.assignmentMode, 'explicit-session-or-handoff');
+
+  const silent = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: '' } });
+  assert.equal(silent.state, 'unresolved');
+  assert.equal(silent.reasonCode, 'holder-assignment-mode-unresolved');
+
+  const differentInstrument = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: 'requires signed delegation instrument' } });
+  assert.equal(differentInstrument.state, 'unresolved');
+  assert.equal(differentInstrument.reasonCode, 'holder-assignment-mode-not-authorized');
+});
+
+test('bounded Workspace carriage stays blocked when its representation is not independently qualified', () => {
+  const result = boundedActionReadinessFixture({ workspaceQualification: 'unresolved' });
+  assert.equal(result.readiness.state, 'insufficient-grounding');
+  assert.equal(result.coverage.workspaceSnapshots.qualified, false);
+  assert.equal(result.coverage.workspaceSnapshots.boundedCount, 1);
+  assert.equal(result.coverage.workspaceSnapshots.unqualified[0].qualification, 'unresolved');
+  const blocker = result.readiness.missingEvidence.find((item) => item.code === 'workspace-snapshot-coverage-unqualified');
+  assert.ok(blocker);
+  assert.match(blocker.message, /independently qualified as complete or bounded/);
+});
+
+test('bounded Workspace carriage cannot bypass an unqualified exact Required Context item', () => {
+  const result = boundedActionReadinessFixture({ requiredState: 'unresolved' });
+  assert.equal(result.readiness.state, 'insufficient-grounding');
+  assert.ok(result.readiness.missingEvidence.some((item) => item.code === 'required-context-unqualified'));
+  assert.equal(result.readiness.missingEvidence.some((item) => item.code === 'workspace-snapshot-coverage-unqualified'), false);
+  assert.equal(result.coverage.workspaceSnapshots.boundedCount, 1);
+});
+
+
+test('holder binding projection distinguishes explicit session input from semantic holder-assignment authority', () => {
+  const projected = projectGroundingAuthority({
+    status: 'ready',
+    selectedRoute: { id: 'r', pointerPath: '001-pointer.trace.md', workspaceId: 'core', workspaceRelativeHandoffPath: 'handoff.trace.md' },
+    handoff: { purpose: 'p', from: 'Anchor', to: 'Loom', transfers: [] },
+    role: { state: 'qualified', endpoint: { label: 'Loom', kind: 'role' } },
+    holderBinding: {
+      state: 'qualified', roleLabel: 'Loom', recipientRoleLabel: 'Loom', recipientCompatibility: 'matched', source: 'explicit-input', explicit: true, inferredFromTransport: false,
+      sourceDetail: { kind: 'operator-session-input', locator: 'cli:--holder-role', authorityClass: 'session-binding-input-only', semanticAuthorityState: 'not-established', qualifiedMaterialSource: false }
+    },
+    mutationBoundary: { sourceMutation: false, remoteWrite: false }
+  }, 'routed-handoff-package');
+  assert.equal(projected.holderBinding.bindingPresent, true);
+  assert.equal(projected.holderBinding.declarationPresent, true);
+  assert.equal(projected.holderBinding.recipientCompatibility, 'matched');
+  assert.equal(projected.holderBinding.sourceDetail.locator, 'cli:--holder-role');
+  assert.equal(projected.holderBinding.sourceDetail.authorityClass, 'session-binding-input-only');
+  assert.equal(projected.holderBinding.semanticAuthorityState, 'not-established');
+  assert.equal(projected.holderBinding.provenance.qualifiedMaterialSource, false);
+});
+
+test('writable complete Business Workspace and executable Task do not establish implementation-source creation authority', () => {
+  const projected = projectGroundingImplementationSourceAuthority({
+    authority: { status: 'ready' },
+    records: [{
+      path: 'business/.topics/.workspaces/tiinex-business.workspace.md',
+      hasContinuityContext: true,
+      hasIntegrity: true,
+      markdown: '# Continuity Context\n\n---\n\n# Business\n\n## Workspace Boundary\n\nImplementation work may be staged in this Workspace when separately authorized.\n\n# Continuity Integrity\n'
+    }],
+    contextAudit: { workspaceMaterializations: [{ workspaceId: 'business', qualification: 'qualified', coverage: 'complete', sourceWorkspaceTargetInnerPath: '.topics/.workspaces/tiinex-business.workspace.md', sourceWorkspaceTargetSha256: 'a'.repeat(64) }] },
+    requiredContext: [{ requirementId: 'business-workspace', state: 'qualified', workspaceId: 'business', purpose: 'writable implementation and regression basis.', provenance: { basis: 'selected-handoff-required-context-declaration', declarationSource: { line: 42, endLine: 46 } } }]
+  });
+  assert.equal(projected.state, 'unresolved');
+  assert.deepEqual(projected.facts, []);
+  assert.equal(projected.unresolved[0].code, 'implementation-source-authority-not-established');
+  assert.equal(projected.descriptiveFacts.length, 2);
+  assert.equal(projected.descriptiveFacts.every((item) => item.authorityEffect === 'descriptive-only'), true);
+  assert.match(projected.descriptiveFacts[0].provenance.boundary, /does not reinterpret boundary prose as implementation-source creation permission/);
+  assert.match(projected.descriptiveFacts[1].text, /writable implementation and regression basis/);
+  assert.match(projected.boundary, /does not define allow\/deny meaning/);
+});
+
+test('implementation-source authority accepts only an exact upstream-qualified projection and passes it through without interpretation', () => {
+  const qualified = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: {
+    explicit: true,
+    qualification: 'qualified',
+    sourceArtifact: { workspaceId: 'docs', path: '.topics/interpretations/source-authority.trace.md', sha256: 'b'.repeat(64), schemaId: 'tiinex.interpretation.v1' },
+    facts: [{ id: 'semantic-owner-fact', disposition: 'upstream-owned' }],
+    provenance: { owner: 'semantic-owner' }
+  } } });
+  assert.equal(qualified.state, 'explicit-qualified-upstream-projection');
+  assert.equal(qualified.facts[0].id, 'semantic-owner-fact');
+  assert.equal(qualified.provenance.sourceArtifact.path, '.topics/interpretations/source-authority.trace.md');
+  assert.deepEqual(qualified.unresolved, []);
+  assert.match(qualified.boundary, /upstream semantic owner defines the meaning/);
+
+  const inexact = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: {
+    explicit: true,
+    qualification: 'qualified',
+    sourceArtifact: { path: '.topics/interpretations/source-authority.trace.md', sha256: '' },
+    facts: [{ disposition: 'must-not-pass' }]
+  } } });
+  assert.equal(inexact.state, 'unresolved');
+  assert.deepEqual(inexact.facts, []);
 });

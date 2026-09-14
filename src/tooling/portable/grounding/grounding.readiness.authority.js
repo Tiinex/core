@@ -38,16 +38,31 @@ export function projectGroundingAuthority(authority, mode) {
     role: authority.role ? Object.freeze({ state: authority.role.state || '', label: authority.role.endpoint?.label || '', kind: authority.role.endpoint?.kind || '' }) : null,
     holderBinding: authority.holderBinding ? Object.freeze({
       state: authority.holderBinding.state || '',
+      bindingPresent: String(authority.holderBinding.state || '') === 'qualified',
+      declarationPresent: Boolean(authority.holderBinding.explicit),
       holderId: authority.holderBinding.holderId || '',
       roleLabel: authority.holderBinding.roleLabel || '',
       recipientRoleLabel: authority.holderBinding.recipientRoleLabel || '',
       recipientCompatibility: authority.holderBinding.recipientCompatibility || '',
       source: authority.holderBinding.source || '',
+      sourceDetail: authority.holderBinding.sourceDetail ? Object.freeze({ ...(authority.holderBinding.sourceDetail || {}) }) : null,
+      authorization: authority.holderBinding.authorization ? Object.freeze({
+        ...(authority.holderBinding.authorization || {}),
+        provenance: authority.holderBinding.authorization.provenance ? Object.freeze({ ...(authority.holderBinding.authorization.provenance || {}) }) : null
+      }) : null,
+      durableIdentity: authority.holderBinding.durableIdentity ? Object.freeze({ ...(authority.holderBinding.durableIdentity || {}) }) : Object.freeze({ state: 'not-established' }),
+      semanticAuthorityState: authority.holderBinding.sourceDetail?.semanticAuthorityState || 'not-established',
       explicit: Boolean(authority.holderBinding.explicit),
       inferredFromTransport: Boolean(authority.holderBinding.inferredFromTransport),
       provenance: Object.freeze({
         basis: authority.holderBinding.explicit ? 'explicit-consuming-session-holder-binding' : 'unresolved-or-non-explicit-holder-binding',
         source: authority.holderBinding.source || '',
+        sourceKind: authority.holderBinding.sourceDetail?.kind || '',
+        sourceLocator: authority.holderBinding.sourceDetail?.locator || '',
+        semanticAuthorityState: authority.holderBinding.sourceDetail?.semanticAuthorityState || 'not-established',
+        qualifiedMaterialSource: Boolean(authority.holderBinding.sourceDetail?.qualifiedMaterialSource),
+        authorizationState: authority.holderBinding.authorization?.state || 'unresolved',
+        authorizationBasis: authority.holderBinding.authorization?.provenance?.basis || '',
         boundary: authority.holderBinding.boundary || 'Consuming-session holder identity is never inferred from route transport or recipient position.'
       }),
       boundary: authority.holderBinding.boundary || ''

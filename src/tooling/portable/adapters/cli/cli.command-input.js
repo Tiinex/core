@@ -117,7 +117,7 @@ export async function commandInput(parsed, runtime = {}) {
         packageSourcePath: packagePath,
         includeLegacyTopics: Boolean(flags['include-legacy-topics']),
         includeRequiredContext: flags['include-required-context'] || '',
-        holderBinding: { roleLabel: flags['holder-role'] || '', holderId: flags['holder-id'] || '' },
+        holderBinding: { roleLabel: flags['holder-role'] || '', holderId: flags['holder-id'] || '', sourceLocator: holderBindingCliSource(flags) },
         host,
         recoveryAcceptance
       },
@@ -471,4 +471,11 @@ function mergeLoadedMaterial(primary = {}, secondary = {}) {
 }
 
 function normalizeRuntimePaths(value) { const paths = Array.isArray(value) ? value : value ? [value] : []; return paths.map((entry) => String(entry || '').trim()).filter(Boolean); }
+function holderBindingCliSource(flags = {}) {
+  const fields = [];
+  if (Object.prototype.hasOwnProperty.call(flags, 'holder-role')) fields.push('--holder-role');
+  if (Object.prototype.hasOwnProperty.call(flags, 'holder-id')) fields.push('--holder-id');
+  return fields.length ? `cli:${fields.join(',')}` : '';
+}
+
 function splitFlag(value) { return !value || value === true ? [] : String(value).split(',').map((item) => item.trim()).filter(Boolean); }

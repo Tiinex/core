@@ -32,14 +32,16 @@ export function qualifyDelegationReturnReservation(input = {}) {
     });
   }
 
+  const rawSupplied = rawIndex !== undefined && rawIndex !== null && String(rawIndex).trim() !== '';
   const siblingIndex = parseSiblingIndex(rawIndex);
-  if (siblingIndex === null) findings.push(finding('error', 'portable.delegation-return-reservation.sibling-index.required', 'A return Handoff is transport-not-ready until the delegator supplies one explicit non-Major return package sibling index in the supported range 1..9999.'));
+  if (rawSupplied && siblingIndex === null) findings.push(finding('error', 'portable.delegation-return-reservation.sibling-index.invalid', 'Explicit return package sibling override must be an integer in the supported range 1..9999.'));
   return freeze({
     schema: PORTABLE_DELEGATION_RETURN_RESERVATION_SCHEMA_ID,
     state: findings.length ? 'blocked' : 'qualified',
     returnExpected: true,
     carrierKind: 'non-major',
     siblingIndex,
+    allocationMode: siblingIndex === null ? 'derive-from-qualified-recipient-selected-pointer' : 'explicit-advanced-override',
     findings,
     boundary: boundary()
   });
@@ -95,7 +97,7 @@ function field(section = '', name = '') {
   const match = String(section || '').match(new RegExp(`^\\s*-\\s+${escapeRegExp(name)}\\s*:\\s*(.+?)\\s*$`, 'mi'));
   return String(match?.[1] || '').trim();
 }
-function boundary() { return 'Transport preflight only. It validates an explicit delegator-coordinated return reservation and never allocates, discovers, increments, guesses, recycles, or promotes a sibling index into semantic Parent, Workspace, Role, acceptance, or completion authority.'; }
+function boundary() { return 'Transport preflight only. Ordinary non-Major return allocation is derived later from the exact qualified selected parent Handoff Pointer ordinal; an explicit return sibling index is an advanced compatibility override only. This projection never promotes transport allocation into semantic Parent, Workspace, Role, acceptance, completion, participant, process, or source authority.'; }
 function finding(severity, code, message) { return Object.freeze({ severity, code, message }); }
 function escapeRegExp(value = '') { return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function freeze(value) { if (Array.isArray(value)) return Object.freeze(value.map(freeze)); if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value; return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, item]) => [key, freeze(item)]))); }

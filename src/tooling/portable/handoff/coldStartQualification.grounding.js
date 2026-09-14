@@ -31,6 +31,7 @@ import {
   normalizeStringList,
   normalizeToken
 } from './coldStartQualification.shared.js';
+import { projectHolderBindingAuthorization } from '../grounding/grounding.holderBindingAuthorization.js';
 
 export function groundPortableColdConsumer(input = {}, options = {}) {
   const ingressKind = normalizeIngressKind(input.ingressKind || input.kind || (input.toolingAvailable === false ? COLD_START_INGRESS_KINDS.DEGRADED_CAPTURE : COLD_START_INGRESS_KINDS.HANDOFF));
@@ -59,7 +60,7 @@ export function groundPortableColdConsumer(input = {}, options = {}) {
 
   const bundle = input.bundle || input.package || input;
   const role = groundRecipientRole(input, handoff, bundle, orientation, selectedRoute, findings, materialContext);
-  const holderBinding = groundHolderBinding(input, handoff, findings);
+  const holderBinding = groundHolderBinding(input, handoff, role, findings);
   const participation = groundParticipation(input, handoff, bundle, orientation, selectedRoute, findings, materialContext);
   const interaction = groundInteraction(input, handoff);
 
@@ -68,7 +69,12 @@ export function groundPortableColdConsumer(input = {}, options = {}) {
   }
 
   const blocked = findings.some((finding) => finding.severity === 'error');
-  const degraded = degradedCapture.active || role.state === 'degraded' || holderBinding.state === 'unresolved' || interaction.modeState === 'unresolved' || participation.participantState === 'unresolved';
+  const degraded = degradedCapture.active
+    || role.state === 'degraded'
+    || holderBinding.state === 'unresolved'
+    || holderBinding.authorization?.state === 'unresolved'
+    || interaction.modeState === 'unresolved'
+    || participation.participantState === 'unresolved';
   return deepFreeze({
     schema: PORTABLE_COLD_CONSUMER_GROUNDING_SCHEMA_ID,
     version: 1,
@@ -178,13 +184,14 @@ function groundRecipientRole(input, handoff, bundle, orientation, selectedRoute,
     compatibility,
     exactBoundaryLoaded: selected ? selected.boundary : null,
     authorityBoundaryLoaded: selected ? selected.authorityBoundary : null,
+    holderRelationshipLoaded: selected ? selected.holderRelationship : null,
     interpretationLimitsLoaded: selected ? selected.interpretationLimits : null,
     boundary: 'A Handoff `To Kind: role` endpoint remains bounded even when current Role material is missing. Matching Role material qualifies the loaded boundary but does not prove a human holder, consent, or authority beyond the Role artifact itself.'
   });
 }
 
 
-function groundHolderBinding(input, handoff, findings) {
+function groundHolderBinding(input, handoff, role, findings) {
   const raw = input.holderBinding || input.sessionHolderBinding || input.sessionRoleBinding || {};
   const explicit = typeof raw === 'string' ? { roleLabel: raw } : (raw && typeof raw === 'object' ? raw : {});
   const roleLabel = String(explicit.roleLabel || explicit.role || input.holderRole || input.sessionRole || '').trim();
@@ -193,6 +200,9 @@ function groundHolderBinding(input, handoff, findings) {
   const recipientRoleKind = normalizeToken(handoff.toKind || (recipientRoleLabel ? 'role' : ''));
   const roleRecipient = recipientRoleKind === 'role';
   const explicitlySupplied = Boolean(roleLabel || holderId);
+  const sourceDetail = holderBindingSourceDetail(input, explicit, explicitlySupplied);
+  const authorization = projectHolderBindingAuthorization(role);
+  const durableIdentity = holderDurableIdentityProjection(holderId);
 
   if (!roleRecipient) return deepFreeze({
     state: 'not-applicable',
@@ -201,6 +211,9 @@ function groundHolderBinding(input, handoff, findings) {
     recipientRoleLabel,
     recipientCompatibility: 'not-applicable',
     source: explicitlySupplied ? 'explicit-input' : 'none',
+    sourceDetail,
+    authorization,
+    durableIdentity,
     explicit: explicitlySupplied,
     inferredFromTransport: false,
     boundary: 'The selected Handoff recipient is not a Role endpoint, so no consuming-session Role holder binding is required or inferred.'
@@ -215,6 +228,9 @@ function groundHolderBinding(input, handoff, findings) {
       recipientRoleLabel,
       recipientCompatibility: 'unresolved',
       source: explicitlySupplied ? 'explicit-input' : 'none',
+      sourceDetail,
+      authorization,
+      durableIdentity,
       explicit: explicitlySupplied,
       inferredFromTransport: false,
       boundary: 'Recipient Role and consuming-session holder are separate. No holder Role is inferred from route selection, transport identity, provider identity, assistant/user position, or participant declarations.'
@@ -230,6 +246,9 @@ function groundHolderBinding(input, handoff, findings) {
       recipientRoleLabel,
       recipientCompatibility: 'mismatch',
       source: 'explicit-input',
+      sourceDetail,
+      authorization,
+      durableIdentity,
       explicit: true,
       inferredFromTransport: false,
       boundary: 'An explicit holder Role mismatch is contradictory and blocks act-ready grounding. Tooling does not relabel the session to make the route fit.'
@@ -243,9 +262,49 @@ function groundHolderBinding(input, handoff, findings) {
     recipientRoleLabel,
     recipientCompatibility: 'matched',
     source: 'explicit-input',
+    sourceDetail,
+    authorization,
+    durableIdentity,
     explicit: true,
     inferredFromTransport: false,
     boundary: 'Explicit consuming-session Role-capacity binding only. This binds the current Tooling invocation/session to the selected recipient Role capacity; it does not prove a human identity, consent, or authority beyond the qualified Handoff/Role/Task boundaries.'
+  });
+}
+
+function holderDurableIdentityProjection(holderId = '') {
+  return deepFreeze({
+    state: 'not-established',
+    declaredHolderId: String(holderId || ''),
+    boundary: 'A bounded session Role assertion and its assignment authorization do not establish durable Party/person/model holder identity. Exact holder/Party authority would be required separately.'
+  });
+}
+
+function holderBindingSourceDetail(input = {}, explicit = {}, explicitlySupplied = false) {
+  if (!explicitlySupplied) return deepFreeze({
+    kind: 'none',
+    locator: '',
+    authorityClass: 'none',
+    semanticAuthorityState: 'not-established',
+    qualifiedMaterialSource: false,
+    boundary: 'No consuming-session holder declaration was supplied.'
+  });
+  const declaredLocator = String(explicit.sourceLocator || explicit.source || '').trim();
+  let locator = declaredLocator;
+  if (!locator) {
+    if (input.holderBinding) locator = 'input.holderBinding';
+    else if (input.sessionHolderBinding) locator = 'input.sessionHolderBinding';
+    else if (input.sessionRoleBinding) locator = 'input.sessionRoleBinding';
+    else if (input.holderRole || input.holderId) locator = 'input.holderRole/input.holderId';
+    else if (input.sessionRole) locator = 'input.sessionRole';
+    else locator = 'explicit-session-input';
+  }
+  return deepFreeze({
+    kind: 'operator-session-input',
+    locator,
+    authorityClass: 'session-binding-input-only',
+    semanticAuthorityState: 'not-established',
+    qualifiedMaterialSource: false,
+    boundary: 'This source proves only the explicit consuming-session Role-capacity declaration supplied to Tooling. It is not semantic holder-assignment authority carried by qualified material.'
   });
 }
 

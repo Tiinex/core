@@ -79,6 +79,7 @@
     "./tooling/portable/grounding/grounding.capsule.js": "./src/tooling/portable/grounding/grounding.capsule.js",
     "./tooling/portable/grounding/grounding.participantAuthority.js": "./src/tooling/portable/grounding/grounding.participantAuthority.js",
     "./tooling/portable/grounding/grounding.processApplicability.js": "./src/tooling/portable/grounding/grounding.processApplicability.js",
+    "./tooling/portable/grounding/grounding.implementationSourceAuthority.js": "./src/tooling/portable/grounding/grounding.implementationSourceAuthority.js",
     "./tooling/portable/grounding/grounding.readiness.js": "./src/tooling/portable/grounding/grounding.readiness.js",
     "./tooling/portable/grounding/grounding.workProvenance.js": "./src/tooling/portable/grounding/grounding.workProvenance.js",
     "./tooling/portable/handoff/carrierLineage.js": "./src/tooling/portable/handoff/carrierLineage.js",

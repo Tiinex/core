@@ -77,6 +77,7 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
     roundtrip: upgraded.roundtrip || null,
     toolingBootstrap: input.toolingBootstrap || null,
     manufacturingEvidence: input.manufacturingEvidence || null,
+    carrierAllocation: input.carrierAllocation || input.manufacturingEvidence?.carrierAllocation || null,
     schemaReferencePreflight,
     returnCarrierReservationPreflight,
     reconciliationProofQualification,

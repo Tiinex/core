@@ -163,6 +163,7 @@ function projectHandoffDefault(result = {}, parsed = {}) {
       status: String(carrier.status || ''),
       mode: String(carrier.mode || ''),
       lineage: carrier.lineage ? compactCarrierLineage(carrier.lineage) : null,
+      allocation: result.carrierAllocation ? Object.freeze({ ...result.carrierAllocation }) : null,
       route: Object.freeze({
         id: String(route.id || ''),
         state: String(route.state || ''),
@@ -275,11 +276,17 @@ function compactGroundAuthority(authority = {}) {
     }),
     holderBinding: Object.freeze({
       state: String(holderBinding.state || ''),
+      bindingPresent: Boolean(holderBinding.bindingPresent),
+      declarationPresent: Boolean(holderBinding.declarationPresent),
       holderId: String(holderBinding.holderId || ''),
       roleLabel: String(holderBinding.roleLabel || ''),
       recipientRoleLabel: String(holderBinding.recipientRoleLabel || ''),
       recipientCompatibility: String(holderBinding.recipientCompatibility || ''),
       source: String(holderBinding.source || ''),
+      sourceDetail: holderBinding.sourceDetail ? Object.freeze({ ...holderBinding.sourceDetail }) : null,
+      authorization: holderBinding.authorization ? Object.freeze({ ...holderBinding.authorization, provenance: holderBinding.authorization.provenance ? Object.freeze({ ...holderBinding.authorization.provenance }) : null }) : null,
+      durableIdentity: holderBinding.durableIdentity ? Object.freeze({ ...holderBinding.durableIdentity }) : Object.freeze({ state: 'not-established' }),
+      semanticAuthorityState: String(holderBinding.semanticAuthorityState || 'not-established'),
       explicit: Boolean(holderBinding.explicit),
       inferredFromTransport: Boolean(holderBinding.inferredFromTransport),
       provenance: holderBinding.provenance ? Object.freeze({ ...holderBinding.provenance }) : null

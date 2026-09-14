@@ -113,6 +113,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     const route = authority?.selectedRoute || null;
     const roleState = String(authority?.role?.state || 'unresolved');
     const holderState = String(authority?.holderBinding?.state || 'unresolved');
+    const holderAuthorizationState = String(authority?.holderBinding?.authorization?.state || (holderState === 'not-applicable' ? 'not-applicable' : 'unresolved'));
     if (!route || String(authority?.status || '') === 'blocked') missing(missingEvidence, unresolved, 'authority-route-unqualified', 'The selected Handoff route is not qualified for this grounding result.');
     else known.push(evidence('qualified-handoff-route', 'qualified', route.id || route.pointerPath || 'selected-route'));
     if (roleState === 'qualified' || roleState === 'not-applicable') known.push(evidence('recipient-role-boundary', roleState, authority?.role?.endpoint?.label || 'recipient'));
@@ -120,7 +121,6 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     else missing(missingEvidence, unresolved, 'recipient-role-unresolved', 'The Handoff recipient Role boundary is not qualified for act-ready grounding.');
 
     if (holderState === 'qualified' || holderState === 'not-applicable') {
-      holderBindingActReady = true;
       known.push(evidence('session-holder-role-binding', holderState, authority?.holderBinding?.roleLabel || authority?.role?.endpoint?.label || 'recipient'));
     } else if (holderState === 'blocked') {
       holderBindingActReady = false;
@@ -131,13 +131,28 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
       reasons.push(reason('session-holder-role-binding-unresolved', 'The selected recipient Role does not assign itself to this consuming session. Supply an explicit matching session holder Role binding before act-ready continuation.'));
     }
 
+    if (holderState === 'not-applicable') {
+      holderBindingActReady = true;
+      known.push(evidence('session-holder-role-binding-authorization', 'not-applicable', 'selected Handoff recipient is not a Role endpoint'));
+    } else if (holderState === 'qualified') {
+      if (holderAuthorizationState === 'qualified') {
+        holderBindingActReady = true;
+        known.push(evidence('session-holder-role-binding-authorization', 'qualified', authority?.holderBinding?.authorization?.provenance?.roleArtifactPath || authority?.role?.endpoint?.label || 'recipient Role material'));
+      } else {
+        holderBindingActReady = false;
+        unresolved.push(evidence('session-holder-role-binding-authorization', holderAuthorizationState || 'unresolved', authority?.holderBinding?.authorization?.holderState || 'exact qualified Role Holder Relationship does not establish the explicit-session/Handoff assignment mode'));
+        reasons.push(reason('session-holder-role-binding-authorization-unresolved', 'The explicit consuming-session Role assertion matches the selected recipient Role, but exact qualified Role holder-assignment authority does not establish that assignment mode. Matching session input alone cannot make the route act-ready.'));
+      }
+    }
+
     const required = Array.isArray(requiredContext) ? requiredContext : [];
     const unresolvedRequired = required.filter((entry) => entry.state !== 'qualified');
     if (unresolvedRequired.length) missing(missingEvidence, unresolved, 'required-context-unqualified', `${unresolvedRequired.length} declared Required Context item(s) are not exact-qualified.`);
     else known.push(evidence('required-context-closure', 'qualified', `${required.length} item(s)`));
     if (String(continuation?.state || '') !== 'ready') missing(missingEvidence, unresolved, 'continuation-not-ready', 'The grounded continuation is not ready for substantive work.');
-    if (String(contextAudit?.status || '') !== 'ready' || String(contextAudit?.coverage?.state || '') !== 'qualified') missing(missingEvidence, unresolved, 'workspace-snapshot-coverage-unqualified', 'Complete carried Workspace snapshot coverage is not qualified.');
-    else known.push(evidence('workspace-snapshot-coverage', 'qualified', `${contextAudit.workspaceMaterializations?.length || 0} workspace(s)`));
+    const workspaceCoverage = projectWorkspaceActionCoverage(contextAudit);
+    if (!workspaceCoverage.qualified) missing(missingEvidence, unresolved, 'workspace-snapshot-coverage-unqualified', workspaceCoverage.message);
+    else known.push(evidence('workspace-snapshot-coverage', 'qualified', `${workspaceCoverage.count} workspace representation(s): ${workspaceCoverage.completeCount} complete, ${workspaceCoverage.boundedCount} bounded`));
     for (const item of requiredRecordResolution.missing) missing(missingEvidence, unresolved, 'required-context-not-in-snapshot', item);
     if (!routeRecordIds.size) missing(missingEvidence, unresolved, 'selected-route-not-in-snapshot', 'The qualified selected Handoff route was not found at its exact carried Workspace path.');
   } else {
@@ -148,7 +163,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   if (!records.length) missing(missingEvidence, unresolved, 'no-artifact-records', 'No readable Tiinex artifact records were loaded for grounding.');
   else known.push(evidence('loaded-artifact-records', 'known', `${records.length} record(s)`));
 
-  inferred.push(evidence('relevant-lineage-scope', 'bounded-inference', handoffMode ? 'directed declared-Parent cone around the exact selected Handoff route within complete carried Workspace snapshots plus independently qualified exact detached Parent-boundary cache records' : 'all loaded records'));
+  inferred.push(evidence('relevant-lineage-scope', 'bounded-inference', handoffMode ? 'directed declared-Parent cone around the exact selected Handoff route within qualified carried Workspace representations (complete or bounded as declared) plus independently qualified exact detached Parent-boundary cache records' : 'all loaded records'));
   inferred.push(evidence('lineage-leaf-role', 'bounded-inference', 'derived only from declared Parent edges in the shared resolver'));
 
   if (handoffMode) {
@@ -157,7 +172,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     } else if (topology.routeLeaves.length) {
       known.push(evidence('selected-route-parent-lineage-leaf', 'resolved', `${topology.routeLeaves.length} selected-route leaf/leaves`));
     } else {
-      missing(missingEvidence, unresolved, 'selected-route-lineage-leaf-missing', 'The selected Handoff route is not a resolved Parent-lineage leaf in the complete carried Workspace snapshots.');
+      missing(missingEvidence, unresolved, 'selected-route-lineage-leaf-missing', 'The selected Handoff route is not a resolved Parent-lineage leaf in the qualified carried Workspace material.');
     }
     if (lineageIssues.length > routeBlockingLineageIssues.length) unresolved.push(evidence('upstream-lineage-diagnostics', continuity.state === 'qualified' ? 'degraded-nonblocking' : 'blocking-for-cold-start-continuity', `${lineageIssues.length - routeBlockingLineageIssues.length} upstream Parent-lineage issue(s) remain outside the selected-route edge boundary.`));
   } else if (lineageIssues.length) {
@@ -190,7 +205,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   let state = 'grounded-to-act';
   if (missingEvidence.length) state = 'insufficient-grounding';
   else if (!handoffMode || !holderBindingActReady || !topology.currentFrontier.length || humanOnly.length) state = 'grounded-to-discuss';
-  if (state === 'grounded-to-act') reasons.push(reason('bounded-act-ready', 'Selected Handoff authority, explicit consuming-session holder Role binding, Required Context, carried Workspace coverage, cold-start continuity to a qualified semantic root, the selected-route Parent-lineage leaf, and declared current-work frontier evidence are all resolved enough for the next bounded action.'));
+  if (state === 'grounded-to-act') reasons.push(reason('bounded-act-ready', 'Selected Handoff authority, explicit consuming-session holder Role binding, exact qualified holder-assignment authorization where the recipient is a Role, exact Required Context, qualified carried Workspace coverage (complete or bounded as declared), cold-start continuity to a qualified semantic root, the selected-route Parent-lineage leaf, and declared current-work frontier evidence are all resolved enough for the next bounded action.'));
   const orchestrationReadiness = projectGroundingOrchestrationReadiness({ readinessState: state, participantContext: capsule.participantContext, processApplicability: capsule.processApplicability, sourceEvidence: capsule.sourceEvidence, topology });
 
   return Object.freeze({
@@ -218,11 +233,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
         requestedSelectors: requiredContextProjection.requestedSelectors,
         unmatchedSelectors: requiredContextProjection.unmatchedSelectors
       }),
-      workspaceSnapshots: contextAudit ? Object.freeze({
-        state: String(contextAudit.coverage?.state || contextAudit.status || 'unresolved'),
-        qualified: String(contextAudit.status || '') === 'ready',
-        count: contextAudit.workspaceMaterializations?.length || 0
-      }) : Object.freeze({ state: 'not-supplied', qualified: false, count: 0 })
+      workspaceSnapshots: contextAudit ? projectWorkspaceActionCoverage(contextAudit) : Object.freeze({ state: 'not-supplied', qualified: false, count: 0, completeCount: 0, boundedCount: 0, unqualified: Object.freeze([]), message: 'No carried Workspace context audit was supplied.' })
     }),
     lineage: Object.freeze({
       state: handoffMode ? (routeBlockingLineageIssues.length ? 'unresolved' : topology.routeLeaves.length ? (lineageIssues.length ? 'resolved-with-upstream-degradation' : 'resolved') : 'missing-leaf') : (lineageIssues.length ? 'unresolved' : topology.leaves.length ? 'resolved' : 'missing-leaf'),
@@ -277,6 +288,47 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   });
 }
 
+function projectWorkspaceActionCoverage(contextAudit = {}) {
+  const workspaces = Array.isArray(contextAudit?.workspaceMaterializations) ? contextAudit.workspaceMaterializations : [];
+  const summaries = workspaces.map((workspace) => {
+    const coverage = workspaceCoverageState(workspace);
+    const qualification = String(workspace?.qualification || '').trim().toLowerCase();
+    const qualified = ['complete', 'bounded'].includes(coverage) && qualification === 'qualified';
+    return Object.freeze({ workspaceId: String(workspace?.workspaceId || ''), coverage, qualification: qualification || 'unresolved', qualified });
+  });
+  const aggregateReady = String(contextAudit?.status || '') === 'ready' && String(contextAudit?.coverage?.state || '') === 'qualified';
+  const qualified = aggregateReady && summaries.length > 0 && summaries.every((item) => item.qualified);
+  const completeCount = summaries.filter((item) => item.coverage === 'complete').length;
+  const boundedCount = summaries.filter((item) => item.coverage === 'bounded').length;
+  const unqualified = summaries.filter((item) => !item.qualified);
+  const message = qualified
+    ? `Qualified carried Workspace coverage is established for ${summaries.length} representation(s): ${completeCount} complete, ${boundedCount} bounded.`
+    : !aggregateReady
+      ? 'Carried Workspace context audit is not qualified for bounded action readiness.'
+      : !summaries.length
+        ? 'No qualified carried Workspace representation is available for the selected Handoff route.'
+        : `Carried Workspace representation qualification is incomplete for ${unqualified.length} workspace(s); bounded carriage is actionable only when each carried representation is independently qualified as complete or bounded.`;
+  return Object.freeze({
+    state: qualified ? 'qualified' : 'unqualified',
+    qualified,
+    count: summaries.length,
+    completeCount,
+    boundedCount,
+    unqualified: Object.freeze(unqualified),
+    message,
+    boundary: 'Complete and bounded carriage remain distinct. Bounded coverage can satisfy current-route action readiness only when the carried representation itself is qualified; it never implies whole-Workspace or whole-program authority.'
+  });
+}
+
+function workspaceCoverageState(workspace = {}) {
+  const explicit = String(workspace?.coverage || workspace?.materialization || '').trim().toLowerCase();
+  if (explicit === 'complete' || explicit === 'bounded') return explicit;
+  const reason = String(workspace?.reason || '').trim().toLowerCase();
+  if (reason.includes('bounded') || reason.includes('partial')) return 'bounded';
+  if (reason.includes('complete')) return 'complete';
+  return 'unresolved';
+}
+
 function projectCurrentWork(topology = {}, records = [], includeCurrentWork = false) {
   const recordById = new Map((records || []).map((record) => [String(record.id || ''), record]));
   const frontier = (topology.currentFrontier || []).slice(0, MAX_ITEMS).map((item) => {
@@ -300,8 +352,13 @@ function projectCurrentWork(topology = {}, records = [], includeCurrentWork = fa
 }
 
 function nextActionFor(state, topology, continuity = {}, authority = null) {
-  if (state === 'grounded-to-act') return Object.freeze({ kind: 'continue-bounded-handoff-work', target: topology.currentFrontier[0]?.path || '', basis: 'qualified authority + explicit session holder Role binding + required context + cold-start root continuity + selected-route Parent leaf + declared current-work frontier' });
+  if (state === 'grounded-to-act') return Object.freeze({ kind: 'continue-bounded-handoff-work', target: topology.currentFrontier[0]?.path || '', basis: 'qualified authority + explicit session holder Role binding + exact qualified holder-assignment authorization when Role-recipient + required context + cold-start root continuity + selected-route Parent leaf + declared current-work frontier' });
   if (state === 'grounded-to-discuss' && String(authority?.holderBinding?.state || 'unresolved') === 'unresolved') return Object.freeze({ kind: 'declare-explicit-session-holder-role-binding', target: authority?.role?.endpoint?.label || authority?.handoff?.to || '', basis: 'recipient Role qualification is separate from consuming-session holder binding; no transport/provider/assistant-user identity inference is permitted' });
+  if (state === 'grounded-to-discuss' && String(authority?.holderBinding?.state || '') === 'qualified' && String(authority?.holderBinding?.authorization?.state || 'unresolved') !== 'qualified') return Object.freeze({
+    kind: 'resolve-session-holder-binding-authorization',
+    target: authority?.holderBinding?.authorization?.provenance?.roleArtifactPath || authority?.role?.endpoint?.label || authority?.handoff?.to || '',
+    basis: 'a matching explicit session Role assertion is not semantic authorization; exact qualified recipient Role Holder Relationship authority must establish the assignment mode'
+  });
   if (state === 'grounded-to-discuss') return Object.freeze({ kind: topology.currentFrontier.length ? 'obtain-bounded-action-authority-or-human-gate' : 'resolve-current-work-frontier', target: topology.currentTasks[0]?.path || '', basis: 'discussion-ready but act-readiness condition is unresolved' });
   if (continuity?.state === 'unproven') return Object.freeze({
     kind: continuity.recovery?.state === 'host-action-available' ? 'recover-required-parent-with-host-action' : 'request-exact-required-parent-material',

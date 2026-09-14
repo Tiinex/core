@@ -160,6 +160,7 @@ export function parseRoleMaterial(entry) {
     const roleSection = sectionText(parsed.body?.text || '', 'Role Identity');
     const boundarySection = sectionText(parsed.body?.text || '', 'Role Boundary');
     const authoritySection = sectionText(parsed.body?.text || '', 'Authority And Responsibility Boundary');
+    const holderSection = sectionText(parsed.body?.text || '', 'Holder Relationship');
     const limitsSection = sectionText(parsed.body?.text || '', 'Interpretation Limits');
     const label = sectionField(roleSection, 'Role Label');
     return deepFreeze({
@@ -172,6 +173,13 @@ export function parseRoleMaterial(entry) {
       roleKind: sectionField(roleSection, 'Role Kind'),
       boundary: Object.freeze({ inScope: sectionField(boundarySection, 'In Scope'), outOfScope: sectionField(boundarySection, 'Out Of Scope'), context: sectionField(boundarySection, 'Context') }),
       authorityBoundary: Object.freeze({ mayDo: sectionField(authoritySection, 'May Do'), doesNotAuthorize: sectionField(authoritySection, 'Does Not Authorize'), reviewBoundary: sectionField(authoritySection, 'Review Boundary') }),
+      holderRelationship: Object.freeze({
+        holderState: sectionField(holderSection, 'Holder State'),
+        currentHolder: sectionField(holderSection, 'Current Holder'),
+        possibleHolder: sectionField(holderSection, 'Possible Holder'),
+        unknownHolder: sectionField(holderSection, 'Unknown Holder'),
+        relationArtifact: sectionReferenceTarget(holderSection, 'Relation Artifact')
+      }),
       interpretationLimits: Object.freeze({ doesNotProve: sectionField(limitsSection, 'Does Not Prove'), mustNotBeTreatedAs: sectionField(limitsSection, 'Must Not Be Treated As') }),
       parentTrace: String(parsed.envelope?.parent?.trace || ''),
       parentSchemaId: String(parsed.envelope?.parent?.schema?.id || '')

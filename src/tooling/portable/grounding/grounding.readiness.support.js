@@ -168,7 +168,7 @@ export function resolveRequiredContextRecords(requiredContext = [], records = []
     const record = byPath.get(expectedPath);
     if (record) { ids.add(record.id); matched += 1; continue; }
     if (isExactHydratedWorkspaceContext(entry)) { matched += 1; continue; }
-    missing.push(`${entry.requirementId || entry.name || expectedPath}: exact qualified context was not found at ${expectedPath} inside the complete carried Workspace snapshots.`);
+    missing.push(`${entry.requirementId || entry.name || expectedPath}: exact qualified context was not found at ${expectedPath} inside the qualified carried Workspace material.`);
   }
   return Object.freeze({ ids, matched, missing: Object.freeze(missing) });
 }
