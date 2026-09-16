@@ -3,6 +3,7 @@ import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
 import { portableFinding } from '../findings.js';
 import { inspectStoredWorkspaceArchive } from './workspaceByteProvider.js';
 import { recipientV2FactsIndex } from './recipientV2.transportManifest.js';
+import { deriveRecipientV2ArtifactFirstPhase1Facts } from './recipientV2.artifactFirst.materials.js';
 import { parseNamedDeclarationSection } from '../schema/named.declarations.js';
 import { resolveColdStartRolePointerMaterial } from './coldStartRolePointers.js';
 import {
@@ -58,7 +59,12 @@ export function collectPackageRoleMaterials(bundle = {}) {
 }
 
 export function resolveReferencedRoleMaterial(bundle = {}, handoff = {}, orientation = null, selectedRoute = null, findings = [], context = null) {
-  const reference = String(handoff.toReference || '').trim();
+  return resolveReferencedEndpointRoleMaterial(bundle, handoff, orientation, selectedRoute, findings, context, 'to');
+}
+
+export function resolveReferencedEndpointRoleMaterial(bundle = {}, handoff = {}, orientation = null, selectedRoute = null, findings = [], context = null, endpointParty = 'to') {
+  const party = String(endpointParty || 'to').trim().toLowerCase() === 'from' ? 'from' : 'to';
+  const reference = String(party === 'from' ? handoff.fromReference : handoff.toReference || '').trim();
   if (!reference) return null;
   if (!isExternalReference(reference)) {
     const workspaceZip = findFile(bundle, String(handoff.packagePath || ''));
@@ -71,7 +77,7 @@ export function resolveReferencedRoleMaterial(bundle = {}, handoff = {}, orienta
           const markdown = decodeUtf8(matches[0].data || new Uint8Array());
           if (markdown) return Object.freeze({ path: `${workspaceZip.path}::${resolvedPath}`, markdown, explicit: false, exactReference: reference });
         }
-        if (matches.length > 1) findings.push(portableFinding('error', 'portable.cold-start.role.reference-material.ambiguous', 'Handoff To Reference resolves to multiple entries in the selected Workspace archive.', { reference, resolvedPath }));
+        if (matches.length > 1) findings.push(portableFinding('error', 'portable.cold-start.role.reference-material.ambiguous', 'Handoff endpoint Reference resolves to multiple entries in the selected Workspace archive.', { reference, resolvedPath }));
       }
     }
   }
@@ -85,14 +91,14 @@ export function resolveReferencedRoleMaterial(bundle = {}, handoff = {}, orienta
       : projectedFacts
         ? { role: 'endpoint-role', ...projectedFacts }
         : {};
-    if (facts.role !== 'endpoint-role' || String(facts.endpointParty || '').toLowerCase() !== 'to') continue;
+    if (facts.role !== 'endpoint-role' || String(facts.endpointParty || '').toLowerCase() !== party) continue;
     if (facts.referenceTarget && String(facts.referenceTarget) !== reference) continue;
     const material = resolveColdStartRolePointerMaterial(bundle, facts, findings, String(pointerPath || ''), 'endpoint-role');
     if (material) endpointPointerMatches.push(Object.freeze({ ...material, exactReference: reference }));
   }
   if (endpointPointerMatches.length === 1) return endpointPointerMatches[0];
   if (endpointPointerMatches.length > 1) {
-    findings.push(portableFinding('error', 'portable.cold-start.role.reference-material.ambiguous', 'Handoff To Reference resolves through multiple qualified endpoint Role Pointers.', { reference, count: endpointPointerMatches.length }));
+    findings.push(portableFinding('error', 'portable.cold-start.role.reference-material.ambiguous', 'Handoff endpoint Reference resolves through multiple qualified endpoint Role Pointers.', { reference, count: endpointPointerMatches.length }));
     return null;
   }
   const cacheMatches = [];
@@ -114,7 +120,7 @@ export function resolveReferencedRoleMaterial(bundle = {}, handoff = {}, orienta
     }
   }
   if (cacheMatches.length === 1) return cacheMatches[0];
-  if (cacheMatches.length > 1) findings.push(portableFinding('error', 'portable.cold-start.role.reference-material.ambiguous', 'Handoff To Reference resolves to multiple cached exact byte carriers.', { reference, count: cacheMatches.length }));
+  if (cacheMatches.length > 1) findings.push(portableFinding('error', 'portable.cold-start.role.reference-material.ambiguous', 'Handoff endpoint Reference resolves to multiple cached exact byte carriers.', { reference, count: cacheMatches.length }));
   return null;
 }
 
@@ -172,9 +178,16 @@ export function parseRoleMaterial(entry) {
       label,
       roleKind: sectionField(roleSection, 'Role Kind'),
       boundary: Object.freeze({ inScope: sectionField(boundarySection, 'In Scope'), outOfScope: sectionField(boundarySection, 'Out Of Scope'), context: sectionField(boundarySection, 'Context') }),
-      authorityBoundary: Object.freeze({ mayDo: sectionField(authoritySection, 'May Do'), doesNotAuthorize: sectionField(authoritySection, 'Does Not Authorize'), reviewBoundary: sectionField(authoritySection, 'Review Boundary') }),
+      authorityBoundary: Object.freeze({
+        mayDo: sectionField(authoritySection, 'May Do'),
+        doesNotAuthorize: sectionField(authoritySection, 'Does Not Authorize'),
+        requiredInstrument: sectionField(authoritySection, 'Required Instrument'),
+        delegation: sectionField(authoritySection, 'Delegation'),
+        reviewBoundary: sectionField(authoritySection, 'Review Boundary')
+      }),
       holderRelationship: Object.freeze({
         holderState: sectionField(holderSection, 'Holder State'),
+        assignmentModes: sectionField(holderSection, 'Assignment Modes'),
         currentHolder: sectionField(holderSection, 'Current Holder'),
         possibleHolder: sectionField(holderSection, 'Possible Holder'),
         unknownHolder: sectionField(holderSection, 'Unknown Holder'),
@@ -262,7 +275,7 @@ function hydrateRequiredContextEntry(bundle = {}, entry = {}, context = null) {
     })
   };
   if (base.state !== 'qualified') return Object.freeze({ ...base, contentState: 'unavailable', content: '' });
-  const hydrated = resolveQualifiedMaterialBytes(bundle, resolution, context);
+  const hydrated = resolveQualifiedMaterialBytes(bundle, resolution, context, base);
   if (!hydrated.bytes) return Object.freeze({ ...base, state: 'unresolved', contentState: 'unavailable', content: '' });
   const actualSha256 = sha256Hex(hydrated.bytes);
   const identityQualified = (!base.bytes || hydrated.bytes.byteLength === base.bytes) && (!base.sha256 || actualSha256 === base.sha256);
@@ -270,14 +283,21 @@ function hydrateRequiredContextEntry(bundle = {}, entry = {}, context = null) {
   return Object.freeze({
     ...base,
     state: identityQualified ? 'qualified' : 'identity-mismatch',
+    workspaceId: String(hydrated.workspaceId || base.workspaceId || ''),
+    archivePackagePath: String(hydrated.archivePackagePath || base.archivePackagePath || ''),
+    innerPath: String(hydrated.innerPath || base.innerPath || ''),
+    packagePath: String(hydrated.packagePath || base.packagePath || ''),
+    providerMode: String(hydrated.providerMode || base.providerMode || ''),
+    kind: String(hydrated.kind || base.kind || ''),
     actualBytes: hydrated.bytes.byteLength,
     actualSha256,
+    provenance: Object.freeze({ ...(base.provenance || {}), providerMode: String(hydrated.providerMode || base.providerMode || ''), resolutionKind: String(hydrated.kind || base.kind || '') }),
     contentState: text ? 'hydrated-text' : identityQualified ? 'qualified-locator-only' : 'unavailable',
     content: text
   });
 }
 
-function resolveQualifiedMaterialBytes(bundle = {}, resolution = {}, context = null) {
+function resolveQualifiedMaterialBytes(bundle = {}, resolution = {}, context = null, requirement = {}) {
   const kind = String(resolution.kind || '');
   if (kind === 'workspace-archive-entry' || kind === 'workspace-cache-entry') {
     const archivePath = String(resolution.archivePackagePath || resolution.packagePath || '');
@@ -293,17 +313,64 @@ function resolveQualifiedMaterialBytes(bundle = {}, resolution = {}, context = n
   }
   const packagePath = String(resolution.packagePath || '');
   const file = packagePath ? findFile(bundle, packagePath) : null;
-  return Object.freeze({ bytes: file ? packageFileBytes(file) : null });
+  if (file) return Object.freeze({ bytes: packageFileBytes(file), packagePath });
+  if (kind === 'materialized-required-material') {
+    const requirementId = String(requirement.requirementId || '');
+    const referenceTarget = String(requirement.referenceTarget || '');
+    const matches = [];
+    const factsIndex = recipientFactsIndexForColdStart(bundle, context).map;
+    const visibleFactsIndex = deriveRecipientV2ArtifactFirstPhase1Facts(bundle.files || []);
+    for (const candidateFile of bundle.files || []) {
+      const candidatePath = String(candidateFile.path || '');
+      const facts = factsIndex.get(candidatePath) || visibleFactsIndex.get(candidatePath) || null;
+      if (facts?.role !== 'workspace-dependency-cache' && !/dependency cache/i.test(String(facts?.role || ''))) continue;
+      for (const material of facts.materials || []) {
+        if (requirementId && String(material.requirementId || '') !== requirementId) continue;
+        if (referenceTarget && String(material.referenceTarget || '') !== referenceTarget) continue;
+        const archivePath = String(facts.archivePath || '');
+        const archiveFile = findFile(bundle, archivePath);
+        if (!archiveFile) continue;
+        const archive = inspectWorkspaceArchiveForColdStart(archiveFile, context);
+        if (archive.state !== 'qualified') continue;
+        const entries = (archive.entries || []).filter((entry) => String(entry.path || '') === String(material.archiveEntry || ''));
+        if (entries.length !== 1) continue;
+        const entry = entries[0];
+        const data = packageFileBytes({ data: entry.data });
+        const actualSha = sha256Hex(data);
+        if (Number(material.bytes || 0) && Number(material.bytes || 0) !== data.byteLength) continue;
+        if (String(material.sha256 || '') && String(material.sha256 || '') !== actualSha) continue;
+        if (Number(resolution.bytes || 0) && Number(resolution.bytes || 0) !== data.byteLength) continue;
+        if (String(resolution.sha256 || '') && String(resolution.sha256 || '') !== actualSha) continue;
+        matches.push(Object.freeze({
+          bytes: data, providerMode: 'cache', kind: 'workspace-cache-entry',
+          workspaceId: String(material.targetWorkspaceId || material.sourceWorkspaceId || facts.workspaceId || ''),
+          innerPath: String(material.targetPath || material.originalPath || ''),
+          archivePackagePath: archivePath, packagePath: archivePath
+        }));
+      }
+    }
+    if (matches.length === 1) return matches[0];
+  }
+  return Object.freeze({ bytes: null });
 }
 
 export function parseHandoffGrounding(markdown, route) {
   const parties = sectionText(markdown, 'Handoff Parties');
   const transferSection = parseNamedDeclarationSection(markdown, '## Transfers');
+  const retainedSection = parseNamedDeclarationSection(markdown, '## Retained Responsibilities');
   const completion = sectionText(markdown, 'Completion Expectation');
   const transfers = Object.freeze((transferSection.entries || []).filter((entry) => String(entry.name || '').trim().toLowerCase() !== 'none').map((entry) => Object.freeze({
     id: String(entry.name || ''),
     transferKind: String(entry.fields?.['Transfer Kind'] || ''),
     description: String(entry.fields?.Description || ''),
+    controllingArtifact: String(entry.fields?.['Controlling Artifact'] || ''),
+    controllingArtifactTarget: markdownReferenceTarget(entry.fields?.['Controlling Artifact'] || ''),
+    boundary: String(entry.fields?.Boundary || '')
+  })));
+  const retainedResponsibilities = Object.freeze((retainedSection.entries || []).filter((entry) => String(entry.name || '').trim().toLowerCase() !== 'none').map((entry) => Object.freeze({
+    id: String(entry.name || ''),
+    retainedBy: String(entry.fields?.['Retained By'] || ''),
+    responsibility: String(entry.fields?.Responsibility || ''),
     boundary: String(entry.fields?.Boundary || '')
   })));
   return deepFreeze({
@@ -316,6 +383,7 @@ export function parseHandoffGrounding(markdown, route) {
     fromReference: sectionReferenceTarget(parties, 'From Reference'),
     toReference: sectionReferenceTarget(parties, 'To Reference'),
     transfers,
+    retainedResponsibilities,
     completionExpectation: Object.freeze({
       signalKind: sectionField(completion, 'Signal Kind'),
       signalMeaning: sectionField(completion, 'Signal Meaning'),
@@ -330,8 +398,14 @@ export function parseHandoffGrounding(markdown, route) {
   });
 }
 
+function markdownReferenceTarget(value = '') {
+  const text = String(value || '').trim();
+  const match = text.match(/\[[^\]]*\]\(([^)]+)\)/);
+  return match ? String(match[1] || '').trim() : '';
+}
+
 export function emptyHandoffGrounding() {
-  return deepFreeze({ schemaId: '', purpose: '', from: '', fromKind: '', fromReference: '', to: '', toKind: '', toReference: '', transfers: Object.freeze([]), completionExpectation: Object.freeze({ signalKind: '', signalMeaning: '', returnTo: '' }), routeId: '', workspaceId: '', workspaceRelativePath: '', packagePath: '', sha256: '', boundary: 'No Handoff material supplied.' });
+  return deepFreeze({ schemaId: '', purpose: '', from: '', fromKind: '', fromReference: '', to: '', toKind: '', toReference: '', transfers: Object.freeze([]), retainedResponsibilities: Object.freeze([]), completionExpectation: Object.freeze({ signalKind: '', signalMeaning: '', returnTo: '' }), routeId: '', workspaceId: '', workspaceRelativePath: '', packagePath: '', sha256: '', boundary: 'No Handoff material supplied.' });
 }
 
 export function resolveGroundingRouteMarkdown(bundle = {}, selectedRoute = {}, findings = [], context = null) {

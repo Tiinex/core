@@ -19,6 +19,7 @@ import {
   resolveGroundingRouteMarkdown,
   recipientFactsIndexForColdStart,
   resolveReferencedRoleMaterial,
+  resolveReferencedEndpointRoleMaterial,
   selectGroundingRoute
 } from './coldStartQualification.materials.js';
 import {
@@ -60,6 +61,7 @@ export function groundPortableColdConsumer(input = {}, options = {}) {
 
   const bundle = input.bundle || input.package || input;
   const role = groundRecipientRole(input, handoff, bundle, orientation, selectedRoute, findings, materialContext);
+  const senderRole = groundSenderRole(handoff, bundle, orientation, selectedRoute, materialContext);
   const holderBinding = groundHolderBinding(input, handoff, role, findings);
   const participation = groundParticipation(input, handoff, bundle, orientation, selectedRoute, findings, materialContext);
   const interaction = groundInteraction(input, handoff);
@@ -84,6 +86,7 @@ export function groundPortableColdConsumer(input = {}, options = {}) {
     selectedRoute,
     handoff,
     role,
+    senderRole,
     holderBinding,
     participation,
     interaction,
@@ -117,6 +120,50 @@ export function groundPortableColdConsumer(input = {}, options = {}) {
     findings: Object.freeze(findings),
     findingSummary: summarizePortableFindings(findings),
     boundary: 'Portable consumer grounding only. Handoff and Role artifacts remain semantic authority; participant identity is never inferred from one transport channel; host/provider projections do not create authority.'
+  });
+}
+
+function groundSenderRole(handoff, bundle, orientation, selectedRoute, materialContext) {
+  const fromKind = normalizeToken(handoff.fromKind);
+  if (fromKind && fromKind !== 'role') return deepFreeze({
+    state: 'not-applicable',
+    endpoint: Object.freeze({ label: handoff.from || '', kind: handoff.fromKind || '', bounded: Boolean(handoff.from) }),
+    material: Object.freeze({ state: 'not-required', artifact: null }),
+    exactBoundaryLoaded: null,
+    authorityBoundaryLoaded: null,
+    boundary: 'Sender endpoint is not declared as Role; no sender Role authority is invented.'
+  });
+  if (!handoff.fromReference) return deepFreeze({
+    state: 'unresolved',
+    endpoint: Object.freeze({ label: handoff.from || '', kind: handoff.fromKind || (handoff.from ? 'role' : ''), bounded: Boolean(handoff.from) }),
+    material: Object.freeze({ state: 'missing-exact-reference', artifact: null }),
+    exactBoundaryLoaded: null,
+    authorityBoundaryLoaded: null,
+    boundary: 'Delegation projection requires an exact Handoff From Reference; Role inventory and endpoint labels are not substituted.'
+  });
+  const localFindings = [];
+  const material = resolveReferencedEndpointRoleMaterial(bundle, handoff, orientation, selectedRoute, localFindings, materialContext, 'from');
+  const parsed = material ? parseRoleMaterial(material) : null;
+  const target = normalizeComparable(handoff.from || '');
+  if (!parsed || (target && normalizeComparable(parsed.label) !== target)) return deepFreeze({
+    state: 'unresolved',
+    endpoint: Object.freeze({ label: handoff.from || '', kind: handoff.fromKind || (handoff.from ? 'role' : ''), bounded: Boolean(handoff.from) }),
+    material: Object.freeze({ state: localFindings.length ? 'unresolved-exact-reference' : 'missing', artifact: null }),
+    exactBoundaryLoaded: null,
+    authorityBoundaryLoaded: null,
+    boundary: 'Exact sender Role material did not qualify; sender authority is not inferred from carried Role inventory.'
+  });
+  return deepFreeze({
+    state: 'qualified',
+    endpoint: Object.freeze({ label: handoff.from || parsed.label || '', kind: handoff.fromKind || 'role', bounded: Boolean(handoff.from) }),
+    material: Object.freeze({
+      state: 'qualified',
+      artifact: Object.freeze({ path: parsed.path, sha256: parsed.sha256, schemaId: parsed.schemaId, title: parsed.title, roleLabel: parsed.label, roleKind: parsed.roleKind, reference: handoff.fromReference || '' })
+    }),
+    exactBoundaryLoaded: parsed.boundary,
+    authorityBoundaryLoaded: parsed.authorityBoundary,
+    interpretationLimitsLoaded: parsed.interpretationLimits,
+    boundary: 'Exact Handoff From Reference Role material only. Sender Role authority remains separate from Handoff transfer and is never inferred from endpoint naming or cache inventory.'
   });
 }
 
@@ -201,12 +248,14 @@ function groundHolderBinding(input, handoff, role, findings) {
   const roleRecipient = recipientRoleKind === 'role';
   const explicitlySupplied = Boolean(roleLabel || holderId);
   const sourceDetail = holderBindingSourceDetail(input, explicit, explicitlySupplied);
-  const authorization = projectHolderBindingAuthorization(role);
+  const assertionMode = String(explicit.assignmentMode || explicit.bindingMode || explicit.mechanism || input.holderAssignmentMode || input.sessionAssignmentMode || 'explicit-session').trim();
+  const authorization = projectHolderBindingAuthorization(role, { assertionMode });
   const durableIdentity = holderDurableIdentityProjection(holderId);
 
   if (!roleRecipient) return deepFreeze({
     state: 'not-applicable',
     holderId,
+    assertionMode,
     roleLabel,
     recipientRoleLabel,
     recipientCompatibility: 'not-applicable',
@@ -224,6 +273,7 @@ function groundHolderBinding(input, handoff, role, findings) {
     return deepFreeze({
       state: 'unresolved',
       holderId,
+      assertionMode,
       roleLabel: '',
       recipientRoleLabel,
       recipientCompatibility: 'unresolved',
@@ -242,6 +292,7 @@ function groundHolderBinding(input, handoff, role, findings) {
     return deepFreeze({
       state: 'blocked',
       holderId,
+      assertionMode,
       roleLabel,
       recipientRoleLabel,
       recipientCompatibility: 'mismatch',
@@ -258,6 +309,7 @@ function groundHolderBinding(input, handoff, role, findings) {
   return deepFreeze({
     state: 'qualified',
     holderId,
+    assertionMode,
     roleLabel,
     recipientRoleLabel,
     recipientCompatibility: 'matched',
@@ -310,7 +362,7 @@ function holderBindingSourceDetail(input = {}, explicit = {}, explicitlySupplied
 
 function groundParticipation(input, handoff, bundle, orientation, selectedRoute, findings, materialContext) {
   const explicitParticipants = normalizeParticipants(input.participants || input.interaction?.participants || []);
-  const packageRoleGrounding = resolvePackageParticipantRoles(bundle, orientation, selectedRoute, findings);
+  const packageRoleGrounding = resolvePackageParticipantRoles(bundle, orientation, selectedRoute, findings, materialContext);
   const participants = dedupeGroundedParticipants(explicitParticipants);
   const contributions = normalizeContributions(input.contributions || input.interaction?.contributions || []);
   const currentContributionId = String(input.currentContributionId || input.interaction?.currentContributionId || '').trim();
@@ -345,7 +397,7 @@ function resolvePackageParticipantRoles(bundle = {}, orientation = null, selecte
     const pointerPath = String(pointerPaths[index] || '');
     const pointerFile = findFile(bundle, pointerPath);
     if (!pointerFile) { findings.push(portableFinding('error', 'portable.cold-start.participant-role.pointer.missing', 'Selected Handoff route declares Role grounding Pointer ancestry that is not carried.', { pointerPath })); continue; }
-    const compatibilityFacts = recipientV2FactsIndex(bundle).map.get(pointerPath) || null;
+    const compatibilityFacts = recipientFactsIndexForColdStart(bundle, materialContext).map.get(pointerPath) || null;
     const projectedFacts = (orientation?.participantRoles || []).find((item) => String(item.pointerPath || '') === pointerPath) || null;
     const facts = compatibilityFacts?.role === 'participant-role'
       ? compatibilityFacts

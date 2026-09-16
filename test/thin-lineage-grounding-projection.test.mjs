@@ -6,6 +6,8 @@ import { projectGroundingSourceEvidence } from '../src/tooling/portable/groundin
 import { projectGroundingOrchestrationReadiness } from '../src/tooling/portable/grounding/grounding.orchestrationReadiness.js';
 import { projectGroundingProcessApplicability } from '../src/tooling/portable/grounding/grounding.processApplicability.js';
 import { projectGroundingImplementationSourceAuthority } from '../src/tooling/portable/grounding/grounding.implementationSourceAuthority.js';
+import { projectGroundingDelegationReadiness } from '../src/tooling/portable/grounding/grounding.delegationReadiness.js';
+import { projectGroundingDelegationArtifactAuthority } from '../src/tooling/portable/grounding/grounding.delegationArtifactAuthority.js';
 import { projectGroundingAuthority } from '../src/tooling/portable/grounding/grounding.readiness.authority.js';
 import { projectHolderBindingAuthorization } from '../src/tooling/portable/grounding/grounding.holderBindingAuthorization.js';
 import { projectCommonCliDefaultOutput } from '../src/tooling/portable/adapters/cli/cli.common-output.js';
@@ -281,31 +283,150 @@ test('holder Role mismatch remains blocking even when Role material authorizes t
   assert.ok(result.readiness.missingEvidence.some((item) => item.code === 'session-holder-role-binding-blocked'));
 });
 
-test('holder-binding authorization accepts only exact qualified Role Holder Relationship authority', () => {
+test('holder-binding authorization consumes structured canonical modes while Holder State remains diagnostic-only', () => {
   const baseRole = {
     state: 'qualified',
-    endpoint: { label: 'Loom', kind: 'role' },
-    material: { state: 'qualified', artifact: { path: 'business/.topics/roles/loom.trace.md', sha256: 'a'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Loom' } }
+    endpoint: { label: 'Fixture', kind: 'role' },
+    material: { state: 'qualified', artifact: { path: 'business/.topics/roles/fixture.trace.md', sha256: 'a'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Fixture' } }
   };
-  const authorized = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: 'assignable per explicit session or Handoff' } });
+  const authorized = projectHolderBindingAuthorization({
+    ...baseRole,
+    holderRelationshipLoaded: { holderState: 'arbitrary human-readable summary', assignmentModes: 'explicit-session, handoff' }
+  });
   assert.equal(authorized.state, 'qualified');
-  assert.equal(authorized.assignmentMode, 'explicit-session-or-handoff');
-  assert.equal(authorized.provenance.basis, 'exact-qualified-role-holder-relationship');
-  assert.equal(authorized.provenance.roleArtifactPath, 'business/.topics/roles/loom.trace.md');
+  assert.equal(authorized.assignmentMode, 'explicit-session');
+  assert.deepEqual(authorized.authorizedModes, ['explicit-session', 'handoff']);
+  assert.equal(authorized.modeAuthority.provenance.field, 'Assignment Modes');
+  assert.equal(authorized.modeAuthority.provenance.basis, 'exact-qualified-role-assignment-modes');
+  assert.equal(authorized.holderState, 'arbitrary human-readable summary');
 
-  const currentRoleWording = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: 'assignable per explicit session, role invocation, or Handoff; no permanent holder asserted' } });
-  assert.equal(currentRoleWording.state, 'qualified');
-  const anchorRoleWording = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: 'assignable per explicit session or Handoff; no permanent holder asserted' } });
-  assert.equal(anchorRoleWording.state, 'qualified');
-  assert.equal(currentRoleWording.assignmentMode, 'explicit-session-or-handoff');
+  const unknownToken = projectHolderBindingAuthorization({
+    ...baseRole,
+    holderRelationshipLoaded: { holderState: 'contains session and handoff words', assignmentModes: 'explicit-session, future-magic-mode' }
+  });
+  assert.equal(unknownToken.state, 'unresolved');
+  assert.equal(unknownToken.reasonCode, 'holder-assignment-mode-authority-unknown-token');
+});
 
-  const silent = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: '' } });
-  assert.equal(silent.state, 'unresolved');
-  assert.equal(silent.reasonCode, 'holder-assignment-mode-unresolved');
+const ACTIVE_CANONICAL_ROLE_MATRIX = [
+  { label: 'Anchor', path: '.topics/roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md', sha256: '8302ced51dca642e4f2cc38e76344e0bc5583b988d17d472176d812813f917f3', modes: ['explicit-session', 'handoff'] },
+  { label: 'Axiom', path: '.topics/roles/001-2-1-axiom-canonical-holder-cutover-role.trace.md', sha256: '97d00ef1b7263f47703ae2875aba4f58c2f236b32b3fc508d2f4528eefbb0d01', modes: ['explicit-session', 'handoff'] },
+  { label: 'Loom', path: '.topics/roles/001-3-1-loom-canonical-holder-cutover-role.trace.md', sha256: 'b6206c9d450c13f2eac24895567255f0afadbd9dc71685b29c668201c78c88ad', modes: ['explicit-session', 'explicit-role-invocation', 'handoff'] },
+  { label: 'Sigma', path: '.topics/roles/001-4-1-sigma-canonical-holder-cutover-role.trace.md', sha256: '0f5944dc3f0c4c21ea6f29318da92171dad5343b45b18a7a6b5dac59f386cebf', modes: ['explicit-participation'] },
+  { label: 'Glimmer', path: '.topics/roles/001-5-1-glimmer-canonical-holder-cutover-role.trace.md', sha256: 'f08a155596381ba8a8d4b7f3dda84a67f53f82c7b777ce8a0dd1312fd8035724', modes: ['explicit-user-session', 'handoff'] },
+  { label: 'Kodax', path: '.topics/roles/001-6-1-kodax-canonical-holder-cutover-role.trace.md', sha256: '1983edfcc64f136eee8ed3f40fac163b5fb4ecb57edba5068883f77f10db268e', modes: ['explicit-session', 'explicit-role-invocation', 'handoff'] },
+  { label: 'Pilot', path: '.topics/roles/001-7-1-pilot-canonical-holder-cutover-role.trace.md', sha256: 'b6ff95c6edc9669ea8c41170a14847b9733bd83c1008d72a23484a2b8a89dd8f', modes: ['explicit-session', 'explicit-role-invocation', 'handoff'] },
+  { label: 'Prism', path: '.topics/roles/001-8-1-1-prism-canonical-holder-cutover-role.trace.md', sha256: '590880b05ee3915e8499ed0fbd7e7b7aaf3ab658c14ca98abfac73bf060767ae', modes: ['explicit-session', 'explicit-role-invocation', 'handoff'] }
+];
 
-  const differentInstrument = projectHolderBindingAuthorization({ ...baseRole, holderRelationshipLoaded: { holderState: 'requires signed delegation instrument' } });
-  assert.equal(differentInstrument.state, 'unresolved');
-  assert.equal(differentInstrument.reasonCode, 'holder-assignment-mode-not-authorized');
+const HISTORICAL_LEGACY_ROLES = [
+  ['Anchor', '.topics/roles/001-1-anchor-role.trace.md', 'ea081ef6221fdd13b2e4e3a7691342fba3e0c6615954a90da410b8c4ce6213b3'],
+  ['Axiom', '.topics/roles/001-2-axiom-role.trace.md', 'f17e74db07c6a2d1288119c330a20b3b19cd0eb01f6a2c9f207d21102d9488d5'],
+  ['Loom', '.topics/roles/001-3-loom-role.trace.md', '8e6afdac36d2596a6c63d1fb6b318260fff728b1a99c4aa29a7253fd36b4a457'],
+  ['Sigma', '.topics/roles/001-4-sigma-role.trace.md', '4db1e529e00d855fdf58821a5cfe4c22c7df5d725f0809ce1ba2d7bdb42604ee'],
+  ['Glimmer', '.topics/roles/001-5-glimmer-role.trace.md', '376a4fd7284e399bfcb667fe9eabefa518f7e676328d45ff6b72a46f2b1a8b4a'],
+  ['Kodax', '.topics/roles/001-6-kodax-role.trace.md', '4c0adf7100f149435a15cb7cc4dd91340b36ead0163fc58eaca352927e78772b'],
+  ['Pilot', '.topics/roles/001-7-pilot-role.trace.md', '4c415382817723c5332f8fa37dc28f7ca4cfc577deb219e52e7e9ee86c479331'],
+  ['Playthings', '.topics/roles/001-8-playthings-role.trace.md', '99337c48bdaa0025330fe847674905a76c431860d33d3df43b30e4e8c846e9e3'],
+  ['Prism', '.topics/roles/001-9-prism-role.trace.md', '2ad9a98d099428a771bc4740896386d02e620fb82a4ffd139a7f8794863171ad']
+];
+
+function canonicalRoleFixture({ label, path, sha256, modes, state = 'qualified', materialState = 'qualified', holderState = 'diagnostic only' }) {
+  return {
+    state,
+    endpoint: { label, kind: 'role' },
+    material: { state: materialState, artifact: { path: `001-3-business.workspace.zip::${path}`, sha256, schemaId: 'tiinex.party.role.v1', roleLabel: label } },
+    holderRelationshipLoaded: { holderState, assignmentModes: modes.join(', ') }
+  };
+}
+
+test('historical pre-cutover Role artifacts no longer authorize current holder binding without canonical Assignment Modes', () => {
+  for (const [label, path, sha256] of HISTORICAL_LEGACY_ROLES) {
+    const projected = projectHolderBindingAuthorization({
+      state: 'qualified',
+      endpoint: { label, kind: 'role' },
+      material: { state: 'qualified', artifact: { path: `001-3-business.workspace.zip::${path}`, sha256, schemaId: 'tiinex.party.role.v1', roleLabel: label } },
+      holderRelationshipLoaded: { holderState: 'historical diagnostic prose', assignmentModes: '' }
+    });
+    assert.equal(projected.state, 'unresolved', label);
+    assert.equal(projected.reasonCode, 'holder-assignment-mode-authority-missing', label);
+    assert.deepEqual(projected.authorizedModes, [], label);
+    assert.equal(projected.modeAuthority.provenance.decisionArtifact, null, label);
+    assert.equal(projected.modeAuthority.provenance.exactRoleSourcePath, '', label);
+  }
+});
+
+test('the exact eight active canonical Roles authorize only through direct structured Assignment Modes', () => {
+  for (const active of ACTIVE_CANONICAL_ROLE_MATRIX) {
+    const role = canonicalRoleFixture(active);
+    const primaryMode = active.modes[0];
+    const projected = projectHolderBindingAuthorization(role, { assertionMode: primaryMode });
+    assert.equal(projected.state, 'qualified', active.label);
+    assert.equal(projected.assignmentMode, primaryMode, active.label);
+    assert.deepEqual(projected.authorizedModes, active.modes, active.label);
+    assert.equal(projected.modeAuthority.source, 'qualified-recipient-role-structured-modes', active.label);
+    assert.equal(projected.modeAuthority.provenance.basis, 'exact-qualified-role-assignment-modes', active.label);
+    assert.equal(projected.modeAuthority.provenance.roleArtifactSha256, active.sha256, active.label);
+    assert.match(projected.modeAuthority.provenance.roleArtifactPath, new RegExp(active.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), active.label);
+  }
+
+  const kodax = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Kodax');
+  assert.equal(projectHolderBindingAuthorization(canonicalRoleFixture(kodax), { assertionMode: 'explicit-role-invocation' }).state, 'qualified');
+  const pilot = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Pilot');
+  assert.equal(projectHolderBindingAuthorization(canonicalRoleFixture(pilot), { assertionMode: 'explicit-role-invocation' }).state, 'qualified');
+  const sigma = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Sigma');
+  assert.equal(projectHolderBindingAuthorization(canonicalRoleFixture(sigma), { assertionMode: 'explicit-session' }).state, 'unresolved');
+  const glimmer = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Glimmer');
+  assert.equal(projectHolderBindingAuthorization(canonicalRoleFixture(glimmer), { assertionMode: 'explicit-session' }).state, 'unresolved');
+});
+
+test('canonical holder authorization fails closed for missing modes and unqualified current Role material', () => {
+  const active = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Loom');
+  const missing = canonicalRoleFixture({ ...active, modes: [] });
+  assert.equal(projectHolderBindingAuthorization(missing).state, 'unresolved');
+  assert.equal(projectHolderBindingAuthorization(missing).reasonCode, 'holder-assignment-mode-authority-missing');
+
+  const unqualifiedRole = canonicalRoleFixture({ ...active, state: 'unresolved' });
+  assert.equal(projectHolderBindingAuthorization(unqualifiedRole).state, 'unresolved');
+  assert.equal(projectHolderBindingAuthorization(unqualifiedRole).reasonCode, 'qualified-role-holder-authority-not-established');
+
+  const unqualifiedMaterial = canonicalRoleFixture({ ...active, materialState: 'unresolved' });
+  assert.equal(projectHolderBindingAuthorization(unqualifiedMaterial).state, 'unresolved');
+  assert.equal(projectHolderBindingAuthorization(unqualifiedMaterial).reasonCode, 'qualified-role-holder-authority-not-established');
+});
+
+test('unknown Holder State prose never self-authorizes without direct structured modes', () => {
+  const baseRole = {
+    state: 'qualified',
+    endpoint: { label: 'Unknown', kind: 'role' },
+    material: { state: 'qualified', artifact: { path: '.topics/roles/unknown.trace.md', sha256: 'b'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Unknown' } },
+    holderRelationshipLoaded: { holderState: 'explicit session, invocation, Handoff, participation all sound familiar', assignmentModes: '' }
+  };
+  const projected = projectHolderBindingAuthorization(baseRole);
+  assert.equal(projected.state, 'unresolved');
+  assert.equal(projected.reasonCode, 'holder-assignment-mode-authority-missing');
+  assert.deepEqual(projected.authorizedModes, []);
+});
+
+
+test('token substring punctuation and fuzzy Holder State variants cannot authorize a Role without direct modes', () => {
+  const variants = [
+    'assignable per explicit session or Handoff',
+    'assignable per explicit-session or Handoff!',
+    'session invocation handoff',
+    'assignable per explicit session, invocation, or Handoff; no permanent holder asserted',
+    'approximately assignable for a session and maybe a handoff'
+  ];
+  for (const holderState of variants) {
+    const projected = projectHolderBindingAuthorization({
+      state: 'qualified',
+      endpoint: { label: 'Unmapped', kind: 'role' },
+      material: { state: 'qualified', artifact: { path: '.topics/roles/unmapped.trace.md', sha256: 'c'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Unmapped' } },
+      holderRelationshipLoaded: { holderState, assignmentModes: '' }
+    });
+    assert.equal(projected.state, 'unresolved', holderState);
+    assert.equal(projected.reasonCode, 'holder-assignment-mode-authority-missing', holderState);
+  }
 });
 
 test('bounded Workspace carriage stays blocked when its representation is not independently qualified', () => {
@@ -394,3 +515,206 @@ test('implementation-source authority accepts only an exact upstream-qualified p
   assert.equal(inexact.state, 'unresolved');
   assert.deepEqual(inexact.facts, []);
 });
+
+test('cached Role presence alone never enables qualified delegation authoring', () => {
+  const processApplicability = projectGroundingProcessApplicability({
+    participation: { packageRoleGrounding: [{ label: 'Site', roleArtifact: { path: 'business/.topics/roles/site.trace.md', sha256: 'a'.repeat(64) } }] }
+  });
+  const sourceAuthority = projectGroundingImplementationSourceAuthority({ authority: {} });
+  const projected = projectGroundingDelegationReadiness({
+    authority: { participation: { packageRoleGrounding: [{ label: 'Site' }] } },
+    processApplicability,
+    implementationSourceAuthority: sourceAuthority
+  });
+  assert.equal(projected.state, 'not-established');
+  assert.equal(projected.plainChatFallbackPermitted, false);
+  assert.equal(projected.repositoryScanningFallbackPermitted, false);
+  assert.deepEqual(projected.nextOperations, []);
+  assert.deepEqual(projected.blockers.map((item) => item.code), [
+    'delegate-capability-authority-not-established',
+    'delegation-process-applicability-not-established',
+    'delegation-target-authority-not-established',
+    'delegation-source-authority-not-established',
+    'delegation-return-reconciliation-expectation-not-established'
+  ]);
+  assert.match(projected.blockers[0].request, /Cached Role presence/);
+  assert.match(projected.blockers[0].request, /Do not fall back to plain-chat delegation/);
+});
+
+test('explicit forward-selected delegate authority plus qualified process target source and return inputs exposes the normal Tooling delegation path', () => {
+  const sourceArtifact = (path, sha = 'b'.repeat(64)) => ({ workspaceId: 'business', path, sha256: sha, schemaId: 'tiinex.interpretation.v1' });
+  const authority = {
+    delegateCapabilityAuthority: {
+      explicit: true,
+      qualification: 'qualified',
+      sourceArtifact: sourceArtifact('.topics/interpretations/delegate-selection.trace.md'),
+      selection: { state: 'forward-selected' },
+      delegate: { label: 'Site', kind: 'role' },
+      capabilities: [{ id: 'site-specialist', relevance: 'upstream-qualified' }]
+    },
+    delegationTargetAuthority: {
+      explicit: true,
+      qualification: 'qualified',
+      sourceArtifact: sourceArtifact('.topics/interpretations/delegation-target.trace.md', 'c'.repeat(64)),
+      target: { workspaceId: 'site', repository: 'Tiinex/site', taskDirectory: '.topics/tasks', handoffDirectory: '.topics/handoffs' }
+    },
+    delegationReturnReconciliationExpectation: {
+      explicit: true,
+      qualification: 'qualified',
+      sourceArtifact: sourceArtifact('.topics/interpretations/return.trace.md', 'd'.repeat(64)),
+      completionExpectation: { signalKind: 'return', signalMeaning: 'return qualified implementation/evidence Handoff', returnTo: 'Anchor' },
+      reconciliation: { state: 'required-before-integration', expectation: 'compare and reconcile exact source frontier before integration' }
+    }
+  };
+  const processApplicability = projectGroundingProcessApplicability({ processApplicability: {
+    explicit: true,
+    qualification: 'qualified',
+    source: 'qualified-semantic-projection',
+    facts: [{ processId: 'specialist-delegation', applicability: 'explicitly-applicable' }]
+  } });
+  const sourceAuthority = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: {
+    explicit: true,
+    qualification: 'qualified',
+    sourceArtifact: sourceArtifact('.topics/interpretations/source-authority.trace.md', 'e'.repeat(64)),
+    facts: [{ source: 'site', disposition: 'upstream-owned' }]
+  } } });
+  const projected = projectGroundingDelegationReadiness({ authority, processApplicability, implementationSourceAuthority: sourceAuthority });
+  assert.equal(projected.state, 'qualified-for-delegation-authoring');
+  assert.deepEqual(projected.blockers, []);
+  assert.equal(projected.delegateCapabilityAuthority.delegate.label, 'Site');
+  assert.equal(projected.targetAuthority.target.workspaceId, 'site');
+  assert.equal(projected.returnReconciliationExpectation.completionExpectation.returnTo, 'Anchor');
+  assert.deepEqual(projected.nextOperations.map((item) => item.kind), [
+    'author-delegation-task',
+    'author-delegation-handoff',
+    'manufacture-delegation-carrier'
+  ]);
+  assert.equal(projected.nextOperations[0].command, 'author');
+  assert.equal(projected.nextOperations[0].schemaId, 'tiinex.task.v1');
+  assert.equal(projected.nextOperations[0].directory, '.topics/tasks');
+  assert.equal(projected.nextOperations[1].recipient.label, 'Site');
+  assert.equal(projected.nextOperations[2].command, 'handoff');
+  assert.equal(projected.nextOperations[2].carrierAllocation, 'machine-derived-from-qualified-parent-pointer-topology');
+  assert.match(projected.boundary, /generates a work plan/);
+});
+
+test('delegation readiness fails closed on an individually missing authority slot instead of suggesting discovery or plain chat', () => {
+  const exact = { workspaceId: 'business', path: '.topics/authority.trace.md', sha256: 'f'.repeat(64), schemaId: 'tiinex.interpretation.v1' };
+  const processApplicability = projectGroundingProcessApplicability({ processApplicability: { explicit: true, qualification: 'qualified', source: 'qualified', facts: [{ applicable: true }] } });
+  const sourceAuthority = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: { explicit: true, qualification: 'qualified', sourceArtifact: exact, facts: [{ allowed: 'upstream' }] } } });
+  const projected = projectGroundingDelegationReadiness({
+    authority: {
+      delegateCapabilityAuthority: { explicit: true, qualification: 'qualified', sourceArtifact: exact, selection: { state: 'forward-selected' }, delegate: { label: 'Site' }, capabilities: ['site'] },
+      delegationTargetAuthority: { explicit: true, qualification: 'qualified', sourceArtifact: exact, target: { workspaceId: 'site', repository: 'Tiinex/site', taskDirectory: '.topics/tasks', handoffDirectory: '.topics/handoffs' } }
+    },
+    processApplicability,
+    implementationSourceAuthority: sourceAuthority
+  });
+  assert.equal(projected.state, 'not-established');
+  assert.deepEqual(projected.blockers.map((item) => item.code), ['delegation-return-reconciliation-expectation-not-established']);
+  assert.match(projected.blockers[0].request, /Provide an explicit upstream-qualified return\/reconciliation projection/);
+  assert.match(projected.blockers[0].request, /repository scanning/);
+  assert.deepEqual(projected.nextOperations, []);
+});
+
+
+test('delegation readiness requires substantive process and source projections, not empty qualified markers', () => {
+  const exact = { workspaceId: 'business', path: '.topics/authority.trace.md', sha256: '1'.repeat(64), schemaId: 'tiinex.interpretation.v1' };
+  const authority = {
+    delegateCapabilityAuthority: { explicit: true, qualification: 'qualified', sourceArtifact: exact, selection: { state: 'forward-selected' }, delegate: { label: 'Site' }, capabilities: ['site'] },
+    delegationTargetAuthority: { explicit: true, qualification: 'qualified', sourceArtifact: exact, target: { workspaceId: 'site', repository: 'Tiinex/site', taskDirectory: '.topics/tasks', handoffDirectory: '.topics/handoffs' } },
+    delegationReturnReconciliationExpectation: { explicit: true, qualification: 'qualified', sourceArtifact: exact, completionExpectation: { signalKind: 'return', signalMeaning: 'return qualified result', returnTo: 'Anchor' }, reconciliation: { state: 'not-required' } }
+  };
+  const processApplicability = projectGroundingProcessApplicability({ processApplicability: { explicit: true, qualification: 'qualified', facts: [], source: '' } });
+  const sourceAuthority = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: { explicit: true, qualification: 'qualified', sourceArtifact: exact, facts: [] } } });
+  const projected = projectGroundingDelegationReadiness({ authority, processApplicability, implementationSourceAuthority: sourceAuthority });
+  assert.equal(projected.state, 'not-established');
+  assert.deepEqual(projected.blockers.map((item) => item.code), ['delegation-process-applicability-not-established', 'delegation-source-authority-not-established']);
+});
+
+test('exact selected Handoff chain derives delegation closure without caller-injected delegation objects', () => {
+  const fixture = artifactDelegationFixture();
+  const projected = projectGroundingDelegationArtifactAuthority(fixture);
+  assert.equal(projected.state, 'qualified-forward-artifact-closure');
+  assert.deepEqual(projected.unresolved, []);
+  assert.equal(projected.delegateCapabilityAuthority.delegate.label, 'Loom');
+  assert.equal(projected.processApplicability.source, 'business::.topics/roles/anchor.trace.md');
+  assert.equal(projected.delegationTargetAuthority.target.repository, 'Tiinex/core');
+  assert.equal(projected.implementationSourceAuthority.sourceArtifact.path, 'core/.topics/grounding/task.trace.md');
+  assert.equal(projected.delegationReturnReconciliationExpectation.completionExpectation.returnTo, 'Anchor');
+
+  const process = projectGroundingProcessApplicability({ processApplicability: projected.processApplicability });
+  const source = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: projected.implementationSourceAuthority } });
+  const readiness = projectGroundingDelegationReadiness({
+    authority: {
+      delegateCapabilityAuthority: projected.delegateCapabilityAuthority,
+      delegationTargetAuthority: projected.delegationTargetAuthority,
+      delegationReturnReconciliationExpectation: projected.delegationReturnReconciliationExpectation
+    },
+    processApplicability: process,
+    implementationSourceAuthority: source
+  });
+  assert.equal(readiness.state, 'qualified-for-delegation-authoring');
+  assert.deepEqual(readiness.blockers, []);
+  assert.match(projected.provenance.boundary, /never searched for delegation meaning/);
+});
+
+test('artifact delegation closure fails closed when any required forward authority link is removed', () => {
+  const base = artifactDelegationFixture();
+  const cases = [
+    ['recipient capability', { ...base, authority: { ...base.authority, role: null } }, 'exact-recipient-role-authority-not-established'],
+    ['sender delegation authority', { ...base, authority: { ...base.authority, senderRole: null } }, 'exact-sender-role-authority-not-established'],
+    ['controlling Task selector', { ...base, authority: { ...base.authority, handoff: { ...base.authority.handoff, transfers: [{ ...base.authority.handoff.transfers[0], controllingArtifactTarget: '' }] } } }, 'forward-controlling-transfer-not-established'],
+    ['target repository authority', { ...base, sourceEvidence: { workspaces: [] } }, 'exact-target-repository-authority-not-established'],
+    ['return reconciliation responsibility', { ...base, authority: { ...base.authority, handoff: { ...base.authority.handoff, retainedResponsibilities: [] } } }, 'return-reconciliation-artifact-projection-not-established']
+  ];
+  for (const [label, input, code] of cases) {
+    const projected = projectGroundingDelegationArtifactAuthority(input);
+    assert.equal(projected.state, 'not-established', label);
+    assert.equal(projected.unresolved.some((item) => item.code === code), true, label);
+  }
+
+  const returnMissing = projectGroundingDelegationArtifactAuthority(cases[4][1]);
+  const process = projectGroundingProcessApplicability({ processApplicability: returnMissing.processApplicability });
+  const source = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: returnMissing.implementationSourceAuthority } });
+  const readiness = projectGroundingDelegationReadiness({
+    authority: {
+      delegateCapabilityAuthority: returnMissing.delegateCapabilityAuthority,
+      delegationTargetAuthority: returnMissing.delegationTargetAuthority,
+      delegationReturnReconciliationExpectation: returnMissing.delegationReturnReconciliationExpectation
+    },
+    processApplicability: process,
+    implementationSourceAuthority: source
+  });
+  assert.deepEqual(readiness.blockers.map((item) => item.code), ['delegation-return-reconciliation-expectation-not-established']);
+});
+
+function artifactDelegationFixture() {
+  const taskMarkdown = `# Specialist Task\n\n## Scope\n\nCore grounding projection only.\n`;
+  const role = (label, reference, sha, { mayDo, requiredInstrument, roleKind = 'specialist', inScope = 'bounded specialist work' } = {}) => ({
+    state: 'qualified',
+    endpoint: { label, kind: 'role' },
+    material: { state: 'qualified', artifact: { reference, sha256: sha, schemaId: 'tiinex.party.role.v1', roleLabel: label, roleKind } },
+    exactBoundaryLoaded: { inScope, outOfScope: 'unrelated work', context: 'qualified route only' },
+    authorityBoundaryLoaded: { mayDo: mayDo || 'perform explicitly transferred bounded work', requiredInstrument: requiredInstrument || 'use qualified Task and Handoff authority', delegation: '', doesNotAuthorize: 'unrelated work', reviewBoundary: 'return to Anchor' }
+  });
+  return {
+    authority: {
+      handoff: {
+        schemaId: 'tiinex.handoff.v1', workspaceId: 'core', workspaceRelativePath: '.topics/grounding/handoffs/delegate.trace.md', sha256: 'a'.repeat(64),
+        from: 'Anchor', fromKind: 'role', fromReference: 'business::.topics/roles/anchor.trace.md',
+        to: 'Loom', toKind: 'role', toReference: 'business::.topics/roles/loom.trace.md',
+        transfers: [{ id: 'work', transferKind: 'work-and-responsibility', controllingArtifactTarget: '../task.trace.md' }],
+        retainedResponsibilities: [{ id: 'integration', retainedBy: 'Anchor', responsibility: 'reconcile returned qualified work' }],
+        completionExpectation: { signalKind: 'return', signalMeaning: 'return qualified work', returnTo: 'Anchor' }
+      },
+      role: role('Loom', 'business::.topics/roles/loom.trace.md', 'b'.repeat(64)),
+      senderRole: role('Anchor', 'business::.topics/roles/anchor.trace.md', 'c'.repeat(64), { mayDo: 'delegate bounded specialist work', requiredInstrument: 'use durable Task and Handoff transfer' })
+    },
+    records: [{
+      id: 'task', path: 'core/.topics/grounding/task.trace.md', schemaId: 'tiinex.task.v1', markdown: taskMarkdown, hasContinuityContext: true, hasIntegrity: true
+    }],
+    topology: { currentFrontier: [{ path: 'core/.topics/grounding/task.trace.md' }] },
+    sourceEvidence: { workspaces: [{ workspace: 'core', state: 'qualified', repository: 'Tiinex/core', rootPath: '.' }] }
+  };
+}

@@ -38,14 +38,17 @@ export function projectRecipientV2EndpointRoles(pointers = []) {
 export function projectRecipientV2ParticipantRoles(pointers = []) {
   return Object.freeze(pointers.map((item) => Object.freeze({
     pointerPath: item.path,
-    routeId: String(item.facts?.routeId || qualified?.id || ''),
-    workspaceId: String(item.facts?.workspaceId || ''),
     routeId: String(item.facts?.routeId || ''),
+    workspaceId: String(item.facts?.workspaceId || ''),
+    requirementId: String(item.facts?.participantRequirementId || ''),
     roleLabelHint: String(item.facts?.roleLabelHint || ''),
     referenceTarget: String(item.facts?.referenceTarget || ''),
     targetCarrierKind: String(item.facts?.targetCarrierKind || ''),
     targetWorkspaceId: String(item.facts?.targetWorkspaceId || ''),
+    archivePath: String(item.facts?.archivePath || ''),
     targetInnerPath: String(item.facts?.targetInnerPath || item.facts?.targetArchiveEntry || ''),
+    targetArchiveEntry: String(item.facts?.targetArchiveEntry || ''),
+    targetBytes: Number(item.facts?.targetBytes || 0),
     targetSha256: String(item.facts?.targetSha256 || '')
   })));
 }

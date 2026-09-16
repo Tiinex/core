@@ -41,7 +41,7 @@ function workspaceFixture(title, repository) {
 }
 
 function roleFixture(label) {
-  return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE_SCHEMA_TARGET})\n  - Created At: 2026-09-12 12:00:00\n  - Authors: Fixture\n  - Why: Exercise bounded Handoff endpoint Role projection.\n  - Summary: ${label} Role fixture.\n  - Status: active/local\n\n---\n\n# ${label}\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: operational\n\n## Role Boundary\n\n- In Scope: bounded Handoff regression\n- Out Of Scope: all other authority\n\n## Authority And Responsibility Boundary\n\n- May Do: exercise the fixture route\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session or Handoff\n\n## Interpretation Limits\n\n- Does Not Prove: human identity or authority beyond the fixture\n- Must Not Be Treated As: semantic authority outside the declared boundary\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
+  return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE_SCHEMA_TARGET})\n  - Created At: 2026-09-12 12:00:00\n  - Authors: Fixture\n  - Why: Exercise bounded Handoff endpoint Role projection.\n  - Summary: ${label} Role fixture.\n  - Status: active/local\n\n---\n\n# ${label}\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: operational\n\n## Role Boundary\n\n- In Scope: bounded Handoff regression\n- Out Of Scope: all other authority\n\n## Authority And Responsibility Boundary\n\n- May Do: exercise the fixture route\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session or Handoff\n- Assignment Modes: explicit-session, handoff\n\n## Interpretation Limits\n\n- Does Not Prove: human identity or authority beyond the fixture\n- Must Not Be Treated As: semantic authority outside the declared boundary\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
 }
 
 async function writeWorkspaceFile(root, relativePath, data) {
@@ -233,7 +233,8 @@ test('bounded Handoff carrier isolates unrelated answer history while qualifying
   assert.equal(grounding.role.state, 'qualified');
   assert.equal(grounding.holderBinding.state, 'qualified');
   assert.equal(grounding.holderBinding.authorization.state, 'qualified');
-  assert.equal(grounding.holderBinding.authorization.assignmentMode, 'explicit-session-or-handoff');
+  assert.equal(grounding.holderBinding.authorization.assignmentMode, 'explicit-session');
+  assert.deepEqual(grounding.holderBinding.authorization.authorizedModes, ['explicit-session', 'handoff']);
   assert.equal(grounding.holderBinding.authorization.provenance.roleArtifactPath.endsWith(LOOM_ROLE_PATH), true);
   assert.equal(grounding.holderBinding.durableIdentity.state, 'not-established');
   assert.equal(grounding.findingSummary.status, 'clean');

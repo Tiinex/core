@@ -41,6 +41,7 @@ export function projectPortableGroundingReadiness(input = {}, options = {}) {
     route,
     toolingAvailable: true
   }, { ...options, coldStartMaterialContext: materialContext });
+  const authority = withExplicitGroundingAuthorityInputs(grounding, input);
   const continuation = projectGroundedContinuation({
     bundle,
     route,
@@ -62,7 +63,7 @@ export function projectPortableGroundingReadiness(input = {}, options = {}) {
   });
   return composeGroundingReadiness({
     mode: 'routed-handoff-package',
-    authority: grounding,
+    authority,
     continuation,
     contextAudit,
     material,
@@ -140,8 +141,8 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
         known.push(evidence('session-holder-role-binding-authorization', 'qualified', authority?.holderBinding?.authorization?.provenance?.roleArtifactPath || authority?.role?.endpoint?.label || 'recipient Role material'));
       } else {
         holderBindingActReady = false;
-        unresolved.push(evidence('session-holder-role-binding-authorization', holderAuthorizationState || 'unresolved', authority?.holderBinding?.authorization?.holderState || 'exact qualified Role Holder Relationship does not establish the explicit-session/Handoff assignment mode'));
-        reasons.push(reason('session-holder-role-binding-authorization-unresolved', 'The explicit consuming-session Role assertion matches the selected recipient Role, but exact qualified Role holder-assignment authority does not establish that assignment mode. Matching session input alone cannot make the route act-ready.'));
+        unresolved.push(evidence('session-holder-role-binding-authorization', holderAuthorizationState || 'unresolved', authority?.holderBinding?.authorization?.reasonCode || 'exact qualified canonical assignment-mode authority does not authorize the asserted binding mechanism'));
+        reasons.push(reason('session-holder-role-binding-authorization-unresolved', 'The explicit consuming-session Role assertion matches the selected recipient Role, but exact qualified canonical assignment-mode authority does not authorize the asserted mechanism. Matching session input alone cannot make the route act-ready.'));
       }
     }
 
@@ -254,6 +255,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     }),
     continuity,
     orchestrationReadiness,
+    delegationReadiness: capsule.delegationReadiness,
     capsule,
     currentWork: Object.freeze({
       state: topology.currentFrontier.length ? 'current-frontier-resolved' : topology.currentTasks.length ? 'current-candidates-without-frontier' : 'unresolved',
@@ -286,6 +288,20 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     }),
     boundary: 'Decision-oriented grounding projection only. Handoff/Role/Task/Parent artifacts retain authority; this projection composes their loaded evidence and fails visible rather than inventing missing currentness or lineage.'
   });
+}
+
+
+function withExplicitGroundingAuthorityInputs(grounding = {}, input = {}) {
+  const context = input.delegationContext && typeof input.delegationContext === 'object' ? input.delegationContext : {};
+  const selected = {
+    delegateCapabilityAuthority: input.delegateCapabilityAuthority || context.delegateCapabilityAuthority || null,
+    processApplicability: input.processApplicability || context.processApplicability || null,
+    delegationTargetAuthority: input.delegationTargetAuthority || context.delegationTargetAuthority || context.targetAuthority || null,
+    implementationSourceAuthority: input.implementationSourceAuthority || context.implementationSourceAuthority || context.sourceAuthority || null,
+    delegationReturnReconciliationExpectation: input.delegationReturnReconciliationExpectation || context.delegationReturnReconciliationExpectation || context.returnReconciliationExpectation || null
+  };
+  const additions = Object.fromEntries(Object.entries(selected).filter(([, value]) => value && typeof value === 'object'));
+  return Object.freeze({ ...(grounding || {}), ...additions, ...(Object.keys(context).length ? { delegationContext: Object.freeze({ ...context }) } : {}) });
 }
 
 function projectWorkspaceActionCoverage(contextAudit = {}) {

@@ -181,7 +181,7 @@ export function validateArtifactCreationResult(draft = {}, parentRecord = {}, op
     const parentSchemaAuthority = parentRecord.schemaReferenceAuthority || {};
     const parentSchemaReference = qualifySchemaReferenceValue(parent.schema?.raw || '', parentSchemaAuthority, { requireExactTargetWhenQualified: true });
     for (const [index, message] of (parentSchemaReference.findings || []).entries()) findings.push(error(`creation.parent-schema-reference.${index + 1}`, message));
-    if (parentSchemaAuthority.resolutionState !== 'qualified') findings.push(error('creation.parent-schema-reference.unresolved', 'Exact continuation requires the declared Parent Schema reference authority to be resolver-qualified.'));
+    if (parentSchemaAuthority.resolutionState !== 'qualified') findings.push(error('creation.parent-schema-reference.unresolved', 'Exact continuation requires qualified Parent Schema reference authority at the strength actually known: either an exact target or a qualified historical schema identifier.'));
   } else if (!rootCreation) findings.push(error('creation.parent.required', 'Continuation creation requires an exact supplied Parent authority.'));
 
   if (draft.status !== 'local') findings.push(error('creation.result.status.not-local', 'Creation result must stay local until explicit publication/export.'));

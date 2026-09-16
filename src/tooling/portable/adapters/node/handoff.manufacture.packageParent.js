@@ -3,6 +3,7 @@ import { inspectRecipientFacingV2Topology } from '../../handoff/recipientV2.insp
 import { parseHandoffPackageV1, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH } from '../../handoff/recipientV2.packageV1.js';
 import { projectHandoffMaterialRequirements } from '../../handoff/materialClosure.requirements.js';
 import { parseWorkspaceQualifiedReference } from '../../handoff/workspaceQualifiedReference.js';
+import { inspectStoredWorkspaceArchive } from '../../handoff/workspaceByteProvider.js';
 
 export function preparePackageParentWorkspaceReuse(input = {}) {
   const bundle = input.bundle || null;
@@ -76,6 +77,128 @@ export function preparePackageParentWorkspaceReuse(input = {}) {
     boundary: 'Qualified package-parent Workspace snapshots may serve as read-only exact material providers, but complete Workspace carriage is reused only for explicitly selected package-parent Workspace ids. Package-parent carrier lineage alone never selects Workspace source. Explicit current Workspace roots take precedence by id, and explicit qualified workspace aliases may supersede a renamed parent-carrier Workspace without carrying stale duplicate source. Parent-carrier placement and lineage remain non-semantic.'
   });
 }
+
+
+
+export function preparePackageParentExactMaterialProvider(input = {}) {
+  const bundle = input.bundle || null;
+  const currentIds = new Set([...(input.currentWorkspaceIds || [])].map(normalizeId).filter(Boolean));
+  if (!bundle?.files?.length) return emptyExactMaterialProvider('unavailable');
+  const inspection = inspectRecipientFacingV2Topology(bundle);
+  const claims = [];
+  for (const cache of inspection.caches || []) {
+    const archivePath = String(cache.archivePath || '').trim();
+    const matches = (bundle.files || []).filter((file) => String(file.path || '') === archivePath);
+    let archive = null;
+    if (matches.length === 1) {
+      try { archive = inspectStoredWorkspaceArchive(packageFileBytes(matches[0]), { ownedBytes: true }); } catch { archive = null; }
+    }
+    const byPath = new Map((archive?.entries || []).map((entry) => [String(entry.path || ''), entry]));
+    for (const material of cache.materials || []) {
+      const referenceTarget = String(material.referenceTarget || '').trim();
+      if (!referenceTarget) continue;
+      const parsed = parseWorkspaceQualifiedReference(referenceTarget);
+      if (parsed && currentIds.has(normalizeId(parsed.workspaceId))) continue;
+      const entry = byPath.get(String(material.archiveEntry || '')) || null;
+      const declaredSha = String(material.sha256 || '').trim();
+      const declaredBytes = Number(material.bytes || 0);
+      const entrySha = entry ? String(entry.sha256 || sha256Hex(entry.data || new Uint8Array())) : '';
+      const entryBytes = entry ? Number(entry.bytes || packageFileBytes({ data: entry.data }).byteLength) : 0;
+      const qualified = inspection.status === 'valid' && archive?.state === 'qualified' && Boolean(entry)
+        && (!declaredSha || declaredSha === entrySha) && (!declaredBytes || declaredBytes === entryBytes);
+      claims.push(Object.freeze({
+        referenceTarget,
+        state: qualified ? 'available-qualified' : 'present-unqualified',
+        reason: qualified ? '' : inspection.status !== 'valid' ? 'parent-carrier-inspection-invalid' : archive?.state !== 'qualified' ? 'cache-archive-unqualified' : !entry ? 'cache-entry-unresolved' : 'cache-entry-identity-mismatch',
+        classification: String(material.classification || ''),
+        sourceRequirementId: String(material.requirementId || material.sourceRequirementId || ''),
+        workspaceId: String(cache.workspaceId || ''),
+        cacheArtifactPath: String(cache.artifactPath || ''),
+        cacheArchivePath: archivePath,
+        archiveEntry: String(material.archiveEntry || ''),
+        targetWorkspaceId: String(material.targetWorkspaceId || parsed?.workspaceId || ''),
+        targetPath: String(material.targetPath || material.originalPath || parsed?.path || ''),
+        bytes: entryBytes, sha256: entrySha, data: entry?.data || null
+      }));
+    }
+  }
+  const byTarget = new Map();
+  for (const claim of claims) {
+    const list = byTarget.get(claim.referenceTarget) || [];
+    list.push(claim); byTarget.set(claim.referenceTarget, list);
+  }
+  const entries = [];
+  for (const [referenceTarget, targetClaims] of byTarget.entries()) {
+    const qualified = targetClaims.filter((item) => item.state === 'available-qualified');
+    const digests = [...new Set(qualified.map((item) => item.sha256).filter(Boolean))];
+    if (digests.length !== 1) continue;
+    const same = qualified.filter((item) => item.sha256 === digests[0]);
+    if (!same.length) continue;
+    const first = same[0];
+    entries.push(Object.freeze({
+      referenceTarget, data: first.data, bytes: first.bytes, sha256: first.sha256,
+      providerId: 'qualified-package-parent-exact-material',
+      providerKind: 'qualified-package-parent-cache-material',
+      provenance: Object.freeze({
+        parentPackagePath: String(input.parentPackagePath || ''), parentPackageSha256: String(input.parentPackageSha256 || ''),
+        providerMode: 'qualified-package-parent-cache', cacheArtifactPath: first.cacheArtifactPath, cacheArchivePath: first.cacheArchivePath,
+        archiveEntry: first.archiveEntry, sourceRequirementIds: Object.freeze([...new Set(same.map((item) => item.sourceRequirementId).filter(Boolean))].sort()),
+        referenceTarget, workspaceId: first.targetWorkspaceId || first.workspaceId, path: first.targetPath, authority: 'none'
+      })
+    }));
+  }
+  return Object.freeze({
+    state: inspection.status === 'valid' ? 'qualified' : 'present-unqualified', inspectionStatus: String(inspection.status || ''),
+    entries: Object.freeze(entries), claims: Object.freeze(claims),
+    boundary: 'Exact material already present in a received qualified package cache may satisfy a newly authored return requirement only after exact declared-target and byte-identity qualification. Reuse is mechanical byte closure only: it does not select Workspace source, create semantic authority, infer delegation, or authorize repository discovery.'
+  });
+}
+
+export function resolvePackageParentRequirementMaterials(requirements = {}, provider = {}) {
+  const out = [];
+  const byTarget = new Map((provider.entries || []).map((entry) => [String(entry.referenceTarget || ''), entry]));
+  for (const requirement of allBlockingRequirements(requirements)) {
+    const target = String(requirement.reference?.target || requirement.materialReference || '').trim();
+    if (!target) continue;
+    const entry = byTarget.get(target);
+    if (!entry) continue;
+    out.push(Object.freeze({
+      requirementId: String(requirement.id || ''), referenceTarget: target, path: String(entry.provenance?.path || ''),
+      data: entry.data, bytes: Number(entry.bytes || 0), sha256: String(entry.sha256 || ''),
+      providerId: String(entry.providerId || ''), providerKind: String(entry.providerKind || ''),
+      provenance: Object.freeze({ ...(entry.provenance || {}), reboundRequirementId: String(requirement.id || ''), reboundClassification: String(requirement.classification || '') }),
+      authority: Object.freeze({ packageParentMaterialQualified: true, semanticAuthority: 'none', sourceSelectionAuthority: false })
+    }));
+  }
+  return Object.freeze(out);
+}
+
+export function projectPackageParentMaterialClosurePreflight(requirements = {}, provider = {}) {
+  const claimsByTarget = new Map();
+  for (const claim of provider.claims || []) { const list = claimsByTarget.get(String(claim.referenceTarget || '')) || []; list.push(claim); claimsByTarget.set(String(claim.referenceTarget || ''), list); }
+  const entryTargets = new Set((provider.entries || []).map((item) => String(item.referenceTarget || '')));
+  const projected = [];
+  for (const requirement of allBlockingRequirements(requirements)) {
+    const target = String(requirement.reference?.target || requirement.materialReference || '').trim();
+    if (!target) continue;
+    const claims = claimsByTarget.get(target) || [];
+    const state = entryTargets.has(target) ? 'available-qualified' : claims.length ? 'present-unqualified' : 'absent';
+    projected.push(Object.freeze({
+      requirementId: String(requirement.id || ''), classification: normalizeRequirementClass(requirement.classification), referenceTarget: target, state,
+      provenance: Object.freeze(claims.map((claim) => Object.freeze({ cacheArchivePath: claim.cacheArchivePath, archiveEntry: claim.archiveEntry, sha256: claim.sha256, reason: claim.reason }))),
+      nextAction: state === 'available-qualified' ? 'No action required; exact parent-carrier bytes are mechanically available.' : `Supply exact qualified material for ${target} through an explicit local binding, qualified Workspace provider, or qualified received-package cache surface. Tooling will not scan repositories or infer a source.`
+    }));
+  }
+  const blockers = projected.filter((item) => item.state !== 'available-qualified');
+  return Object.freeze({
+    state: blockers.length ? 'action-required' : 'ready', requirements: Object.freeze(projected), blockerCount: blockers.length,
+    boundary: 'This preflight classifies exact return-material closure only. Qualified received-package bytes may close declared material requirements, but this does not create semantic authority, select a Workspace source, establish process applicability, or authorize repository/network discovery.'
+  });
+}
+
+function allBlockingRequirements(requirements = {}) { return [...(requirements.required || []), ...(requirements.endpointRoles || []), ...(requirements.participantRoles || []), ...(requirements.dependencies || [])]; }
+function normalizeRequirementClass(value = '') { const v = String(value || ''); return v === 'endpoint-role' || v === 'participant-role' ? v : v || 'required'; }
+function emptyExactMaterialProvider(state = 'unavailable') { return Object.freeze({ state, inspectionStatus: '', entries: Object.freeze([]), claims: Object.freeze([]), boundary: 'No qualified received-package exact material provider is available; Tooling will not infer one.' }); }
 
 export function projectRequiredContextWorkspaceSelectionPreflight(input = {}) {
   const reuse = input.packageParentReuse || input.reuse || {};

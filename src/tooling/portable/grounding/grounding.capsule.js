@@ -5,6 +5,8 @@ import { projectGroundingPlanningContext } from './grounding.planningContext.js'
 import { projectGroundingParticipantContext } from './grounding.participantContext.js';
 import { projectGroundingProcessApplicability } from './grounding.processApplicability.js';
 import { projectGroundingImplementationSourceAuthority } from './grounding.implementationSourceAuthority.js';
+import { projectGroundingDelegationReadiness } from './grounding.delegationReadiness.js';
+import { projectGroundingDelegationArtifactAuthority } from './grounding.delegationArtifactAuthority.js';
 
 export const PORTABLE_GROUNDING_CAPSULE_SCHEMA_ID = 'tiinex.portable.grounding-capsule.v1';
 
@@ -16,9 +18,12 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
   const workProvenance = projectWorkProvenance({ records, topology });
   const participantAuthority = projectParticipantAuthority(authority);
   const participantContext = projectGroundingParticipantContext(authority);
-  const processApplicability = projectGroundingProcessApplicability(authority);
-  const implementationSourceAuthority = projectGroundingImplementationSourceAuthority({ authority, records, contextAudit, requiredContext });
   const sourceEvidence = projectGroundingSourceEvidence({ records, contextAudit, continuation, requiredContext });
+  const delegationArtifactAuthority = projectGroundingDelegationArtifactAuthority({ authority, records, topology, sourceEvidence });
+  const effectiveAuthority = mergeArtifactDelegationAuthority(authority, delegationArtifactAuthority);
+  const processApplicability = projectGroundingProcessApplicability(effectiveAuthority);
+  const implementationSourceAuthority = projectGroundingImplementationSourceAuthority({ authority: effectiveAuthority, records, contextAudit, requiredContext });
+  const delegationReadiness = projectGroundingDelegationReadiness({ authority: effectiveAuthority, processApplicability, implementationSourceAuthority });
   return Object.freeze({
     schema: PORTABLE_GROUNDING_CAPSULE_SCHEMA_ID,
     semanticReductions: Object.freeze(requiredContext.slice(0, MAX_CONTEXT).map(reduceRequiredContext)),
@@ -34,21 +39,40 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
       compatibility: String(authority?.holderBinding?.recipientCompatibility || 'unresolved'),
       authorizationState: String(authority?.holderBinding?.authorization?.state || (String(authority?.holderBinding?.state || '') === 'not-applicable' ? 'not-applicable' : 'unresolved')),
       authorizationSource: String(authority?.holderBinding?.authorization?.source || ''),
+      assertionMode: String(authority?.holderBinding?.assertionMode || authority?.holderBinding?.authorization?.assignmentMode || ''),
+      authorizedModes: Object.freeze([...(authority?.holderBinding?.authorization?.authorizedModes || [])]),
+      authorizationBasis: String(authority?.holderBinding?.authorization?.modeAuthority?.provenance?.basis || authority?.holderBinding?.authorization?.provenance?.basis || ''),
       durableIdentityState: String(authority?.holderBinding?.durableIdentity?.state || 'not-established')
     }),
     participantAuthority,
     participantContext,
     processApplicability,
     implementationSourceAuthority,
+    delegationArtifactAuthority,
+    delegationReadiness,
     workProvenance,
     unresolved: Object.freeze([
       ...workProvenance.unresolved,
       ...participantContext.unresolved,
       ...processApplicability.unresolved,
       ...implementationSourceAuthority.unresolved,
+      ...delegationReadiness.blockers.map((item) => ({ code: item.code, detail: item.request })),
       ...sourceEvidence.blockers.map((item) => ({ code: item.code, detail: item.request }))
     ]),
     boundary: 'Full Required Context bodies remain selector-gated.'
+  });
+}
+
+function mergeArtifactDelegationAuthority(authority = null, artifact = null) {
+  if (!artifact || typeof artifact !== 'object') return authority || {};
+  const base = authority && typeof authority === 'object' ? authority : {};
+  return Object.freeze({
+    ...base,
+    delegateCapabilityAuthority: base.delegateCapabilityAuthority || artifact.delegateCapabilityAuthority,
+    processApplicability: base.processApplicability || artifact.processApplicability,
+    delegationTargetAuthority: base.delegationTargetAuthority || artifact.delegationTargetAuthority,
+    implementationSourceAuthority: base.implementationSourceAuthority || artifact.implementationSourceAuthority,
+    delegationReturnReconciliationExpectation: base.delegationReturnReconciliationExpectation || artifact.delegationReturnReconciliationExpectation
   });
 }
 

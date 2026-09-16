@@ -9,7 +9,7 @@ import { RECIPIENT_V2_ROUTE_SELECTION_AUTHORITY, RECIPIENT_V2_SIBLING_ROUTE_INFE
 import { recipientV2TransportFacts } from './recipientV2.transportManifest.js';
 import { buildRecipientV2BootstrapCarrier, buildRecipientV2WorkspaceCarriers, recipientV2ParentAuthority } from './recipientV2.topology.workspaces.js';
 import { buildEndpointRolePointerChain, buildParticipantRolePointerChain } from './recipientV2.endpointRolePointers.js';
-import { bindingForWorkspace, boundedWorkspaceClaimsDetachedRecovery, detachedMaterial, duplicates, finding, roleMaterialTarget, routeClaimsDetachedMaterial, safeToken, uniqueFileIndex } from './recipientV2.topology.materials.js';
+import { bindingForWorkspace, boundedWorkspaceClaimsDetachedRecovery, coalesceDetachedCacheMaterials, detachedMaterial, duplicates, finding, roleMaterialTarget, routeClaimsDetachedMaterial, safeToken, uniqueFileIndex } from './recipientV2.topology.materials.js';
 import { RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH, RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID, RECIPIENT_V2_PACKAGE_V1_SCHEMA_TARGET } from './recipientV2.packageV1.constants.js';
 import { renderHandoffPackageV1 } from './recipientV2.packageV1.contract.js';
 import { inspectRecipientFacingV2PackageV1 } from './recipientV2.packageV1.inspect.js';
@@ -136,7 +136,7 @@ function buildRecipientFacingV2PackageV1Prepared(input = {}, sealedByWorkspaceId
     const workspace = workspaceById.get(plan.workspaceId);
     if (!workspace) continue;
     const binding = bindingForWorkspace(descriptor, workspace.workspaceId);
-    const materials = detached.filter((item) => (workspace.workspaceId === String(route.workspaceId || '') && routeClaimsDetachedMaterial(route, item)) || boundedWorkspaceClaimsDetachedRecovery(binding, item));
+    const materials = coalesceDetachedCacheMaterials(detached.filter((item) => (workspace.workspaceId === String(route.workspaceId || '') && routeClaimsDetachedMaterial(route, item)) || boundedWorkspaceClaimsDetachedRecovery(binding, item)));
     if (!materials.length) continue;
     const artifactPath = `${plan.prefix}-1-cache.trace.md`;
     const archivePath = `${plan.prefix}-1-cache.zip`;

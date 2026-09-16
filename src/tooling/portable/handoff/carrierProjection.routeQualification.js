@@ -71,8 +71,22 @@ function qualifyRequiredRequirement(bundle, descriptor, byteProvider, workspace,
   let resolution=null;
   if (!target||target.startsWith('#')) { resolution=resolveDescriptorMaterial(bundle,descriptor,byteProvider,target,requirementId,workspace.id,routePath); if(!resolution) reasons.push('exact-required-material-reference-or-binding-unresolved'); }
   const qualified=parseWorkspaceQualifiedReference(target);
-  if (!resolution&&!reasons.length&&qualified) resolution=resolveWorkspaceRequiredMaterial(byteProvider,{id:qualified.workspaceId},qualified.path);
-  if (!resolution&&!reasons.length&&!qualified&&!isExternalReference(target)) { const resolvedPath=resolveWorkspaceReference(routePath,target); if(!resolvedPath) reasons.push('workspace-reference-outside-or-invalid'); else resolution=resolveWorkspaceRequiredMaterial(byteProvider,workspace,resolvedPath); }
+  if (!resolution&&!reasons.length&&qualified) {
+    const workspaceResolution=resolveWorkspaceRequiredMaterial(byteProvider,{id:qualified.workspaceId},qualified.path);
+    resolution=workspaceResolution.state==='qualified'
+      ? workspaceResolution
+      : (resolveDescriptorMaterial(bundle,descriptor,byteProvider,target,requirementId,workspace.id,routePath)||workspaceResolution);
+  }
+  if (!resolution&&!reasons.length&&!qualified&&!isExternalReference(target)) {
+    const resolvedPath=resolveWorkspaceReference(routePath,target);
+    if(!resolvedPath) reasons.push('workspace-reference-outside-or-invalid');
+    else {
+      const workspaceResolution=resolveWorkspaceRequiredMaterial(byteProvider,workspace,resolvedPath);
+      resolution=workspaceResolution.state==='qualified'
+        ? workspaceResolution
+        : (resolveDescriptorMaterial(bundle,descriptor,byteProvider,target,requirementId,workspace.id,routePath)||workspaceResolution);
+    }
+  }
   if (!resolution&&!reasons.length) resolution=resolveDescriptorMaterial(bundle,descriptor,byteProvider,target,requirementId,workspace.id,routePath);
   if (!resolution&&!reasons.length) reasons.push('required-material-not-carried');
   if (resolution?.state!=='qualified'&&resolution?.reason) reasons.push(resolution.reason);
@@ -190,8 +204,10 @@ function resolveRouteParent(bundle, descriptor, byteProvider, workspace, routePa
     if (!markdown) continue;
     const self = validatedC14nV2PrimarySelfDigest(markdown);
     if (self.state !== 'verified' || self.value !== digest) continue;
-    const key = `${candidate.workspaceId || ''}\u0000${candidate.workspaceRelativePath || ''}\u0000${candidate.packagePath || ''}`;
-    digestMatches.set(key, Object.freeze({ state: 'qualified', markdown, basis: 'parent-target-digest-candidate', workspaceRelativePath: normalizeWorkspacePath(candidate.workspaceRelativePath || ''), packagePath: String(candidate.packagePath || ''), sha256: sha256Hex(data) }));
+    const candidatePath = normalizeWorkspacePath(candidate.workspaceRelativePath || '');
+    const candidateSha256 = sha256Hex(data);
+    const key = `${candidate.workspaceId || ''}\u0000${candidatePath}\u0000${candidateSha256}`;
+    if (!digestMatches.has(key)) digestMatches.set(key, Object.freeze({ state: 'qualified', markdown, basis: 'parent-target-digest-candidate', workspaceRelativePath: candidatePath, packagePath: String(candidate.packagePath || ''), sha256: candidateSha256 }));
   }
   if (digestMatches.size === 1) return [...digestMatches.values()][0];
   if (digestMatches.size > 1) return Object.freeze({ state: 'ambiguous', reason: 'multiple-parent-target-digest-candidates' });

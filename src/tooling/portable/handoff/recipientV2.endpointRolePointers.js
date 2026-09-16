@@ -136,7 +136,7 @@ export function buildParticipantRolePointerChain(input = {}) {
         prose: 'This Pointer is recipient discovery/grounding only. It does not declare semantic participation, change Handoff From/To, prove a human holder, or create Role authority; participation meaning remains owned by authoritative Handoff/Relation/context authority.',
         currentRead: [
           { label: 'Route Id', value: `\`${String(input.route?.id || '')}\`` },
-          { label: 'Grounding Requirement Id', value: `\`${String(requirement.id || '')}\`` },
+          { label: 'Participant Requirement Id', value: `\`${String(requirement.id || '')}\`` },
           ...(roleFacts.roleLabelHint ? [{ label: 'Role Label Hint', value: roleFacts.roleLabelHint }] : []),
           { label: 'Role Reference', value: roleFacts.referenceTarget ? `\`${roleFacts.referenceTarget}\`` : 'exact carried target' },
           { label: 'Target Carrier Kind', value: target.carrierKind },

@@ -104,6 +104,7 @@ function projectGroundDefault(result = {}, parsed = {}) {
     readiness: compactReadiness(result.readiness),
     authority: compactGroundAuthority(result.authority),
     orchestrationReadiness: compactOrchestrationReadiness(result.orchestrationReadiness),
+    delegationReadiness: compactDelegationReadiness(result.delegationReadiness),
     requiredContext: Object.freeze({
       declared: Number(required.declared || 0),
       matchedInWorkspaceSnapshots: Number(required.matchedInWorkspaceSnapshots || 0),
@@ -297,6 +298,24 @@ function compactGroundAuthority(authority = {}) {
       semanticAuthority: String(operationBoundary.semanticAuthority || ''),
       boundary: String(operationBoundary.boundary || '')
     })
+  });
+}
+
+
+function compactDelegationReadiness(value = {}) {
+  if (!value || typeof value !== 'object') return null;
+  return Object.freeze({
+    state: String(value.state || ''),
+    delegateCapabilityAuthority: value.delegateCapabilityAuthority ? Object.freeze({ ...value.delegateCapabilityAuthority }) : null,
+    processApplicability: value.processApplicability ? Object.freeze({ ...value.processApplicability }) : null,
+    targetAuthority: value.targetAuthority ? Object.freeze({ ...value.targetAuthority }) : null,
+    sourceAuthority: value.sourceAuthority ? Object.freeze({ ...value.sourceAuthority }) : null,
+    returnReconciliationExpectation: value.returnReconciliationExpectation ? Object.freeze({ ...value.returnReconciliationExpectation }) : null,
+    blockers: Object.freeze((value.blockers || []).slice(0, 8).map((item) => Object.freeze({ ...item }))),
+    plainChatFallbackPermitted: Boolean(value.plainChatFallbackPermitted),
+    repositoryScanningFallbackPermitted: Boolean(value.repositoryScanningFallbackPermitted),
+    nextOperations: Object.freeze((value.nextOperations || []).slice(0, 4).map((item) => Object.freeze({ ...item }))),
+    boundary: String(value.boundary || '')
   });
 }
 

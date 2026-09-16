@@ -11,6 +11,8 @@ import { runPortableOperation } from '../../operation.catalog.js';
 import { markPortableBootstrapCanonicalSource } from '../../providers/schema.bootstrap.provenance.js';
 import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../../../../transitions/record.transitions.js';
 import { classifyParentRecoveryReference } from '../../../../lineage/parentRecoveryReference.js';
+import { creationSchemaReferenceValidationContext } from '../../draft/draft.validation-context.js';
+import { isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority, qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority } from '../../../../schemas/schema.reference.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 
@@ -66,16 +68,21 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
     await writeFile(artifactPath, markdown, { encoding: 'utf8', flag: flags.overwrite ? 'w' : 'wx' });
     wrote = true;
     const auditMaterial = await loadNodePortableInput(
-      [artifactPath, ...(parentPath ? [parentPath] : [])],
+      [artifactPath],
       { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] }
     );
-    const audit = await runPortableOperation('audit', auditMaterial, {});
+    const candidateAudit = await runPortableOperation('audit', auditMaterial, {});
+    const parentAudit = parentPath
+      ? await runHistoricalParentAudit(parentPath, parentRecord, contract, flags)
+      : null;
+    const audit = mergeAuthorAuditResults(candidateAudit, parentAudit);
     const stageMaterial = await loadNodePortableInput(
       normalizeRuntimePaths(runtime.defaultSchemaMaterialPaths),
       { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] }
     );
     const stage = await runPortableOperation('stage-draft', {
       ...stageMaterial,
+      schemaReferenceAuthorities: creationSchemaReferenceValidationContext(contract, parentRecord),
       draft: { path: artifactRelativePath, markdown, schemaId, sourceMode: 'local-common-author', source: null }
     }, {});
     const blocking = Number(audit?.findingSummary?.counts?.error || 0) + Number(stage?.findingSummary?.counts?.error || 0);
@@ -87,7 +94,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
         schema: 'tiinex.portable.common-author.result.v1',
         operation: 'author',
         status: 'blocked',
-        artifact: Object.freeze({ path: artifactRelativePath, schemaId, written: false }),
+        artifact: Object.freeze({ path: artifactRelativePath, schemaId, written: false, parentPath: parentReference, parentSource: parentSource || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord) }),
         audit,
         stage,
         findingSummary: mergeFindingSummaries(audit?.findingSummary, stage?.findingSummary),
@@ -105,7 +112,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
       schema: 'tiinex.portable.common-author.result.v1',
       operation: 'author',
       status: 'qualified',
-      artifact: Object.freeze({ path: artifactRelativePath, absolutePath: artifactPath, schemaId, parentPath: parentReference, parentSource: parentSource || '', selfIntegrity: selfIntegrity.state, written: true }),
+      artifact: Object.freeze({ path: artifactRelativePath, absolutePath: artifactPath, schemaId, parentPath: parentReference, parentSource: parentSource || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord), selfIntegrity: selfIntegrity.state, written: true }),
       qualification: Object.freeze({ audit: audit.status, stage: stage.status, exportReady: Boolean(stage?.stagedArtifact?.qualification?.exportReady) }),
       findingSummary: mergeFindingSummaries(audit?.findingSummary, stage?.findingSummary),
       nextAction: schemaId === 'tiinex.handoff.v1'
@@ -120,6 +127,88 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   }
 }
 
+async function runHistoricalParentAudit(parentPath, parentRecord = {}, contract = {}, flags = {}) {
+  const material = await loadNodePortableInput(
+    [parentPath],
+    { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] }
+  );
+  const exactCurrentMatch = sameExactSchemaReferenceAuthority(
+    parentRecord.schemaReferenceAuthority || null,
+    contract?.schemaReferences?.current || null,
+    parentRecord.schemaId || parentRecord.currentSchemaId || ''
+  );
+  return runPortableOperation('audit', material, {
+    schemaReferenceContext: 'historical',
+    schemaReferenceAuthorities: Object.freeze({ current: parentRecord.schemaReferenceAuthority || null }),
+    ...(exactCurrentMatch ? {} : {
+      schemaValidationAuthority: historicalParentSchemaValidationAuthority(parentRecord)
+    })
+  });
+}
+
+export function sameExactSchemaReferenceAuthority(parentAuthority = null, currentAuthority = null, schemaId = '') {
+  if (!parentAuthority || !currentAuthority) return false;
+  const expectedSchemaId = String(schemaId || '').trim();
+  const parentSchemaId = String(parentAuthority.schemaId || '').trim();
+  const currentSchemaId = String(currentAuthority.schemaId || '').trim();
+  if (!expectedSchemaId || parentSchemaId !== expectedSchemaId || currentSchemaId !== expectedSchemaId) return false;
+  if (String(parentAuthority.resolutionState || parentAuthority.state || '') !== 'qualified') return false;
+  if (String(currentAuthority.resolutionState || currentAuthority.state || '') !== 'qualified') return false;
+  const parentTargets = exactSchemaReferenceTargets(parentAuthority);
+  const currentTargets = new Set(exactSchemaReferenceTargets(currentAuthority));
+  return parentTargets.length > 0 && parentTargets.some((target) => currentTargets.has(target));
+}
+
+function exactSchemaReferenceTargets(authority = {}) {
+  return [...new Set([
+    ...(Array.isArray(authority.exactTargets) ? authority.exactTargets : []),
+    authority.preferredTarget || authority.target || ''
+  ].map((item) => String(item || '').trim()).filter(Boolean))];
+}
+
+function historicalParentSchemaValidationAuthority(parentRecord = {}) {
+  const schemaId = String(parentRecord.schemaId || parentRecord.currentSchemaId || '').trim();
+  const target = String(parentRecord.schemaReferenceAuthority?.preferredTarget || parentRecord.schemaReferenceAuthority?.target || '').trim();
+  const identifierOnly = isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority(parentRecord.schemaReferenceAuthority || {});
+  return Object.freeze({
+    schema: 'tiinex.portable.historical-parent-schema-validation-authority.v1',
+    state: 'unavailable',
+    reason: identifierOnly ? 'historical-parent-schema-revision-unresolved-identifier-only' : 'historical-parent-schema-revision-not-qualified-as-current-candidate-authority',
+    schemaId,
+    currentReference: Object.freeze({
+      state: identifierOnly ? 'historical-identifier-only-preserved' : target ? 'historical-exact-reference-preserved' : 'unavailable',
+      basis: identifierOnly ? 'historical-parent-declared-schema-identifier-only' : 'historical-parent-declared-schema-reference',
+      raw: '',
+      target,
+      exactRevisionState: identifierOnly ? 'unresolved' : target ? 'declared-exact-reference' : 'unavailable'
+    }),
+    lineage: Object.freeze([]),
+    findings: Object.freeze([
+      identifierOnly
+        ? `Historical Parent ${parentRecord.path || parentRecord.id || '(parent)'} preserves only the declared ${schemaId || 'Current Schema'} identifier; exact historical schema revision remains unresolved and current candidate schema validation is withheld for the Parent.`
+        : `Historical Parent ${parentRecord.path || parentRecord.id || '(parent)'} is preserved under its exact declared ${schemaId || 'Current Schema'} reference${target ? ` ${target}` : ''}; current candidate schema validation is withheld because exact same-revision current authority is not qualified.`
+    ]),
+    compiledContract: null,
+    boundary: 'Historical Parent validation still runs Root readability, exact declared schema-identifier/reference-shape checks, recovery and integrity. Identifier-only authority never becomes exact historical schema-revision authority; current schema-specific machine/companion validation is applied only when the Parent and current creation contract share exact qualified schema-revision authority.'
+  });
+}
+
+function mergeAuthorAuditResults(candidateAudit = {}, parentAudit = null) {
+  if (!parentAudit) return candidateAudit;
+  const audits = Object.freeze([...(candidateAudit.audits || []), ...(parentAudit.audits || [])]);
+  const findings = Object.freeze([...(candidateAudit.findings || []), ...(parentAudit.findings || [])]);
+  return Object.freeze({
+    ...candidateAudit,
+    audits,
+    findings,
+    findingSummary: mergeFindingSummaries(candidateAudit.findingSummary, parentAudit.findingSummary),
+    boundary: Object.freeze({
+      ...(candidateAudit.boundary || {}),
+      historicalParentAudit: 'separate exact-byte historical audit; current schema-specific validation only when exact same-revision authority is qualified'
+    })
+  });
+}
+
 async function parentRecordFromArtifact(parentPath, parentRelativePath, context = {}) {
   const markdown = await readFile(parentPath, 'utf8');
   const parsed = parseArtifactMarkdown(markdown);
@@ -131,8 +220,11 @@ async function parentRecordFromArtifact(parentPath, parentRelativePath, context 
   if (self.state !== 'verified') throw new Error(`portable.cli.author.parent.integrity.${self.reason || self.state}`);
   const schemaReferenceAuthority = schemaTarget
     ? exactDeclaredSchemaReferenceAuthority(schemaId, schemaTarget)
-    : await recoverQualifiedRuntimeSchemaReferenceAuthority(schemaId, context.runtime || {});
-  if (!schemaReferenceAuthority) throw new Error(`portable.cli.author.parent.schema-authority.required: Parent schema ${schemaId} lacks an exact qualified schema-reference authority. Supply Parent bytes with an exact Current Schema target or qualified runtime canonical schema material; Tooling will not invent the schema target.`);
+    : qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority(schemaId, {
+      basis: 'exact-historical-parent-current-schema-identifier',
+      parentPath: String(parentRelativePath || ''),
+      parentSha256: sha256Hex(utf8Bytes(markdown))
+    });
   return Object.freeze({
     id: parentRelativePath,
     path: parentRelativePath,
@@ -143,6 +235,25 @@ async function parentRecordFromArtifact(parentPath, parentRelativePath, context 
     markdown,
     recoveryMode: parentRecoveryMode(parentRelativePath),
     schemaReferenceAuthority
+  });
+}
+
+function projectHistoricalParentReferenceAuthority(parentRecord = {}) {
+  const authority = parentRecord?.schemaReferenceAuthority || null;
+  if (!authority || !String(parentRecord?.schemaId || parentRecord?.currentSchemaId || '').trim()) return null;
+  const schemaId = String(parentRecord.schemaId || parentRecord.currentSchemaId || '').trim();
+  const target = String(authority.preferredTarget || authority.target || '').trim();
+  const identifierOnly = isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority(authority);
+  return Object.freeze({
+    state: String(authority.resolutionState || authority.state || 'unavailable'),
+    kind: identifierOnly ? 'identifier-only' : target ? 'exact-target' : 'unresolved',
+    schemaId,
+    target,
+    exactRevisionState: identifierOnly ? 'unresolved' : target ? 'declared-exact-reference' : 'unresolved',
+    provenance: Object.freeze({ ...(authority.resolutionEvidence || authority.evidence || {}) }),
+    boundary: identifierOnly
+      ? 'Exact historical Parent artifact identity/integrity and declared schema identifier are qualified; no exact historical schema representation target is claimed or inferred.'
+      : 'Historical Parent schema-reference authority is projected only at the exact strength carried by the supplied Parent bytes.'
   });
 }
 

@@ -6,7 +6,7 @@ import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runt
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
 import { enumerateNodeWorkspace, PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID } from './handoff.manufacture.enumeration.js';
-import { preparePackageParentWorkspaceReuse, projectRequiredContextWorkspaceSelectionPreflight } from './handoff.manufacture.packageParent.js';
+import { preparePackageParentExactMaterialProvider, preparePackageParentWorkspaceReuse, projectPackageParentMaterialClosurePreflight, projectRequiredContextWorkspaceSelectionPreflight, resolvePackageParentRequirementMaterials } from './handoff.manufacture.packageParent.js';
 import { qualifyPortableSourceReconciliationProofForManufacture } from '../../comparison/sourceFrontierReconciliationProof.js';
 import { qualifyPortableManufactureSchemaReferenceCandidate } from '../../handoff/schemaReferencePreflight.js';
 import { qualifyDelegationReturnReservation } from '../../handoff/delegationReturnReservation.js';
@@ -68,6 +68,12 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     parentPackageSha256: input.packageParentSha256 || '',
     workspaceIds: input.packageParentWorkspaceIds || input.reusePackageParentWorkspaceIds || [],
     workspaceAliases: input.packageParentWorkspaceAliases || input.workspaceAliases || {}
+  });
+  const packageParentExactMaterialProvider = preparePackageParentExactMaterialProvider({
+    bundle: input.packageParentBundle || null,
+    currentWorkspaceIds: [...seenWorkspaceIds],
+    parentPackagePath: input.packageParentPath || '',
+    parentPackageSha256: input.packageParentSha256 || ''
   });
   const handoffMarkdown = await handoffMarkdownPromise;
   const requiredContextWorkspaceSelectionPreflight = projectRequiredContextWorkspaceSelectionPreflight({
@@ -169,16 +175,18 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
 
   const routeSpecs = transportRoutes.length ? transportRoutes : Object.freeze([{ workspaceId, path: handoffPath }]);
   let requirements = await projectManufacturingRequirements({ handoff, workspaceId, handoffPath, routeSpecs, workspaceRuntimeById });
+  const packageParentMaterialClosurePreflight = projectPackageParentMaterialClosurePreflight(requirements, packageParentExactMaterialProvider);
   let materials = await resolveWorkspaceRequirementMaterials(requirements, workspaceRuntimeById, input.materialBindings || {});
+  materials = appendMissingRequirementMaterials(materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
   const dependencyClosure = await expandPointerDependencyClosure({ requirements, materials, workspaceRuntimeById, bindings: input.materialBindings || {} });
   requirements = dependencyClosure.requirements;
-  materials = dependencyClosure.materials;
+  materials = appendMissingRequirementMaterials(dependencyClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
   const routeParentBoundaryClosure = expandRouteParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById, routeSpecs });
   requirements = routeParentBoundaryClosure.requirements;
-  materials = routeParentBoundaryClosure.materials;
+  materials = appendMissingRequirementMaterials(routeParentBoundaryClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
   const parentBoundaryClosure = expandBoundedParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById });
   requirements = parentBoundaryClosure.requirements;
-  materials = parentBoundaryClosure.materials;
+  materials = appendMissingRequirementMaterials(parentBoundaryClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
   const toolingBootstrapResult = await toolingBootstrapPromise;
   if (toolingBootstrapResult.error) throw toolingBootstrapResult.error;
   const toolingBootstrap = toolingBootstrapResult.value;
@@ -233,11 +241,25 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
         workspaceAliases: Object.freeze([...(packageParentReuse.workspaceAliases || [])].map((item) => Object.freeze({ ...item }))),
         boundary: String(packageParentReuse.boundary || '')
       }),
+      packageParentMaterialClosurePreflight,
       requiredContextWorkspaceSelectionPreflight,
       carrierProjection: Object.freeze({ requestedRoutes: transportRoutes.length || 1, carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null), carrierProfile: normalizeHandoffCarrierProfile(input.carrierProfile || null), boundary: 'Routes are qualified later against packaged workspace bytes; adapter text is not authority.' })
     }),
     verifyRoundtrip: input.verifyRoundtrip !== false
   });
+}
+
+
+function appendMissingRequirementMaterials(existing = [], additional = []) {
+  const out = [...(existing || [])];
+  const alreadyBound = new Set(out.map((item) => String(item.requirementId || '')).filter(Boolean));
+  for (const item of additional || []) {
+    const id = String(item.requirementId || '');
+    if (id && alreadyBound.has(id)) continue;
+    out.push(item);
+    if (id) alreadyBound.add(id);
+  }
+  return Object.freeze(out);
 }
 
 

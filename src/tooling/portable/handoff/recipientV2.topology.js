@@ -16,6 +16,8 @@ import { buildEndpointRolePointerChain, buildParticipantRolePointerChain } from 
 import {
   bindingForWorkspace,
   boundedWorkspaceClaimsDetachedRecovery,
+  coalesceDetachedCacheMaterials,
+  detachedCacheRepresentationKey,
   deepFreeze,
   detachedMaterial,
   duplicates,
@@ -144,7 +146,7 @@ function buildRecipientFacingV2TopologyLegacy(input = {}) {
     if (!workspace) continue;
     const workspaceRoutes = routePlans.filter((plan) => plan.workspace.workspaceId === workspace.workspaceId);
     const binding = bindingForWorkspace(descriptor, workspace.workspaceId);
-    const materials = detached.filter((item) => workspaceRoutes.some((plan) => routeClaimsDetachedMaterial(plan.route, item)) || boundedWorkspaceClaimsDetachedRecovery(binding, item));
+    const materials = coalesceDetachedCacheMaterials(detached.filter((item) => workspaceRoutes.some((plan) => routeClaimsDetachedMaterial(plan.route, item)) || boundedWorkspaceClaimsDetachedRecovery(binding, item)));
     if (!materials.length) continue;
     const artifactPath = `001-${workspacePlan.ordinal}-1-cache.trace.md`;
     const archivePath = `001-${workspacePlan.ordinal}-1-cache.zip`;
@@ -166,9 +168,9 @@ function buildRecipientFacingV2TopologyLegacy(input = {}) {
   }
 
   const claimedDetached = new Set();
-  for (const cache of topology.caches) for (const material of cache.materials || []) claimedDetached.add(`${material.requirementId}\u0000${material.referenceTarget}\u0000${material.sha256}`);
+  for (const cache of topology.caches) for (const material of cache.materials || []) claimedDetached.add(detachedCacheRepresentationKey(material));
   for (const item of detached) {
-    const key = `${item.requirementId}\u0000${item.referenceTarget}\u0000${item.sha256}`;
+    const key = detachedCacheRepresentationKey(item);
     if (!claimedDetached.has(key)) findings.push(finding('error', 'portable.handoff-v2-surface.cache.material-unowned', 'Detached dependency bytes are not claimed by any Workspace-scoped Handoff route cache.', { requirementId: item.requirementId || '', referenceTarget: item.referenceTarget || '' }));
   }
 

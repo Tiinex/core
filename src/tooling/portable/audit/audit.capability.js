@@ -8,15 +8,21 @@ export const PORTABLE_SHARED_AUDIT_CAPABILITY_SCHEMA_ID = 'tiinex.portable.share
 export function auditPortableRecord(record = {}, options = {}) {
   const schemaId = String(record.schemaId || record.currentSchemaId || '');
   const requireExactSchemaAuthority = options.requireExactSchemaAuthority === true;
-  const runtimeAuthority = requireExactSchemaAuthority ? portableRuntimeValidationAuthorityForRecord(record) : null;
-  const runtimeProjection = requireExactSchemaAuthority ? runtimeAuthority : portableRuntimeValidationContractForSchema(schemaId);
+  const explicitSchemaValidationAuthority = options.schemaValidationAuthority || null;
+  const runtimeAuthority = explicitSchemaValidationAuthority || (requireExactSchemaAuthority ? portableRuntimeValidationAuthorityForRecord(record) : null);
+  const runtimeProjection = explicitSchemaValidationAuthority
+    ? (explicitSchemaValidationAuthority.state === 'qualified' ? explicitSchemaValidationAuthority : null)
+    : requireExactSchemaAuthority
+      ? runtimeAuthority
+      : portableRuntimeValidationContractForSchema(schemaId);
   let result;
   try {
     result = runAudit({
       record,
       markdown: record.markdown,
-      validationContractOverride: runtimeProjection?.state === 'qualified' ? runtimeProjection.compiledContract : null,
-      schemaValidationAuthority: requireExactSchemaAuthority ? runtimeAuthority : null,
+      validationContractOverride: options.validationContractOverride || (runtimeProjection?.state === 'qualified' ? runtimeProjection.compiledContract : null),
+      schemaValidationAuthority: explicitSchemaValidationAuthority || (requireExactSchemaAuthority ? runtimeAuthority : null),
+      schemaReferenceAuthorities: options.schemaReferenceAuthorities || null,
       schemaReferenceContext: options.schemaReferenceContext || 'historical'
     });
   } catch (error) {

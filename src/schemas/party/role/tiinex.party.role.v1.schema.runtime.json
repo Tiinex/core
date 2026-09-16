@@ -2,10 +2,10 @@
   "schema": "tiinex.site.schema-runtime-projection.v1",
   "generator": "schema-runtime-projection-v1",
   "schemaId": "tiinex.party.role.v1",
-  "sourceChecksum": "16b6bd63b9ba6044906aa9daa9bd289881171ddc875b3b9e7c2158470ad27828",
-  "sourceBlobSha": "16687051579d5c850591d4bf4e2dbd9705f83983",
-  "sourceBytes": 10364,
-  "bindingChecksum": "16b6bd63b9ba6044906aa9daa9bd289881171ddc875b3b9e7c2158470ad27828",
+  "sourceChecksum": "2887aef16cf827b78fe38c1a2ba97cb5820d79049729d2cf8696ecf1de828871",
+  "sourceBlobSha": "ba134b998fb3d04a59a3bd5cd951115ea272ebda",
+  "sourceBytes": 13216,
+  "bindingChecksum": "2887aef16cf827b78fe38c1a2ba97cb5820d79049729d2cf8696ecf1de828871",
   "validationContract": {
     "schema": "tiinex.site.compact-portable-validation-contract.v1",
     "schemaId": "tiinex.party.role.v1",
@@ -413,7 +413,8 @@
             "findings": []
           },
           "requiredFields": [
-            "Holder State"
+            "Holder State",
+            "Assignment Modes"
           ],
           "optionalFields": [
             "Current Holder",
@@ -426,7 +427,8 @@
               "sourceSchemaId": "tiinex.party.role.v1",
               "group": "Holder Relationship",
               "requiredFields": [
-                "Holder State"
+                "Holder State",
+                "Assignment Modes"
               ],
               "optionalFields": [
                 "Current Holder",
@@ -1996,6 +1998,7 @@
       "May Do",
       "Does Not Authorize",
       "Holder State",
+      "Assignment Modes",
       "Does Not Prove",
       "Must Not Be Treated As"
     ],
@@ -2063,6 +2066,15 @@
         "section": "Holder Relationship",
         "group": "Holder Relationship",
         "field": "Holder State",
+        "sourceSchemaId": "tiinex.party.role.v1",
+        "requirement": "required"
+      },
+      {
+        "input": "Assignment Modes",
+        "kind": "ordinary-field",
+        "section": "Holder Relationship",
+        "group": "Holder Relationship",
+        "field": "Assignment Modes",
         "sourceSchemaId": "tiinex.party.role.v1",
         "requirement": "required"
       },

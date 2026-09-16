@@ -106,6 +106,35 @@ function materialIdentitiesMatch(semantic = {}, resolved = {}) {
   return true;
 }
 
+
+export function qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority(schemaId = '', evidence = {}) {
+  const id = String(schemaId || '').trim();
+  if (!id) return Object.freeze({ schema: SCHEMA_REFERENCE_AUTHORITY_SCHEMA_ID, schemaId: '', exactTargets: Object.freeze([]), semanticSourceTargets: Object.freeze([]), materialBoundTarget: false, preferredTarget: '', targetAuthority: 'schema-id-only', resolutionState: 'unavailable', resolutionEvidence: Object.freeze({}), semanticMaterialIdentity: Object.freeze({ state: 'unavailable' }), exactSourceTargets: Object.freeze({ state: 'unavailable', targets: Object.freeze([]), findings: Object.freeze(['Historical schema identifier is unavailable.']) }), historicalReferenceAuthority: Object.freeze({ state: 'unavailable', kind: 'identifier-only', exactRevisionState: 'unresolved', evidence: Object.freeze({ ...evidence }) }) });
+  return Object.freeze({
+    schema: SCHEMA_REFERENCE_AUTHORITY_SCHEMA_ID,
+    schemaId: id,
+    exactTargets: Object.freeze([]),
+    semanticSourceTargets: Object.freeze([]),
+    materialBoundTarget: false,
+    preferredTarget: '',
+    targetAuthority: 'schema-id-only',
+    resolutionState: 'qualified',
+    resolutionEvidence: Object.freeze({ state: 'qualified', kind: 'historical-declared-schema-identifier-only', schemaId: id, ...evidence }),
+    semanticMaterialIdentity: Object.freeze({ state: 'unavailable', schemaId: id }),
+    exactSourceTargets: Object.freeze({ state: 'unavailable', targets: Object.freeze([]), findings: Object.freeze(['No exact historical schema representation target is declared or independently qualified.']) }),
+    historicalReferenceAuthority: Object.freeze({ state: 'qualified', kind: 'identifier-only', exactRevisionState: 'unresolved', evidence: Object.freeze({ ...evidence }) })
+  });
+}
+
+export function isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority(authority = {}) {
+  return String(authority?.resolutionState || authority?.state || '') === 'qualified'
+    && String(authority?.targetAuthority || '') === 'schema-id-only'
+    && String(authority?.historicalReferenceAuthority?.kind || '') === 'identifier-only'
+    && String(authority?.historicalReferenceAuthority?.exactRevisionState || '') === 'unresolved'
+    && !String(authority?.preferredTarget || authority?.target || '').trim()
+    && !(authority?.exactTargets || []).some((item) => String(item || '').trim());
+}
+
 export function parseSchemaReferenceValue(value = '') {
   const raw = String(value ?? '');
   if (!raw) return Object.freeze({ raw: '', form: 'empty', schemaId: '', target: '' });

@@ -174,7 +174,7 @@ export function resolveRequiredContextRecords(requiredContext = [], records = []
 }
 
 function isExactHydratedWorkspaceContext(entry = {}) {
-  if (String(entry.providerMode || '') !== 'archive') return false;
+  if (!['archive', 'cache'].includes(String(entry.providerMode || ''))) return false;
   if (!['hydrated-text', 'qualified-locator-only'].includes(String(entry.contentState || ''))) return false;
   const expectedBytes = Number(entry.bytes || 0);
   const actualBytes = Number(entry.actualBytes || 0);

@@ -10,10 +10,10 @@
   "sourcePath": ".topics/.schemas/party/role/tiinex.party.role.v1.schema.md",
   "sourceRepository": "Tiinex/docs",
   "sourceCommit": "3988951208eb9a8926e84ab42625d4b42fa00c2d",
-  "sourceBlobSha": "16687051579d5c850591d4bf4e2dbd9705f83983",
+  "sourceBlobSha": "ba134b998fb3d04a59a3bd5cd951115ea272ebda",
   "checksum": {
     "algorithm": "sha256",
-    "value": "16b6bd63b9ba6044906aa9daa9bd289881171ddc875b3b9e7c2158470ad27828"
+    "value": "2887aef16cf827b78fe38c1a2ba97cb5820d79049729d2cf8696ecf1de828871"
   },
   "capabilityContract": "tiinex.schema.module.v1",
   "snapshotCompleteness": "exact-axiom-canonical-unpublished-bounded-workspace-contract",
