@@ -147,16 +147,19 @@ export function allocateRootArtifactPath({ targetId = '', targetLabel = '', titl
   if (explicitPath) return { path: uniqueTransitionPath(explicitPath, occupied), policy: pathPolicyForExplicit(explicitPath) };
   const labelSlug = slugify(title || targetLabel || labelFromSchemaId(targetId) || 'artifact');
   const targetSlug = slugify(targetLabel || labelFromSchemaId(targetId) || 'artifact');
-  const basePath = `.topics/${labelSlug}--${targetSlug}.trace.md`;
+  const rootPrefix = nextDirectoryRootLineagePrefix('.topics', occupied);
+  const basePath = `.topics/${rootPrefix}-${labelSlug}.trace.md`;
   return {
     path: uniqueTransitionPath(basePath, occupied),
     policy: {
       schema: 'tiinex.transition.path-policy.v1',
       kind: 'standalone-root',
       parentDirectory: '.topics',
+      rootLineagePrefix: rootPrefix,
       labelSlug,
       targetSlug,
-      extension: '.trace.md'
+      extension: '.trace.md',
+      allocationAuthority: 'directory-local-lineage-namespace'
     }
   };
 }
