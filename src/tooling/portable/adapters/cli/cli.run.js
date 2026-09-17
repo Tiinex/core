@@ -9,6 +9,7 @@ import { commandInput } from './cli.command-input.js';
 import { continueGroundWithHostResult } from './cli.ground-recovery.js';
 import { groundContinuationOperationInput, materializeGroundWorkspaceCliOutput } from './cli.ground-materialize.js';
 import { runCommonAuthorCli } from './cli.common-author.js';
+import { runCommonWorkspaceInitCli } from './cli.workspace-init.js';
 import { projectCommonCliDefaultOutput } from './cli.common-output.js';
 
 export async function runPortableCli(argv = process.argv.slice(2), io = console, runtime = {}) {
@@ -24,6 +25,11 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
   try {
     if (parsed.command === 'author') {
       const result = await runCommonAuthorCli(parsed, runtime);
+      writeJson(io, result, parsed.flags.compact !== true);
+      return result?.findingSummary?.counts?.error ? 2 : 0;
+    }
+    if (parsed.command === 'init-workspace') {
+      const result = await runCommonWorkspaceInitCli(parsed, runtime);
       writeJson(io, result, parsed.flags.compact !== true);
       return result?.findingSummary?.counts?.error ? 2 : 0;
     }

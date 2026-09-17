@@ -47,7 +47,7 @@ function projectDocument(record = {}, records = [], lineageInspection = null) {
     sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
     replacementMarkdown: workspacePackagingRepair.markdown,
     diagnosticCodes: workspacePackagingRepair.diagnosticCodes,
-    boundary: 'Repairs only a tiinex.workspace.v1 artifact whose replacement independently qualifies through the same exact registered Workspace contract and c14n-v2 self-integrity requirements used by Handoff package manufacture. A linked Current Schema target is normalized to the registered schema identifier only when the linked target itself is not qualified; no repository, Workspace, Handoff, Role, or authority meaning is invented.'
+    boundary: 'Repairs only a tiinex.workspace.v1 artifact whose replacement independently qualifies through the same exact registered Workspace contract and c14n-v2 self-integrity requirements used by Handoff package manufacture. Existing resolver-capable Current Schema references are preserved; permalink refresh is a separate resolution operation and must not be inferred from integrity repair.'
   }));
   const integrityRepair = deterministicIntegrityHygieneRepair(markdown, audit.findings || []);
   const repairQualification = integrityRepair.state === 'ready'
@@ -99,13 +99,11 @@ function deterministicWorkspacePackagingRepair(record = {}, audit = {}, markdown
   const bare = currentRaw === 'tiinex.workspace.v1';
   if (!linked && !bare) return freeze({ state: 'unavailable' });
 
+  // Current Schema is portable source identity, not a registry token. Preserve any
+  // already-resolvable external permalink; hosts/Core resolution may later offer a
+  // separate permalink refresh only when the resolved schema bytes actually changed.
   let candidate = source;
-  let schemaReferenceChanged = false;
-  const schemaAuthorityUnqualified = (audit.findings || []).some((item) => String(item.code || '') === 'audit.schema-authority.unqualified');
-  if (linked && schemaAuthorityUnqualified) {
-    candidate = candidate.replace(currentMatches[0][0], `${currentMatches[0][1]}tiinex.workspace.v1`);
-    schemaReferenceChanged = true;
-  }
+  const schemaReferenceChanged = false;
 
   const sealed = sealC14nV2Self(candidate);
   if (sealed.state !== 'sealed' && sealed.state !== 'unchanged') return freeze({ state: 'unavailable' });

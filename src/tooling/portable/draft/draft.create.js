@@ -24,13 +24,14 @@ export function createPortableLocalDraft(input = {}, options = {}) {
   const hasDeclaredParent = portableParentRecordHasAnyValue(parentRecord);
   const hasCompleteParent = portableParentRecordIsComplete(parentRecord);
   const exactParentQualification = qualifyPortableExactParent(parentRecord, transitionType);
-  const localContinuityParentCompatible = exactParentQualification.state === 'qualified-local-continuity';
-  const parentRenderable = exactParentQualification.state === 'qualified' || localContinuityParentCompatible;
-  const qualifiedParentRecord = parentRenderable ? exactParentQualification.snapshot : null;
-  const genericParentRecord = transitionType === 'create-artifact' ? parentRecord : qualifiedParentRecord;
-  const exactRendererParentCompatible = exactParentQualification.state === 'qualified';
+  const rootCreation = transitionType === 'create-artifact';
+  const localContinuityParentCompatible = !rootCreation && exactParentQualification.state === 'qualified-local-continuity';
+  const parentRenderable = rootCreation ? !hasDeclaredParent : exactParentQualification.state === 'qualified' || localContinuityParentCompatible;
+  const qualifiedParentRecord = rootCreation ? null : parentRenderable ? exactParentQualification.snapshot : null;
+  const genericParentRecord = rootCreation ? parentRecord : qualifiedParentRecord;
+  const exactRendererParentCompatible = rootCreation ? !hasDeclaredParent : exactParentQualification.state === 'qualified';
   const exactRendererEligible = exactContract.status === 'ready' && exactRendererParentCompatible;
-  const localContinuityRendererEligible = exactContract.status === 'ready' && localContinuityParentCompatible;
+  const localContinuityRendererEligible = !rootCreation && exactContract.status === 'ready' && localContinuityParentCompatible;
   if (!schemaId) findings.push(portableFinding('error', 'portable.draft-create.schema.required', 'Local draft creation requires a target schema id.'));
   if (hasDeclaredParent && !hasCompleteParent) findings.push(portableFinding('error', 'portable.draft-create.parent.incomplete', 'A declared Parent must provide explicit Parent Schema authority, Trace (or an explicit parent id), and a recoverable Origin path. A kind label is not Parent Schema authority.', {
     hasParentSchema: Boolean(parentRecord.schemaId || parentRecord.currentSchemaId),

@@ -144,7 +144,7 @@ test('manufacture preflight gates active Handoff candidate prospectively without
 });
 
 
-test('workspace editor assistance repairs unqualified linked Current Schema and reseals to exact package conformance', () => {
+test('workspace editor assistance preserves resolver-capable Current Schema permalink while resealing exact package conformance', () => {
   const unqualifiedWorkspaceTarget = 'https://github.com/Tiinex/docs/blob/c5c0a8173dcc0816d239a64fa363c7924df216b1/.topics/.schemas/tiinex.workspace.v1.schema.md';
   let markdown = `# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.workspace.v1](${unqualifiedWorkspaceTarget})\n  - Created At: 2026-09-17 15:30:00\n  - Authors: Sigma\n  - Why: External private-repository dogfood Workspace.\n  - Summary: Minimal Workspace used to qualify pointerless package manufacture.\n  - Status: active/local\n\n---\n\n# Private Workspace\n\n## Workspace Entrypoints\n\n### Repository source\n\n- Source Kind: local-directory\n- Repository: Tiinusen/boardgame-tower-havoc\n- Root Path: .\n- Repo Files Discovery: on\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)\n  - Towards: self\n  - Value: stale\n`;
   const record = { path: '.topics/.workspaces/private.workspace.md', markdown, schemaId: 'tiinex.workspace.v1' };
@@ -158,8 +158,8 @@ test('workspace editor assistance repairs unqualified linked Current Schema and 
   assert.ok(Number(integrityDiagnostic?.sourceRange?.startLine || 0) > Number(schemaDiagnostic?.sourceRange?.startLine || 0));
   const action = editor.documents[0].actions.find((item) => item.id === 'normalize-workspace-schema-and-self-integrity');
   assert.ok(action, 'workspace package-conformance repair must be projected');
-  assert.match(action.replacementMarkdown, /^  - Current Schema: tiinex\.workspace\.v1$/m);
-  assert.doesNotMatch(action.replacementMarkdown, new RegExp(unqualifiedWorkspaceTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(action.replacementMarkdown, new RegExp(`^  - Current Schema: \\[tiinex\\.workspace\\.v1\\]\\(${unqualifiedWorkspaceTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)$`, 'm'));
+  assert.equal(action.title, 'Repair Workspace self integrity');
   const conformance = qualifyTiinexRouteArtifact({ markdown: action.replacementMarkdown, expectedSchemaId: 'tiinex.workspace.v1', requireExactContract: true });
   assert.equal(conformance.status, 'qualified');
   assert.equal(conformance.selfIntegrity.state, 'verified');
