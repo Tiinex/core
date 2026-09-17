@@ -15,12 +15,18 @@ export function projectGroundingDelegationArtifactAuthority({ authority = null, 
   const sender = qualifiedRole(senderRole, handoff.fromReference || '');
   if (!sender) unresolved.push('exact-sender-role-authority-not-established');
 
+  const delegateSelection = transferSelection ? selectForwardDelegate(transferSelection.record, authority) : null;
+  if (transferSelection && !delegateSelection?.selector) unresolved.push('forward-delegate-selector-not-established');
+  if (delegateSelection?.selector && !delegateSelection?.role) unresolved.push('exact-forward-selected-delegate-role-authority-not-established');
+
   const taskRecord = transferSelection?.record || null;
   const targetWorkspaceId = String(taskRecord?.path || '').split('/')[0] || '';
   const workspaceSource = (sourceEvidence?.workspaces || []).find((item) => String(item.workspace || '') === targetWorkspaceId && ['qualified', 'explicit-profile'].includes(String(item.state || ''))) || null;
   if (!workspaceSource?.repository) unresolved.push('exact-target-repository-authority-not-established');
 
-  const delegateCapabilityAuthority = recipient && transferSelection ? delegateProjection(recipient, handoff, transferSelection) : null;
+  const delegateCapabilityAuthority = delegateSelection?.role && delegateSelection?.selector && transferSelection
+    ? delegateProjection(delegateSelection.role, handoff, transferSelection, delegateSelection.selector)
+    : null;
   if (!delegateCapabilityAuthority) unresolved.push('delegate-capability-artifact-projection-not-established');
 
   const processApplicability = sender && transferSelection ? processProjection(sender, handoff, transferSelection) : null;
@@ -56,9 +62,11 @@ export function projectGroundingDelegationArtifactAuthority({ authority = null, 
       controllingTask: taskRecord ? sourceArtifactFromRecord(taskRecord) : null,
       senderRole: sender ? sender.sourceArtifact : null,
       recipientRole: recipient ? recipient.sourceArtifact : null,
-      boundary: 'Projection only. Exact Handoff transfer, exact endpoint Role authority, exact controlling Task and exact Workspace source identity are composed mechanically; Role/cache inventory, filenames, adjacency and arbitrary prose are never searched for delegation meaning.'
+      delegateSelector: delegateSelection?.selector || null,
+      delegateRole: delegateSelection?.role?.sourceArtifact || null,
+      boundary: 'Projection only. The inbound Handoff recipient/current holder and downstream specialist are independent claims. The downstream Role is resolved only after one exact explicit selector declaration on the controlling current Task; route-bounded Role material then qualifies that already-selected Role. Role/cache inventory, endpoint identity, filenames, adjacency and arbitrary prose are never used to choose a delegate.'
     }),
-    boundary: 'Artifact-derived delegation closure is available only from the exact selected forward chain. It does not select a delegate, invent a process, create source permission, or treat an endpoint alone as delegation authority.'
+    boundary: 'Artifact-derived delegation closure is available only from the exact selected forward chain. The current-work declaration selects the downstream Role; exact Role material qualifies capability. Inbound recipient/holder identity, Role-cache carriage, process applicability, source permission and return authority remain separate.'
   });
 }
 
@@ -96,7 +104,85 @@ function qualifiedRole(role, declaredReference = '') {
   });
 }
 
-function delegateProjection(role, handoff, selected) {
+function selectForwardDelegate(taskRecord, authority = {}) {
+  const selector = explicitTaskSpecialistSelector(taskRecord);
+  if (!selector) return Object.freeze({ selector: null, role: null, candidates: Object.freeze([]) });
+  const candidates = exactRouteRoleMaterials(authority).filter((role) => normalize(role.label) === normalize(selector.roleLabel));
+  const unique = dedupeRoles(candidates);
+  return Object.freeze({ selector, role: unique.length === 1 ? unique[0] : null, candidates: Object.freeze(unique) });
+}
+
+function explicitTaskSpecialistSelector(taskRecord = {}) {
+  if (String(taskRecord.schemaId || '') !== 'tiinex.task.v1' || !taskRecord.hasContinuityContext || !taskRecord.hasIntegrity) return null;
+  const objective = section(taskRecord.markdown || '', 'Objective');
+  if (!objective) return null;
+  const declarations = objective
+    .split(/\r?\n\s*\r?\n/u)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .flatMap((paragraph) => {
+      if (/\r|\n/u.test(paragraph)) return [];
+      const match = paragraph.match(/^(.{1,80}?) is the explicitly selected specialist for this (.{1,120}?)\.$/u);
+      if (!match) return [];
+      const roleLabel = match[1].trim();
+      const scope = match[2].trim();
+      if (!roleLabel || !scope || /[\r\n]/u.test(roleLabel)) return [];
+      return [Object.freeze({
+        state: 'explicit-current-work-selector',
+        roleLabel,
+        selectorKind: 'explicit-specialist-declaration-paragraph',
+        section: 'Objective',
+        declaration: paragraph,
+        scope,
+        sourceArtifact: sourceArtifactFromRecord(taskRecord),
+        boundary: 'Closed lexical declaration paragraph only. Core does not interpret surrounding prose: no Role label is searched for, guessed from inventory, inferred from endpoint identity, or recovered from near-match text.'
+      })];
+    });
+  return declarations.length === 1 ? declarations[0] : null;
+}
+
+function exactRouteRoleMaterials(authority = {}) {
+  const roles = [];
+  const recipient = qualifiedRole(authority?.role || null, authority?.handoff?.toReference || '');
+  const sender = qualifiedRole(authority?.senderRole || null, authority?.handoff?.fromReference || '');
+  if (recipient) roles.push(recipient);
+  if (sender) roles.push(sender);
+  for (const item of authority?.participation?.packageRoleGrounding || []) {
+    const role = qualifiedPackageGroundingRole(item);
+    if (role) roles.push(role);
+  }
+  return Object.freeze(dedupeRoles(roles));
+}
+
+function qualifiedPackageGroundingRole(entry = {}) {
+  const artifact = entry?.roleArtifact || null;
+  if (!entry?.groundingOnly || String(entry?.materialQualification || '') !== 'qualified' || !artifact) return null;
+  const sha256 = String(artifact.sha256 || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/iu.test(sha256)) return null;
+  const reference = String(artifact.reference || artifact.path || '').trim();
+  const label = String(artifact.roleLabel || entry.label || '').trim();
+  if (!reference || !label || String(artifact.schemaId || '') !== 'tiinex.party.role.v1') return null;
+  return Object.freeze({
+    label,
+    kind: 'role',
+    roleKind: String(artifact.roleKind || ''),
+    boundary: Object.freeze({ ...(entry.exactBoundaryLoaded || {}) }),
+    authority: Object.freeze({ ...(entry.authorityBoundaryLoaded || {}) }),
+    sourceArtifact: sourceArtifactFromReference(reference, sha256, String(artifact.schemaId || 'tiinex.party.role.v1')),
+    materialResolution: Object.freeze({ pointerPath: String(entry.pointerPath || ''), groundingOnly: true })
+  });
+}
+
+function dedupeRoles(roles = []) {
+  const map = new Map();
+  for (const role of roles) {
+    const key = `${normalize(role?.label)}\u0000${String(role?.sourceArtifact?.path || '')}\u0000${String(role?.sourceArtifact?.sha256 || '')}`;
+    if (!map.has(key)) map.set(key, role);
+  }
+  return [...map.values()];
+}
+
+function delegateProjection(role, handoff, selected, selector) {
   const capabilities = [
     role.roleKind ? Object.freeze({ kind: 'role-kind', value: role.roleKind }) : null,
     role.boundary.inScope ? Object.freeze({ kind: 'role-in-scope', value: role.boundary.inScope }) : null,
@@ -111,10 +197,18 @@ function delegateProjection(role, handoff, selected) {
     selection: Object.freeze({ state: 'explicit-forward-selected', forwardSelected: true }),
     sourceArtifact: role.sourceArtifact,
     facts: Object.freeze([
-      Object.freeze({ kind: 'selected-handoff-transfer', handoff: qualifiedHandoffPath(handoff), transferId: String(selected.transfer.id || ''), transferKind: String(selected.transfer.transferKind || ''), controllingArtifact: selected.resolvedPath }),
-      Object.freeze({ kind: 'exact-recipient-role-authority', role: role.label, roleKind: role.roleKind })
+      Object.freeze({ kind: 'current-work-forward-delegate-selector', role: selector.roleLabel, section: selector.section, selectorKind: selector.selectorKind, controllingArtifact: selected.resolvedPath }),
+      Object.freeze({ kind: 'exact-forward-selected-role-authority', role: role.label, roleKind: role.roleKind }),
+      Object.freeze({ kind: 'selected-handoff-current-work-transfer', handoff: qualifiedHandoffPath(handoff), transferId: String(selected.transfer.id || ''), transferKind: String(selected.transfer.transferKind || ''), controllingArtifact: selected.resolvedPath })
     ]),
-    provenance: Object.freeze({ source: role.sourceArtifact.path, basis: 'selected-handoff-transfer-to-exact-recipient-role-and-controlling-task', forwardSelector: Object.freeze({ handoff: qualifiedHandoffPath(handoff), transferId: String(selected.transfer.id || ''), controllingArtifact: selected.resolvedPath }) })
+    provenance: Object.freeze({
+      source: role.sourceArtifact.path,
+      basis: 'exact-controlling-task-explicit-specialist-selector-plus-exact-selected-role-material',
+      forwardSelector: selector,
+      roleSourceArtifact: role.sourceArtifact,
+      materialResolution: role.materialResolution || null,
+      currentWorkTransfer: Object.freeze({ handoff: qualifiedHandoffPath(handoff), transferId: String(selected.transfer.id || ''), controllingArtifact: selected.resolvedPath })
+    })
   });
 }
 

@@ -23,8 +23,11 @@ import { projectGroundingSourceEvidence } from '../src/tooling/portable/groundin
 const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
 const WORKSPACE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.workspace.v1.schema.md';
 const ROLE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/party/role/tiinex.party.role.v1.schema.md';
+const HANDOFF_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/coordination/handoff/tiinex.handoff.v1.schema.md';
+const TASK_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/053d46ce082d4ec261b82abc44ecca403d61e240/.topics/.schemas/core/task/tiinex.task.v1.schema.md';
 const CORE_WORKSPACE_PATH = '.topics/.workspaces/tiinex-core.workspace.md';
 const BUSINESS_WORKSPACE_PATH = '.topics/.workspaces/tiinex-business.workspace.md';
+const DOCS_WORKSPACE_PATH = '.topics/.workspaces/tiinex-docs.workspace.md';
 const ROUTE_PATH = '.topics/handoffs/return.trace.md';
 const GOVERNANCE_PATH = '.topics/governance/current.trace.md';
 const PROCESS_PATH = '.topics/processes/current.trace.md';
@@ -39,6 +42,17 @@ function seal(markdown) { const sealed = sealC14nV2Self(markdown); assert.equal(
 function workspaceFixture(title, repository) { return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.workspace.v1](${WORKSPACE_SCHEMA_TARGET})\n  - Created At: 2026-09-15 00:00:00\n  - Authors: Fixture\n  - Why: Exercise blank/minimal Workspace cache grounding.\n  - Summary: Portable Workspace entrypoint for ${repository}.\n  - Status: active/local\n\n---\n\n# ${title}\n\n## Schema Origins\n\n- [Tiinex docs schemas](https://github.com/Tiinex/docs/tree/master/.topics/.schemas)\n  - Kind: github-tree\n  - Repository: Tiinex/docs\n  - Ref: master\n  - Root Path: .topics/.schemas\n  - Trust Role: canonical-core\n\n## Workspace Entrypoints\n\n### ${title}\n\n- Source Kind: local-directory\n- Repository: ${repository}\n- Root Path: .\n- Repo Files Discovery: on\n\n## Workspace Boundary\n\nBlank/minimal carrier regression fixture only.\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`); }
 function roleFixture(label) { return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE_SCHEMA_TARGET})\n  - Created At: 2026-09-15 00:00:00\n  - Authors: Fixture\n  - Why: Exercise cache-carried endpoint Role grounding.\n  - Summary: ${label} Role fixture.\n  - Status: active/local\n\n---\n\n# ${label}\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: operational\n\n## Role Boundary\n\n- In Scope: blank/minimal cache grounding regression\n- Out Of Scope: all other authority\n\n## Authority And Responsibility Boundary\n\n- May Do: exercise the fixture route\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session or Handoff\n- Assignment Modes: explicit-session, handoff\n\n## Interpretation Limits\n\n- Does Not Prove: human identity or authority beyond the fixture\n- Must Not Be Treated As: semantic participation or durable holder identity\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`); }
 async function writeWorkspaceFile(root, relativePath, data) { const target = path.join(root, ...relativePath.split('/')); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, data); }
+
+function selectedAxiomTaskFixture({ selectorDeclaration = 'Axiom is the explicitly selected specialist for this review.' } = {}) {
+  return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.task.v1](${TASK_SCHEMA_TARGET})\n  - Created At: 2026-09-16 00:00:00\n  - Authors: Fixture\n  - Why: Exercise downstream delegate selection independently from inbound recipient.\n  - Summary: Anchor-held review task selecting Axiom.\n  - Status: ready/local\n\n---\n\n# Fresh Anchor Delegation Acceptance — Axiom Review\n\n## Objective\n\nObtain one bounded independent semantic review.\n\n${selectorDeclaration}\n\n## Done Criteria\n\n- Axiom receives one bounded semantic-review assignment.\n- Anchor does not substitute its own semantic answer.\n\n## Scope\n\nWritable acceptance surface: Docs \`.topics/grounding/**\` and \`.topics/grounding/handoffs/**\` only.\n\n## Dependencies\n\n- exact qualified Anchor Role material;\n- exact qualified Axiom Role material.\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
+}
+
+function anchorToAnchorDelegationHandoffFixture(taskPath, taskMarkdown) {
+  const digest = validatedC14nV2PrimarySelfDigest(taskMarkdown);
+  assert.equal(digest.state, 'verified');
+  const taskBasename = path.posix.basename(taskPath);
+  return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Parent\n  - Parent Schema: [tiinex.task.v1](${TASK_SCHEMA_TARGET})\n  - Created At: 2026-09-16 00:00:00\n  - Trace: [Fresh Anchor Delegation Acceptance](../${taskBasename})\n  - Origin:\n    - [relative](../${taskBasename})\n- Current\n  - Current Schema: [tiinex.handoff.v1](${HANDOFF_SCHEMA_TARGET})\n  - Created At: 2026-09-16 00:01:00\n  - Authors: Fixture\n  - Why: Exercise inbound Anchor/current-holder versus downstream Axiom delegate.\n  - Summary: Anchor to Anchor delegation acceptance fixture.\n  - Status: ready/local\n\n---\n\n# Anchor To Anchor — Blank-Workspace Qualified Delegation Acceptance\n\n## Handoff Parties\n\n- Purpose: continue one bounded Task whose downstream semantic review is assigned to Axiom.\n- From: Anchor\n- From Kind: role\n- From Reference: [Anchor Role](business::${ANCHOR_ROLE_PATH})\n- To: Anchor\n- To Kind: role\n- To Reference: [Anchor Role](business::${ANCHOR_ROLE_PATH})\n\n## Transfers\n\n- delegation-acceptance\n  - Transfer Kind: work-and-responsibility\n  - Description: continue the bounded acceptance task and obtain its selected specialist review.\n  - Controlling Artifact: [Fresh Anchor Delegation Acceptance](../${taskBasename})\n  - Boundary: Anchor remains the current holder; downstream specialist selection stays owned by current work.\n\n## Required Context\n\n- docs-workspace\n  - Material: bounded Docs Workspace acceptance surface.\n  - Material Reference: [Docs Workspace](docs::${DOCS_WORKSPACE_PATH})\n  - Purpose: local acceptance Task/Handoff authoring surface.\n  - Availability: available\n\n## Reference Context\n\n- none\n\n## Retained Responsibilities\n\n- acceptance-reconciliation\n  - Retained By: Anchor\n  - Responsibility: reconcile the returned specialist result.\n  - Boundary: specialist review does not imply acceptance.\n\n## Exclusions And Dependencies\n\n- no-specialist-substitution\n  - Kind: excluded-scope\n  - Description: Anchor must not perform the selected specialist review.\n  - Responsible Party Or Role: Anchor\n\n## Completion Expectation\n\n- Signal Kind: return\n- Signal Meaning: return qualified specialist work\n- Return To: Anchor\n\n## Interpretation Limits\n\n- Does Not Mean: cached Role material selects a delegate.\n- Must Not Be Used To Claim: inbound recipient identity and downstream delegate identity are the same claim.\n- Authority Limits: bounded fixture only.\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: [Fresh Anchor Delegation Acceptance](../${taskBasename})\n  - Value: ${digest.value}\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
+}
 
 test('minimal selected Workspace can ground from exact route-bounded cache Role and Required Context material', async (t) => {
   const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'tiinex-core-blank-cache-'));
@@ -261,6 +275,111 @@ None.
   assert.equal(absentPreflight.state, 'action-required');
   assert.equal(absentPreflight.requirements[0].state, 'absent');
   assert.match(absentPreflight.requirements[0].nextAction, /Supply exact qualified material/);
+});
+
+test('normal ground keeps Anchor recipient/holder distinct from forward-selected Axiom delegate', async (t) => {
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'tiinex-core-delegate-selection-'));
+  t.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+  const docsRoot = path.join(fixtureRoot, 'docs');
+  const businessRoot = path.join(fixtureRoot, 'business');
+  await mkdir(docsRoot, { recursive: true });
+  await mkdir(businessRoot, { recursive: true });
+
+  const taskPath = '.topics/grounding/012-fresh-anchor-delegation-acceptance-axiom-review.trace.md';
+  const routePath = '.topics/grounding/handoffs/009-anchor-to-anchor-blank-workspace-qualified-delegation-acceptance.trace.md';
+  const task = selectedAxiomTaskFixture();
+  const route = anchorToAnchorDelegationHandoffFixture(taskPath, task);
+
+  await writeWorkspaceFile(docsRoot, DOCS_WORKSPACE_PATH, workspaceFixture('Tiinex Docs Fixture', 'Tiinex/docs'));
+  await writeWorkspaceFile(docsRoot, taskPath, task);
+  await writeWorkspaceFile(docsRoot, routePath, route);
+  await writeWorkspaceFile(businessRoot, BUSINESS_WORKSPACE_PATH, workspaceFixture('Tiinex Business Fixture', 'Tiinex/business'));
+  await writeWorkspaceFile(businessRoot, ANCHOR_ROLE_PATH, roleFixture('Anchor'));
+  await writeWorkspaceFile(businessRoot, AXIOM_ROLE_PATH, roleFixture('Axiom'));
+
+  const prepared = await prepareNodeHandoffManufacturingInput({
+    workspaceRoot: docsRoot,
+    workspaceId: 'docs',
+    workspaceTargetPath: DOCS_WORKSPACE_PATH,
+    handoffPath: routePath,
+    additionalWorkspaces: [{ id: 'business', root: businessRoot, workspaceTargetPath: BUSINESS_WORKSPACE_PATH }],
+    workspaceScopes: [
+      { workspaceId: 'docs', coverage: 'bounded', include: [taskPath, routePath] },
+      { workspaceId: 'business', coverage: 'bounded', include: [] }
+    ],
+    transportRoutes: [{
+      workspaceId: 'docs', path: routePath,
+      participantRoles: [{ label: 'Axiom', workspaceId: 'business', path: AXIOM_ROLE_PATH, reference: `business::${AXIOM_ROLE_PATH}` }]
+    }],
+    carrierLineage: { mode: 'continue', dimension: '001-1', parentDimension: '001', parentPackageSha256: '0'.repeat(64), parentPackageFilename: 'parent.zip', checkpointKind: 'progression' },
+    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'),
+    verifyRoundtrip: true
+  });
+  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
+  assert.equal(result.status, 'ready', JSON.stringify(result.findings, null, 2));
+  const orientation = orientColdConsumerFromHandoffPackage({ bundle: result.bundle });
+  assert.equal(orientation.status, 'ready');
+
+  const grounded = projectPortableGroundingReadiness({
+    bundle: result.bundle,
+    route: orientation.routes[0].id,
+    holderRole: 'Anchor',
+    interactionMode: 'execution'
+  });
+  assert.equal(grounded.readiness.state, 'grounded-to-act', JSON.stringify(grounded.readiness, null, 2));
+  assert.equal(grounded.capsule.roleState.recipient, 'Anchor');
+  assert.equal(grounded.capsule.roleState.holder, 'Anchor');
+  assert.equal(grounded.capsule.delegationReadiness.state, 'qualified-for-delegation-authoring', JSON.stringify(grounded.capsule.delegationReadiness, null, 2));
+  assert.equal(grounded.capsule.delegationReadiness.delegateCapabilityAuthority.delegate.label, 'Axiom');
+  assert.equal(grounded.capsule.delegationArtifactAuthority.provenance.recipientRole.path, `business::${ANCHOR_ROLE_PATH}`);
+  assert.equal(grounded.capsule.delegationArtifactAuthority.provenance.delegateRole.path, `business::${AXIOM_ROLE_PATH}`);
+  assert.equal(grounded.capsule.delegationArtifactAuthority.delegateCapabilityAuthority.provenance.forwardSelector.sourceArtifact.path, `docs/${taskPath}`);
+  const handoffOperation = grounded.capsule.delegationReadiness.nextOperations.find((item) => item.kind === 'author-delegation-handoff');
+  const taskOperation = grounded.capsule.delegationReadiness.nextOperations.find((item) => item.kind === 'author-delegation-task');
+  assert.equal(handoffOperation?.recipient?.label, 'Axiom');
+  assert.equal(handoffOperation?.directory, '.topics/grounding/handoffs');
+  assert.equal(taskOperation?.directory, '.topics/grounding');
+  assert.equal(grounded.capsule.participantContext.roleGrounding.find((item) => item.label === 'Axiom')?.semanticParticipant, false);
+
+  const taskWithoutSelector = selectedAxiomTaskFixture({
+    selectorDeclaration: 'Axiom Role material is available for qualification, but this Task does not select a downstream specialist.'
+  });
+  const routeWithoutSelector = anchorToAnchorDelegationHandoffFixture(taskPath, taskWithoutSelector);
+  await writeWorkspaceFile(docsRoot, taskPath, taskWithoutSelector);
+  await writeWorkspaceFile(docsRoot, routePath, routeWithoutSelector);
+  const preparedWithoutSelector = await prepareNodeHandoffManufacturingInput({
+    workspaceRoot: docsRoot,
+    workspaceId: 'docs',
+    workspaceTargetPath: DOCS_WORKSPACE_PATH,
+    handoffPath: routePath,
+    additionalWorkspaces: [{ id: 'business', root: businessRoot, workspaceTargetPath: BUSINESS_WORKSPACE_PATH }],
+    workspaceScopes: [
+      { workspaceId: 'docs', coverage: 'bounded', include: [taskPath, routePath] },
+      { workspaceId: 'business', coverage: 'bounded', include: [] }
+    ],
+    transportRoutes: [{
+      workspaceId: 'docs', path: routePath,
+      participantRoles: [{ label: 'Axiom', workspaceId: 'business', path: AXIOM_ROLE_PATH, reference: `business::${AXIOM_ROLE_PATH}` }]
+    }],
+    carrierLineage: { mode: 'continue', dimension: '001-1', parentDimension: '001', parentPackageSha256: '0'.repeat(64), parentPackageFilename: 'parent.zip', checkpointKind: 'progression' },
+    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'),
+    verifyRoundtrip: true
+  });
+  const withoutSelectorResult = manufactureRecipientRelativeHandoffPackage(preparedWithoutSelector, { verifyRoundtrip: true });
+  assert.equal(withoutSelectorResult.status, 'ready', JSON.stringify(withoutSelectorResult.findings, null, 2));
+  const withoutSelectorOrientation = orientColdConsumerFromHandoffPackage({ bundle: withoutSelectorResult.bundle });
+  const withoutSelectorGrounded = projectPortableGroundingReadiness({
+    bundle: withoutSelectorResult.bundle,
+    route: withoutSelectorOrientation.routes[0].id,
+    holderRole: 'Anchor',
+    interactionMode: 'execution'
+  });
+  assert.equal(withoutSelectorGrounded.capsule.roleState.recipient, 'Anchor');
+  assert.equal(withoutSelectorGrounded.capsule.participantContext.roleGrounding.find((item) => item.label === 'Axiom')?.semanticParticipant, false);
+  assert.equal(withoutSelectorGrounded.capsule.delegationArtifactAuthority.delegateCapabilityAuthority, null);
+  assert.equal(withoutSelectorGrounded.capsule.delegationArtifactAuthority.unresolved.some((item) => item.code === 'forward-delegate-selector-not-established'), true);
+  assert.equal(withoutSelectorGrounded.capsule.delegationReadiness.state, 'not-established');
+  assert.deepEqual(withoutSelectorGrounded.capsule.delegationReadiness.nextOperations, []);
 });
 
 test('cache inventory stays availability-only unless explicit semantic authority is independently qualified', () => {

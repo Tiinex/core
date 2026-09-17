@@ -632,16 +632,20 @@ test('delegation readiness requires substantive process and source projections, 
   assert.deepEqual(projected.blockers.map((item) => item.code), ['delegation-process-applicability-not-established', 'delegation-source-authority-not-established']);
 });
 
-test('exact selected Handoff chain derives delegation closure without caller-injected delegation objects', () => {
+test('current-work selector keeps inbound recipient distinct from downstream delegate', () => {
   const fixture = artifactDelegationFixture();
   const projected = projectGroundingDelegationArtifactAuthority(fixture);
   assert.equal(projected.state, 'qualified-forward-artifact-closure');
   assert.deepEqual(projected.unresolved, []);
-  assert.equal(projected.delegateCapabilityAuthority.delegate.label, 'Loom');
+  assert.equal(projected.delegateCapabilityAuthority.delegate.label, 'Axiom');
   assert.equal(projected.processApplicability.source, 'business::.topics/roles/anchor.trace.md');
   assert.equal(projected.delegationTargetAuthority.target.repository, 'Tiinex/core');
   assert.equal(projected.implementationSourceAuthority.sourceArtifact.path, 'core/.topics/grounding/task.trace.md');
   assert.equal(projected.delegationReturnReconciliationExpectation.completionExpectation.returnTo, 'Anchor');
+  assert.equal(projected.provenance.recipientRole.path, 'business::.topics/roles/anchor.trace.md');
+  assert.equal(projected.provenance.delegateRole.path, 'business::.topics/roles/axiom.trace.md');
+  assert.equal(projected.delegateCapabilityAuthority.provenance.forwardSelector.roleLabel, 'Axiom');
+  assert.equal(projected.delegateCapabilityAuthority.provenance.forwardSelector.sourceArtifact.path, 'core/.topics/grounding/task.trace.md');
 
   const process = projectGroundingProcessApplicability({ processApplicability: projected.processApplicability });
   const source = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: projected.implementationSourceAuthority } });
@@ -656,15 +660,24 @@ test('exact selected Handoff chain derives delegation closure without caller-inj
   });
   assert.equal(readiness.state, 'qualified-for-delegation-authoring');
   assert.deepEqual(readiness.blockers, []);
-  assert.match(projected.provenance.boundary, /never searched for delegation meaning/);
+  assert.equal(readiness.nextOperations.find((item) => item.kind === 'author-delegation-handoff')?.recipient?.label, 'Axiom');
+  assert.match(projected.provenance.boundary, /endpoint identity/);
+
+  const changedRecipient = artifactDelegationFixture({ recipient: 'Loom' });
+  const changedProjected = projectGroundingDelegationArtifactAuthority(changedRecipient);
+  assert.equal(changedProjected.state, 'qualified-forward-artifact-closure');
+  assert.equal(changedProjected.provenance.recipientRole.path, 'business::.topics/roles/loom.trace.md');
+  assert.equal(changedProjected.delegateCapabilityAuthority.delegate.label, 'Axiom');
 });
 
 test('artifact delegation closure fails closed when any required forward authority link is removed', () => {
   const base = artifactDelegationFixture();
   const cases = [
-    ['recipient capability', { ...base, authority: { ...base.authority, role: null } }, 'exact-recipient-role-authority-not-established'],
+    ['recipient/source authority', { ...base, authority: { ...base.authority, role: null } }, 'exact-recipient-role-authority-not-established'],
     ['sender delegation authority', { ...base, authority: { ...base.authority, senderRole: null } }, 'exact-sender-role-authority-not-established'],
     ['controlling Task selector', { ...base, authority: { ...base.authority, handoff: { ...base.authority.handoff, transfers: [{ ...base.authority.handoff.transfers[0], controllingArtifactTarget: '' }] } } }, 'forward-controlling-transfer-not-established'],
+    ['downstream delegate selector', { ...base, records: base.records.map((record) => ({ ...record, markdown: record.markdown.replace('Axiom is the explicitly selected specialist for this review.', 'Obtain an independent specialist review.') })) }, 'forward-delegate-selector-not-established'],
+    ['downstream delegate material', { ...base, authority: { ...base.authority, participation: { ...base.authority.participation, packageRoleGrounding: [] } } }, 'exact-forward-selected-delegate-role-authority-not-established'],
     ['target repository authority', { ...base, sourceEvidence: { workspaces: [] } }, 'exact-target-repository-authority-not-established'],
     ['return reconciliation responsibility', { ...base, authority: { ...base.authority, handoff: { ...base.authority.handoff, retainedResponsibilities: [] } } }, 'return-reconciliation-artifact-projection-not-established']
   ];
@@ -674,7 +687,39 @@ test('artifact delegation closure fails closed when any required forward authori
     assert.equal(projected.unresolved.some((item) => item.code === code), true, label);
   }
 
-  const returnMissing = projectGroundingDelegationArtifactAuthority(cases[4][1]);
+  const selectorMissing = projectGroundingDelegationArtifactAuthority(cases[3][1]);
+  assert.equal(selectorMissing.delegateCapabilityAuthority, null);
+  assert.equal(selectorMissing.provenance.delegateRole, null);
+
+  const nearMatchOnly = projectGroundingDelegationArtifactAuthority({
+    ...base,
+    records: base.records.map((record) => ({
+      ...record,
+      markdown: record.markdown.replace(
+        'Axiom is the explicitly selected specialist for this review.',
+        'Axiom is available for this semantic review, but no downstream specialist is explicitly selected.'
+      )
+    }))
+  });
+  assert.equal(nearMatchOnly.state, 'not-established');
+  assert.equal(nearMatchOnly.delegateCapabilityAuthority, null);
+  assert.equal(nearMatchOnly.unresolved.some((item) => item.code === 'forward-delegate-selector-not-established'), true);
+
+  const ambiguousSelector = projectGroundingDelegationArtifactAuthority({
+    ...base,
+    records: base.records.map((record) => ({
+      ...record,
+      markdown: record.markdown.replace(
+        'Axiom is the explicitly selected specialist for this review.',
+        'Axiom is the explicitly selected specialist for this review.\n\nLoom is the explicitly selected specialist for this review.'
+      )
+    }))
+  });
+  assert.equal(ambiguousSelector.state, 'not-established');
+  assert.equal(ambiguousSelector.delegateCapabilityAuthority, null);
+  assert.equal(ambiguousSelector.unresolved.some((item) => item.code === 'forward-delegate-selector-not-established'), true);
+
+  const returnMissing = projectGroundingDelegationArtifactAuthority(cases[6][1]);
   const process = projectGroundingProcessApplicability({ processApplicability: returnMissing.processApplicability });
   const source = projectGroundingImplementationSourceAuthority({ authority: { implementationSourceAuthority: returnMissing.implementationSourceAuthority } });
   const readiness = projectGroundingDelegationReadiness({
@@ -689,8 +734,8 @@ test('artifact delegation closure fails closed when any required forward authori
   assert.deepEqual(readiness.blockers.map((item) => item.code), ['delegation-return-reconciliation-expectation-not-established']);
 });
 
-function artifactDelegationFixture() {
-  const taskMarkdown = `# Specialist Task\n\n## Scope\n\nCore grounding projection only.\n`;
+function artifactDelegationFixture({ recipient = 'Anchor' } = {}) {
+  const taskMarkdown = `# Specialist Task\n\n## Objective\n\nObtain one bounded semantic review.\n\nAxiom is the explicitly selected specialist for this review.\n\n## Scope\n\nCore grounding projection only.\n`;
   const role = (label, reference, sha, { mayDo, requiredInstrument, roleKind = 'specialist', inScope = 'bounded specialist work' } = {}) => ({
     state: 'qualified',
     endpoint: { label, kind: 'role' },
@@ -703,13 +748,21 @@ function artifactDelegationFixture() {
       handoff: {
         schemaId: 'tiinex.handoff.v1', workspaceId: 'core', workspaceRelativePath: '.topics/grounding/handoffs/delegate.trace.md', sha256: 'a'.repeat(64),
         from: 'Anchor', fromKind: 'role', fromReference: 'business::.topics/roles/anchor.trace.md',
-        to: 'Loom', toKind: 'role', toReference: 'business::.topics/roles/loom.trace.md',
+        to: recipient, toKind: 'role', toReference: `business::.topics/roles/${recipient.toLowerCase()}.trace.md`,
         transfers: [{ id: 'work', transferKind: 'work-and-responsibility', controllingArtifactTarget: '../task.trace.md' }],
         retainedResponsibilities: [{ id: 'integration', retainedBy: 'Anchor', responsibility: 'reconcile returned qualified work' }],
         completionExpectation: { signalKind: 'return', signalMeaning: 'return qualified work', returnTo: 'Anchor' }
       },
-      role: role('Loom', 'business::.topics/roles/loom.trace.md', 'b'.repeat(64)),
-      senderRole: role('Anchor', 'business::.topics/roles/anchor.trace.md', 'c'.repeat(64), { mayDo: 'delegate bounded specialist work', requiredInstrument: 'use durable Task and Handoff transfer' })
+      role: role(recipient, `business::.topics/roles/${recipient.toLowerCase()}.trace.md`, recipient === 'Anchor' ? 'c'.repeat(64) : 'b'.repeat(64)),
+      senderRole: role('Anchor', 'business::.topics/roles/anchor.trace.md', 'c'.repeat(64), { mayDo: 'delegate bounded specialist work', requiredInstrument: 'use durable Task and Handoff transfer' }),
+      participation: {
+        packageRoleGrounding: [{
+          label: 'Axiom', groundingOnly: true, semanticParticipant: false, materialQualification: 'qualified', pointerPath: '001-axiom-role-pointer.trace.md',
+          roleArtifact: { path: 'cache:axiom', reference: 'business::.topics/roles/axiom.trace.md', sha256: 'd'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Axiom', roleKind: 'semantic reviewer' },
+          exactBoundaryLoaded: { inScope: 'bounded semantic review', outOfScope: 'tooling implementation', context: 'selected review only' },
+          authorityBoundaryLoaded: { mayDo: 'perform independent semantic review', requiredInstrument: 'use qualified Task and Handoff authority', delegation: '', doesNotAuthorize: 'implementation', reviewBoundary: 'return to Anchor' }
+        }]
+      }
     },
     records: [{
       id: 'task', path: 'core/.topics/grounding/task.trace.md', schemaId: 'tiinex.task.v1', markdown: taskMarkdown, hasContinuityContext: true, hasIntegrity: true

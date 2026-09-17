@@ -422,7 +422,18 @@ function resolvePackageParticipantRoles(bundle = {}, orientation = null, selecte
       packageDeclared: true,
       groundingOnly: true,
       semanticParticipant: false,
-      roleArtifact: Object.freeze({ path: parsed.path, sha256: parsed.sha256, schemaId: parsed.schemaId, roleLabel: parsed.label, roleKind: parsed.roleKind }),
+      materialQualification: 'qualified',
+      roleArtifact: Object.freeze({
+        path: parsed.path,
+        reference: String(facts.referenceTarget || parsed.path || ''),
+        sha256: parsed.sha256,
+        schemaId: parsed.schemaId,
+        roleLabel: parsed.label,
+        roleKind: parsed.roleKind
+      }),
+      exactBoundaryLoaded: parsed.boundary,
+      authorityBoundaryLoaded: parsed.authorityBoundary,
+      interpretationLimitsLoaded: parsed.interpretationLimits,
       pointerPath
     }));
   }
