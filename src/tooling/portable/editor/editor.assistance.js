@@ -4,6 +4,7 @@ import { sha256Hex } from '../../../export/package.bytes.js';
 import { integrityMethodReferenceAuthorityForCreation } from '../../../integrity/integrity.methodReference.js';
 import { inspectPortableLineageIntegrity } from '../lineage/lineage.integrity.plan.js';
 import { portableFinding } from '../findings.js';
+import { qualifyTiinexRouteArtifact } from '../handoff/routeArtifactConformance.js';
 
 export const PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID = 'tiinex.portable.editor-assistance.v1';
 
@@ -28,11 +29,26 @@ function projectDocument(record = {}, records = [], lineageInspection = null) {
   const markdown = String(record.markdown || '');
   const recordPath = norm(record.path || record.id || '');
   const lineageFindings = findingsForPath(lineageInspection?.findings || [], recordPath);
-  const sharedFindings = [...(audit.findings || []), ...lineageFindings];
+  const workspaceConformance = String(audit.schemaId || '') === 'tiinex.workspace.v1'
+    ? qualifyTiinexRouteArtifact({ markdown, expectedSchemaId: 'tiinex.workspace.v1', requireExactContract: true })
+    : null;
+  const packageQualifiedWorkspace = workspaceConformance?.status === 'qualified';
+  const sharedFindings = [...(audit.findings || []), ...lineageFindings].filter((finding) => !(packageQualifiedWorkspace && String(finding?.code || '') === 'audit.schema-authority.unqualified'));
   const diagnostics = sharedFindings
     .filter((item) => item.severity === 'error' || item.severity === 'warning')
     .map((finding) => projectDiagnostic(finding, markdown));
   const actions = [];
+  const workspacePackagingRepair = deterministicWorkspacePackagingRepair(record, audit, markdown);
+  if (workspacePackagingRepair.state === 'ready' && workspacePackagingRepair.markdown !== markdown) actions.push(freeze({
+    id: 'normalize-workspace-schema-and-self-integrity',
+    title: workspacePackagingRepair.schemaReferenceChanged ? 'Repair Workspace schema reference and self integrity' : 'Repair Workspace self integrity',
+    kind: 'replace-document',
+    qualification: 'deterministic-shared-core',
+    sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
+    replacementMarkdown: workspacePackagingRepair.markdown,
+    diagnosticCodes: workspacePackagingRepair.diagnosticCodes,
+    boundary: 'Repairs only a tiinex.workspace.v1 artifact whose replacement independently qualifies through the same exact registered Workspace contract and c14n-v2 self-integrity requirements used by Handoff package manufacture. A linked Current Schema target is normalized to the registered schema identifier only when the linked target itself is not qualified; no repository, Workspace, Handoff, Role, or authority meaning is invented.'
+  }));
   const integrityRepair = deterministicIntegrityHygieneRepair(markdown, audit.findings || []);
   const repairQualification = integrityRepair.state === 'ready'
     ? qualifyReplacementAgainstSharedGuardrails(record, records, integrityRepair.markdown)
@@ -54,13 +70,13 @@ function projectDocument(record = {}, records = [], lineageInspection = null) {
     path: String(record.path || record.id || ''),
     schemaId: String(audit.schemaId || ''),
     validator: {
-      state: audit.qualification?.exact && validationAuthority?.state === 'qualified' ? 'qualified-exact' : 'degraded',
+      state: packageQualifiedWorkspace || (audit.qualification?.exact && validationAuthority?.state === 'qualified') ? 'qualified-exact' : 'degraded',
       requestedSchema: String(audit.qualification?.requestedSchema || audit.schemaId || ''),
       resolvedThrough: String(audit.qualification?.resolvedThrough || ''),
       fallbackUsed: Boolean(audit.qualification?.fallback?.used),
-      authorityState: String(validationAuthority?.state || 'unavailable'),
-      authorityBasis: String(validationAuthority?.currentReference?.basis || ''),
-      authorityFindings: [...(validationAuthority?.findings || [])]
+      authorityState: packageQualifiedWorkspace ? 'qualified-package-conformance' : String(validationAuthority?.state || 'unavailable'),
+      authorityBasis: packageQualifiedWorkspace ? 'registered-workspace-contract+self-integrity' : String(validationAuthority?.currentReference?.basis || ''),
+      authorityFindings: packageQualifiedWorkspace ? [] : [...(validationAuthority?.findings || [])]
     },
     diagnostics,
     actions
@@ -70,6 +86,37 @@ function projectDocument(record = {}, records = [], lineageInspection = null) {
 function findingsForPath(findings = [], path = '') {
   const wanted = norm(path);
   return (findings || []).filter((finding) => norm(finding?.evidencePath || finding?.ref || '') === wanted);
+}
+
+function deterministicWorkspacePackagingRepair(record = {}, audit = {}, markdown = '') {
+  if (String(audit.schemaId || '') !== 'tiinex.workspace.v1') return freeze({ state: 'unavailable' });
+  const source = String(markdown || '');
+  if (!source) return freeze({ state: 'unavailable' });
+  const currentMatches = [...source.matchAll(/^(\s*-\s+Current Schema:\s*)(.*)$/gm)];
+  if (currentMatches.length !== 1) return freeze({ state: 'unavailable' });
+  const currentRaw = String(currentMatches[0][2] || '').trim();
+  const linked = currentRaw.match(/^\[tiinex\.workspace\.v1\]\(([^)]+)\)$/);
+  const bare = currentRaw === 'tiinex.workspace.v1';
+  if (!linked && !bare) return freeze({ state: 'unavailable' });
+
+  let candidate = source;
+  let schemaReferenceChanged = false;
+  const schemaAuthorityUnqualified = (audit.findings || []).some((item) => String(item.code || '') === 'audit.schema-authority.unqualified');
+  if (linked && schemaAuthorityUnqualified) {
+    candidate = candidate.replace(currentMatches[0][0], `${currentMatches[0][1]}tiinex.workspace.v1`);
+    schemaReferenceChanged = true;
+  }
+
+  const sealed = sealC14nV2Self(candidate);
+  if (sealed.state !== 'sealed' && sealed.state !== 'unchanged') return freeze({ state: 'unavailable' });
+  candidate = String(sealed.markdown || candidate);
+  const conformance = qualifyTiinexRouteArtifact({ markdown: candidate, expectedSchemaId: 'tiinex.workspace.v1', requireExactContract: true });
+  if (conformance.status !== 'qualified') return freeze({ state: 'blocked', reasons: (conformance.findings || []).map((item) => String(item.code || '')) });
+  const diagnosticCodes = [...new Set([
+    ...(audit.findings || []).filter((item) => /schema-authority|integrity/i.test(String(item.code || ''))).map((item) => String(item.code || '')),
+    'portable.lineage-integrity.child-self-mismatch'
+  ].filter(Boolean))];
+  return freeze({ state: 'ready', markdown: candidate, schemaReferenceChanged, diagnosticCodes });
 }
 
 function qualifyReplacementAgainstSharedGuardrails(record = {}, records = [], replacementMarkdown = '') {
@@ -99,8 +146,20 @@ function projectDiagnostic(finding = {}, markdown = '') {
     message: String(finding.message || 'Tiinex validation finding.'),
     fixability: String(finding.fixability || 'unknown'),
     line: located.line,
+    sourceRange: located.sourceRange,
     locationState: located.state,
     locationBasis: located.basis
+  });
+}
+
+function locatedLine(lines = [], index = -1, state = 'deterministic', basis = '') {
+  if (!Number.isInteger(index) || index < 0 || index >= lines.length) return freeze({ state: 'unresolved', line: null, sourceRange: null, basis: basis || 'line-unavailable' });
+  const text = String(lines[index] || '');
+  return freeze({
+    state,
+    line: index + 1,
+    sourceRange: { startLine: index + 1, startColumn: 1, endLine: index + 1, endColumn: text.length + 1 },
+    basis
   });
 }
 
@@ -113,43 +172,43 @@ export function locateFindingLine(finding = {}, markdown = '') {
   const group = String(params.group || '').trim();
   if (field) {
     const index = lines.findIndex((line) => new RegExp(`^\\s*-\\s+${escapeRegExp(field)}\\s*:`).test(line));
-    if (index >= 0) return freeze({ state: 'deterministic', line: index + 1, basis: `field:${field}` });
+    if (index >= 0) return locatedLine(lines, index, 'deterministic', `field:${field}`);
   }
   for (const owner of [section, heading, group].filter(Boolean)) {
     const sectionIndex = lines.findIndex((line) => new RegExp(`^#{2,6}\\s+${escapeRegExp(owner)}\\s*$`, 'i').test(line));
-    if (sectionIndex >= 0) return freeze({ state: section || heading ? 'deterministic' : 'deterministic-anchor', line: sectionIndex + 1, basis: `${section || heading ? 'section' : 'owning-section'}:${owner}` });
+    if (sectionIndex >= 0) return locatedLine(lines, sectionIndex, section || heading ? 'deterministic' : 'deterministic-anchor', `${section || heading ? 'section' : 'owning-section'}:${owner}`);
     const envelopeIndex = lines.findIndex((line) => new RegExp(`^\\s*-\\s+${escapeRegExp(owner)}(?:\\s*:.*)?\\s*$`, 'i').test(line));
-    if (envelopeIndex >= 0) return freeze({ state: 'deterministic-anchor', line: envelopeIndex + 1, basis: `envelope-owner:${owner}` });
+    if (envelopeIndex >= 0) return locatedLine(lines, envelopeIndex, 'deterministic-anchor', `envelope-owner:${owner}`);
   }
   const code = String(finding.code || '');
   if (code.includes('schema.') || code.endsWith('.schema.mismatch') || code === 'audit.schema-authority.unqualified') {
     const index = lines.findIndex((line) => /^\s*-\s+Current Schema\s*:/.test(line));
-    if (index >= 0) return freeze({ state: 'deterministic', line: index + 1, basis: 'current-schema-field' });
+    if (index >= 0) return locatedLine(lines, index, 'deterministic', 'current-schema-field');
   }
   if (code === 'integrity.method-reference.unqualified') {
     const headingIndex = lines.findIndex((line) => line.trim() === '# Continuity Integrity');
     const methodIndex = lines.findIndex((line, index) => index > headingIndex && /^\s*-\s+\[sha256-base64url-c14n-v2\]\([^)]+\)\s*$/.test(line));
-    if (methodIndex >= 0) return freeze({ state: 'deterministic', line: methodIndex + 1, basis: 'continuity-integrity-method-reference' });
+    if (methodIndex >= 0) return locatedLine(lines, methodIndex, 'deterministic', 'continuity-integrity-method-reference');
   }
   if (code.includes('integrity') || /integrity|checksum|digest/i.test(String(finding.message || ''))) {
     const headingIndex = lines.findIndex((line) => line.trim() === '# Continuity Integrity');
     if (headingIndex >= 0) {
       const index = lines.findIndex((line, i) => i > headingIndex && /^\s+-\s+Value\s*:/.test(line));
-      if (index >= 0) return freeze({ state: 'deterministic', line: index + 1, basis: 'continuity-integrity-value' });
-      return freeze({ state: 'deterministic-anchor', line: headingIndex + 1, basis: 'continuity-integrity-heading' });
+      if (index >= 0) return locatedLine(lines, index, 'deterministic', 'continuity-integrity-value');
+      return locatedLine(lines, headingIndex, 'deterministic-anchor', 'continuity-integrity-heading');
     }
   }
   if (/^(portable\.contract\.|root\.|integrity\.)/i.test(code) && (/missing|required|incomplete/i.test(code) || /\bmissing\b|\brequired\b/i.test(String(finding.message || '')))) {
     const bodyHeading = lines.findIndex((line) => /^#\s+\S/.test(line) && !/^#\s+Continuity (?:Context|Integrity)\s*$/.test(line));
-    if (bodyHeading >= 0) return freeze({ state: 'deterministic-anchor', line: bodyHeading + 1, basis: section ? `body-heading-for-missing-section:${section}` : field ? `body-heading-for-missing-field:${field}` : 'body-heading-for-missing-required-content' });
+    if (bodyHeading >= 0) return locatedLine(lines, bodyHeading, 'deterministic-anchor', section ? `body-heading-for-missing-section:${section}` : field ? `body-heading-for-missing-field:${field}` : 'body-heading-for-missing-required-content');
     const contextHeading = lines.findIndex((line) => line.trim() === '# Continuity Context');
-    if (contextHeading >= 0) return freeze({ state: 'deterministic-anchor', line: contextHeading + 1, basis: 'continuity-context-for-missing-required-content' });
+    if (contextHeading >= 0) return locatedLine(lines, contextHeading, 'deterministic-anchor', 'continuity-context-for-missing-required-content');
   }
   if (/\.body\.|body/i.test(code) || /\bbody\b/i.test(String(finding.message || ''))) {
     const bodyHeading = lines.findIndex((line) => /^#\s+\S/.test(line) && !/^#\s+Continuity (?:Context|Integrity)\s*$/.test(line));
-    if (bodyHeading >= 0) return freeze({ state: 'deterministic-anchor', line: bodyHeading + 1, basis: 'body-heading-for-body-finding' });
+    if (bodyHeading >= 0) return locatedLine(lines, bodyHeading, 'deterministic-anchor', 'body-heading-for-body-finding');
   }
-  return freeze({ state: 'unresolved', line: null, basis: 'shared-finding-has-no-deterministic-line-evidence' });
+  return freeze({ state: 'unresolved', line: null, sourceRange: null, basis: 'shared-finding-has-no-deterministic-line-evidence' });
 }
 
 function deterministicIntegrityHygieneRepair(markdown = '', findings = []) {
