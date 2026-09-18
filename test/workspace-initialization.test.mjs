@@ -28,5 +28,6 @@ test('Workspace initialization preserves a resolvable schema permalink and seals
   assert.equal(result.findingSummary.counts.error, 0);
   assert.match(result.markdown, new RegExp(`- Current Schema: \\[tiinex\\.workspace\\.v1\\]\\(${permalink.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\)`));
   assert.match(result.markdown, /- Repository: Tiinusen\/boardgame-tower-havoc/);
+  assert.match(result.markdown, /# Boardgame: Tower Havoc\n\n## Workspace Entrypoints/);
   assert.equal(canonicalC14nV2SelfState(result.markdown).state, 'verified');
 });

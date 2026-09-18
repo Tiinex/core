@@ -46,7 +46,7 @@ export function preparePortableWorkspaceInitialization(input = {}) {
   if (!integrityTarget) findings.push(finding('error', 'workspace.initialize.integrity-method.unresolved', 'Core could not resolve canonical c14n-v2 validator authority.'));
   if (findings.some((item) => item.severity === 'error')) return blocked(findings);
 
-  const entrypoint = repository ? `\n## Workspace Entrypoints\n\n### Repository source\n\n- Source Kind: ${sourceKind}\n- Repository: ${repository}${ref ? `\n- Ref: ${ref}` : ''}\n- Root Path: ${rootPath}\n- Repo Files Discovery: on\n` : '';
+  const entrypoint = repository ? `\n\n## Workspace Entrypoints\n\n### Repository source\n\n- Source Kind: ${sourceKind}\n- Repository: ${repository}${ref ? `\n- Ref: ${ref}` : ''}\n- Root Path: ${rootPath}\n- Repo Files Discovery: on\n` : '';
   const unsigned = `# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${envelopeTarget})\n- Current\n  - Current Schema: [tiinex.workspace.v1](${schemaTarget})\n  - Created At: ${createdAt}\n  - Authors: ${authors}\n  - Why: Establish an explicit portable Workspace entrypoint for this repository.\n  - Summary: ${title} Workspace.\n  - Status: active/local\n\n---\n\n# ${title}${entrypoint}\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${integrityTarget})\n  - Towards: self\n  - Value: pending\n`;
   const sealed = sealC14nV2Self(unsigned);
   if (sealed.state !== 'sealed') return blocked([finding('error', 'workspace.initialize.integrity-seal.failed', 'Core could not seal Workspace c14n-v2 self integrity.', { reason: sealed.reason || sealed.state })]);
