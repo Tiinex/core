@@ -13,10 +13,19 @@ export function portableRuntimeValidationContractForSchema(schemaId = '', resolu
   const resolution = resolutionInput || resolveSchemaModule({ schemaId });
   if (resolution?.fallbackUsed || !resolution?.module) return unavailable('registered-schema-resolution-unavailable', { resolution });
   const qualification = typeof resolution.module.schemaSource?.qualify === 'function' ? resolution.module.schemaSource.qualify() : null;
+  const lineageAuthority = qualification?.validationLineageAuthority || null;
+  if (qualification?.state === 'qualified' && lineageAuthority && lineageAuthority.state !== 'qualified') {
+    return unavailable('compiled-validation-lineage-source-authority-unqualified', {
+      resolution,
+      findings: Object.freeze([...(lineageAuthority.findings || [])]),
+      lineageAuthority,
+      baseQualificationState: String(qualification?.state || 'unavailable')
+    });
+  }
   const baseContract = qualification?.state === 'qualified' ? qualification?.compiledContract?.validationContract || null : null;
-  if (!baseContract) return unavailable(qualification?.state === 'qualified' ? 'compiled-validation-contract-unavailable' : 'schema-source-unqualified', { resolution });
+  if (!baseContract) return unavailable(qualification?.state === 'qualified' ? 'compiled-validation-contract-unavailable' : 'schema-source-unqualified', { resolution, findings: Object.freeze([...(qualification?.findings || [])]), baseQualificationState: String(qualification?.state || 'unavailable') });
   const projected = projectPortableValidationContractWithQualifiedLocalRoot(baseContract);
-  return deepFreeze({ ...projected, resolution, baseQualificationState: String(qualification?.state || 'unavailable') });
+  return deepFreeze({ ...projected, resolution, lineageAuthority, baseQualificationState: String(qualification?.state || 'unavailable') });
 }
 
 export function portableRuntimeValidationAuthorityForRecord(record = {}) {
@@ -26,7 +35,10 @@ export function portableRuntimeValidationAuthorityForRecord(record = {}) {
   const schemaId = String(declaredSchema.id || record?.schemaId || record?.currentSchemaId || '').trim();
   const runtime = portableRuntimeValidationContractForSchema(schemaId);
   if (runtime.state !== 'qualified' || !runtime.compiledContract) {
-    return unavailableAuthority(schemaId, runtime, ['Registered compiled validation authority is unavailable for the declared Current Schema.']);
+    const runtimeFindings = Array.isArray(runtime?.findings) && runtime.findings.length
+      ? runtime.findings
+      : ['Registered compiled validation authority is unavailable for the declared Current Schema.'];
+    return unavailableAuthority(schemaId, runtime, runtimeFindings);
   }
 
   const findings = [];

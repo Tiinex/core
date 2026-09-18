@@ -1,5 +1,6 @@
 import { sha256Hex, utf8Bytes } from '../export/package.bytes.js';
 import { qualifyGithubSchemaSourceProvider } from './schema.githubSourceTarget.js';
+import { qualifyCompiledSchemaLineageSourceAuthority } from './schema.lineageAuthority.js';
 
 export const BUNDLED_SCHEMA_SOURCE_SCHEMA_ID = 'tiinex.site.bundled-schema-source.v1';
 export const SCHEMA_RUNTIME_PROJECTION_SCHEMA_ID = 'tiinex.site.schema-runtime-projection.v1';
@@ -48,6 +49,7 @@ export function defineBundledSchemaSource(binding = {}, projection = {}, options
         ...(!loadedBlobSha ? ['Loaded schema Git-blob identity is unavailable from the runtime projection.'] : [])
       ])
     });
+    const validationLineageAuthority = qualifyCompiledSchemaLineageSourceAuthority(runtimeProjection.validationContract || {});
     const validationContract = projectionExact && runtimeProjection.validationContract?.schemaId === schemaId && runtimeProjection.validationContract?.lineageQualification?.state === 'valid'
       ? runtimeProjection.validationContract
       : null;
@@ -85,6 +87,7 @@ export function defineBundledSchemaSource(binding = {}, projection = {}, options
       authority,
       bindingMaterialCoherence,
       materialIdentity,
+      validationLineageAuthority,
       compiledContract,
       projection: runtimeProjection,
       findings: Object.freeze([
@@ -93,7 +96,8 @@ export function defineBundledSchemaSource(binding = {}, projection = {}, options
         ...(runtimeProjection.sourceChecksum !== expectedChecksum ? ['Schema runtime projection source checksum does not match binding.'] : []),
         ...(runtimeProjection.bindingChecksum !== expectedChecksum ? ['Schema runtime projection binding checksum does not match binding.'] : []),
         ...(runtimeProjection.validationContract && runtimeProjection.validationContract?.schemaId !== schemaId ? ['Schema runtime validation projection identity does not match binding.'] : []),
-        ...(runtimeProjection.validationContract && runtimeProjection.validationContract?.lineageQualification?.state !== 'valid' ? ['Schema runtime validation projection lineage is not exact/valid.'] : [])
+        ...(runtimeProjection.validationContract && runtimeProjection.validationContract?.lineageQualification?.state !== 'valid' ? ['Schema runtime validation projection lineage is not exact/valid.'] : []),
+        ...(validationLineageAuthority.state !== 'qualified' ? validationLineageAuthority.findings : [])
       ])
     });
     return cached;
