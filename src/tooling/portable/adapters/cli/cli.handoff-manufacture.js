@@ -198,7 +198,28 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   const workspaceScopeValue = await readOptionalJson(flags['workspace-scopes']);
   const additionalWorkspaces = [...splitFlag(flags['additional-workspaces']), ...descriptorArray(workspaceDescriptorValue, 'workspaces')];
   const verifyRoundtrip = !flags['no-roundtrip'];
-  const carrierProfile = selectCarrierProfile({ operator: operatorCarrierProfile, runtime: runtime.defaultCarrierProfile || null });
+  const parentPackagePath = String(flags['package-parent'] || '').trim();
+  let carrierLineage = Object.freeze({ ...initialHandoffCarrierLineage(), checkpointKind: 'progression', majorReason: '' });
+  let inheritedCarrierProfile = normalizeHandoffCarrierProfile(null);
+  if (parentPackagePath) {
+    const resolvedParent = path.resolve(parentPackagePath);
+    const parentBytes = new Uint8Array(await readFile(resolvedParent));
+    const parentBundle = await loadNodePortableInput([resolvedParent], { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] });
+    inheritedCarrierProfile = parentHandoffCarrierProfileFromBundle(parentBundle);
+    const parentLineage = parentHandoffCarrierLineageFromBundle(parentBundle);
+    carrierLineage = carrierLineageFromCliParent({
+      bundle: parentBundle,
+      parentPath: resolvedParent,
+      parentBytes,
+      qualifiedParentLineage: parentLineage,
+      major: Boolean(flags['package-major']),
+      majorReason: flags['major-reason'] || '',
+      siblingIndex: 1
+    });
+  } else if (flags['package-major']) {
+    throw new Error('portable.cli.workspace-carrier.package-major.parent-required');
+  }
+  const carrierProfile = selectCarrierProfile({ operator: operatorCarrierProfile, inherited: inheritedCarrierProfile, runtime: runtime.defaultCarrierProfile || null });
   const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || '').trim();
   const input = await prepareNodeWorkspaceCarrierManufacturingInput({
     workspaceRoot,
@@ -216,7 +237,7 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
     verifyRoundtrip,
     createdAt: flags['built-at'] || undefined,
     projectedFilename,
-    carrierLineage: Object.freeze({ ...initialHandoffCarrierLineage(), checkpointKind: 'progression', majorReason: '' }),
+    carrierLineage,
     carrierProfile
   }, runtime);
   return { input, options: { verifyRoundtrip, packageInput: { builtAt: flags['built-at'] || undefined } } };
