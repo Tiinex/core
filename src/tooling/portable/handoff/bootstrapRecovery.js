@@ -9,22 +9,26 @@ const BOOTSTRAP_CODE_PREFIXES = Object.freeze([
 export function projectPortableBootstrapRecovery(bundle = {}, inspection = {}) {
   const findings = Array.isArray(inspection.findings) ? inspection.findings : [];
   const errors = findings.filter((item) => String(item?.severity || '') === 'error');
-  const bootstrapPath = String(inspection.packageContract?.bootstrapPath || '').trim();
+  const bootstrapPaths = recoveryBootstrapArtifactPaths(bundle, inspection);
   const packageBootstrapValid = String(inspection.bootstrapInspection?.status || '') === 'valid';
   if (packageBootstrapValid) return freeze({
     schema: 'tiinex.portable.bootstrap-recovery.v1',
     state: 'not-needed',
     eligibleWithQualifiedHostBootstrap: false,
-    packageBootstrap: Object.freeze({ state: 'qualified', artifactPath: bootstrapPath }),
+    packageBootstrap: Object.freeze({ state: 'qualified', artifactPath: bootstrapPaths[0] || '' }),
     ignoredFindingCodes: Object.freeze([]),
     blockingFindingCodes: Object.freeze([]),
     boundary: boundary()
   });
 
-  const bootstrapArtifact = bootstrapPath ? findFile(bundle, bootstrapPath) : null;
-  const bootstrapMarkdown = bootstrapArtifact ? decodeUtf8(packageFileBytes(bootstrapArtifact)) : '';
-  const payloadPath = bootstrapMarkdown ? recoveryPayloadPath(bootstrapMarkdown) : '';
-  const bootstrapOwnedPaths = new Set([bootstrapPath, payloadPath].filter(Boolean));
+  const bootstrapArtifacts = bootstrapPaths.map((artifactPath) => Object.freeze({ artifactPath, file: findFile(bundle, artifactPath) })).filter((item) => item.artifactPath);
+  const payloadPaths = [...new Set(bootstrapArtifacts.flatMap((item) => {
+    if (!item.file) return [];
+    const markdown = decodeUtf8(packageFileBytes(item.file));
+    const target = recoveryPayloadPath(markdown);
+    return target ? [target] : [];
+  }))];
+  const bootstrapOwnedPaths = new Set([...bootstrapPaths, ...payloadPaths].filter(Boolean));
   const ignored = [];
   const blocking = [];
   for (const item of errors) {
@@ -37,19 +41,53 @@ export function projectPortableBootstrapRecovery(bundle = {}, inspection = {}) {
   const packageStructurePresent = Boolean(inspection.rootArtifact && inspection.readArtifact && inspection.carrierProjection);
   const carrierReady = String(inspection.carrierProjection?.status || '') === 'ready';
   const eligible = packageStructurePresent && carrierReady && ignored.length > 0 && blocking.length === 0;
+  const primaryPath = bootstrapPaths.find((artifactPath) => Boolean(findFile(bundle, artifactPath))) || bootstrapPaths[0] || '';
   return freeze({
     schema: 'tiinex.portable.bootstrap-recovery.v1',
     state: eligible ? 'eligible' : 'ineligible',
     eligibleWithQualifiedHostBootstrap: eligible,
     packageBootstrap: Object.freeze({
-      state: bootstrapPath ? (bootstrapArtifact ? 'unqualified' : 'missing') : 'undeclared',
-      artifactPath: bootstrapPath,
-      payloadPath
+      state: primaryPath ? (findFile(bundle, primaryPath) ? 'unqualified' : 'missing') : 'undeclared',
+      artifactPath: primaryPath,
+      artifactCandidates: Object.freeze([...bootstrapPaths]),
+      payloadPath: payloadPaths[0] || '',
+      payloadCandidates: Object.freeze([...payloadPaths])
     }),
     ignoredFindingCodes: Object.freeze(ignored.map((item) => String(item?.code || '')).filter(Boolean)),
     blockingFindingCodes: Object.freeze(blocking.map((item) => String(item?.code || '')).filter(Boolean)),
     boundary: boundary()
   });
+}
+
+function recoveryBootstrapArtifactPaths(bundle = {}, inspection = {}) {
+  const out = [];
+  const declared = String(inspection.packageContract?.bootstrapPath || '').trim();
+  if (declared) out.push(declared);
+
+  // Recovery may need to operate precisely when the bootstrap External Payload
+  // no longer qualifies strongly enough to reach normal package-contract
+  // projection. Use only explicit package-local bootstrap references from the
+  // already-identified package root/Start artifacts as recovery hints. These
+  // hints bound malformed bootstrap bytes; they do not grant bootstrap authority.
+  const candidates = [inspection.rootArtifact?.path, inspection.readArtifact?.path]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  for (const artifactPath of candidates) {
+    const file = findFile(bundle, artifactPath);
+    if (!file) continue;
+    const markdown = decodeUtf8(packageFileBytes(file));
+    for (const target of explicitBootstrapMarkdownTargets(markdown)) out.push(target);
+  }
+  return Object.freeze([...new Set(out.filter(Boolean))]);
+}
+
+function explicitBootstrapMarkdownTargets(markdown = '') {
+  const out = [];
+  for (const line of String(markdown || '').split(/\r?\n/)) {
+    if (!/bootstrap/i.test(line)) continue;
+    for (const match of line.matchAll(/\[[^\]]+\]\(([^)]+\.md)\)/ig)) if (match?.[1]) out.push(match[1].trim());
+  }
+  return [...new Set(out.filter(Boolean))];
 }
 
 function recoveryPayloadPath(markdown = '') {
