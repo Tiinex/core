@@ -3,6 +3,7 @@ import { inspectHandoffCarrierProjection } from './carrierProjection.js';
 import { inspectHandoffPointerEntrypoints } from './pointerEntrypoint.js';
 import { inspectRecipientFacingV2Topology } from './recipientV2.inspect.js';
 import { RECIPIENT_V2_READ_PATH } from './recipientV2.topology.js';
+import { projectPortableBootstrapRecovery } from './bootstrapRecovery.js';
 
 export const HANDOFF_COLD_CONSUMER_ENTRYPOINT_PATH = 'tiinex.package/START.md';
 export const HANDOFF_COLD_CONSUMER_PROJECTION_SCHEMA_ID = 'tiinex.portable.handoff-cold-consumer-projection.v1';
@@ -120,6 +121,7 @@ export function orientColdConsumerFromHandoffPackage(input = {}) {
   if ((bundle.files || []).some((file) => String(file.path || '') === RECIPIENT_V2_READ_PATH)) {
     const v2 = inspectRecipientFacingV2Topology(bundle);
     const projection = v2.coldConsumerProjection || null;
+    const bootstrapRecovery = projectPortableBootstrapRecovery(bundle, v2);
     const routeMetadata = new Map((v2.routes || []).map((route) => [`${String(route.workspaceId || '')}\u0000${String(route.workspaceRelativeHandoffPath || '')}`, route]));
     const carrierRouteById = new Map((v2.carrierProjection?.routes || []).map((route) => [String(route.id || ''), route]));
     const workspaceArchiveById = new Map((v2.workspaces || []).map((workspace) => {
@@ -135,7 +137,7 @@ export function orientColdConsumerFromHandoffPackage(input = {}) {
       const handoffPath = String(route.workspaceRelativeHandoffPath || '');
       return Object.freeze({ ...route, sha256: handoffSha256, sha256Target: handoffPath, handoffSha256, archiveSha256: String(archive.sha256 || ''), archivePackagePath: String(archive.path || route.packagePath || ''), requiredClosure: carrierRoute.requiredClosure || null, pointerPath: String(metadata.pointerPath || ''), endpointRolePointers: Object.freeze([...(metadata.endpointRolePointers || [])]), participantRolePointers: Object.freeze([...(metadata.participantRolePointers || [])]) });
     }));
-    return deepFreeze({ schema: 'tiinex.portable.handoff-cold-consumer-orientation.v1', status: v2.status === 'valid' && projection?.status === 'ready' ? 'ready' : 'blocked', entrypoint: Object.freeze({ schema: 'tiinex.portable.handoff-v2.recipient-orientation.inspection.v1', status: v2.status, path: RECIPIENT_V2_READ_PATH, projection, findings: v2.findings }), pointerEntrypoints: Object.freeze({ schema: 'tiinex.portable.handoff-v2.recipient-pointer.inspection.v1', status: v2.status, entries: v2.routes, findings: v2.findings }), workspaces: projection?.workspaces || Object.freeze([]), carrierLineage: v2.carrierProjection?.lineage || null, routes, endpointRoles: v2.endpointRoles || Object.freeze([]), participantRoles: v2.participantRoles || Object.freeze([]), selection: projection?.selection || null, operationBoundary: orientationOperationBoundary(v2.bootstrapInspection), boundary: 'Read-only recipient-facing v2 orientation from qualified visible Tiinex artifacts and exact payload bytes; no legacy control JSON, filename, or adjacency authority.' });
+    return deepFreeze({ schema: 'tiinex.portable.handoff-cold-consumer-orientation.v1', status: v2.status === 'valid' && projection?.status === 'ready' ? 'ready' : 'blocked', entrypoint: Object.freeze({ schema: 'tiinex.portable.handoff-v2.recipient-orientation.inspection.v1', status: v2.status, path: RECIPIENT_V2_READ_PATH, projection, findings: v2.findings }), pointerEntrypoints: Object.freeze({ schema: 'tiinex.portable.handoff-v2.recipient-pointer.inspection.v1', status: v2.status, entries: v2.routes, findings: v2.findings }), workspaces: projection?.workspaces || Object.freeze([]), carrierLineage: v2.carrierProjection?.lineage || null, routes, endpointRoles: v2.endpointRoles || Object.freeze([]), participantRoles: v2.participantRoles || Object.freeze([]), selection: projection?.selection || null, bootstrapRecovery, operationBoundary: orientationOperationBoundary(v2.bootstrapInspection), boundary: 'Read-only recipient-facing v2 orientation from qualified visible Tiinex artifacts and exact payload bytes; no legacy control JSON, filename, or adjacency authority.' });
   }
   const inspection = inspectHandoffColdConsumerEntrypoint(bundle);
   const pointerEntrypoints = inspectHandoffPointerEntrypoints(bundle);
