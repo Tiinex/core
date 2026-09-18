@@ -129,7 +129,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     } else {
       holderBindingActReady = false;
       unresolved.push(evidence('session-holder-role-binding', 'unresolved', `recipient Role ${authority?.role?.endpoint?.label || authority?.handoff?.to || 'recipient'} is qualified separately from the consuming session`));
-      reasons.push(reason('session-holder-role-binding-unresolved', 'The selected recipient Role does not assign itself to this consuming session. Supply an explicit matching session holder Role binding before act-ready continuation.'));
+      reasons.push(reason('session-holder-role-binding-unresolved', 'The selected recipient Role is not yet bound to this consuming session. Exact qualified selected-Handoff consumption may bind it only when the exact recipient Role authorizes Assignment Mode `handoff`; otherwise supply an explicit matching session holder Role binding authorized by that Role.'));
     }
 
     if (holderState === 'not-applicable') {
@@ -142,7 +142,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
       } else {
         holderBindingActReady = false;
         unresolved.push(evidence('session-holder-role-binding-authorization', holderAuthorizationState || 'unresolved', authority?.holderBinding?.authorization?.reasonCode || 'exact qualified canonical assignment-mode authority does not authorize the asserted binding mechanism'));
-        reasons.push(reason('session-holder-role-binding-authorization-unresolved', 'The explicit consuming-session Role assertion matches the selected recipient Role, but exact qualified canonical assignment-mode authority does not authorize the asserted mechanism. Matching session input alone cannot make the route act-ready.'));
+        reasons.push(reason('session-holder-role-binding-authorization-unresolved', 'The consuming-session Role binding matches the selected recipient Role, but exact qualified canonical assignment-mode authority does not authorize the asserted mechanism. Matching session input or Handoff selection alone cannot make the route act-ready.'));
       }
     }
 
@@ -368,12 +368,12 @@ function projectCurrentWork(topology = {}, records = [], includeCurrentWork = fa
 }
 
 function nextActionFor(state, topology, continuity = {}, authority = null) {
-  if (state === 'grounded-to-act') return Object.freeze({ kind: 'continue-bounded-handoff-work', target: topology.currentFrontier[0]?.path || '', basis: 'qualified authority + explicit session holder Role binding + exact qualified holder-assignment authorization when Role-recipient + required context + cold-start root continuity + selected-route Parent leaf + declared current-work frontier' });
-  if (state === 'grounded-to-discuss' && String(authority?.holderBinding?.state || 'unresolved') === 'unresolved') return Object.freeze({ kind: 'declare-explicit-session-holder-role-binding', target: authority?.role?.endpoint?.label || authority?.handoff?.to || '', basis: 'recipient Role qualification is separate from consuming-session holder binding; no transport/provider/assistant-user identity inference is permitted' });
+  if (state === 'grounded-to-act') return Object.freeze({ kind: 'continue-bounded-handoff-work', target: topology.currentFrontier[0]?.path || '', basis: 'qualified authority + qualified session holder Role binding (explicit or exact selected-Handoff consumption) + exact qualified holder-assignment authorization when Role-recipient + required context + cold-start root continuity + selected-route Parent leaf + declared current-work frontier' });
+  if (state === 'grounded-to-discuss' && String(authority?.holderBinding?.state || 'unresolved') === 'unresolved') return Object.freeze({ kind: 'establish-session-holder-role-binding', target: authority?.role?.endpoint?.label || authority?.handoff?.to || '', basis: 'recipient Role qualification is separate from consuming-session holder binding; exact qualified selected-Handoff consumption may establish `handoff` assignment when authorized, otherwise an explicit authorized binding is required; no transport/provider/assistant-user identity inference is permitted' });
   if (state === 'grounded-to-discuss' && String(authority?.holderBinding?.state || '') === 'qualified' && String(authority?.holderBinding?.authorization?.state || 'unresolved') !== 'qualified') return Object.freeze({
     kind: 'resolve-session-holder-binding-authorization',
     target: authority?.holderBinding?.authorization?.provenance?.roleArtifactPath || authority?.role?.endpoint?.label || authority?.handoff?.to || '',
-    basis: 'a matching explicit session Role assertion is not semantic authorization; exact qualified recipient Role Holder Relationship authority must establish the assignment mode'
+    basis: 'a matching session Role binding is not semantic authorization by itself; exact qualified recipient Role Holder Relationship authority must establish the selected assignment mode'
   });
   if (state === 'grounded-to-discuss') return Object.freeze({ kind: topology.currentFrontier.length ? 'obtain-bounded-action-authority-or-human-gate' : 'resolve-current-work-frontier', target: topology.currentTasks[0]?.path || '', basis: 'discussion-ready but act-readiness condition is unresolved' });
   if (continuity?.state === 'unproven') return Object.freeze({

@@ -97,10 +97,62 @@ export function deriveHandoffSiblingAllocation({ parentInspection = null, select
   }
 }
 
+export function deriveHandoffConsolidationAllocation({ parentInspection = null, explicitSiblingIndex = null, parentPackagePath = '', parentPackageSha256 = '', parentDimension = '' } = {}) {
+  const explicit = normalizeSiblingIndex(explicitSiblingIndex);
+  const inspection = parentInspection && typeof parentInspection === 'object' ? parentInspection : null;
+  if (!inspection || inspection.detected === false) return freeze({
+    state: 'unavailable', siblingIndex: null, allocationMode: 'unavailable',
+    reasonCode: 'qualified-parent-route-topology-unavailable-for-consolidation',
+    provenance: provenanceBase({ parentPackagePath, parentPackageSha256, parentDimension, explicitSiblingIndex: explicit }),
+    boundary: consolidationBoundary()
+  });
+  if (String(inspection.status || '') !== 'valid') return consolidationBlocked('qualified-parent-route-topology-invalid-for-consolidation');
+  const routes = [...(inspection.routes || [])];
+  if (!routes.length) return consolidationBlocked('qualified-parent-route-topology-empty-for-consolidation');
+
+  const topology = deriveHandoffSiblingAllocation({
+    parentInspection: inspection,
+    selectedRoutePointer: String(routes[0]?.pointerPath || ''),
+    parentPackagePath, parentPackageSha256, parentDimension
+  });
+  if (topology.state !== 'qualified') return consolidationBlocked(topology.reasonCode || 'qualified-parent-route-pointer-order-unresolved');
+  const routeCount = Number(topology.provenance?.qualifiedRouteCount || 0);
+  const siblingIndex = routeCount + 1;
+  if (!Number.isInteger(siblingIndex) || siblingIndex < 2 || siblingIndex > MAX_SIBLING_INDEX) return consolidationBlocked('derived-consolidation-sibling-index-out-of-range');
+  if (explicit && explicit !== siblingIndex) return consolidationBlocked('explicit-sibling-index-conflicts-with-qualified-consolidation-topology', { expectedSiblingIndex: siblingIndex });
+
+  return freeze({
+    state: 'qualified', siblingIndex,
+    childDimension: parentDimension ? `${String(parentDimension).trim()}-${siblingIndex}` : '',
+    allocationMode: 'qualified-parent-route-consolidation-ordinal',
+    explicitOverride: explicit ? 'matched-derived-value' : 'not-supplied',
+    reasonCode: '',
+    provenance: {
+      ...provenanceBase({ parentPackagePath, parentPackageSha256, parentDimension, explicitSiblingIndex: explicit }),
+      basis: 'qualified-parent-route-consolidation-ordinal',
+      qualifiedRouteCount: routeCount,
+      consolidationOrdinal: siblingIndex,
+      commonFrontierDimension: String(parentDimension || '').trim(),
+      pointerOrder: topology.provenance.pointerOrder
+    },
+    boundary: consolidationBoundary()
+  });
+
+  function consolidationBlocked(reasonCode, extra = {}) {
+    return freeze({
+      state: 'blocked', siblingIndex: null, allocationMode: 'blocked', reasonCode, ...extra,
+      provenance: provenanceBase({ parentPackagePath, parentPackageSha256, parentDimension, explicitSiblingIndex: explicit }),
+      boundary: consolidationBoundary()
+    });
+  }
+}
+
 export async function resolveHandoffSiblingAllocation(input = {}) {
-  const derived = deriveHandoffSiblingAllocation(input);
+  const consolidation = input.consolidation === true;
+  const derived = consolidation ? deriveHandoffConsolidationAllocation(input) : deriveHandoffSiblingAllocation(input);
   if (derived.state === 'qualified') return derived;
   if (derived.state === 'blocked') throw new Error(`portable.cli.handoff-carrier.sibling-allocation.${derived.reasonCode}`);
+  if (consolidation) throw new Error('portable.cli.handoff-carrier.sibling-allocation.qualified-parent-route-topology-required-for-consolidation');
   const explicit = normalizeSiblingIndex(input.explicitSiblingIndex ?? input.siblingIndex);
   if (!explicit) throw new Error('portable.cli.handoff-carrier.sibling-allocation.explicit-index-required-when-topology-unavailable');
   const legacy = await reserveHandoffSiblingIndex({
@@ -172,6 +224,7 @@ function provenanceBase({ parentPackagePath = '', parentPackageSha256 = '', pare
     explicitSiblingIndex: explicitSiblingIndex ? normalizeSiblingIndex(explicitSiblingIndex) : null
   };
 }
+function consolidationBoundary() { return 'Transport-only carrier consolidation allocation. The consolidation sibling is exactly N+1 for N qualified Handoff routes on the common pre-batch carrier frontier. It is never derived from one specialist return, arrival order, retries, output collisions, local allocation files or artifact Parent lineage; explicit Major stabilization remains separate.'; }
 function allocationBoundary() { return 'Transport-only carrier allocation. A non-Major sibling ordinal may come only from exact qualified package-local Handoff Pointer order for the selected parent route, or from an explicit advanced override when such topology is unavailable. Allocation never creates semantic Parent, Workspace, Role, acceptance, completion, participant, process, or source authority; different carrier prefixes are not coordinated.'; }
 function normalizeSiblingIndex(value) {
   if (value === null || value === undefined || value === '') return 0;

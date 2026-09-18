@@ -8,7 +8,7 @@ export function buildEndpointRolePointerChain(input = {}) {
   const findings = [];
   let lineageParent = input.lineageParent || null;
   let nextDimension = String(input.nextDimension || '');
-  for (const requirement of input.requirements || []) {
+  for (const requirement of orderedEndpointRequirements(input.requirements || [])) {
     const target = input.resolveRoleMaterialTarget(requirement, input.descriptor, input.workspaceById, input.cache, input.route);
     if (target.state !== 'qualified') {
       findings.push(finding('error', `portable.handoff-v2-surface.endpoint-role.${target.reason || 'unresolved'}`, 'Endpoint Role requirement did not resolve to one exact carried Workspace/cache representation.', { routeId: String(input.route?.id || ''), requirementId: String(requirement.id || '') }));
@@ -173,6 +173,19 @@ export function buildParticipantRolePointerChain(input = {}) {
     lineageParent,
     nextDimension
   });
+}
+
+function orderedEndpointRequirements(requirements = []) {
+  return [...requirements].map((item, index) => ({ item, index })).sort((a, b) => {
+    const rank = (entry) => {
+      const party = String(entry?.party || entry?.fields?.Side || '').trim().toLowerCase();
+      if (party === 'from') return 0;
+      if (party === 'to') return 1;
+      return 2;
+    };
+    const delta = rank(a.item) - rank(b.item);
+    return delta || a.index - b.index;
+  }).map(({ item }) => item);
 }
 
 function safeToken(value = '') { return String(value || '').trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'workspace'; }

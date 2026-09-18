@@ -5,7 +5,7 @@ export function projectRecipientV2Routes(routePointers = [], endpointPointers = 
     const qualified = (qualifiedRoutes || []).find((route) => String(route.workspaceId || '') === String(item.facts?.workspaceId || '') && String(route.workspaceRelativePath || '') === String(item.facts?.workspaceRelativeHandoffPath || '')) || null;
     return Object.freeze({
     pointerPath: item.path,
-    routeId: String(item.facts?.routeId || qualified?.id || ''),
+    routeId: String(item.facts?.routeId || ''),
     workspaceId: String(item.facts?.workspaceId || ''),
     workspaceRelativeHandoffPath: String(item.facts?.workspaceRelativeHandoffPath || ''),
     returnCarrierReservation: item.facts?.returnCarrierReservation || qualified?.returnCarrierReservation || null,

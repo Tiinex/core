@@ -181,7 +181,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   const dependencyClosure = await expandPointerDependencyClosure({ requirements, materials, workspaceRuntimeById, bindings: input.materialBindings || {} });
   requirements = dependencyClosure.requirements;
   materials = appendMissingRequirementMaterials(dependencyClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
-  const routeParentBoundaryClosure = expandRouteParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById, routeSpecs });
+  const routeParentBoundaryClosure = expandRouteParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById, routeSpecs, exactMaterialProvider: packageParentExactMaterialProvider });
   requirements = routeParentBoundaryClosure.requirements;
   materials = appendMissingRequirementMaterials(routeParentBoundaryClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
   const parentBoundaryClosure = expandBoundedParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById });

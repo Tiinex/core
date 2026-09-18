@@ -225,7 +225,6 @@ test('bounded Handoff carrier isolates unrelated answer history while qualifying
   const grounding = groundPortableColdConsumer({
     bundle: result.bundle,
     route: orientation.routes[0].id,
-    holderRole: 'Loom',
     interactionMode: 'execution',
     participants: [{ id: 'fixture-participant', label: 'Fixture participant', roles: ['Loom'] }]
   });
@@ -233,7 +232,9 @@ test('bounded Handoff carrier isolates unrelated answer history while qualifying
   assert.equal(grounding.role.state, 'qualified');
   assert.equal(grounding.holderBinding.state, 'qualified');
   assert.equal(grounding.holderBinding.authorization.state, 'qualified');
-  assert.equal(grounding.holderBinding.authorization.assignmentMode, 'explicit-session');
+  assert.equal(grounding.holderBinding.authorization.assignmentMode, 'handoff');
+  assert.equal(grounding.holderBinding.source, 'qualified-selected-handoff-consumption');
+  assert.equal(grounding.holderBinding.sourceDetail.qualifiedMaterialSource, true);
   assert.deepEqual(grounding.holderBinding.authorization.authorizedModes, ['explicit-session', 'handoff']);
   assert.equal(grounding.holderBinding.authorization.provenance.roleArtifactPath.endsWith(LOOM_ROLE_PATH), true);
   assert.equal(grounding.holderBinding.durableIdentity.state, 'not-established');

@@ -129,10 +129,22 @@ function resolveDescriptorMaterial(bundle, descriptor, byteProvider, target = ''
   const expectedRouteWorkspaceId = String(routeWorkspaceId || '');
   const expectedRoutePath = normalizeWorkspacePath(routePath || '');
   const matches = (descriptor.materialized || []).filter((entry) => {
-    if (expectedRequirementId && String(entry.requirementId || '') !== expectedRequirementId) return false;
+    const entryRequirementId = String(entry.requirementId || '');
+    const entrySourceRequirementId = String(entry.sourceRequirementId || '');
+    const entryRouteWorkspaceId = String(entry.routeWorkspaceId || '');
+    const entryRoutePath = normalizeWorkspacePath(entry.routePath || '');
+    const exactRequirementMatch = !expectedRequirementId || entryRequirementId === expectedRequirementId;
+    const routeScopedSourceMatch = Boolean(
+      expectedRequirementId &&
+      entrySourceRequirementId === expectedRequirementId &&
+      expectedRouteWorkspaceId && expectedRoutePath &&
+      entryRouteWorkspaceId === expectedRouteWorkspaceId &&
+      entryRoutePath === expectedRoutePath
+    );
+    if (expectedRequirementId && !exactRequirementMatch && !routeScopedSourceMatch) return false;
     if (expectedTarget && String(entry.referenceTarget || '') !== expectedTarget) return false;
-    if (expectedRouteWorkspaceId && entry.routeWorkspaceId && String(entry.routeWorkspaceId || '') !== expectedRouteWorkspaceId) return false;
-    if (expectedRoutePath && entry.routePath && normalizeWorkspacePath(entry.routePath || '') !== expectedRoutePath) return false;
+    if (expectedRouteWorkspaceId && entryRouteWorkspaceId && entryRouteWorkspaceId !== expectedRouteWorkspaceId) return false;
+    if (expectedRoutePath && entryRoutePath && entryRoutePath !== expectedRoutePath) return false;
     return Boolean(expectedTarget || expectedRequirementId);
   });
   const byRepresentation = new Map();

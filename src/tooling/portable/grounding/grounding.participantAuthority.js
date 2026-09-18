@@ -14,7 +14,7 @@ export function projectParticipantAuthority(authority = null) {
     participantIdentityCreatesAuthority: false,
     conversationPositionCreatesAuthority: false,
     universalHumanFeedbackRule: false,
-    boundary: 'Qualified Role material plus explicit holder binding is the basis. Identity/chat position alone create no authority; no universal human-input-as-feedback rule is imposed.'
+    boundary: 'Qualified Role material plus a qualified holder binding is the basis; that binding may be explicit or may come from exact qualified selected-Handoff consumption when the Role authorizes `handoff`. Identity/chat position alone create no authority; no universal human-input-as-feedback rule is imposed.'
   });
 }
 function compact(value = '', limit = 180) { const text = String(value || '').replace(/\s+/g, ' ').trim(); return text.length > limit ? `${text.slice(0, limit - 1).trimEnd()}…` : text; }

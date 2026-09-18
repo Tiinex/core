@@ -270,11 +270,11 @@ test('matching holder assertion stays discussion-only when exact Role assignment
   assert.equal(result.readiness.nextAction.target, 'business/role.trace.md');
 });
 
-test('authorized Role assignment still requires an explicit matching session assertion', () => {
+test('authorized Role assignment without a qualified binding source still requires holder binding evidence', () => {
   const result = boundedActionReadinessFixture({ holderState: 'unresolved', holderAuthorization: 'qualified' });
   assert.equal(result.readiness.state, 'grounded-to-discuss');
   assert.ok(result.readiness.reasons.some((item) => item.code === 'session-holder-role-binding-unresolved'));
-  assert.equal(result.readiness.nextAction.kind, 'declare-explicit-session-holder-role-binding');
+  assert.equal(result.readiness.nextAction.kind, 'establish-session-holder-role-binding');
 });
 
 test('holder Role mismatch remains blocking even when Role material authorizes the assignment mode', () => {

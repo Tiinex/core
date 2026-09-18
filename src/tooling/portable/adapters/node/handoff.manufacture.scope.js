@@ -166,10 +166,9 @@ export function expandRouteParentBoundaryClosure(input = {}) {
       const visitKey = `${currentWorkspaceId}\0${currentPath}`;
       if (visited.has(visitKey)) break;
       visited.add(visitKey);
-      const runtime = input.workspaceRuntimeById?.get(currentWorkspaceId);
-      const currentEntry = runtime ? entryFromEnumeration(runtime.enumeration, currentPath) : null;
-      if (!currentEntry) break;
-      const markdown = decodeUtf8(currentEntry.data);
+      const currentSource = exactArtifactSource(input, materials, currentWorkspaceId, currentPath);
+      if (!currentSource) break;
+      const markdown = decodeUtf8(currentSource.data);
       if (!markdown) break;
       let parent;
       try { parent = parseArtifactMarkdown(markdown).envelope?.parent || {}; } catch { break; }
@@ -188,8 +187,7 @@ export function expandRouteParentBoundaryClosure(input = {}) {
       }
       if (!targetWorkspaceId || !targetPath) break;
 
-      const targetRuntime = input.workspaceRuntimeById?.get(targetWorkspaceId);
-      const targetEntry = targetRuntime ? entryFromEnumeration(targetRuntime.enumeration, targetPath) : null;
+      const targetSource = exactArtifactSource(input, materials, targetWorkspaceId, targetPath);
       const targetMaterialization = materializationByWorkspaceId.get(targetWorkspaceId);
       const targetAlreadyCarried = workspaceMaterializationIncludesPath(targetMaterialization, targetPath);
       const routeTargetKey = `${routeWorkspaceId}\0${routePath}\0${targetWorkspaceId}\0${targetPath}`;
@@ -217,10 +215,10 @@ export function expandRouteParentBoundaryClosure(input = {}) {
             fields: Object.freeze({ RouteWorkspace: routeWorkspaceId, RoutePath: routePath, SourceWorkspace: currentWorkspaceId, SourcePath: currentPath, TargetWorkspace: targetWorkspaceId, TargetPath: targetPath, Reference: reference })
           });
           dependencies.push(requirement);
-          if (targetEntry) materials.push(materialCandidateFromWorkspaceEntry(requirement, targetWorkspaceId, targetPath, targetEntry, targetRuntime.enumeration, targetRuntime));
+          if (targetSource) materials.push(materialCandidateFromExactArtifactSource(requirement, targetSource));
         }
       }
-      if (!targetEntry) break;
+      if (!targetSource) break;
       currentWorkspaceId = targetWorkspaceId;
       currentPath = targetPath;
     }
@@ -229,6 +227,81 @@ export function expandRouteParentBoundaryClosure(input = {}) {
   return Object.freeze({
     requirements: Object.freeze({ ...requirements, dependencies: Object.freeze(dependencies), counts: Object.freeze({ ...(requirements.counts || {}), dependencies: dependencies.length }) }),
     materials: Object.freeze(materials)
+  });
+}
+
+function exactArtifactSource(input = {}, materials = [], workspaceIdValue = '', targetPathValue = '') {
+  const workspaceId = String(workspaceIdValue || '').trim();
+  const targetPath = normalizeRelativePath(targetPathValue);
+  if (!workspaceId || !targetPath) return null;
+
+  // Explicit current/inherited Workspace providers retain precedence over detached cache
+  // material. This preserves the existing package-parent precedence boundary while allowing
+  // the exact same route traversal to continue when the next ancestor is cache-only.
+  const runtime = input.workspaceRuntimeById?.get(workspaceId);
+  const entry = runtime ? entryFromEnumeration(runtime.enumeration, targetPath) : null;
+  if (entry) return Object.freeze({
+    kind: 'workspace-entry', workspaceId, path: targetPath, data: entry.data, bytes: Number(entry.bytes || 0), sha256: String(entry.sha256 || ''),
+    mediaType: String(entry.mediaType || 'text/markdown'), entry, runtime
+  });
+
+  const candidates = [];
+  for (const material of materials || []) {
+    const provenance = material?.provenance || {};
+    const candidateWorkspaceId = String(provenance.workspaceId || material.workspaceId || material.targetWorkspaceId || '').trim();
+    const candidatePath = normalizeRelativePath(provenance.path || material.path || material.targetPath || '');
+    if (candidateWorkspaceId !== workspaceId || candidatePath !== targetPath || !material?.data) continue;
+    candidates.push(Object.freeze({
+      kind: 'qualified-material', workspaceId, path: targetPath, data: material.data, bytes: Number(material.bytes || 0), sha256: String(material.sha256 || ''),
+      mediaType: String(material.mediaType || 'text/markdown'), providerId: String(material.providerId || ''), providerKind: String(material.providerKind || ''),
+      provenance: Object.freeze({ ...provenance }), authority: Object.freeze({ ...(material.authority || {}) })
+    }));
+  }
+  for (const material of input.exactMaterialProvider?.entries || []) {
+    const provenance = material?.provenance || {};
+    const candidateWorkspaceId = String(provenance.workspaceId || '').trim();
+    const candidatePath = normalizeRelativePath(provenance.path || '');
+    if (candidateWorkspaceId !== workspaceId || candidatePath !== targetPath || !material?.data) continue;
+    candidates.push(Object.freeze({
+      kind: 'qualified-material', workspaceId, path: targetPath, data: material.data, bytes: Number(material.bytes || 0), sha256: String(material.sha256 || ''),
+      mediaType: String(material.mediaType || 'text/markdown'), providerId: String(material.providerId || 'qualified-package-parent-exact-material'),
+      providerKind: String(material.providerKind || 'qualified-package-parent-cache-material'), provenance: Object.freeze({ ...provenance }),
+      authority: Object.freeze({ packageParentMaterialQualified: true, semanticAuthority: 'none', sourceSelectionAuthority: false })
+    }));
+  }
+  if (!candidates.length) return null;
+  const digests = [...new Set(candidates.map((candidate) => String(candidate.sha256 || '')).filter(Boolean))];
+  if (digests.length !== 1) return null;
+  return candidates.find((candidate) => candidate.sha256 === digests[0]) || null;
+}
+
+function materialCandidateFromExactArtifactSource(requirement = {}, source = {}) {
+  if (source.kind === 'workspace-entry') {
+    return materialCandidateFromWorkspaceEntry(requirement, source.workspaceId, source.path, source.entry, source.runtime.enumeration, source.runtime);
+  }
+  return Object.freeze({
+    requirementId: String(requirement.id || ''),
+    referenceTarget: String(requirement.reference?.target || requirement.referenceTarget || ''),
+    path: String(source.path || ''),
+    data: source.data,
+    bytes: Number(source.bytes || 0),
+    sha256: String(source.sha256 || ''),
+    mediaType: String(source.mediaType || 'text/markdown'),
+    providerId: String(source.providerId || 'qualified-exact-material'),
+    providerKind: String(source.providerKind || 'qualified-exact-material'),
+    provenance: Object.freeze({
+      ...(source.provenance || {}),
+      workspaceId: String(source.workspaceId || source.provenance?.workspaceId || ''),
+      path: String(source.path || source.provenance?.path || ''),
+      reboundRequirementId: String(requirement.id || ''),
+      reboundClassification: String(requirement.classification || '')
+    }),
+    authority: Object.freeze({
+      ...(source.authority || {}),
+      localIdentityQualified: true,
+      semanticAuthority: 'none',
+      sourceSelectionAuthority: false
+    })
   });
 }
 

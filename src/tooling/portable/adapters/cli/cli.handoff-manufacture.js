@@ -20,6 +20,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   if (!['handoff', 'workspace', 'bootstrap'].includes(carrierMode)) throw new Error(`portable.cli.handoff-carrier.carrier-mode.invalid:${carrierMode}`);
   if (carrierMode === 'workspace') return prepareWorkspaceCarrierCliCommand(flags, workspaceRoot, runtime);
   if (carrierMode === 'bootstrap') return prepareBootstrapCarrierCliCommand(flags, runtime);
+  if (flags['package-major'] && flags['package-consolidation']) throw new Error('portable.cli.handoff-carrier.package-major-consolidation-conflict');
   const continuationState = parsed.surfaceCommand === 'handoff'
     ? await readGroundContinuationState(workspaceRoot)
     : {};
@@ -103,6 +104,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
         selectedRoutePointer: continuationState.selectedRoutePointer || flags['package-parent-route-pointer'] || '',
         selectedRouteId: continuationState.selectedRouteId || flags['package-parent-route-id'] || '',
         explicitSiblingIndex: flags['package-sibling-index'],
+        consolidation: Boolean(flags['package-consolidation']),
         enabled: Boolean(flags.output || flags['output-dir'])
       });
       carrierAllocation = siblingAllocation;
@@ -118,6 +120,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     packageParentSha256 = String(carrierLineage.parentPackageSha256 || '');
   } else if (flags['package-major']) {
     throw new Error('portable.cli.handoff-carrier.package-major.parent-required');
+  } else if (flags['package-consolidation']) {
+    throw new Error('portable.cli.handoff-carrier.package-consolidation.parent-required');
   }
   const carrierProfile = selectCarrierProfile({
     operator: operatorCarrierProfile,

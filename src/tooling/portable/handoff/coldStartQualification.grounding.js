@@ -247,79 +247,107 @@ function groundHolderBinding(input, handoff, role, findings) {
   const recipientRoleKind = normalizeToken(handoff.toKind || (recipientRoleLabel ? 'role' : ''));
   const roleRecipient = recipientRoleKind === 'role';
   const explicitlySupplied = Boolean(roleLabel || holderId);
-  const sourceDetail = holderBindingSourceDetail(input, explicit, explicitlySupplied);
-  const assertionMode = String(explicit.assignmentMode || explicit.bindingMode || explicit.mechanism || input.holderAssignmentMode || input.sessionAssignmentMode || 'explicit-session').trim();
-  const authorization = projectHolderBindingAuthorization(role, { assertionMode });
   const durableIdentity = holderDurableIdentityProjection(holderId);
 
-  if (!roleRecipient) return deepFreeze({
-    state: 'not-applicable',
-    holderId,
-    assertionMode,
-    roleLabel,
-    recipientRoleLabel,
-    recipientCompatibility: 'not-applicable',
-    source: explicitlySupplied ? 'explicit-input' : 'none',
-    sourceDetail,
-    authorization,
-    durableIdentity,
-    explicit: explicitlySupplied,
-    inferredFromTransport: false,
-    boundary: 'The selected Handoff recipient is not a Role endpoint, so no consuming-session Role holder binding is required or inferred.'
-  });
+  if (!roleRecipient) {
+    const assertionMode = String(explicit.assignmentMode || explicit.bindingMode || explicit.mechanism || input.holderAssignmentMode || input.sessionAssignmentMode || 'explicit-session').trim();
+    const sourceDetail = holderBindingSourceDetail(input, explicit, explicitlySupplied);
+    const authorization = projectHolderBindingAuthorization(role, { assertionMode });
+    return deepFreeze({
+      state: 'not-applicable', holderId, assertionMode, roleLabel, recipientRoleLabel,
+      recipientCompatibility: 'not-applicable', source: explicitlySupplied ? 'explicit-input' : 'none', sourceDetail,
+      authorization, durableIdentity, explicit: explicitlySupplied, inferredFromTransport: false,
+      boundary: 'The selected Handoff recipient is not a Role endpoint, so no consuming-session Role holder binding is required or inferred.'
+    });
+  }
+
+  if (!explicitlySupplied) {
+    const assertionMode = 'handoff';
+    const authorization = projectHolderBindingAuthorization(role, { assertionMode });
+    const exactHandoff = exactSelectedHandoffAssignmentEvidence(handoff, role);
+    const sourceDetail = handoffHolderBindingSourceDetail(handoff, role, exactHandoff, authorization);
+    if (exactHandoff && authorization.state === 'qualified') return deepFreeze({
+      state: 'qualified', holderId: '', assertionMode, roleLabel: recipientRoleLabel, recipientRoleLabel,
+      recipientCompatibility: 'matched', source: 'qualified-selected-handoff-consumption', sourceDetail,
+      authorization, durableIdentity, explicit: false, inferredFromTransport: false,
+      boundary: 'Qualified consumption of the exact selected Handoff binds this bounded Tooling session to its exact recipient Role only because that exact qualified Role authorizes the canonical `handoff` assignment mode. Package delivery, route position, provider/chat identity and Role inventory alone do not bind a holder; durable identity and broader semantic authority remain unestablished.'
+    });
+    return deepFreeze({
+      state: 'unresolved', holderId: '', assertionMode, roleLabel: '', recipientRoleLabel,
+      recipientCompatibility: 'unresolved', source: exactHandoff ? 'qualified-selected-handoff-consumption' : 'none', sourceDetail,
+      authorization, durableIdentity, explicit: false, inferredFromTransport: false,
+      boundary: 'No explicit holder declaration was supplied, and bounded Handoff assignment can qualify only from the exact selected qualified Handoff plus exact recipient Role material that directly authorizes the canonical `handoff` mode. Transport delivery, endpoint naming, cached Role inventory and assistant/user position are insufficient.'
+    });
+  }
+
+  const sourceDetail = holderBindingSourceDetail(input, explicit, true);
+  const assertionMode = String(explicit.assignmentMode || explicit.bindingMode || explicit.mechanism || input.holderAssignmentMode || input.sessionAssignmentMode || 'explicit-session').trim();
+  const authorization = projectHolderBindingAuthorization(role, { assertionMode });
 
   if (!roleLabel) {
     if (holderId) findings.push(portableFinding('warning', 'portable.cold-start.holder-binding.role-missing', 'A consuming-session holder identifier was supplied without an explicit Role capacity; the holder binding remains unresolved.', { holderId, recipientRole: recipientRoleLabel }));
     return deepFreeze({
-      state: 'unresolved',
-      holderId,
-      assertionMode,
-      roleLabel: '',
-      recipientRoleLabel,
-      recipientCompatibility: 'unresolved',
-      source: explicitlySupplied ? 'explicit-input' : 'none',
-      sourceDetail,
-      authorization,
-      durableIdentity,
-      explicit: explicitlySupplied,
-      inferredFromTransport: false,
-      boundary: 'Recipient Role and consuming-session holder are separate. No holder Role is inferred from route selection, transport identity, provider identity, assistant/user position, or participant declarations.'
+      state: 'unresolved', holderId, assertionMode, roleLabel: '', recipientRoleLabel,
+      recipientCompatibility: 'unresolved', source: 'explicit-input', sourceDetail, authorization, durableIdentity,
+      explicit: true, inferredFromTransport: false,
+      boundary: 'A partial explicit holder declaration is not completed from the Handoff path. Explicit-session and Handoff assignment remain mode-isolated.'
     });
   }
 
   if (recipientRoleLabel && normalizeComparable(roleLabel) !== normalizeComparable(recipientRoleLabel)) {
     findings.push(portableFinding('error', 'portable.cold-start.holder-binding.role-mismatch', 'Explicit consuming-session holder Role does not match the selected Handoff recipient Role.', { holderRole: roleLabel, recipientRole: recipientRoleLabel }));
     return deepFreeze({
-      state: 'blocked',
-      holderId,
-      assertionMode,
-      roleLabel,
-      recipientRoleLabel,
-      recipientCompatibility: 'mismatch',
-      source: 'explicit-input',
-      sourceDetail,
-      authorization,
-      durableIdentity,
-      explicit: true,
-      inferredFromTransport: false,
-      boundary: 'An explicit holder Role mismatch is contradictory and blocks act-ready grounding. Tooling does not relabel the session to make the route fit.'
+      state: 'blocked', holderId, assertionMode, roleLabel, recipientRoleLabel,
+      recipientCompatibility: 'mismatch', source: 'explicit-input', sourceDetail, authorization, durableIdentity,
+      explicit: true, inferredFromTransport: false,
+      boundary: 'An explicit holder Role mismatch is contradictory and blocks act-ready grounding. Tooling does not relabel the session or fall back to Handoff assignment to make the route fit.'
     });
   }
 
   return deepFreeze({
-    state: 'qualified',
-    holderId,
-    assertionMode,
-    roleLabel,
-    recipientRoleLabel,
-    recipientCompatibility: 'matched',
-    source: 'explicit-input',
-    sourceDetail,
-    authorization,
-    durableIdentity,
-    explicit: true,
-    inferredFromTransport: false,
+    state: 'qualified', holderId, assertionMode, roleLabel, recipientRoleLabel,
+    recipientCompatibility: 'matched', source: 'explicit-input', sourceDetail, authorization, durableIdentity,
+    explicit: true, inferredFromTransport: false,
     boundary: 'Explicit consuming-session Role-capacity binding only. This binds the current Tooling invocation/session to the selected recipient Role capacity; it does not prove a human identity, consent, or authority beyond the qualified Handoff/Role/Task boundaries.'
+  });
+}
+
+function exactSelectedHandoffAssignmentEvidence(handoff = {}, role = {}) {
+  const artifact = role?.material?.artifact || {};
+  return String(handoff.schemaId || '') === 'tiinex.handoff.v1'
+    && Boolean(String(handoff.routeId || '').trim())
+    && Boolean(String(handoff.routePointerPath || '').trim())
+    && Boolean(String(handoff.workspaceRelativePath || '').trim())
+    && /^[0-9a-f]{64}$/i.test(String(handoff.sha256 || ''))
+    && String(role?.state || '') === 'qualified'
+    && String(role?.material?.state || '') === 'qualified'
+    && Boolean(String(artifact.path || '').trim())
+    && /^[0-9a-f]{64}$/i.test(String(artifact.sha256 || ''));
+}
+
+function handoffHolderBindingSourceDetail(handoff = {}, role = {}, exactHandoff = false, authorization = {}) {
+  const artifact = role?.material?.artifact || {};
+  const qualified = exactHandoff && String(authorization?.state || '') === 'qualified';
+  return deepFreeze({
+    kind: exactHandoff ? 'qualified-selected-handoff-consumption' : 'none',
+    locator: exactHandoff ? String(handoff.routePointerPath || handoff.workspaceRelativePath || '') : '',
+    authorityClass: exactHandoff ? 'selected-handoff-assignment-evidence' : 'none',
+    semanticAuthorityState: qualified ? 'qualified-bounded-handoff-assignment' : 'not-established',
+    qualifiedMaterialSource: Boolean(exactHandoff),
+    assignmentMode: 'handoff',
+    routeId: String(handoff.routeId || ''),
+    routePointerPath: String(handoff.routePointerPath || ''),
+    handoffArtifactPath: String(handoff.workspaceRelativePath || ''),
+    handoffArtifactSha256: String(handoff.sha256 || ''),
+    roleArtifactPath: String(artifact.path || ''),
+    roleArtifactSha256: String(artifact.sha256 || ''),
+    roleSchemaId: String(artifact.schemaId || ''),
+    roleLabel: String(artifact.roleLabel || role?.endpoint?.label || ''),
+    authorizationState: String(authorization?.state || 'unresolved'),
+    authorizationBasis: String(authorization?.provenance?.basis || ''),
+    boundary: exactHandoff
+      ? 'Exact selected qualified Handoff consumption plus exact qualified recipient Role material are the bounded assignment evidence. This is semantic Handoff/Role evidence, not package-delivery, provider, model, chat-position, filename or neighboring-route inference.'
+      : 'Exact selected Handoff/Role assignment evidence is not established; no Handoff-mode holder binding is projected.'
   });
 }
 

@@ -183,24 +183,6 @@ function buildRecipientFacingV2TopologyLegacy(input = {}) {
     const routeDimension = cache ? `001-${plan.workspace.ordinal}-1-${plan.ordinal}` : `001-${plan.workspace.ordinal}-${plan.ordinal}`;
     let lineageParent = cache?.parent || workspace.parent;
     let nextDimension = routeDimension;
-    const endpointChain = buildEndpointRolePointerChain({
-      requirements: route.materialRequirements?.endpointRoles || [],
-      descriptor,
-      workspaceById,
-      cache,
-      workspace,
-      route,
-      createdAt,
-      lineageParent,
-      nextDimension,
-      resolveRoleMaterialTarget: roleMaterialTarget,
-      parentAuthority: recipientV2ParentAuthority
-    });
-    files.push(...endpointChain.files);
-    topology.endpointRoles.push(...endpointChain.roles);
-    findings.push(...endpointChain.findings);
-    lineageParent = endpointChain.lineageParent;
-    nextDimension = endpointChain.nextDimension;
     const participantChain = buildParticipantRolePointerChain({
       requirements: route.materialRequirements?.participantRoles || [],
       descriptor,
@@ -219,6 +201,24 @@ function buildRecipientFacingV2TopologyLegacy(input = {}) {
     findings.push(...participantChain.findings);
     lineageParent = participantChain.lineageParent;
     nextDimension = participantChain.nextDimension;
+    const endpointChain = buildEndpointRolePointerChain({
+      requirements: route.materialRequirements?.endpointRoles || [],
+      descriptor,
+      workspaceById,
+      cache,
+      workspace,
+      route,
+      createdAt,
+      lineageParent,
+      nextDimension,
+      resolveRoleMaterialTarget: roleMaterialTarget,
+      parentAuthority: recipientV2ParentAuthority
+    });
+    files.push(...endpointChain.files);
+    topology.endpointRoles.push(...endpointChain.roles);
+    findings.push(...endpointChain.findings);
+    lineageParent = endpointChain.lineageParent;
+    nextDimension = endpointChain.nextDimension;
     const pointerPath = `${nextDimension}-handoff-pointer.trace.md`;
     const pointerFacts = {
       workspaceId: workspace.workspaceId,

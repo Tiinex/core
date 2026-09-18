@@ -390,6 +390,7 @@ export function parseHandoffGrounding(markdown, route) {
       returnTo: sectionField(completion, 'Return To')
     }),
     routeId: String(route?.id || ''),
+    routePointerPath: String(route?.pointerPath || ''),
     workspaceId: String(route?.workspaceId || ''),
     workspaceRelativePath: String(route?.workspaceRelativeHandoffPath || route?.workspaceRelativePath || ''),
     packagePath: String(route?.packagePath || ''),
@@ -405,7 +406,7 @@ function markdownReferenceTarget(value = '') {
 }
 
 export function emptyHandoffGrounding() {
-  return deepFreeze({ schemaId: '', purpose: '', from: '', fromKind: '', fromReference: '', to: '', toKind: '', toReference: '', transfers: Object.freeze([]), retainedResponsibilities: Object.freeze([]), completionExpectation: Object.freeze({ signalKind: '', signalMeaning: '', returnTo: '' }), routeId: '', workspaceId: '', workspaceRelativePath: '', packagePath: '', sha256: '', boundary: 'No Handoff material supplied.' });
+  return deepFreeze({ schemaId: '', purpose: '', from: '', fromKind: '', fromReference: '', to: '', toKind: '', toReference: '', transfers: Object.freeze([]), retainedResponsibilities: Object.freeze([]), completionExpectation: Object.freeze({ signalKind: '', signalMeaning: '', returnTo: '' }), routeId: '', routePointerPath: '', workspaceId: '', workspaceRelativePath: '', packagePath: '', sha256: '', boundary: 'No Handoff material supplied.' });
 }
 
 export function resolveGroundingRouteMarkdown(bundle = {}, selectedRoute = {}, findings = [], context = null) {

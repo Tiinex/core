@@ -163,10 +163,10 @@ function buildRecipientFacingV2PackageV1Prepared(input = {}, sealedByWorkspaceId
     const binding = bindingForWorkspace(descriptor, owningWorkspace.workspaceId);
     let lineageParent = cache?.parent || owningWorkspace.parent;
     let nextDimension = cache ? `${plan.prefix}-1-1` : `${plan.prefix}-1`;
-    const endpointChain = buildEndpointRolePointerChain({ requirements: route.materialRequirements?.endpointRoles || [], descriptor, workspaceById, cache, workspace: owningWorkspace, route, createdAt, lineageParent, nextDimension, resolveRoleMaterialTarget: roleMaterialTarget, parentAuthority: recipientV2ParentAuthority });
-    files.push(...endpointChain.files); topology.endpointRoles.push(...endpointChain.roles); findings.push(...endpointChain.findings); lineageParent = endpointChain.lineageParent; nextDimension = endpointChain.nextDimension;
     const participantChain = buildParticipantRolePointerChain({ requirements: route.materialRequirements?.participantRoles || [], descriptor, workspaceById, cache, workspace: owningWorkspace, route, createdAt, lineageParent, nextDimension, resolveRoleMaterialTarget: roleMaterialTarget, parentAuthority: recipientV2ParentAuthority });
     files.push(...participantChain.files); topology.participantRoles.push(...participantChain.roles); findings.push(...participantChain.findings); lineageParent = participantChain.lineageParent; nextDimension = participantChain.nextDimension;
+    const endpointChain = buildEndpointRolePointerChain({ requirements: route.materialRequirements?.endpointRoles || [], descriptor, workspaceById, cache, workspace: owningWorkspace, route, createdAt, lineageParent, nextDimension, resolveRoleMaterialTarget: roleMaterialTarget, parentAuthority: recipientV2ParentAuthority });
+    files.push(...endpointChain.files); topology.endpointRoles.push(...endpointChain.roles); findings.push(...endpointChain.findings); lineageParent = endpointChain.lineageParent; nextDimension = endpointChain.nextDimension;
     const pointerPath = `${nextDimension}-handoff-pointer.trace.md`;
     const routeEntry = (binding?.entryMap?.entries || []).find((entry) => String(entry.path || '') === String(route.workspaceRelativePath || ''));
     const pointerFacts = {

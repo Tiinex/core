@@ -8,8 +8,8 @@ import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.ren
 import { rootValidate } from '../src/schemas/tiinex.root.v1.validate.js';
 import { parentRecoveryMode, recoverQualifiedRuntimeSchemaReferenceAuthority } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
 import { resolveArchiveParent } from '../src/tooling/portable/handoff/recipientV2.artifactFirst.closure.js';
-import { deriveHandoffSiblingAllocation, reserveHandoffSiblingIndex } from '../src/tooling/portable/adapters/cli/cli.handoff-sibling-allocation.js';
-import { continueHandoffCarrierLineage } from '../src/tooling/portable/handoff/carrierLineage.js';
+import { deriveHandoffConsolidationAllocation, deriveHandoffSiblingAllocation, reserveHandoffSiblingIndex } from '../src/tooling/portable/adapters/cli/cli.handoff-sibling-allocation.js';
+import { advanceHandoffCarrierMajor, continueHandoffCarrierLineage } from '../src/tooling/portable/handoff/carrierLineage.js';
 import { qualifyDelegationReturnReservation } from '../src/tooling/portable/handoff/delegationReturnReservation.js';
 import { writeExactRecipientTransportBytes } from '../src/tooling/portable/output/recipientV2.zip.js';
 import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integrity/integrity.c14nV2.js';
@@ -245,6 +245,49 @@ test('parallel branches return by appending their own dense -1 continuation and 
   assert.equal(business.siblingIndex, 2);
   assert.equal(core.siblingIndex, 2);
   assert.notEqual(business.provenance.parentPackagePath, core.provenance.parentPackagePath);
+});
+
+test('batch consolidation uses N+1 from the common pre-batch frontier and later batches preserve that prefix', () => {
+  const topology = { detected: true, status: 'valid', routes: [
+    { pointerPath: '001-4-3-handoff-pointer.trace.md', routeId: 'route:c' },
+    { pointerPath: '001-4-1-handoff-pointer.trace.md', routeId: 'route:a' },
+    { pointerPath: '001-4-2-handoff-pointer.trace.md', routeId: 'route:b' }
+  ] };
+  const consolidation = deriveHandoffConsolidationAllocation({ parentInspection: topology, parentDimension: '002-1', parentPackagePath: '/tmp/common-frontier.zip', parentPackageSha256: 'a'.repeat(64) });
+  assert.equal(consolidation.state, 'qualified');
+  assert.equal(consolidation.siblingIndex, 4);
+  assert.equal(consolidation.childDimension, '002-1-4');
+  assert.equal(consolidation.provenance.qualifiedRouteCount, 3);
+  assert.equal(consolidation.provenance.commonFrontierDimension, '002-1');
+  assert.deepEqual(consolidation.provenance.pointerOrder.map((item) => item.routeId), ['route:a', 'route:b', 'route:c']);
+
+  // Return arrival order does not participate in the allocation; only the common sent carrier topology does.
+  const arrivalOrder = ['002-1-3', '002-1-1', '002-1-2'];
+  assert.deepEqual(arrivalOrder.sort(), ['002-1-1', '002-1-2', '002-1-3']);
+  assert.equal(consolidation.childDimension, '002-1-4');
+
+  // A later batch starts from the consolidation frontier and appends that batch's route ordinal.
+  assert.equal(continueHandoffCarrierLineage({ dimension: consolidation.childDimension }, 2).dimension, '002-1-4-2');
+
+  // Stabilization is a distinct explicit major operation and does not derive from route count.
+  const major = advanceHandoffCarrierMajor({ dimension: consolidation.childDimension }, 'explicit stabilization');
+  assert.equal(major.dimension, '003');
+  assert.equal(major.parentDimension, '002-1-4');
+  assert.equal(major.checkpointKind, 'major');
+});
+
+test('consolidation fails closed without qualified common-frontier topology and rejects a non-N+1 override', () => {
+  const topology = { detected: true, status: 'valid', routes: [
+    { pointerPath: '001-4-1-handoff-pointer.trace.md', routeId: 'route:a' },
+    { pointerPath: '001-4-2-handoff-pointer.trace.md', routeId: 'route:b' }
+  ] };
+  const conflict = deriveHandoffConsolidationAllocation({ parentInspection: topology, parentDimension: '007-9', explicitSiblingIndex: 2 });
+  assert.equal(conflict.state, 'blocked');
+  assert.equal(conflict.reasonCode, 'explicit-sibling-index-conflicts-with-qualified-consolidation-topology');
+  assert.equal(conflict.expectedSiblingIndex, 3);
+  const unavailable = deriveHandoffConsolidationAllocation({ parentInspection: null, parentDimension: '007-9' });
+  assert.equal(unavailable.state, 'unavailable');
+  assert.equal(unavailable.siblingIndex, null);
 });
 
 test('explicit carrier sibling override is accepted only when it matches qualified topology and ambiguity fails visible', () => {
