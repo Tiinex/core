@@ -1,5 +1,7 @@
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { auditPortableRecord } from '../audit/audit.capability.js';
+import { classifyParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
+import { buildArtifactCreationContract } from '../../../schemas/creation.contracts.js';
 
 export const PORTABLE_AUTHORING_PARENT_SCHEMA_ID = 'tiinex.portable.authoring-parent.v1';
 
@@ -15,13 +17,24 @@ export function projectPortableAuthoringParent(input = {}) {
   const schemaId = String(parsed.envelope?.current?.schema?.id || audit.schemaId || '');
   const schemaTarget = String(parsed.envelope?.current?.schema?.target || '');
   const createdAt = String(parsed.envelope?.current?.createdAt || audit.artifact?.createdAt || '');
+  const explicitReference = String(input.reference || '').trim();
+  const projectedPath = explicitReference || String(record.path || record.id || '');
+  const referenceClassification = classifyParentRecoveryReference(projectedPath);
+  if (referenceClassification.kind === 'malformed-workspace-qualified') return freeze({ schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID, status: 'blocked', parentRecord: null, findings: [{ severity: 'error', code: 'portable.authoring-parent.reference.malformed', message: 'Selected Parent reference is malformed and cannot be used for native authoring.' }], operationBoundary: boundary() });
+  const recoveryMode = referenceClassification.kind === 'workspace-qualified' ? 'workspace-qualified' : 'local-relative';
+  const canonicalCurrent = buildArtifactCreationContract({ schemaId, transitionType: 'continue-from-record' })?.schemaReferences?.current || null;
+  const canonicalTargets = new Set([...(canonicalCurrent?.exactTargets || []), String(canonicalCurrent?.preferredTarget || '')].filter(Boolean));
+  const schemaReferenceQualified = Boolean(schemaTarget && canonicalCurrent?.resolutionState === 'qualified' && canonicalTargets.has(schemaTarget));
+  const schemaReferenceAuthority = schemaReferenceQualified
+    ? { ...canonicalCurrent, preferredTarget: schemaTarget, resolutionState: 'qualified', resolutionEvidence: { ...(canonicalCurrent?.resolutionEvidence || {}), basis: 'declared-parent-target-exact-canonical-match' } }
+    : { schemaId, preferredTarget: schemaTarget, exactTargets: schemaTarget ? [schemaTarget] : [], resolutionState: 'unresolved', evidence: { basis: 'declared-current-schema-reference-only' } };
   return freeze({
     schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID,
     status: 'ready',
     parentRecord: {
-      id: String(record.path || record.id || ''), path: String(record.path || record.id || ''), schemaId, currentSchemaId: schemaId, currentCreatedAt: createdAt,
+      id: projectedPath, path: projectedPath, schemaId, currentSchemaId: schemaId, currentCreatedAt: createdAt, createdAt, recoveryMode, relativeReference: recoveryMode === 'workspace-qualified' ? projectedPath : '',
       markdown: record.markdown, sourceMode: String(record.sourceMode || 'portable-node-local'),
-      schemaReferenceAuthority: { schemaId, preferredTarget: schemaTarget, exactTargets: schemaTarget ? [schemaTarget] : [], resolutionState: 'unresolved', evidence: { basis: 'declared-current-schema-reference-only' } }
+      schemaReferenceAuthority
     },
     findings: [],
     operationBoundary: boundary(),

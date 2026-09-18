@@ -217,7 +217,8 @@ export function qualifyContinuationCreationRepresentation(markdown = '', contrac
     const publishedTarget = typeof publishedReference === 'string' ? '' : String(publishedReference?.target || publishedReference?.url || '');
     const publishedState = typeof publishedReference === 'string' ? 'unresolved' : String(publishedReference?.state || publishedReference?.resolutionState || 'unresolved');
     const publishedQualified = Boolean(publishedTarget && publishedState === 'qualified');
-    const recoveryMode = String(parentRecord?.recoveryMode || parentRecord?.parentRecoveryMode || '').trim() === 'external-versioned' ? 'external-versioned' : 'local-relative';
+    const declaredRecoveryMode = String(parentRecord?.recoveryMode || parentRecord?.parentRecoveryMode || '').trim();
+    const recoveryMode = declaredRecoveryMode === 'external-versioned' ? 'external-versioned' : declaredRecoveryMode === 'workspace-qualified' ? 'workspace-qualified' : 'local-relative';
     if (recoveryMode === 'external-versioned') {
       if (!publishedQualified) findings.push('External Parent recovery requires one qualified version-stable published representation.');
       if (origins.length !== 1 || relative.length !== 0 || browse.length !== 1) findings.push('External Parent Origin must contain exactly one [browse + git](...) entry and must not fabricate [relative](...).');

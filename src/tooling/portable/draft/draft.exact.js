@@ -16,6 +16,7 @@ export function normalizePortableParentRecord(parent = {}) {
     boundary: String(parent.boundary || parent.source?.boundary || ''),
     sourceMode: String(parent.sourceMode || ''),
     recoveryMode: String(parent.recoveryMode || parent.parentRecoveryMode || ''),
+    relativeReference: String(parent.relativeReference || ''),
     source: parent.source || null,
     markdown: String(parent.markdown || ''),
     integrity: parent.integrity || null,
@@ -108,11 +109,14 @@ export function qualifyPortableRenderedParentRepresentation(markdown = '', paren
   const observed = parsed.envelope?.parent || {};
   const hasObserved = Boolean(observed.schema?.id || observed.trace || observed.origin || observed.createdAt || observed.boundary || observed.originEntries?.length);
   if (rootCreation) return Object.freeze({ state: hasObserved ? 'invalid' : 'qualified', reason: hasObserved ? 'exact-result-parent-unexpected' : '' });
-  const relative = relativePath(dirname(childPath), parent.path);
   const published = parent.publishedReference || {};
   const publishedTarget = String(published.target || '');
   const publishedQualified = Boolean(publishedTarget && published.state === 'qualified');
-  const recoveryMode = String(parent.recoveryMode || '').trim() === 'external-versioned' ? 'external-versioned' : 'local-relative';
+  const declaredRecoveryMode = String(parent.recoveryMode || '').trim();
+  const recoveryMode = declaredRecoveryMode === 'external-versioned' ? 'external-versioned' : declaredRecoveryMode === 'workspace-qualified' ? 'workspace-qualified' : 'local-relative';
+  const relative = recoveryMode === 'workspace-qualified'
+    ? String(parent.relativeReference || parent.path || '')
+    : relativePath(dirname(childPath), parent.path);
   const schemaTarget = String(parent.schemaReferenceAuthority?.preferredTarget || '');
   const origins = observed.originEntries || [];
   const createdAtLines = renderedParentFieldLines(markdown, 'Created At');

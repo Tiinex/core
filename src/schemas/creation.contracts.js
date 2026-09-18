@@ -173,7 +173,10 @@ export function validateArtifactCreationResult(draft = {}, parentRecord = {}, op
 
   if (rootCreation) findings.push(...validateRootCreationRepresentation(draft.markdown || '', contract));
   else if (parentExpected) {
-    const relativeReference = relativePath(dirname(options.childPath || draft.path || ''), parentRecord.path || '');
+    const recoveryMode = String(parentRecord?.recoveryMode || parentRecord?.parentRecoveryMode || '').trim();
+    const relativeReference = recoveryMode === 'workspace-qualified'
+      ? String(parentRecord.relativeReference || parentRecord.path || '')
+      : relativePath(dirname(options.childPath || draft.path || ''), parentRecord.path || '');
     const parentIntegrityTarget = qualifiedParentIntegrityTarget(parentRecord, relativeReference);
     const representation = qualifyContinuationCreationRepresentation(draft.markdown || '', contract, parentRecord, { relativeReference, parentIntegrityTarget });
     findings.push(...(representation.findings || []).map((message, index) => error(`creation.continuation-representation.${index + 1}`, message)));
@@ -221,7 +224,8 @@ function qualifiedParentIntegrityTarget(parentRecord = {}, relativeReference = '
   const published = parentRecord?.publishedReference || parentRecord?.browseGitReference || parentRecord?.browseGit || null;
   const target = typeof published === 'string' ? '' : String(published?.target || published?.url || '');
   const state = typeof published === 'string' ? 'unresolved' : String(published?.state || published?.resolutionState || 'unresolved');
-  const recoveryMode = String(parentRecord?.recoveryMode || parentRecord?.parentRecoveryMode || '').trim() === 'external-versioned' ? 'external-versioned' : 'local-relative';
+  const declaredRecoveryMode = String(parentRecord?.recoveryMode || parentRecord?.parentRecoveryMode || '').trim();
+  const recoveryMode = declaredRecoveryMode === 'external-versioned' ? 'external-versioned' : declaredRecoveryMode === 'workspace-qualified' ? 'workspace-qualified' : 'local-relative';
   if (recoveryMode === 'external-versioned') return state === 'qualified' && target ? target : '';
   return state === 'qualified' && target ? target : String(relativeReference || '');
 }

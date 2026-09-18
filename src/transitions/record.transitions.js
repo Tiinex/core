@@ -169,19 +169,21 @@ export function allocateContinuationPath({ parentRecord = {}, targetId = '', tar
   const explicitPath = canonicalLocalPath(options.path || options.draftPath || '');
   if (explicitPath) return { path: uniqueTransitionPath(explicitPath, occupied), policy: pathPolicyForExplicit(explicitPath) };
   const parentPath = externalWebArtifactUrl(parentRecord) ? '' : canonicalLocalPath(parentRecord.path || parentRecord.sourcePath || parentRecord.sourceTarget?.sourceArtifactPath || '');
-  const parentDir = parentDirectory(parentPath) || '.topics';
-  const requestedDir = canonicalLocalPath(options.targetDirectory || options.directory || '');
-  const targetDir = requestedDir || parentDir;
+  const parentDir = parentDirectory(parentPath);
+  const requestedRaw = String(options.targetDirectory || options.directory || '').trim();
+  const requestedExplicit = Boolean(requestedRaw);
+  const requestedDir = requestedRaw === '.' ? '' : canonicalLocalPath(requestedRaw);
+  const targetDir = requestedExplicit ? requestedDir : (parentDir || '.topics');
   const parentPrefix = lineagePrefixFromPath(parentPath);
   const labelSlug = slugify(title || parentRecord.title || targetLabel || 'continuation');
   const targetSlug = slugify(targetLabel || labelFromSchemaId(targetId) || 'leaf');
   const extension = '.trace.md';
-  const directoryLocal = Boolean(requestedDir && requestedDir !== parentDir);
+  const directoryLocal = Boolean(requestedExplicit && requestedDir !== parentDir);
   const policy = {
     schema: 'tiinex.transition.path-policy.v1',
     kind: directoryLocal ? 'directory-local-continuation' : 'same-parent-directory',
     parentDirectory: parentDir,
-    targetDirectory: targetDir,
+    targetDirectory: requestedExplicit && requestedDir === '' ? '.' : targetDir,
     parentPath,
     parentLineagePrefix: parentPrefix,
     labelSlug,
@@ -196,14 +198,16 @@ export function allocateDirectoryArtifactPath({ targetDirectory = '.topics', tar
   const occupied = existingTransitionPaths(options);
   const explicitPath = canonicalLocalPath(options.path || options.draftPath || '');
   if (explicitPath) return { path: uniqueTransitionPath(explicitPath, occupied), policy: pathPolicyForExplicit(explicitPath) };
-  const dir = canonicalLocalPath(targetDirectory || '.topics') || '.topics';
+  const targetRaw = String(targetDirectory ?? '').trim();
+  const explicitRoot = targetRaw === '.';
+  const dir = explicitRoot ? '' : (canonicalLocalPath(targetRaw || '.topics') || '.topics');
   const labelSlug = slugify(title || targetLabel || labelFromSchemaId(targetId) || 'artifact');
   const targetSlug = slugify(targetLabel || labelFromSchemaId(targetId) || 'artifact');
   const extension = '.trace.md';
   const policy = {
     schema: 'tiinex.transition.path-policy.v1',
     kind: 'directory-local-root',
-    targetDirectory: dir,
+    targetDirectory: explicitRoot ? '.' : dir,
     labelSlug,
     targetSlug,
     extension,
@@ -214,20 +218,25 @@ export function allocateDirectoryArtifactPath({ targetDirectory = '.topics', tar
 
 function pathFromPolicy(policy = {}, occupied = new Set()) {
   const kind = String(policy.kind || '').trim();
-  const dir = canonicalLocalPath(policy.targetDirectory || policy.parentDirectory || '.topics') || '.topics';
+  const hasTargetDirectory = Object.prototype.hasOwnProperty.call(policy, 'targetDirectory');
+  const hasParentDirectory = Object.prototype.hasOwnProperty.call(policy, 'parentDirectory');
+  const rawDirectory = hasTargetDirectory ? String(policy.targetDirectory ?? '') : hasParentDirectory ? String(policy.parentDirectory ?? '') : '.topics';
+  const rootDirectory = rawDirectory === '.' || ((hasTargetDirectory || hasParentDirectory) && rawDirectory === '');
+  const dir = rootDirectory ? '' : (canonicalLocalPath(rawDirectory || '.topics') || '.topics');
+  const pathPrefix = dir ? `${dir}/` : '';
   const extension = String(policy.extension || '.trace.md').startsWith('.') ? String(policy.extension || '.trace.md') : `.${policy.extension}`;
   const labelSlug = slugify(policy.labelSlug || 'continuation');
   const targetSlug = slugify(policy.targetSlug || 'leaf');
   const parentPrefix = String(policy.parentLineagePrefix || '').trim();
   if (kind === 'directory-local-root' || kind === 'directory-local-continuation') {
     const rootPrefix = nextDirectoryRootLineagePrefix(dir, occupied);
-    return `${dir}/${rootPrefix}-${labelSlug}.${extension.replace(/^\./, '')}`;
+    return `${pathPrefix}${rootPrefix}-${labelSlug}.${extension.replace(/^\./, '')}`;
   }
   if (parentPrefix) {
     const childPrefix = nextChildLineagePrefix(parentPrefix, dir, occupied);
-    return `${dir}/${childPrefix}-${labelSlug}.${extension.replace(/^\./, '')}`;
+    return `${pathPrefix}${childPrefix}-${labelSlug}.${extension.replace(/^\./, '')}`;
   }
-  return uniqueTransitionPath(`${dir}/${labelSlug}--${targetSlug}${extension}`, occupied);
+  return uniqueTransitionPath(`${pathPrefix}${labelSlug}--${targetSlug}${extension}`, occupied);
 }
 
 function pathPolicyForExplicit(path = '') {

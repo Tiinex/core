@@ -4,7 +4,8 @@ import { normalizePortableInput } from '../input/portable.input.js';
 import { portableFinding, summarizePortableFindings } from '../findings.js';
 import { planPortableArtifact } from '../schema/schema.guide.js';
 import { indexPortableLoadedParentRecords, projectPortableLoadedParentRecord, resolvePortableLoadedParentReference } from './loaded.parent.js';
-import { allocateContinuationPath, allocateRootArtifactPath } from '../../../transitions/record.transitions.js';
+import { allocateContinuationPath, allocateDirectoryArtifactPath, allocateRootArtifactPath } from '../../../transitions/record.transitions.js';
+import { normalizePortableParentRecord, qualifyPortableExactParent } from '../draft/draft.exact.js';
 
 export const PORTABLE_EPISTEMIC_PLAN_SCHEMA_ID = 'tiinex.portable.epistemic-materialization-plan.v1';
 
@@ -69,18 +70,20 @@ function planProposal({ proposal, index, proposals, proposalIds, loadedIndex, ma
   const clarificationNeeds = [];
   const contract = buildArtifactCreationContract({ schemaId: proposal.schemaId, transitionType: proposal.parentRef ? 'continue-from-record' : 'create-artifact' });
   const artifactPlan = planPortableArtifact({ ...material, schemaId: proposal.schemaId, task: proposal.parentRef ? 'continue' : 'create', values: proposal.values || {}, inputs: proposal.values || {} }, options);
-  const parent = resolveParentReference(proposal.parentRef, { loadedIndex, proposalIds, proposalIndex: index, proposals });
+  const parent = resolveParentReference(proposal.parentRef, { loadedIndex, proposalIds, proposalIndex: index, proposals, suppliedParentRecord: proposal.parentRecord });
   const parentForAllocation = parent.status === 'resolved'
     ? parent.kind === 'proposal'
       ? plannedParentRecord(plannedById.get(parent.parent?.proposalId || ''))
       : parent.parent
     : null;
-  const allocationOptions = Object.freeze({ existingPaths: Object.freeze([...occupiedPaths]), path: proposal.path || '' });
+  const allocationOptions = Object.freeze({ existingPaths: Object.freeze([...occupiedPaths]), path: proposal.path || '', targetDirectory: proposal.targetDirectory || '' });
   const allocated = proposal.parentRef && parentForAllocation
     ? allocateContinuationPath({ parentRecord: parentForAllocation, targetId: proposal.schemaId, targetLabel: proposal.schemaId, title: proposal.title || proposal.summary || proposal.id }, allocationOptions)
-    : !proposal.parentRef
-      ? allocateRootArtifactPath({ targetId: proposal.schemaId, targetLabel: proposal.schemaId, title: proposal.title || proposal.summary || proposal.id }, allocationOptions)
-      : Object.freeze({ path: proposal.path || '', policy: Object.freeze({}) });
+    : !proposal.parentRef && proposal.targetDirectory
+      ? allocateDirectoryArtifactPath({ targetDirectory: proposal.targetDirectory, targetId: proposal.schemaId, targetLabel: proposal.schemaId, title: proposal.title || proposal.summary || proposal.id }, allocationOptions)
+      : !proposal.parentRef
+        ? allocateRootArtifactPath({ targetId: proposal.schemaId, targetLabel: proposal.schemaId, title: proposal.title || proposal.summary || proposal.id }, allocationOptions)
+        : Object.freeze({ path: proposal.path || '', policy: Object.freeze({}) });
 
   if (!proposal.schemaId) {
     findings.push(portableFinding('error', 'portable.materialization.schema.required', 'Each proposal must declare an implemented schema id; schema meaning is never inferred by the writer.', { proposalId: proposal.id }));
@@ -130,6 +133,7 @@ function planProposal({ proposal, index, proposals, proposalIds, loadedIndex, ma
     rationale: proposal.rationale,
     evidenceRefs: proposal.evidenceRefs,
     parentRef: proposal.parentRef,
+    targetDirectory: proposal.targetDirectory,
     parent: parent.status === 'resolved' ? parent.parent : null,
     parentKind: parent.status === 'resolved' ? parent.kind : '',
     creationContract: contract,
@@ -148,6 +152,8 @@ function normalizeProposals(value) {
       mode: clean(raw.mode || ''),
       schemaId: clean(raw.schemaId || raw.schema || ''),
       parentRef: exact(raw.parentRef ?? raw.parent ?? ''),
+      parentRecord: raw.parentRecord && typeof raw.parentRecord === 'object' ? Object.freeze(clone(raw.parentRecord)) : null,
+      targetDirectory: clean(raw.targetDirectory || raw.directory || ''),
       path: clean(raw.path || ''),
       title: clean(raw.title || ''),
       summary: clean(raw.summary || ''),
@@ -168,9 +174,17 @@ function plannedParentRecord(entry = null) {
   return Object.freeze({ id: entry.id || '', path: entry.path, schemaId: entry.schemaId || '', title: entry.title || entry.summary || entry.id || '' });
 }
 
-function resolveParentReference(ref, { loadedIndex, proposalIds, proposalIndex, proposals }) {
+function resolveParentReference(ref, { loadedIndex, proposalIds, proposalIndex, proposals, suppliedParentRecord = null }) {
   if (!ref) return { status: 'none', kind: 'none', parent: null };
   const reference = exact(ref);
+  if (suppliedParentRecord && typeof suppliedParentRecord === 'object') {
+    const normalized = normalizePortableParentRecord(suppliedParentRecord);
+    const declared = new Set([exact(normalized.id), exact(normalized.path)].filter(Boolean));
+    if (!declared.has(reference)) return { status: 'mismatch', code: 'portable.materialization.parent.supplied-reference-mismatch', message: 'The supplied Parent record does not identify the declared Parent reference.', candidates: [...declared] };
+    const qualification = qualifyPortableExactParent(normalized, 'continue-from-record');
+    if (!['qualified', 'qualified-local-continuity'].includes(String(qualification.state || ''))) return { status: 'unqualified', code: `portable.materialization.parent.supplied-${qualification.reason || 'unqualified'}`, message: 'The supplied Parent record is not qualified for continuation authoring.', candidates: [] };
+    return { status: 'resolved', kind: 'supplied-record', parent: qualification.snapshot };
+  }
   const proposalRef = reference.startsWith('proposal:') ? reference.slice('proposal:'.length) : proposalIds.has(reference) ? reference : '';
   if (proposalRef) {
     const targetIndex = proposals.findIndex((proposal) => proposal.id === proposalRef);
