@@ -76,6 +76,24 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
   diagnostics.push(...referenceResolution.diagnostics);
   actions.push(...referenceResolution.actions);
 
+  const lineageArtifact = (lineageInspection?.artifacts || []).find((item) => norm(item?.path || '') === recordPath) || null;
+  const parentIntegrityRepair = deterministicParentIntegrityRepair(markdown, lineageArtifact);
+  const parentRepairQualification = parentIntegrityRepair.state === 'ready'
+    ? qualifyReplacementAgainstSharedGuardrails(record, records, parentIntegrityRepair.markdown, {
+      allowExistingWarningCodes: sharedFindings.filter((item) => item.severity === 'warning').map((item) => String(item.code || ''))
+    })
+    : { state: 'unavailable' };
+  if (parentIntegrityRepair.state === 'ready' && parentIntegrityRepair.markdown !== markdown && parentRepairQualification.state === 'qualified') actions.push(freeze({
+    id: 'refresh-parent-integrity-and-self-seal',
+    title: 'Refresh Tiinex Parent integrity and self seal',
+    kind: 'replace-document',
+    qualification: 'deterministic-shared-core',
+    sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
+    replacementMarkdown: parentIntegrityRepair.markdown,
+    diagnosticCodes: ['portable.lineage-integrity.parent-target-mismatch', 'integrity.c14n-v2.mismatch', 'portable.lineage-integrity.child-self-mismatch'],
+    boundary: 'Refreshes only an existing Parent integrity digest whose declared locator already matches the exact resolved Parent and whose verified Parent self digest is available locally; the focused artifact is resealed and the action is withheld when loaded descendants would become inconsistent.'
+  }));
+
   const integrityRepair = deterministicIntegrityHygieneRepair(markdown, sharedFindings);
   const repairQualification = integrityRepair.state === 'ready'
     ? qualifyReplacementAgainstSharedGuardrails(record, records, integrityRepair.markdown, {
@@ -394,9 +412,12 @@ export function locateFindingLine(finding = {}, markdown = '') {
   const code = String(finding.code || '');
 
   // Integrity findings often carry the generic field name `Value`. That field
-  // appears once per integrity relation, so resolving `field:Value` first would
-  // incorrectly anchor a self-integrity finding on the first Parent digest.
-  // Resolve semantically-owned integrity locations before generic field lookup.
+  // appears once per integrity relation, so resolve semantically-owned relation
+  // locations before generic field lookup.
+  if (code === 'portable.lineage-integrity.parent-target-mismatch') {
+    const parentValueIndex = primaryParentIntegrityValueLine(lines);
+    if (parentValueIndex >= 0) return locatedLine(lines, parentValueIndex, 'deterministic', 'continuity-integrity-primary-parent-value');
+  }
   if (code === 'integrity.c14n-v2.mismatch' || code === 'integrity.c14n-v2.ambiguous' || code === 'portable.lineage-integrity.child-self-mismatch' || code === 'portable.lineage-integrity.child-self-unavailable') {
     const selfValueIndex = primarySelfIntegrityValueLine(lines);
     if (selfValueIndex >= 0) return locatedLine(lines, selfValueIndex, 'deterministic', 'continuity-integrity-primary-self-value');
@@ -451,6 +472,24 @@ export function locateFindingLine(finding = {}, markdown = '') {
   return freeze({ state: 'unresolved', line: null, sourceRange: null, basis: 'shared-finding-has-no-deterministic-line-evidence' });
 }
 
+function primaryParentIntegrityValueLine(lines = []) {
+  const headingIndex = lines.findIndex((line) => String(line || '').trim() === '# Continuity Integrity');
+  if (headingIndex < 0) return -1;
+  let parentTowards = -1;
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const line = String(lines[index] || '');
+    if (index > headingIndex + 1 && /^#\s+/.test(line)) break;
+    const towards = line.match(/^\s+-\s+Towards\s*:\s*(.+?)\s*$/i);
+    if (towards) {
+      parentTowards = String(towards[1] || '').trim().toLowerCase() === 'self' ? -1 : index;
+      continue;
+    }
+    if (parentTowards >= 0 && /^\s+-\s+Value\s*:/.test(line)) return index;
+    if (parentTowards >= 0 && /^-\s+/.test(line)) parentTowards = -1;
+  }
+  return -1;
+}
+
 function primarySelfIntegrityValueLine(lines = []) {
   const headingIndex = lines.findIndex((line) => String(line || '').trim() === '# Continuity Integrity');
   if (headingIndex < 0) return -1;
@@ -463,6 +502,43 @@ function primarySelfIntegrityValueLine(lines = []) {
     if (selfTowards >= 0 && /^-\s+/.test(line)) selfTowards = -1;
   }
   return -1;
+}
+
+function deterministicParentIntegrityRepair(markdown = '', artifact = null) {
+  const source = String(markdown || '');
+  if (!source || !artifact || artifact.state !== 'parent-target-mismatch') return freeze({ state: 'unavailable' });
+  if (String(artifact?.parentTarget?.reason || '') !== 'target-self-digest-mismatch') return freeze({ state: 'unavailable' });
+  if (artifact?.parentAvailability?.state !== 'resolved' || artifact?.parentPrimarySelf?.state !== 'verified') return freeze({ state: 'unavailable' });
+  const declaredTarget = String(artifact?.parentTarget?.declaredTarget || '').trim();
+  const expectedTarget = String(artifact?.exactParent?.expectedIntegrityTarget || '').trim();
+  const digest = String(artifact?.repairCandidate?.candidateTargetDigest || artifact?.parentPrimarySelf?.value || '').trim();
+  if (!declaredTarget || !expectedTarget || declaredTarget !== expectedTarget || !digest) return freeze({ state: 'unavailable' });
+
+  const lines = source.replace(/\r\n?/g, '\n').split('\n');
+  const headingIndex = lines.findIndex((line) => String(line || '').trim() === '# Continuity Integrity');
+  if (headingIndex < 0) return freeze({ state: 'unavailable' });
+  let targetMatched = false;
+  let changed = false;
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const line = String(lines[index] || '');
+    if (index > headingIndex + 1 && /^#\s+/.test(line)) break;
+    const towards = line.match(/^\s+-\s+Towards\s*:\s*(?:\[[^\]]+\]\(([^)]+)\)|(\S.*))\s*$/i);
+    if (towards) {
+      const value = String(towards[1] || towards[2] || '').trim();
+      targetMatched = value === declaredTarget;
+      continue;
+    }
+    if (targetMatched && /^(\s+-\s+Value\s*:\s*)(.*)$/.test(line)) {
+      const match = line.match(/^(\s+-\s+Value\s*:\s*)(.*)$/);
+      lines[index] = `${match?.[1] || '  - Value: '}${digest}`;
+      changed = String(match?.[2] || '').trim() !== digest;
+      break;
+    }
+  }
+  if (!changed) return freeze({ state: 'unavailable' });
+  const sealed = sealC14nV2Self(lines.join('\n'));
+  if (sealed.state !== 'sealed' && sealed.state !== 'unchanged') return freeze({ state: 'unavailable' });
+  return freeze({ state: 'ready', markdown: String(sealed.markdown || lines.join('\n')) });
 }
 
 function deterministicIntegrityHygieneRepair(markdown = '', findings = []) {

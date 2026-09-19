@@ -179,6 +179,39 @@ test('editor assistance locates child self mismatch on the primary self Value an
   assert.equal(repaired.documents[0].diagnostics.some((item) => item.code === 'integrity.c14n-v2.mismatch' || item.code === 'portable.lineage-integrity.child-self-mismatch'), false);
 });
 
+test('editor assistance prioritizes a mutated Parent digest on the Parent Value and offers a deterministic parent+self repair', () => {
+  const parentPath = '.topics/source/001-parent.trace.md';
+  const childPath = '.topics/target/001-parent-digest-child.trace.md';
+  const parent = parentMarkdown(parentPath);
+  const projected = projectPortableAuthoringParent({ records: [{ path: parentPath, markdown: parent, sourceMode: 'portable-node-local' }] });
+  assert.equal(projected.status, 'ready');
+  const created = createPortableLocalDraft({
+    schemaId: TOPIC, transitionType: 'continue-from-record', path: childPath, parent: projected.parentRecord,
+    values: VALUES, title: 'Child', materials: []
+  });
+  assert.equal(created.status, 'created-clean');
+  const lines = created.draft.markdown.split(/\r?\n/);
+  const parentTowards = lines.findIndex((line) => /^\s+-\s+Towards:\s*\[[^\]]+\]\([^)]+\)\s*$/.test(line));
+  const parentValue = lines.findIndex((line, index) => index > parentTowards && /^\s+-\s+Value\s*:/.test(line));
+  const selfTowards = lines.findIndex((line) => /^\s+-\s+Towards:\s*self\s*$/.test(line));
+  const selfValue = lines.findIndex((line, index) => index > selfTowards && /^\s+-\s+Value\s*:/.test(line));
+  assert.ok(parentValue >= 0 && selfValue > parentValue);
+  lines[parentValue] = lines[parentValue].replace(/Value\s*:\s*.*/, 'Value: deliberately-wrong-parent-digest');
+  const mutated = lines.join('\n');
+  const assistance = projectPortableEditorAssistance({ records: [{ path: parentPath, markdown: parent }, { path: childPath, markdown: mutated }], focusPath: childPath });
+  const doc = assistance.documents[0];
+  const parentDiagnostic = doc.diagnostics.find((item) => item.code === 'portable.lineage-integrity.parent-target-mismatch');
+  assert.equal(parentDiagnostic?.line, parentValue + 1);
+  assert.equal(parentDiagnostic?.locationBasis, 'continuity-integrity-primary-parent-value');
+  const selfDiagnostic = doc.diagnostics.find((item) => item.code === 'integrity.c14n-v2.mismatch');
+  assert.equal(selfDiagnostic?.line, selfValue + 1, 'the consequential stale self seal remains owned by the self Value');
+  const action = doc.actions.find((item) => item.id === 'refresh-parent-integrity-and-self-seal');
+  assert.ok(action, 'exact loaded Parent bytes should make the Parent digest deterministic to repair');
+  assert.ok(action.diagnosticCodes.includes('portable.lineage-integrity.parent-target-mismatch'));
+  const repaired = projectPortableEditorAssistance({ records: [{ path: parentPath, markdown: parent }, { path: childPath, markdown: action.replacementMarkdown }], focusPath: childPath });
+  assert.equal(repaired.documents[0].diagnostics.some((item) => item.code === 'portable.lineage-integrity.parent-target-mismatch' || item.code === 'integrity.c14n-v2.mismatch' || item.code === 'portable.lineage-integrity.child-self-mismatch'), false);
+});
+
 test('self-integrity diagnostic ignores generic field:Value evidence and anchors the Towards:self digest', () => {
   const markdown = `# Continuity Context
 

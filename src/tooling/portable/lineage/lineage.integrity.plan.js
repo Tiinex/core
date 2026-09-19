@@ -223,11 +223,15 @@ function choosePrimaryState({ parentResolution, parentSchema, parentPrimarySelf,
     || consider(parentSchema.state !== 'verified', 'parent-schema-unavailable', parentSchema.reason)
     || consider(parentPrimarySelf.state === 'mismatch', 'parent-self-mismatch', parentPrimarySelf.reason)
     || consider(parentPrimarySelf.state !== 'verified', 'parent-self-unavailable', parentPrimarySelf.reason)
-    || consider(childSelf.state === 'mismatch', 'child-self-mismatch', childSelf.reason)
-    || consider(childSelf.state !== 'verified', 'child-self-unavailable', childSelf.reason)
+    // Parent-target corruption is more specific than the consequential child-self
+    // mismatch caused by changing footer bytes. Surface the owned Parent relation
+    // first so editors can locate and repair the actual mutated digest.
     || consider(targetInspection.state === 'missing', 'parent-target-missing', targetInspection.reason)
     || consider(targetInspection.state === 'mismatch', 'parent-target-mismatch', targetInspection.reason)
-    || consider(targetInspection.state !== 'verified', targetInspection.state === 'ambiguous' ? 'parent-target-ambiguous' : 'unsupported', targetInspection.reason)
+    || consider(targetInspection.state === 'ambiguous', 'parent-target-ambiguous', targetInspection.reason)
+    || consider(childSelf.state === 'mismatch', 'child-self-mismatch', childSelf.reason)
+    || consider(childSelf.state !== 'verified', 'child-self-unavailable', childSelf.reason)
+    || consider(targetInspection.state !== 'verified', 'unsupported', targetInspection.reason)
     || consider(publicationOrigin.state === 'contradictory', 'publication-origin-contradictory', publicationOrigin.reason)
     || consider(publicationOrigin.state === 'stale', 'publication-origin-stale', publicationOrigin.reason)
     || consider(publicationOrigin.state === 'unresolved', 'publication-origin-unresolved', publicationOrigin.reason)
