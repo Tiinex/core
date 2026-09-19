@@ -30,7 +30,26 @@ export function deriveHandoffSiblingAllocation({ parentInspection = null, select
     workspaceId: String(route.workspaceId || '').trim(),
     workspaceRelativeHandoffPath: String(route.workspaceRelativeHandoffPath || '').trim()
   }));
-  if (!routes.length) return blocked('qualified-parent-route-topology-empty');
+  if (!routes.length) {
+    const siblingIndex = 1;
+    if (explicit && explicit !== siblingIndex) return blocked('explicit-sibling-index-conflicts-with-qualified-pointerless-topology', { expectedSiblingIndex: siblingIndex });
+    return freeze({
+      state: 'qualified',
+      siblingIndex,
+      childDimension: parentDimension ? `${String(parentDimension).trim()}-${siblingIndex}` : '',
+      allocationMode: 'qualified-parent-pointerless-default',
+      explicitOverride: explicit ? 'matched-derived-value' : 'not-supplied',
+      reasonCode: '',
+      provenance: {
+        ...provenanceBase({ parentPackagePath, parentPackageSha256, parentDimension, explicitSiblingIndex: explicit }),
+        basis: 'qualified-parent-pointerless-default',
+        routeOrdinal: siblingIndex,
+        qualifiedRouteCount: 0,
+        pointerOrder: []
+      },
+      boundary: allocationBoundary()
+    });
+  }
 
   const qualified = [];
   const seenDimensions = new Set();

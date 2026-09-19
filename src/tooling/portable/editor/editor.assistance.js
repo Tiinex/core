@@ -5,6 +5,7 @@ import { integrityMethodReferenceAuthorityForCreation } from '../../../integrity
 import { inspectPortableLineageIntegrity } from '../lineage/lineage.integrity.plan.js';
 import { portableFinding } from '../findings.js';
 import { qualifyTiinexRouteArtifact } from '../handoff/routeArtifactConformance.js';
+import { classifyParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
 
 export const PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID = 'tiinex.portable.editor-assistance.v1';
 
@@ -49,6 +50,28 @@ function projectDocument(record = {}, records = [], lineageInspection = null) {
     diagnosticCodes: workspacePackagingRepair.diagnosticCodes,
     boundary: 'Repairs only a tiinex.workspace.v1 artifact whose replacement independently qualifies through the same exact registered Workspace contract and c14n-v2 self-integrity requirements used by Handoff package manufacture. Existing resolver-capable Current Schema references are preserved; permalink refresh is a separate resolution operation and must not be inferred from integrity repair.'
   }));
+  const referenceRepair = deterministicReferenceHygieneRepair(record, audit, markdown);
+  const referenceQualification = referenceRepair.state === 'ready'
+    ? qualifyReplacementAgainstSharedGuardrails(record, records, referenceRepair.markdown, {
+      allowQualifiedExternalParentUnresolved: true,
+      allowExistingWarningCodes: (audit.findings || []).filter((item) => item.severity === 'warning').map((item) => String(item.code || ''))
+    })
+    : { state: 'unavailable' };
+  if (referenceRepair.state === 'ready' && referenceRepair.markdown !== markdown && referenceQualification.state === 'qualified') actions.push(freeze({
+    id: 'repair-qualified-references-and-self-integrity',
+    title: referenceRepair.parentReferenceChanged && referenceRepair.schemaReferenceChanged
+      ? 'Repair Tiinex Parent/schema references and self integrity'
+      : referenceRepair.parentReferenceChanged
+        ? 'Repair Tiinex Parent references and self integrity'
+        : 'Repair Tiinex schema reference and self integrity',
+    kind: 'replace-document',
+    qualification: 'deterministic-shared-core',
+    sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
+    replacementMarkdown: referenceRepair.markdown,
+    diagnosticCodes: referenceRepair.diagnosticCodes,
+    boundary: 'Repairs only deterministically malformed Workspace-qualified Parent recovery locators and/or a bare Current Schema id when exact qualified current-schema source authority exists; reseals self integrity and exposes the replacement only after shared audit and loaded-descendant guardrails re-qualify it. External Parent availability is not invented.'
+  }));
+
   const integrityRepair = deterministicIntegrityHygieneRepair(markdown, audit.findings || []);
   const repairQualification = integrityRepair.state === 'ready'
     ? qualifyReplacementAgainstSharedGuardrails(record, records, integrityRepair.markdown)
@@ -117,23 +140,117 @@ function deterministicWorkspacePackagingRepair(record = {}, audit = {}, markdown
   return freeze({ state: 'ready', markdown: candidate, schemaReferenceChanged, diagnosticCodes });
 }
 
-function qualifyReplacementAgainstSharedGuardrails(record = {}, records = [], replacementMarkdown = '') {
+function qualifyReplacementAgainstSharedGuardrails(record = {}, records = [], replacementMarkdown = '', options = {}) {
   const focusPath = norm(record.path || record.id || '');
   if (!focusPath || !replacementMarkdown) return freeze({ state: 'unavailable', reason: 'replacement-or-focus-unavailable' });
   const replacedRecords = records.map((item) => norm(item.path || item.id || '') === focusPath ? { ...item, markdown: replacementMarkdown } : item);
   const replacementRecord = replacedRecords.find((item) => norm(item.path || item.id || '') === focusPath);
   if (!replacementRecord) return freeze({ state: 'unavailable', reason: 'focused-record-unavailable' });
   const replacementAudit = auditPortableRecord(replacementRecord, { requireExactSchemaAuthority: true });
-  const auditBlockers = [...(replacementAudit.findings || [])].filter((item) => item.severity === 'error' || item.severity === 'warning');
+  const allowedWarnings = new Set((options.allowExistingWarningCodes || []).map((item) => String(item || '')));
+  const auditBlockers = [...(replacementAudit.findings || [])].filter((item) => {
+    if (item.severity === 'error') return true;
+    if (item.severity !== 'warning') return false;
+    return !allowedWarnings.has(String(item.code || ''));
+  });
   if (auditBlockers.length) return freeze({ state: 'blocked', reason: 'replacement-shared-audit-not-clean', blockerCodes: auditBlockers.map((item) => String(item.code || '')) });
 
   const before = inspectPortableLineageIntegrity({ records });
   const after = inspectPortableLineageIntegrity({ records: replacedRecords });
   const beforeFocus = (before.artifacts || []).find((item) => norm(item.path || '') === focusPath);
   const affectedPaths = new Set([focusPath, ...((beforeFocus?.downstreamDescendants || []).map((item) => norm(item.path || '')).filter(Boolean))]);
-  const lineageBlockers = (after.artifacts || []).filter((item) => affectedPaths.has(norm(item.path || '')) && item.state !== 'healthy');
+  const lineageBlockers = (after.artifacts || []).filter((item) => {
+    if (!affectedPaths.has(norm(item.path || '')) || item.state === 'healthy') return false;
+    if (options.allowQualifiedExternalParentUnresolved === true && norm(item.path || '') === focusPath && item.state === 'parent-unresolved' && hasQualifiedWorkspaceParentReference(replacementMarkdown)) return false;
+    return true;
+  });
   if (lineageBlockers.length) return freeze({ state: 'blocked', reason: 'replacement-shared-lineage-not-clean', blockers: lineageBlockers.map((item) => ({ path: item.path, state: item.state })) });
   return freeze({ state: 'qualified', affectedPaths: [...affectedPaths] });
+}
+
+function deterministicReferenceHygieneRepair(record = {}, audit = {}, markdown = '') {
+  const source = String(markdown || '');
+  if (!source) return freeze({ state: 'unavailable' });
+  let candidate = source;
+  let parentReferenceChanged = false;
+  let schemaReferenceChanged = false;
+  const diagnosticCodes = [];
+
+  const lines = candidate.replace(/\r\n?/g, '\n').split('\n');
+  const parentStart = lines.findIndex((line) => /^\s*-\s+Parent\s*$/.test(line));
+  if (parentStart >= 0) {
+    let parentEnd = lines.length;
+    for (let index = parentStart + 1; index < lines.length; index += 1) {
+      if (/^-\s+\S/.test(lines[index])) { parentEnd = index; break; }
+    }
+    for (let index = parentStart + 1; index < parentEnd; index += 1) {
+      lines[index] = lines[index].replace(/\]\(([^)]+::[^)]+)\)/g, (whole, target) => {
+        const normalized = normalizeMalformedWorkspaceQualifiedTarget(target);
+        if (!normalized || normalized === target) return whole;
+        parentReferenceChanged = true;
+        return `](${normalized})`;
+      });
+    }
+  }
+  if (parentReferenceChanged) {
+    candidate = lines.join('\n');
+    const integrityLines = candidate.replace(/\r\n?/g, '\n').split('\n');
+    const integrityStart = integrityLines.findIndex((line) => line.trim() === '# Continuity Integrity');
+    if (integrityStart >= 0) {
+      for (let index = integrityStart + 1; index < integrityLines.length; index += 1) {
+        integrityLines[index] = integrityLines[index].replace(/\]\(([^)]+::[^)]+)\)/g, (whole, target) => {
+          const normalized = normalizeMalformedWorkspaceQualifiedTarget(target);
+          return normalized && normalized !== target ? `](${normalized})` : whole;
+        });
+      }
+      candidate = integrityLines.join('\n');
+    }
+    diagnosticCodes.push('root.parent.recovery.workspace-qualified.malformed', 'portable.lineage-integrity.parent-unresolved');
+  }
+
+  const exactTarget = String(audit?.schemaValidationAuthority?.currentReference?.target || '').trim();
+  const schemaId = String(audit?.schemaId || '').trim();
+  const schemaWarning = (audit?.findings || []).some((item) => String(item?.code || '') === 'schema.reference.exact-target-omitted');
+  if (schemaWarning && schemaId && exactTarget && audit?.schemaValidationAuthority?.currentReference?.state === 'qualified') {
+    const schemaLines = candidate.replace(/\r\n?/g, '\n').split('\n');
+    const index = schemaLines.findIndex((line) => /^\s*-\s+Current Schema:\s*/.test(line));
+    if (index >= 0) {
+      const match = schemaLines[index].match(/^(\s*-\s+Current Schema:\s*)([^\s].*)$/);
+      const raw = String(match?.[2] || '').trim();
+      if (match && raw === schemaId) {
+        schemaLines[index] = `${match[1]}[${schemaId}](${exactTarget})`;
+        candidate = schemaLines.join('\n');
+        schemaReferenceChanged = true;
+        diagnosticCodes.push('schema.reference.exact-target-omitted');
+      }
+    }
+  }
+
+  if (!parentReferenceChanged && !schemaReferenceChanged) return freeze({ state: 'unavailable' });
+  const sealed = sealC14nV2Self(candidate);
+  if (sealed.state !== 'sealed' && sealed.state !== 'unchanged') return freeze({ state: 'unavailable' });
+  return freeze({ state: 'ready', markdown: String(sealed.markdown || candidate), parentReferenceChanged, schemaReferenceChanged, diagnosticCodes: [...new Set(diagnosticCodes)] });
+}
+
+function normalizeMalformedWorkspaceQualifiedTarget(value = '') {
+  const raw = String(value || '').trim();
+  if (classifyParentRecoveryReference(raw).kind !== 'malformed-workspace-qualified') return raw;
+  const stripped = raw.replace(/^(?:\.\.\/)+/, '').replace(/^\.\//, '');
+  return classifyParentRecoveryReference(stripped).kind === 'workspace-qualified' ? stripped : raw;
+}
+
+function hasQualifiedWorkspaceParentReference(markdown = '') {
+  const source = String(markdown || '');
+  const parentStart = source.split(/\r?\n/).findIndex((line) => /^\s*-\s+Parent\s*$/.test(line));
+  if (parentStart < 0) return false;
+  const lines = source.split(/\r?\n/);
+  let parentEnd = lines.length;
+  for (let index = parentStart + 1; index < lines.length; index += 1) if (/^-\s+\S/.test(lines[index])) { parentEnd = index; break; }
+  const targets = [];
+  for (let index = parentStart + 1; index < parentEnd; index += 1) {
+    for (const match of lines[index].matchAll(/\]\(([^)]+)\)/g)) targets.push(String(match[1] || ''));
+  }
+  return targets.some((target) => classifyParentRecoveryReference(target).kind === 'workspace-qualified');
 }
 
 function projectDiagnostic(finding = {}, markdown = '') {

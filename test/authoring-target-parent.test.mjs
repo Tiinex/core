@@ -5,6 +5,8 @@ import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.ren
 import { projectPortableAuthoringParent } from '../src/tooling/portable/editor/authoring.parent.js';
 import { prepareEpistemicMaterialization } from '../src/tooling/portable/materialization/epistemic.plan.js';
 import { createPortableLocalDraft } from '../src/tooling/portable/draft/draft.create.js';
+import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
+import { projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
 
 const TOPIC = 'tiinex.topic.v1';
 const VALUES = Object.freeze({ 'Current Read': 'read', 'Design Direction': 'direction', 'Next Artifacts': 'next' });
@@ -86,4 +88,53 @@ test('Workspace-qualified Parent renders and validates clean while child stays i
   assert.equal(created.findings.some((item) => item.severity === 'error'), false);
   assert.match(created.draft.markdown, /- Trace: \[001-parent\.trace\.md\]\(business::\.topics\/source\/001-parent\.trace\.md\)/);
   assert.match(created.draft.markdown, /- Current Schema: \[tiinex\.topic\.v1\]\(https:\/\/github\.com\/Tiinex\/docs\/blob\//);
+});
+
+
+test('authoring Parent permits direct continuation from exact verified bytes carrying only historical malformed ancestor recovery debt', () => {
+  const rootMarkdown = parentMarkdown('.topics/source/001-parent.trace.md');
+  const externalReference = 'business::.topics/source/001-parent.trace.md';
+  const externalParent = projectPortableAuthoringParent({ reference: externalReference, records: [{ path: '001-parent.trace.md', markdown: rootMarkdown, sourceMode: 'portable-node-local' }] });
+  assert.equal(externalParent.status, 'ready');
+  const created = createPortableLocalDraft({
+    schemaId: TOPIC,
+    transitionType: 'continue-from-record',
+    path: '.topics/target/001-legacy-child.trace.md',
+    parent: externalParent.parentRecord,
+    values: VALUES,
+    title: 'Legacy Child',
+    materials: []
+  });
+  assert.equal(created.status, 'created-clean');
+  const legacy = sealC14nV2Self(created.draft.markdown.replaceAll('](business::', '](../../business::'));
+  assert.equal(legacy.state, 'sealed');
+
+  const projected = projectPortableAuthoringParent({
+    reference: '.topics/target/001-legacy-child.trace.md',
+    records: [{ path: '.topics/target/001-legacy-child.trace.md', markdown: legacy.markdown, sourceMode: 'portable-node-local' }]
+  });
+  assert.equal(projected.status, 'ready');
+  assert.equal(projected.parentRecord.path, '.topics/target/001-legacy-child.trace.md');
+  assert.equal(projected.findings.some((item) => item.code === 'portable.authoring-parent.historical-ancestor-recovery-debt'), true);
+});
+
+test('editor assistance offers deterministic repair for malformed Workspace-qualified Parent locators on a leaf', () => {
+  const rootMarkdown = parentMarkdown('.topics/source/001-parent.trace.md');
+  const externalParent = projectPortableAuthoringParent({ reference: 'business::.topics/source/001-parent.trace.md', records: [{ path: '001-parent.trace.md', markdown: rootMarkdown, sourceMode: 'portable-node-local' }] });
+  const created = createPortableLocalDraft({
+    schemaId: TOPIC,
+    transitionType: 'continue-from-record',
+    path: '.topics/target/001-legacy-child.trace.md',
+    parent: externalParent.parentRecord,
+    values: VALUES,
+    title: 'Legacy Child',
+    materials: []
+  });
+  const legacy = sealC14nV2Self(created.draft.markdown.replaceAll('](business::', '](../../business::'));
+  assert.equal(legacy.state, 'sealed');
+  const assistance = projectPortableEditorAssistance({ records: [{ path: '.topics/target/001-legacy-child.trace.md', markdown: legacy.markdown }], focusPath: '.topics/target/001-legacy-child.trace.md' });
+  const action = assistance.documents[0].actions.find((item) => item.id === 'repair-qualified-references-and-self-integrity');
+  assert.ok(action);
+  assert.doesNotMatch(action.replacementMarkdown, /\.\.\/\.\.\/business::/);
+  assert.match(action.replacementMarkdown, /\]\(business::\.topics\/source\/001-parent\.trace\.md\)/);
 });

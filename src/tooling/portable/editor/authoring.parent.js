@@ -2,6 +2,7 @@ import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { auditPortableRecord } from '../audit/audit.capability.js';
 import { classifyParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
 import { buildArtifactCreationContract } from '../../../schemas/creation.contracts.js';
+import { canonicalC14nV2SelfState } from '../../../integrity/integrity.c14nV2.js';
 
 export const PORTABLE_AUTHORING_PARENT_SCHEMA_ID = 'tiinex.portable.authoring-parent.v1';
 
@@ -12,8 +13,15 @@ export function projectPortableAuthoringParent(input = {}) {
   let parsed;
   try { parsed = parseArtifactMarkdown(record.markdown); }
   catch { return freeze({ schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID, status: 'blocked', parentRecord: null, findings: [{ severity: 'error', code: 'portable.authoring-parent.parse-failed', message: 'Selected Parent bytes are not a readable Tiinex artifact.' }], operationBoundary: boundary() }); }
-  const audit = auditPortableRecord({ ...record, title: parsed.title, schemaId: parsed.envelope?.current?.schema?.id, currentSchemaId: parsed.envelope?.current?.schema?.id, parent: parsed.envelope?.parent });
-  if (audit.status !== 'readable' || audit.qualification?.exact !== true || (audit.findings || []).some((item) => item.severity === 'error')) return freeze({ schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID, status: 'blocked', parentRecord: null, findings: [{ severity: 'error', code: 'portable.authoring-parent.unqualified', message: 'Selected Parent must pass exact shared audit before it can be used for native authoring.' }], operationBoundary: boundary() });
+  const audit = auditPortableRecord({ ...record, title: parsed.title, schemaId: parsed.envelope?.current?.schema?.id, currentSchemaId: parsed.envelope?.current?.schema?.id, parent: parsed.envelope?.parent }, { requireExactSchemaAuthority: true });
+  const auditErrors = (audit.findings || []).filter((item) => item.severity === 'error');
+  const historicalParentRecoveryDebt = auditErrors.length > 0 && auditErrors.every((item) => String(item.code || '') === 'root.parent.recovery.workspace-qualified.malformed');
+  const selfIntegrity = canonicalC14nV2SelfState(record.markdown || '');
+  const directParentUsableWithHistoricalDebt = historicalParentRecoveryDebt
+    && audit.qualification?.exact === true
+    && audit.schemaValidationAuthority?.state === 'qualified'
+    && selfIntegrity.state === 'verified';
+  if ((audit.status !== 'readable' && !directParentUsableWithHistoricalDebt) || audit.qualification?.exact !== true || (auditErrors.length && !directParentUsableWithHistoricalDebt)) return freeze({ schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID, status: 'blocked', parentRecord: null, findings: [{ severity: 'error', code: 'portable.authoring-parent.unqualified', message: 'Selected Parent must pass exact shared audit before it can be used for native authoring.' }], operationBoundary: boundary() });
   const schemaId = String(parsed.envelope?.current?.schema?.id || audit.schemaId || '');
   const schemaTarget = String(parsed.envelope?.current?.schema?.target || '');
   const createdAt = String(parsed.envelope?.current?.createdAt || audit.artifact?.createdAt || '');
@@ -36,9 +44,11 @@ export function projectPortableAuthoringParent(input = {}) {
       markdown: record.markdown, sourceMode: String(record.sourceMode || 'portable-node-local'),
       schemaReferenceAuthority
     },
-    findings: [],
+    findings: directParentUsableWithHistoricalDebt ? [{ severity: 'warning', code: 'portable.authoring-parent.historical-ancestor-recovery-debt', message: 'Selected Parent has historical malformed Workspace-qualified recovery references to its own ancestor. Direct child authoring is allowed from the Parent exact current bytes and verified self integrity; that ancestor debt is not repaired, inherited, or upgraded.' }] : [],
     operationBoundary: boundary(),
-    boundary: 'Projects exact supplied Parent bytes and declared current schema locator into shared draft-authoring input. A declared schema locator remains unresolved and is not upgraded to publication or canonical reference authority.'
+    boundary: directParentUsableWithHistoricalDebt
+      ? 'Projects exact supplied Parent current bytes for direct continuation while preserving unresolved historical ancestor-recovery debt on the Parent itself. The child does not inherit or repair that ancestor locator.'
+      : 'Projects exact supplied Parent bytes and declared current schema locator into shared draft-authoring input. A declared schema locator remains unresolved and is not upgraded to publication or canonical reference authority.'
   });
 }
 

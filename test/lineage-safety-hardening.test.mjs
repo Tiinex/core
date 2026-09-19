@@ -231,6 +231,24 @@ test('qualified selected Handoff Pointer topology derives dense non-Major carrie
   assert.deepEqual(b.provenance.pointerOrder.map((item) => item.routeId), ['route:a', 'route:b', 'route:c']);
 });
 
+test('qualified pointerless parent carrier derives first child as dense sibling -1 without inventing semantic route authority', () => {
+  const pointerless = { detected: true, status: 'valid', routes: [] };
+  const derived = deriveHandoffSiblingAllocation({ parentInspection: pointerless, parentDimension: '001', parentPackagePath: '/tmp/pointerless.zip', parentPackageSha256: 'a'.repeat(64) });
+  assert.equal(derived.state, 'qualified');
+  assert.equal(derived.siblingIndex, 1);
+  assert.equal(derived.childDimension, '001-1');
+  assert.equal(derived.allocationMode, 'qualified-parent-pointerless-default');
+  assert.equal(derived.provenance.qualifiedRouteCount, 0);
+  assert.deepEqual(derived.provenance.pointerOrder, []);
+
+  const matched = deriveHandoffSiblingAllocation({ parentInspection: pointerless, parentDimension: '001', explicitSiblingIndex: 1 });
+  assert.equal(matched.state, 'qualified');
+  assert.equal(matched.explicitOverride, 'matched-derived-value');
+  const conflict = deriveHandoffSiblingAllocation({ parentInspection: pointerless, parentDimension: '001', explicitSiblingIndex: 2 });
+  assert.equal(conflict.state, 'blocked');
+  assert.equal(conflict.reasonCode, 'explicit-sibling-index-conflicts-with-qualified-pointerless-topology');
+});
+
 test('parallel branches return by appending their own dense -1 continuation and prefix families remain independent', () => {
   assert.equal(continueHandoffCarrierLineage({ dimension: '001-1' }, 1).dimension, '001-1-1');
   assert.equal(continueHandoffCarrierLineage({ dimension: '001-2' }, 1).dimension, '001-2-1');
