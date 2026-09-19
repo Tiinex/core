@@ -14,7 +14,7 @@ export function projectPortableEditorAssistance(input = {}) {
   const focusPath = norm(input.focusPath || input.focus || '');
   const selectedRecords = focusPath ? records.filter((record) => norm(record.path || record.id || '') === focusPath) : records;
   const lineageInspection = inspectPortableLineageIntegrity({ records });
-  const documents = selectedRecords.map((record) => projectDocument(record, records, lineageInspection));
+  const documents = selectedRecords.map((record) => projectDocument(record, records, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record)));
   const diagnostics = documents.flatMap((item) => item.diagnostics);
   return freeze({
     schema: PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID,
@@ -25,7 +25,7 @@ export function projectPortableEditorAssistance(input = {}) {
   });
 }
 
-function projectDocument(record = {}, records = [], lineageInspection = null) {
+function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = []) {
   const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true });
   const markdown = String(record.markdown || '');
   const recordPath = norm(record.path || record.id || '');
@@ -72,9 +72,15 @@ function projectDocument(record = {}, records = [], lineageInspection = null) {
     boundary: 'Repairs only deterministically malformed Workspace-qualified Parent recovery locators and/or a bare Current Schema id when exact qualified current-schema source authority exists; reseals self integrity and exposes the replacement only after shared audit and loaded-descendant guardrails re-qualify it. External Parent availability is not invented.'
   }));
 
-  const integrityRepair = deterministicIntegrityHygieneRepair(markdown, audit.findings || []);
+  const referenceResolution = projectReferenceResolutionAssistance(markdown, referenceResolutions);
+  diagnostics.push(...referenceResolution.diagnostics);
+  actions.push(...referenceResolution.actions);
+
+  const integrityRepair = deterministicIntegrityHygieneRepair(markdown, sharedFindings);
   const repairQualification = integrityRepair.state === 'ready'
-    ? qualifyReplacementAgainstSharedGuardrails(record, records, integrityRepair.markdown)
+    ? qualifyReplacementAgainstSharedGuardrails(record, records, integrityRepair.markdown, {
+      allowExistingWarningCodes: sharedFindings.filter((item) => item.severity === 'warning').map((item) => String(item.code || ''))
+    })
     : { state: 'unavailable' };
   if (integrityRepair.state === 'ready' && integrityRepair.markdown !== markdown && repairQualification.state === 'qualified') actions.push(freeze({
     id: 'refresh-primary-self-integrity',
@@ -232,6 +238,110 @@ function deterministicReferenceHygieneRepair(record = {}, audit = {}, markdown =
   return freeze({ state: 'ready', markdown: String(sealed.markdown || candidate), parentReferenceChanged, schemaReferenceChanged, diagnosticCodes: [...new Set(diagnosticCodes)] });
 }
 
+function referenceResolutionsForRecord(resolutions = [], record = {}) {
+  const recordPath = norm(record.path || record.id || '');
+  return (Array.isArray(resolutions) ? resolutions : []).filter((item) => {
+    const itemPath = norm(item?.path || '');
+    return !itemPath || itemPath === recordPath;
+  });
+}
+
+function projectReferenceResolutionAssistance(markdown = '', resolutions = []) {
+  const source = String(markdown || '');
+  if (!source || !Array.isArray(resolutions) || !resolutions.length) return freeze({ diagnostics: [], actions: [] });
+  const byTarget = new Map(resolutions.map((item) => [String(item?.target || '').trim(), item]).filter(([target]) => Boolean(target)));
+  const references = versionBearingGitHubReferences(source).filter((item) => byTarget.has(item.target));
+  const diagnostics = [];
+  const actions = [];
+  for (const reference of references) {
+    const fact = byTarget.get(reference.target) || {};
+    const exact = fact.exact || {};
+    const latest = fact.latest || {};
+    const exactState = String(exact.state || 'unavailable');
+    const latestState = String(latest.state || 'unavailable');
+    const exactSha = String(exact.sha256 || '');
+    const latestSha = String(latest.sha256 || '');
+    const latestTarget = String(latest.target || '').trim();
+    let diagnostic = null;
+    let actionTitle = '';
+    if (exactState === 'missing') {
+      diagnostic = {
+        severity: 'error',
+        code: 'reference.permalink.unresolved',
+        message: `${reference.field} permalink does not resolve at its declared revision.`,
+        params: { field: reference.field, line: reference.line }
+      };
+      if (latestState === 'resolved' && latestTarget) actionTitle = `Repair ${reference.field} permalink to latest`;
+    } else if (exactState === 'unavailable') {
+      diagnostic = {
+        severity: 'warning',
+        code: 'reference.permalink.verification-unavailable',
+        message: `${reference.field} permalink could not be verified from the current host.`,
+        params: { field: reference.field, line: reference.line }
+      };
+      if (latestState === 'resolved' && latestTarget) actionTitle = `Use latest ${reference.field} permalink`;
+    } else if (exactState === 'resolved' && latestState === 'resolved' && exactSha && latestSha && exactSha !== latestSha) {
+      diagnostic = {
+        severity: 'warning',
+        code: 'reference.permalink.stale',
+        message: `${reference.field} permalink resolves, but master contains different bytes.`,
+        params: { field: reference.field, line: reference.line }
+      };
+      if (latestTarget) actionTitle = `Upgrade ${reference.field} permalink to latest`;
+    }
+    if (diagnostic) diagnostics.push(projectDiagnostic(diagnostic, source));
+    if (!actionTitle || !latestTarget || latestTarget === reference.target) continue;
+    const replacement = replaceReferenceTargetAtLine(source, reference, latestTarget);
+    if (!replacement || replacement === source) continue;
+    const sealed = sealIfSelfIntegrityPresent(replacement);
+    if (sealed.state === 'blocked') continue;
+    const replacementMarkdown = sealed.markdown;
+    actions.push(freeze({
+      id: `upgrade-permalink-${reference.field.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${reference.line}`,
+      title: actionTitle,
+      kind: 'replace-document',
+      qualification: 'deterministic-shared-core+explicit-host-resolution',
+      sourceSha256: sha256Hex(new TextEncoder().encode(source)),
+      replacementMarkdown,
+      diagnosticCodes: diagnostic ? [diagnostic.code] : [],
+      boundary: 'Uses explicit host-provided resolution evidence for the exact declared GitHub permalink and master candidate. A newer master revision is only offered as an operator-selected Quick Fix; it does not silently replace version-bearing source authority.'
+    }));
+  }
+  return freeze({ diagnostics, actions });
+}
+
+function versionBearingGitHubReferences(markdown = '') {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const refs = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = String(lines[index] || '');
+    const fieldMatch = line.match(/^\s*-\s+(Envelope Schema|Parent Schema|Current Schema)\s*:\s*\[[^\]]+\]\((https:\/\/github\.com\/[^)]+\/blob\/[^)]+)\)\s*$/i);
+    if (fieldMatch) refs.push({ field: fieldMatch[1], target: fieldMatch[2], line: index + 1 });
+    if (/^\s*-\s+\[sha256-base64url-c14n-v2\]\(/.test(line)) {
+      const methodMatch = line.match(/^\s*-\s+\[sha256-base64url-c14n-v2\]\((https:\/\/github\.com\/[^)]+\/blob\/[^)]+)\)\s*$/i);
+      if (methodMatch) refs.push({ field: 'Integrity method', target: methodMatch[1], line: index + 1 });
+    }
+  }
+  return refs;
+}
+
+function replaceReferenceTargetAtLine(markdown = '', reference = {}, latestTarget = '') {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const index = Number(reference.line || 0) - 1;
+  if (index < 0 || index >= lines.length) return '';
+  if (!lines[index].includes(reference.target)) return '';
+  lines[index] = lines[index].replace(reference.target, latestTarget);
+  return lines.join('\n');
+}
+
+function sealIfSelfIntegrityPresent(markdown = '') {
+  const state = canonicalC14nV2SelfState(markdown);
+  if (state.state === 'unavailable') return freeze({ state: 'ready', markdown: String(markdown || '') });
+  if (!['verified', 'mismatch', 'prepared'].includes(state.state)) return freeze({ state: 'blocked', markdown: String(markdown || '') });
+  const sealed = sealC14nV2Self(markdown);
+  return sealed.state === 'sealed' ? freeze({ state: 'ready', markdown: sealed.markdown }) : freeze({ state: 'blocked', markdown: String(markdown || '') });
+}
+
 function normalizeMalformedWorkspaceQualifiedTarget(value = '') {
   const raw = String(value || '').trim();
   if (classifyParentRecoveryReference(raw).kind !== 'malformed-workspace-qualified') return raw;
@@ -281,6 +391,25 @@ function locatedLine(lines = [], index = -1, state = 'deterministic', basis = ''
 export function locateFindingLine(finding = {}, markdown = '') {
   const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
   const params = finding.params || finding;
+  const code = String(finding.code || '');
+
+  // Integrity findings often carry the generic field name `Value`. That field
+  // appears once per integrity relation, so resolving `field:Value` first would
+  // incorrectly anchor a self-integrity finding on the first Parent digest.
+  // Resolve semantically-owned integrity locations before generic field lookup.
+  if (code === 'integrity.c14n-v2.mismatch' || code === 'integrity.c14n-v2.ambiguous' || code === 'portable.lineage-integrity.child-self-mismatch' || code === 'portable.lineage-integrity.child-self-unavailable') {
+    const selfValueIndex = primarySelfIntegrityValueLine(lines);
+    if (selfValueIndex >= 0) return locatedLine(lines, selfValueIndex, 'deterministic', 'continuity-integrity-primary-self-value');
+  }
+  if (code === 'integrity.method-reference.unqualified') {
+    const headingIndex = lines.findIndex((line) => line.trim() === '# Continuity Integrity');
+    const methodIndex = lines.findIndex((line, index) => index > headingIndex && /^\s*-\s+\[sha256-base64url-c14n-v2\]\([^)]+\)\s*$/.test(line));
+    if (methodIndex >= 0) return locatedLine(lines, methodIndex, 'deterministic', 'continuity-integrity-method-reference');
+  }
+
+  const explicitLine = Number(params.line || 0);
+  if (Number.isInteger(explicitLine) && explicitLine > 0) return locatedLine(lines, explicitLine - 1, 'deterministic', 'explicit-resolution-line');
+
   const field = String(params.field || '').trim();
   const section = String(params.section || '').trim();
   const heading = String(params.heading || '').replace(/^#{1,6}\s+/, '').trim();
@@ -295,19 +424,15 @@ export function locateFindingLine(finding = {}, markdown = '') {
     const envelopeIndex = lines.findIndex((line) => new RegExp(`^\\s*-\\s+${escapeRegExp(owner)}(?:\\s*:.*)?\\s*$`, 'i').test(line));
     if (envelopeIndex >= 0) return locatedLine(lines, envelopeIndex, 'deterministic-anchor', `envelope-owner:${owner}`);
   }
-  const code = String(finding.code || '');
   if (code.includes('schema.') || code.endsWith('.schema.mismatch') || code === 'audit.schema-authority.unqualified') {
     const index = lines.findIndex((line) => /^\s*-\s+Current Schema\s*:/.test(line));
     if (index >= 0) return locatedLine(lines, index, 'deterministic', 'current-schema-field');
   }
-  if (code === 'integrity.method-reference.unqualified') {
-    const headingIndex = lines.findIndex((line) => line.trim() === '# Continuity Integrity');
-    const methodIndex = lines.findIndex((line, index) => index > headingIndex && /^\s*-\s+\[sha256-base64url-c14n-v2\]\([^)]+\)\s*$/.test(line));
-    if (methodIndex >= 0) return locatedLine(lines, methodIndex, 'deterministic', 'continuity-integrity-method-reference');
-  }
   if (code.includes('integrity') || /integrity|checksum|digest/i.test(String(finding.message || ''))) {
     const headingIndex = lines.findIndex((line) => line.trim() === '# Continuity Integrity');
     if (headingIndex >= 0) {
+      const selfValueIndex = primarySelfIntegrityValueLine(lines);
+      if (selfValueIndex >= 0 && /self-integrity|canonical artifact bytes|child-self/i.test(String(finding.message || ''))) return locatedLine(lines, selfValueIndex, 'deterministic', 'continuity-integrity-primary-self-value');
       const index = lines.findIndex((line, i) => i > headingIndex && /^\s+-\s+Value\s*:/.test(line));
       if (index >= 0) return locatedLine(lines, index, 'deterministic', 'continuity-integrity-value');
       return locatedLine(lines, headingIndex, 'deterministic-anchor', 'continuity-integrity-heading');
@@ -324,6 +449,20 @@ export function locateFindingLine(finding = {}, markdown = '') {
     if (bodyHeading >= 0) return locatedLine(lines, bodyHeading, 'deterministic-anchor', 'body-heading-for-body-finding');
   }
   return freeze({ state: 'unresolved', line: null, sourceRange: null, basis: 'shared-finding-has-no-deterministic-line-evidence' });
+}
+
+function primarySelfIntegrityValueLine(lines = []) {
+  const headingIndex = lines.findIndex((line) => String(line || '').trim() === '# Continuity Integrity');
+  if (headingIndex < 0) return -1;
+  let selfTowards = -1;
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const line = String(lines[index] || '');
+    if (index > headingIndex + 1 && /^#\s+/.test(line)) break;
+    if (/^\s+-\s+Towards\s*:\s*self\s*$/i.test(line)) { selfTowards = index; continue; }
+    if (selfTowards >= 0 && /^\s+-\s+Value\s*:/.test(line)) return index;
+    if (selfTowards >= 0 && /^-\s+/.test(line)) selfTowards = -1;
+  }
+  return -1;
 }
 
 function deterministicIntegrityHygieneRepair(markdown = '', findings = []) {
@@ -357,7 +496,9 @@ function deterministicIntegrityHygieneRepair(markdown = '', findings = []) {
   const diagnosticCodes = [
     ...(methodReferenceChanged ? ['integrity.method-reference.unqualified'] : []),
     'integrity.c14n-v2.mismatch',
-    'integrity.c14n-v2.ambiguous'
+    'integrity.c14n-v2.ambiguous',
+    'portable.lineage-integrity.child-self-mismatch',
+    'portable.lineage-integrity.child-self-unavailable'
   ];
   return freeze({ state: 'ready', markdown: sealed.markdown, methodReferenceChanged, diagnosticCodes: [...new Set(diagnosticCodes)] });
 }

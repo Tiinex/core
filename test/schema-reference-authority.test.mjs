@@ -154,7 +154,7 @@ test('workspace editor assistance preserves resolver-capable Current Schema perm
   assert.equal(schemaDiagnostic?.locationBasis, 'field:Current Schema');
   assert.ok(Number(schemaDiagnostic?.sourceRange?.startLine || 0) > 1);
   assert.equal(schemaDiagnostic?.sourceRange?.startLine, schemaDiagnostic?.line);
-  assert.equal(integrityDiagnostic?.locationBasis, 'continuity-integrity-value');
+  assert.equal(integrityDiagnostic?.locationBasis, 'continuity-integrity-primary-self-value');
   assert.ok(Number(integrityDiagnostic?.sourceRange?.startLine || 0) > Number(schemaDiagnostic?.sourceRange?.startLine || 0));
   const action = editor.documents[0].actions.find((item) => item.id === 'normalize-workspace-schema-and-self-integrity');
   assert.ok(action, 'workspace package-conformance repair must be projected');

@@ -78,7 +78,7 @@ export function renderQualifiedPortableExactDraft({ contract = {}, schemaId = ''
 }
 
 export function renderPortableLocalContinuityDraft({ contract = {}, schemaId = '', transitionType = 'continue-from-record', parentSnapshot = {}, rendererInput = {} } = {}) {
-  const markdown = renderArtifactCreationCandidateMarkdown(contract, { ...rendererInput, parentRecord: parentSnapshot, currentSchemaId: schemaId });
+  const markdown = renderArtifactCreationCandidateMarkdown(contract, { ...rendererInput, parentRecord: parentSnapshot, currentSchemaId: schemaId, preserveUnqualifiedParentSchemaReference: true });
   if (!markdown) return Object.freeze({ state: 'unqualified', reason: 'local-continuity-renderer-empty', markdown: '', validation: null, parentRepresentation: null });
   const parentRepresentation = qualifyPortableRenderedParentRepresentation(markdown, parentSnapshot, transitionType, rendererInput.childPath || '', { allowUnpublishedLocalParent: true });
   if (parentRepresentation.state !== 'qualified') return Object.freeze({ state: 'unqualified', reason: parentRepresentation.reason || 'local-continuity-parent-representation-mismatch', markdown: '', validation: null, parentRepresentation });

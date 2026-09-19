@@ -10,6 +10,7 @@ import { projectPortableValidationContractWithQualifiedLocalRoot } from '../tool
 import { qualifyRootCreationRepresentation, qualifyContinuationCreationRepresentation } from './creation.representation.js';
 import { qualifyCreationSchemaReferences, schemaReferenceAuthoritiesForCreation } from './creation.schemaReferences.js';
 import { qualifySchemaReferenceValue } from './schema.reference.js';
+import { qualifiedCreationAuthorityFromSchemaSource } from './schema.source.js';
 import { C14N_V2_METHOD_ID, integrityMethodReferenceAuthorityForCreation } from '../integrity/integrity.methodReference.js';
 
 export const ARTIFACT_CREATION_CONTRACT_SCHEMA_ID = 'tiinex.artifact.creation.contract.v1';
@@ -39,16 +40,7 @@ export function buildArtifactCreationContract(input = {}, options = {}) {
   const transitionType = String(input.transitionType || options.transitionType || 'create-artifact').trim();
   const creationCapability = qualifyArtifactCreationCapability(module, transitionType);
   const creationAuthority = creationCapability.authority?.compiledContract?.creation || {};
-  const creation = Object.freeze({
-    requiredInputs: list(creationAuthority.requiredInputs),
-    optionalInputs: list(creationAuthority.optionalInputs),
-    requiredSections: list(creationAuthority.requiredSections),
-    representationSections: list(creationAuthority.representationSections),
-    toolingConfigurationFields: list(creationAuthority.toolingConfigurationFields),
-    inputBindings: list(creationAuthority.inputBindings),
-    supplementalRequiredFields: list(creationAuthority.supplementalRequiredFields),
-    requiredShape: list(creationAuthority.requiredShape)
-  });
+  const creation = composeCreationAuthority(module, creationCapability.authority, creationAuthority);
   const renderer = creationCapability.implementation?.state === 'implemented'
     ? { status: CapabilityStatus.implemented, ...(creationCapability.implementation.renderer || {}) }
     : { status: CapabilityStatus.unavailable, id: '', scope: transitionType };
@@ -202,6 +194,96 @@ export function validateArtifactCreationResult(draft = {}, parentRecord = {}, op
 }
 
 
+
+
+function composeCreationAuthority(module = null, authority = {}, localCreation = {}) {
+  const validationContract = authority?.compiledContract?.validationContract || null;
+  const lineage = Array.isArray(validationContract?.lineage) && validationContract.lineage.length
+    ? validationContract.lineage
+    : [String(module?.id || authority?.schemaId || '')].filter(Boolean);
+  const creationAuthorities = [];
+  for (const schemaId of lineage) {
+    const lineageModule = schemaRegistry.byId?.get(schemaId) || null;
+    if (!lineageModule) continue;
+    const qualified = qualifiedCreationAuthorityFromSchemaSource(lineageModule);
+    if (qualified.state !== 'qualified' || !qualified.compiledContract?.creation) continue;
+    creationAuthorities.push({ schemaId, creation: qualified.compiledContract.creation });
+  }
+  if (!creationAuthorities.length) creationAuthorities.push({ schemaId: String(module?.id || ''), creation: localCreation });
+
+  const requiredHeadingOrder = [...(validationContract?.validation?.requiredHeadings || [])]
+    .filter((item) => Number(item?.level || 0) === 2 && String(item?.title || '').trim())
+    .map((item) => String(item.title).trim());
+  const requiredHeadingSet = new Set(requiredHeadingOrder);
+  const bindingByInput = new Map();
+  const requiredInputSet = new Set();
+  const optionalInputSet = new Set();
+  const toolingFields = [];
+  const supplementalByKey = new Map();
+  const shapeByKey = new Map();
+
+  for (const entry of creationAuthorities) {
+    const creation = entry.creation || {};
+    for (const value of creation.requiredInputs || []) requiredInputSet.add(String(value || '').trim());
+    for (const value of creation.optionalInputs || []) optionalInputSet.add(String(value || '').trim());
+    for (const value of creation.toolingConfigurationFields || []) pushUnique(toolingFields, String(value || '').trim());
+    for (const item of creation.inputBindings || []) {
+      const input = String(item?.input || '').trim();
+      if (!input) continue;
+      const section = String(item?.section || '').trim();
+      if (section && requiredHeadingSet.size && !requiredHeadingSet.has(section)) continue;
+      bindingByInput.set(input, item);
+    }
+    for (const item of creation.supplementalRequiredFields || []) {
+      const section = String(item?.section || '').trim();
+      if (section && requiredHeadingSet.size && !requiredHeadingSet.has(section)) continue;
+      const key = `${section}\u0000${String(item?.field || '')}`;
+      supplementalByKey.set(key, item);
+    }
+    for (const item of creation.requiredShape || []) {
+      const primitive = item?.primitive || {};
+      const section = String(primitive?.section || '').trim();
+      if (section && requiredHeadingSet.size && !requiredHeadingSet.has(section)) continue;
+      const key = `${String(primitive?.kind || '')}\u0000${String(primitive?.input || '')}\u0000${section}\u0000${String(primitive?.position || '')}`;
+      shapeByKey.set(key, item);
+    }
+  }
+
+  const bindings = [];
+  for (const item of bindingByInput.values()) if (!String(item?.section || '').trim()) bindings.push(item);
+  for (const section of requiredHeadingOrder) {
+    for (const item of bindingByInput.values()) if (String(item?.section || '').trim() === section && !bindings.includes(item)) bindings.push(item);
+  }
+  for (const item of bindingByInput.values()) if (!bindings.includes(item)) bindings.push(item);
+
+  const boundInputs = new Set(bindings.map((item) => String(item?.input || '').trim()).filter(Boolean));
+  const requiredInputs = [...requiredInputSet].filter((input) => input && boundInputs.has(input));
+  const optionalInputs = [...optionalInputSet].filter((input) => input && boundInputs.has(input) && !requiredInputSet.has(input));
+  const requiredSections = requiredHeadingOrder.length
+    ? requiredHeadingOrder.filter((section) => bindings.some((item) => String(item?.section || '').trim() === section))
+    : uniqueStrings(creationAuthorities.flatMap((entry) => entry.creation?.requiredSections || []));
+  const representationSections = requiredSections.length
+    ? requiredSections
+    : uniqueStrings(bindings.map((item) => String(item?.section || '').trim()).filter(Boolean));
+
+  return Object.freeze({
+    requiredInputs: Object.freeze(requiredInputs),
+    optionalInputs: Object.freeze(optionalInputs),
+    requiredSections: Object.freeze(requiredSections),
+    representationSections: Object.freeze(representationSections),
+    toolingConfigurationFields: Object.freeze(toolingFields),
+    inputBindings: Object.freeze(bindings),
+    supplementalRequiredFields: Object.freeze([...supplementalByKey.values()]),
+    requiredShape: Object.freeze([...shapeByKey.values()])
+  });
+}
+
+function uniqueStrings(values = []) {
+  const out = [];
+  for (const value of values || []) pushUnique(out, String(value || '').trim());
+  return out;
+}
+function pushUnique(values, value) { if (value && !values.includes(value)) values.push(value); }
 
 function validateParentTargetIntegrity(parsed = {}, parentRecord = {}, expectedTarget = '') {
   const entries = (parsed?.integrity?.entries || []).filter((entry) => entry?.method === C14N_V2_METHOD_ID && String(entry?.towards || '') !== 'self');

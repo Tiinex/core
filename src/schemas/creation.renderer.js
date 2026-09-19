@@ -38,7 +38,7 @@ export function renderArtifactCreationDraftMarkdown(contract = {}, input = {}) {
   const lines = [
     '# Continuity Context', '',
     `- Envelope Schema: ${envelopeSchemaReference}`,
-    ...(parent ? renderParent(parent) : []),
+    ...(parent ? renderParent(parent, { preserveUnqualifiedSchemaReference: input.preserveUnqualifiedParentSchemaReference === true }) : []),
     '- Current',
     `  - Current Schema: ${currentSchemaReference}`,
     `  - Created At: ${createdAt}`,
@@ -69,16 +69,23 @@ export const genericArtifactCreationImplementation = Object.freeze({
   execute: renderArtifactCreationDraftMarkdown
 });
 
-function renderParent(parent) {
+function renderParent(parent, options = {}) {
   return [
     '- Parent',
-    `  - Parent Schema: ${renderSchemaReference(parent.schemaReferenceAuthority)}`,
+    `  - Parent Schema: ${renderParentSchemaReference(parent.schemaReferenceAuthority, options.preserveUnqualifiedSchemaReference === true)}`,
     ...(parent.createdAt ? [`  - Created At: ${parent.createdAt}`] : []),
     `  - Trace: [${parent.traceLabel}](${parent.traceReference})`,
     '  - Origin:',
     ...(parent.relativeReference ? [`    - [relative](${parent.relativeReference})`] : []),
     ...(parent.publishedReference ? [`    - [browse + git](${parent.publishedReference})`] : [])
   ];
+}
+
+function renderParentSchemaReference(authority = {}, preserveUnqualified = false) {
+  const schemaId = String(authority?.schemaId || '').trim();
+  const preferredTarget = String(authority?.preferredTarget || authority?.target || '').trim();
+  if (preserveUnqualified && schemaId && preferredTarget) return `[${schemaId}](${preferredTarget})`;
+  return renderSchemaReference(authority);
 }
 
 function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } = {}) {
