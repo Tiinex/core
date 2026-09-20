@@ -29,9 +29,11 @@ export async function projectManufacturingRequirements({ handoff, workspaceId, h
       ? primary
       : projectHandoffMaterialRequirements({ id: routePath, path: routePath, semanticStatus: 'unknown', markdown: routeMarkdown });
     const primaryRoute = routeWorkspaceId === workspaceId && routePath === handoffPath;
-    for (const key of ['required', 'reference', 'endpointRoles']) {
+    for (const key of ['required', 'reference']) {
       for (const requirement of projected[key] || []) combined[key].push(scopeRouteRequirement(requirement, routeWorkspaceId, routePath, primaryRoute));
     }
+    const endpointRoleBindings = bindExplicitRouteEndpointRoles(projected.endpointRoles || [], route.endpointRoles || [], routeWorkspaceId, routePath, combined.findings, workspaceRuntimeById);
+    for (const requirement of endpointRoleBindings) combined.endpointRoles.push(scopeRouteRequirement(requirement, routeWorkspaceId, routePath, primaryRoute));
     participantRoleInputs.push(Object.freeze({
       routeWorkspaceId,
       routePath,
@@ -131,6 +133,79 @@ export function projectSemanticParticipantManufacturingRequirements({ requiremen
     }),
     semanticRoutes: Object.freeze(semanticRoutes)
   });
+}
+
+
+function bindExplicitRouteEndpointRoles(requirements = [], explicitRoles = [], routeWorkspaceId = '', routePath = '', findings = [], workspaceRuntimeById = new Map()) {
+  const byParty = new Map();
+  for (const raw of explicitRoles || []) {
+    const role = raw && typeof raw === 'object' ? raw : {};
+    const party = String(role.party || role.side || '').trim().toLowerCase();
+    if (!['from', 'to'].includes(party)) {
+      findings.push(finding('error', 'portable.handoff-manufacture.endpoint-role.explicit-party-invalid', 'Explicit route endpoint Role material must identify exactly one `from` or `to` Handoff party.', { routeWorkspaceId, routePath, party }));
+      continue;
+    }
+    if (!byParty.has(party)) byParty.set(party, []);
+    byParty.get(party).push(role);
+  }
+  const projectedParties = new Set((requirements || []).map((item) => String(item.party || '').trim().toLowerCase()).filter(Boolean));
+  for (const [party, entries] of byParty.entries()) {
+    if (!projectedParties.has(party)) findings.push(finding('error', 'portable.handoff-manufacture.endpoint-role.semantic-authority-not-established', 'Explicit endpoint Role material cannot create a Role endpoint when the Handoff does not declare that party as `Kind: role`.', { routeWorkspaceId, routePath, party, explicitCount: entries.length }));
+  }
+  return Object.freeze((requirements || []).map((requirement) => {
+    const party = String(requirement.party || '').trim().toLowerCase();
+    const entries = byParty.get(party) || [];
+    if (!entries.length) return requirement;
+    if (entries.length !== 1) {
+      findings.push(finding('error', 'portable.handoff-manufacture.endpoint-role.explicit-binding-ambiguous', 'Exactly one explicit endpoint Role material binding may be supplied for each Role endpoint party.', { routeWorkspaceId, routePath, party, explicitCount: entries.length }));
+      return requirement;
+    }
+    const role = entries[0];
+    const explicitLabel = String(role.label || role.roleLabel || '').trim();
+    const declaredLabel = String(requirement.roleLabel || requirement.name || '').trim();
+    if (explicitLabel && normalizeRoleLabel(explicitLabel) !== normalizeRoleLabel(declaredLabel)) {
+      findings.push(finding('error', 'portable.handoff-manufacture.endpoint-role.explicit-label-mismatch', 'Explicit endpoint Role material label contradicts the Handoff endpoint label.', { routeWorkspaceId, routePath, party, handoffRoleLabel: declaredLabel, explicitRoleLabel: explicitLabel }));
+      return requirement;
+    }
+    const targetWorkspaceId = String(role.workspaceId || role.targetWorkspaceId || '').trim();
+    const targetPath = normalizeRelativePath(role.path || role.targetPath || '');
+    if (!targetWorkspaceId || !targetPath) {
+      findings.push(finding('error', 'portable.handoff-manufacture.endpoint-role.explicit-material-unresolved', 'Explicit endpoint Role material binding must identify one exact carried Workspace id and Role artifact path.', { routeWorkspaceId, routePath, party, targetWorkspaceId, targetPath }));
+      return requirement;
+    }
+    const explicitReference = String(role.reference || role.referenceTarget || '').trim();
+    const qualifiedReference = explicitReference ? parseWorkspaceQualifiedReference(explicitReference) : null;
+    if (qualifiedReference && (qualifiedReference.workspaceId !== targetWorkspaceId || normalizeRelativePath(qualifiedReference.path) !== targetPath)) {
+      findings.push(finding('error', 'portable.handoff-manufacture.endpoint-role.explicit-reference-mismatch', 'Explicit endpoint Role reference contradicts its exact carried Workspace/path binding.', { routeWorkspaceId, routePath, party, reference: explicitReference, targetWorkspaceId, targetPath }));
+      return requirement;
+    }
+    const targetRuntime = workspaceRuntimeById.get(targetWorkspaceId);
+    const targetEntry = targetRuntime ? entryFromEnumeration(targetRuntime.enumeration, targetPath) : null;
+    const targetMarkdown = targetEntry ? decodeUtf8(targetEntry.data) : '';
+    const parsedTarget = targetMarkdown ? parseRoleMaterial({ path: targetPath, markdown: targetMarkdown, explicit: false }) : null;
+    if (!parsedTarget || parsedTarget.schemaId !== 'tiinex.party.role.v1' || !parsedTarget.label) {
+      findings.push(finding('error', 'portable.handoff-manufacture.endpoint-role.explicit-role-material-invalid', 'Explicit endpoint Role material binding must resolve to one exact qualified Role artifact.', { routeWorkspaceId, routePath, party, targetWorkspaceId, targetPath }));
+      return requirement;
+    }
+    if (normalizeRoleLabel(parsedTarget.label) !== normalizeRoleLabel(declaredLabel)) {
+      findings.push(finding('error', 'portable.handoff-manufacture.endpoint-role.explicit-material-label-mismatch', 'Exact endpoint Role material contradicts the Handoff endpoint label.', { routeWorkspaceId, routePath, party, handoffRoleLabel: declaredLabel, materialRoleLabel: parsedTarget.label, targetWorkspaceId, targetPath }));
+      return requirement;
+    }
+    return Object.freeze({
+      ...requirement,
+      targetWorkspaceId,
+      targetPath,
+      explicitTransportBinding: Object.freeze({
+        basis: 'explicit-route-endpoint-role-material-binding',
+        routeWorkspaceId,
+        routePath,
+        party,
+        roleLabel: declaredLabel,
+        targetWorkspaceId,
+        targetPath
+      })
+    });
+  }));
 }
 
 function resolveNearestQualifiedTaskRecord({ workspaceId, path: sourcePath, workspaceRuntimeById }) {
