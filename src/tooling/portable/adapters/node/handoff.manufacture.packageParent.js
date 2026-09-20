@@ -147,11 +147,56 @@ export function preparePackageParentExactMaterialProvider(input = {}) {
       })
     }));
   }
+  const endpointContext = projectSelectedPackageParentEndpointContext(inspection, {
+    selectedRoutePointer: input.selectedRoutePointer || input.packageParentRoutePointer || '',
+    selectedRouteId: input.selectedRouteId || input.packageParentRouteId || ''
+  });
   return Object.freeze({
     state: inspection.status === 'valid' ? 'qualified' : 'present-unqualified', inspectionStatus: String(inspection.status || ''),
-    entries: Object.freeze(entries), claims: Object.freeze(claims),
-    boundary: 'Exact material already present in a received qualified package cache may satisfy a newly authored return requirement only after exact declared-target and byte-identity qualification. Reuse is mechanical byte closure only: it does not select Workspace source, create semantic authority, infer delegation, or authorize repository discovery.'
+    entries: Object.freeze(entries), claims: Object.freeze(claims), endpointContext,
+    boundary: 'Exact material already present in a received qualified package cache may satisfy a newly authored return requirement only after exact declared-target and byte-identity qualification. Exact selected-parent endpoint bindings may rebind otherwise-unreferenced Role endpoints only through qualified reverse-return symmetry. Reuse is mechanical byte closure only: it does not select Workspace source, create semantic authority, infer delegation, or authorize repository discovery.'
   });
+}
+
+export function rebindPackageParentEndpointRoleRequirements(requirements = {}, provider = {}) {
+  const endpointRoles = [...(requirements.endpointRoles || [])];
+  const context = provider.endpointContext || {};
+  if (String(context.state || '') !== 'qualified') return requirements;
+  const primary = new Map(endpointRoles
+    .filter((item) => ['endpoint-role:from', 'endpoint-role:to'].includes(String(item.id || '')))
+    .map((item) => [String(item.party || ''), item]));
+  const fromRequirement = primary.get('from');
+  const toRequirement = primary.get('to');
+  const parentFrom = context.endpoints?.from || null;
+  const parentTo = context.endpoints?.to || null;
+  if (!fromRequirement || !toRequirement || !parentFrom || !parentTo) return requirements;
+  const reverseSymmetry = String(fromRequirement.roleLabel || '') === String(parentTo.roleLabel || '')
+    && String(toRequirement.roleLabel || '') === String(parentFrom.roleLabel || '');
+  if (!reverseSymmetry) return requirements;
+  const bindings = Object.freeze({ from: parentTo, to: parentFrom });
+  const rebound = endpointRoles.map((requirement) => {
+    const party = String(requirement.party || '');
+    const binding = bindings[party];
+    if (!binding || String(requirement.reference?.target || '').trim()) return requirement;
+    const target = String(binding.referenceTarget || '').trim();
+    if (!target || !String(binding.targetSha256 || '').match(/^[a-f0-9]{64}$/)) return requirement;
+    return Object.freeze({
+      ...requirement,
+      materialReference: target,
+      reference: Object.freeze({ form: 'qualified-package-parent-endpoint-binding', raw: target, label: String(binding.roleLabel || ''), target, exactTargetDeclared: true }),
+      packageParentEndpointRebinding: Object.freeze({
+        state: 'qualified',
+        selectedRoutePointer: String(context.selectedRoutePointer || ''),
+        selectedRouteId: String(context.selectedRouteId || ''),
+        parentEndpointParty: String(binding.endpointParty || ''),
+        roleLabel: String(binding.roleLabel || ''),
+        referenceTarget: target,
+        targetSha256: String(binding.targetSha256 || ''),
+        basis: 'exact-qualified-selected-parent-route-reverse-endpoint-binding'
+      })
+    });
+  });
+  return Object.freeze({ ...requirements, endpointRoles: Object.freeze(rebound) });
 }
 
 export function resolvePackageParentRequirementMaterials(requirements = {}, provider = {}) {
@@ -195,6 +240,37 @@ export function projectPackageParentMaterialClosurePreflight(requirements = {}, 
     boundary: 'This preflight classifies exact return-material closure only. Qualified received-package bytes may close declared material requirements, but this does not create semantic authority, select a Workspace source, establish process applicability, or authorize repository/network discovery.'
   });
 }
+
+function projectSelectedPackageParentEndpointContext(inspection = {}, selectors = {}) {
+  if (String(inspection.status || '') !== 'valid') return emptyEndpointContext('parent-inspection-invalid');
+  const pointer = String(selectors.selectedRoutePointer || '').trim();
+  const routeId = String(selectors.selectedRouteId || '').trim();
+  const matches = (inspection.routes || []).filter((route) => (pointer && String(route.pointerPath || '') === pointer) || (routeId && String(route.routeId || '') === routeId));
+  const exact = matches.length === 1 ? matches[0] : null;
+  if (!exact) return emptyEndpointContext(matches.length > 1 ? 'selected-parent-route-ambiguous' : 'selected-parent-route-unresolved');
+  const endpoints = (inspection.endpointRoles || []).filter((item) => String(item.routeId || '') === String(exact.routeId || ''));
+  const side = (party) => {
+    const candidates = endpoints.filter((item) => String(item.endpointParty || '') === party);
+    if (candidates.length !== 1) return null;
+    const item = candidates[0];
+    const referenceTarget = String(item.referenceTarget || '').trim();
+    const targetSha256 = String(item.targetSha256 || '').trim().toLowerCase();
+    if (!referenceTarget || !/^[a-f0-9]{64}$/.test(targetSha256)) return null;
+    return Object.freeze({
+      endpointParty: party, roleLabel: String(item.roleLabelHint || ''), referenceTarget, targetSha256,
+      targetCarrierKind: String(item.targetCarrierKind || ''), targetWorkspaceId: String(item.targetWorkspaceId || ''),
+      targetInnerPath: String(item.targetInnerPath || ''), targetArchiveEntry: String(item.targetArchiveEntry || ''), pointerPath: String(item.pointerPath || '')
+    });
+  };
+  const from = side('from'), to = side('to');
+  if (!from || !to) return emptyEndpointContext('selected-parent-route-endpoint-closure-unqualified');
+  return Object.freeze({
+    state: 'qualified', selectedRoutePointer: String(exact.pointerPath || ''), selectedRouteId: String(exact.routeId || ''),
+    endpoints: Object.freeze({ from, to }),
+    boundary: 'Exact endpoint bindings from the one qualified selected received-parent route only. Role labels are compatibility checks after exact route selection, never source-selection authority.'
+  });
+}
+function emptyEndpointContext(reason = 'unavailable') { return Object.freeze({ state: 'unavailable', reason, selectedRoutePointer: '', selectedRouteId: '', endpoints: Object.freeze({}), boundary: 'No exact selected received-parent endpoint binding is available; Tooling must not infer one from Role labels, filenames, nearby Workspaces, or repository inventory.' }); }
 
 function allBlockingRequirements(requirements = {}) { return [...(requirements.required || []), ...(requirements.endpointRoles || []), ...(requirements.participantRoles || []), ...(requirements.dependencies || [])]; }
 function normalizeRequirementClass(value = '') { const v = String(value || ''); return v === 'endpoint-role' || v === 'participant-role' ? v : v || 'required'; }

@@ -1,7 +1,8 @@
 import { posix } from 'node:path';
 import { sha256Hex } from '../../../export/package.bytes.js';
+import { parseRoleMaterial } from '../handoff/coldStartQualification.materials.js';
 
-export function projectGroundingDelegationArtifactAuthority({ authority = null, records = [], topology = {}, sourceEvidence = null } = {}) {
+export function projectGroundingDelegationArtifactAuthority({ authority = null, records = [], topology = {}, sourceEvidence = null, requiredContext = [] } = {}) {
   const unresolved = [];
   const handoff = authority?.handoff || null;
   const recipientRole = authority?.role || null;
@@ -15,7 +16,7 @@ export function projectGroundingDelegationArtifactAuthority({ authority = null, 
   const sender = qualifiedRole(senderRole, handoff.fromReference || '');
   if (!sender) unresolved.push('exact-sender-role-authority-not-established');
 
-  const delegateSelection = transferSelection ? selectForwardDelegate(transferSelection.record, authority) : null;
+  const delegateSelection = transferSelection ? selectForwardDelegate(transferSelection.record, authority, requiredContext) : null;
   if (transferSelection && !delegateSelection?.selector) unresolved.push('forward-delegate-selector-not-established');
   if (delegateSelection?.selector && !delegateSelection?.role) unresolved.push('exact-forward-selected-delegate-role-authority-not-established');
 
@@ -104,10 +105,10 @@ function qualifiedRole(role, declaredReference = '') {
   });
 }
 
-function selectForwardDelegate(taskRecord, authority = {}) {
+function selectForwardDelegate(taskRecord, authority = {}, requiredContext = []) {
   const selector = explicitTaskSpecialistSelector(taskRecord);
   if (!selector) return Object.freeze({ selector: null, role: null, candidates: Object.freeze([]) });
-  const candidates = exactRouteRoleMaterials(authority).filter((role) => normalize(role.label) === normalize(selector.roleLabel));
+  const candidates = exactRouteRoleMaterials(authority, requiredContext).filter((role) => normalize(role.label) === normalize(selector.roleLabel));
   const unique = dedupeRoles(candidates);
   return Object.freeze({ selector, role: unique.length === 1 ? unique[0] : null, candidates: Object.freeze(unique) });
 }
@@ -141,7 +142,7 @@ function explicitTaskSpecialistSelector(taskRecord = {}) {
   return declarations.length === 1 ? declarations[0] : null;
 }
 
-function exactRouteRoleMaterials(authority = {}) {
+function exactRouteRoleMaterials(authority = {}, requiredContext = []) {
   const roles = [];
   const recipient = qualifiedRole(authority?.role || null, authority?.handoff?.toReference || '');
   const sender = qualifiedRole(authority?.senderRole || null, authority?.handoff?.fromReference || '');
@@ -149,6 +150,10 @@ function exactRouteRoleMaterials(authority = {}) {
   if (sender) roles.push(sender);
   for (const item of authority?.participation?.packageRoleGrounding || []) {
     const role = qualifiedPackageGroundingRole(item);
+    if (role) roles.push(role);
+  }
+  for (const entry of requiredContext || []) {
+    const role = qualifiedRequiredContextRole(entry);
     if (role) roles.push(role);
   }
   return Object.freeze(dedupeRoles(roles));
@@ -171,6 +176,37 @@ function qualifiedPackageGroundingRole(entry = {}) {
     sourceArtifact: sourceArtifactFromReference(reference, sha256, String(artifact.schemaId || 'tiinex.party.role.v1')),
     materialResolution: Object.freeze({ pointerPath: String(entry.pointerPath || ''), groundingOnly: true })
   });
+}
+
+function qualifiedRequiredContextRole(entry = {}) {
+  if (String(entry.state || '') !== 'qualified' || String(entry.contentState || '') !== 'hydrated-text' || typeof entry.content !== 'string' || !entry.content) return null;
+  const parsed = parseRoleMaterial({ path: String(entry.referenceTarget || entry.innerPath || entry.name || ''), markdown: entry.content, explicit: false });
+  if (!parsed || parsed.schemaId !== 'tiinex.party.role.v1' || !parsed.label) return null;
+  const expectedSha = String(entry.actualSha256 || entry.sha256 || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/iu.test(expectedSha) || parsed.sha256 !== expectedSha) return null;
+  const reference = String(entry.referenceTarget || crossWorkspaceReference(entry) || parsed.path || '').trim();
+  if (!reference) return null;
+  return Object.freeze({
+    label: parsed.label,
+    kind: 'role',
+    roleKind: parsed.roleKind,
+    boundary: Object.freeze({ ...(parsed.boundary || {}) }),
+    authority: Object.freeze({ ...(parsed.authorityBoundary || {}) }),
+    sourceArtifact: sourceArtifactFromReference(reference, expectedSha, 'tiinex.party.role.v1'),
+    materialResolution: Object.freeze({
+      kind: 'selected-handoff-required-context-role',
+      requirementId: String(entry.requirementId || ''),
+      providerMode: String(entry.providerMode || ''),
+      workspaceId: String(entry.workspaceId || ''),
+      innerPath: String(entry.innerPath || '')
+    })
+  });
+}
+
+function crossWorkspaceReference(entry = {}) {
+  const workspaceId = String(entry.workspaceId || '').trim();
+  const innerPath = String(entry.innerPath || '').trim().replace(/^\/+/, '');
+  return workspaceId && innerPath ? `${workspaceId}::${innerPath}` : '';
 }
 
 function dedupeRoles(roles = []) {

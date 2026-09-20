@@ -6,7 +6,7 @@ import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runt
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
 import { enumerateNodeWorkspace, PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID } from './handoff.manufacture.enumeration.js';
-import { preparePackageParentExactMaterialProvider, preparePackageParentWorkspaceReuse, projectPackageParentMaterialClosurePreflight, projectRequiredContextWorkspaceSelectionPreflight, resolvePackageParentRequirementMaterials } from './handoff.manufacture.packageParent.js';
+import { preparePackageParentExactMaterialProvider, preparePackageParentWorkspaceReuse, projectPackageParentMaterialClosurePreflight, projectRequiredContextWorkspaceSelectionPreflight, rebindPackageParentEndpointRoleRequirements, resolvePackageParentRequirementMaterials } from './handoff.manufacture.packageParent.js';
 import { qualifyPortableSourceReconciliationProofForManufacture } from '../../comparison/sourceFrontierReconciliationProof.js';
 import { qualifyPortableManufactureSchemaReferenceCandidate } from '../../handoff/schemaReferencePreflight.js';
 import { qualifyDelegationReturnReservation } from '../../handoff/delegationReturnReservation.js';
@@ -15,6 +15,7 @@ import {
   expandPointerDependencyClosure,
   normalizeRelativePath,
   projectManufacturingRequirements,
+  projectSemanticParticipantManufacturingRequirements,
   resolveWorkspaceRequirementMaterials
 } from './handoff.manufacture.requirements.js';
 import {
@@ -73,7 +74,9 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     bundle: input.packageParentBundle || null,
     currentWorkspaceIds: [...seenWorkspaceIds],
     parentPackagePath: input.packageParentPath || '',
-    parentPackageSha256: input.packageParentSha256 || ''
+    parentPackageSha256: input.packageParentSha256 || '',
+    selectedRoutePointer: input.packageParentRoutePointer || '',
+    selectedRouteId: input.packageParentRouteId || ''
   });
   const handoffMarkdown = await handoffMarkdownPromise;
   const requiredContextWorkspaceSelectionPreflight = projectRequiredContextWorkspaceSelectionPreflight({
@@ -175,9 +178,19 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
 
   const routeSpecs = transportRoutes.length ? transportRoutes : Object.freeze([{ workspaceId, path: handoffPath }]);
   let requirements = await projectManufacturingRequirements({ handoff, workspaceId, handoffPath, routeSpecs, workspaceRuntimeById });
-  const packageParentMaterialClosurePreflight = projectPackageParentMaterialClosurePreflight(requirements, packageParentExactMaterialProvider);
+  requirements = rebindPackageParentEndpointRoleRequirements(requirements, packageParentExactMaterialProvider);
   let materials = await resolveWorkspaceRequirementMaterials(requirements, workspaceRuntimeById, input.materialBindings || {});
   materials = appendMissingRequirementMaterials(materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
+  const semanticParticipantProjection = projectSemanticParticipantManufacturingRequirements({ requirements, materials, routeSpecs, workspaceRuntimeById });
+  requirements = semanticParticipantProjection.requirements;
+  const semanticParticipantRoutesByKey = new Map((semanticParticipantProjection.semanticRoutes || []).map((item) => [`${String(item.routeWorkspaceId || '')}\u0000${normalizeRelativePath(item.routePath || '')}`, item]));
+  const effectiveTransportRoutes = Object.freeze(transportRoutes.map((route) => {
+    const semantic = semanticParticipantRoutesByKey.get(`${String(route.workspaceId || '')}\u0000${normalizeRelativePath(route.path || '')}`) || null;
+    return Object.freeze({ ...route, participantRoles: Object.freeze([...(semantic?.participantRoles || [])]) });
+  }));
+  materials = appendMissingRequirementMaterials(materials, await resolveWorkspaceRequirementMaterials(requirements, workspaceRuntimeById, input.materialBindings || {}));
+  materials = appendMissingRequirementMaterials(materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
+  const packageParentMaterialClosurePreflight = projectPackageParentMaterialClosurePreflight(requirements, packageParentExactMaterialProvider);
   const dependencyClosure = await expandPointerDependencyClosure({ requirements, materials, workspaceRuntimeById, bindings: input.materialBindings || {} });
   requirements = dependencyClosure.requirements;
   materials = appendMissingRequirementMaterials(dependencyClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
@@ -211,7 +224,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     recipient: Object.freeze({ referenceTargets: Object.freeze([...(input.referenceTargets || [])].map(String)) }),
     bootstrap: orientationBootstrap,
     additionalTransportFiles: toolingBootstrap.files,
-    transportRoutes,
+    transportRoutes: effectiveTransportRoutes,
     workspaceTargets,
     carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null),
     carrierAllocation: input.carrierAllocation ? Object.freeze({ ...input.carrierAllocation }) : null,

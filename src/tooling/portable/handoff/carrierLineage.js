@@ -126,6 +126,8 @@ function packageV1CarrierLineage(files = []) {
     mode: contract.carrierCheckpoint === 'major' ? 'major' : (contract.parentCarrierDimension ? 'continue' : 'root'),
     dimension: contract.carrierDimension,
     parentDimension: contract.parentCarrierDimension,
+    parentPackageSha256: contract.parentPackageSha256,
+    parentPackageFilename: contract.parentPackageFilename,
     checkpointKind: contract.carrierCheckpoint,
     majorReason: contract.majorReason
   });

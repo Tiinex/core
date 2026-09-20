@@ -4,12 +4,15 @@ import path from 'node:path';
 import { packageFileBytes, sha256Hex } from '../../../../export/package.bytes.js';
 import { parseArtifactMarkdown } from '../../../../artifacts/artifact.parse.js';
 import { projectHandoffMaterialRequirements, projectParticipantRoleRequirements } from '../../handoff/materialClosure.requirements.js';
+import { explicitTaskParticipantDeclarations } from '../../grounding/grounding.participantArtifactAuthority.js';
+import { parseRoleMaterial } from '../../handoff/coldStartQualification.materials.js';
 import { safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
 import { parseWorkspaceQualifiedReference } from '../../handoff/workspaceQualifiedReference.js';
 
 export async function projectManufacturingRequirements({ handoff, workspaceId, handoffPath, routeSpecs, workspaceRuntimeById }) {
   const primary = projectHandoffMaterialRequirements(handoff);
   const combined = { required: [], reference: [], endpointRoles: [], participantRoles: [], dependencies: [], findings: [...(primary.findings || [])] };
+  const participantRoleInputs = [];
   const seenRoute = new Set();
   for (const route of routeSpecs || []) {
     const routeWorkspaceId = String(route.workspaceId || workspaceId || '').trim();
@@ -29,7 +32,11 @@ export async function projectManufacturingRequirements({ handoff, workspaceId, h
     for (const key of ['required', 'reference', 'endpointRoles']) {
       for (const requirement of projected[key] || []) combined[key].push(scopeRouteRequirement(requirement, routeWorkspaceId, routePath, primaryRoute));
     }
-    combined.participantRoles.push(...projectParticipantRoleRequirements(route.participantRoles || route.roles || [], { workspaceId: routeWorkspaceId, routePath }));
+    participantRoleInputs.push(Object.freeze({
+      routeWorkspaceId,
+      routePath,
+      roles: Object.freeze([...(route.participantRoles || route.roles || [])])
+    }));
     combined.findings.push(...(projected.findings || []));
   }
   if (!seenRoute.has(`${workspaceId}\u0000${handoffPath}`)) {
@@ -41,11 +48,255 @@ export async function projectManufacturingRequirements({ handoff, workspaceId, h
     reference: Object.freeze(combined.reference),
     endpointRoles: Object.freeze(combined.endpointRoles),
     participantRoles: Object.freeze(combined.participantRoles),
+    participantRoleInputs: Object.freeze(participantRoleInputs),
     dependencies: Object.freeze(combined.dependencies),
     counts: Object.freeze({ required: combined.required.length, reference: combined.reference.length, endpointRoles: combined.endpointRoles.length, participantRoles: combined.participantRoles.length, dependencies: combined.dependencies.length }),
     findings: Object.freeze(combined.findings)
   });
 }
+
+export function projectSemanticParticipantManufacturingRequirements({ requirements = {}, materials = [], routeSpecs = [], workspaceRuntimeById = new Map() } = {}) {
+  const findings = [...(requirements.findings || [])];
+  const participantRoles = [];
+  const semanticRoutes = [];
+  const explicitByRoute = new Map((requirements.participantRoleInputs || []).map((item) => [routeKey(item.routeWorkspaceId, item.routePath), item]));
+
+  for (const route of routeSpecs || []) {
+    const routeWorkspaceId = String(route.workspaceId || '').trim();
+    const routePath = normalizeRelativePath(route.path || route.workspaceRelativePath || '');
+    if (!routeWorkspaceId || !routePath) continue;
+    const key = routeKey(routeWorkspaceId, routePath);
+    const task = resolveNearestQualifiedTaskRecord({ workspaceId: routeWorkspaceId, path: routePath, workspaceRuntimeById });
+    const declarations = task ? [...explicitTaskParticipantDeclarations(task)] : [];
+    const declarationGroups = groupParticipantDeclarations(declarations);
+    const routeMaterials = qualifiedRouteRoleMaterials({ requirements, materials, routeWorkspaceId, routePath });
+    const derived = [];
+    let routeBlocked = false;
+
+    for (const [normalizedLabel, entries] of [...declarationGroups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      const label = String(entries[0]?.roleLabel || '').trim();
+      if (entries.length !== 1) {
+        routeBlocked = true;
+        findings.push(finding('error', 'portable.handoff-manufacture.participant-role.semantic-declaration-ambiguous', 'Exactly one closed current-work participant declaration must identify each participant Role before transport requirements can be manufactured.', { routeWorkspaceId, routePath, roleLabel: label, declarationCount: entries.length }));
+        continue;
+      }
+      const candidates = dedupeQualifiedRoleMaterials(routeMaterials.filter((item) => normalizeRoleLabel(item.label) === normalizedLabel));
+      if (candidates.length !== 1) {
+        routeBlocked = true;
+        findings.push(finding('error', candidates.length ? 'portable.handoff-manufacture.participant-role.semantic-role-material-ambiguous' : 'portable.handoff-manufacture.participant-role.semantic-role-material-not-established', candidates.length
+          ? 'The explicitly declared participant Role resolves to multiple distinct exact qualified Role artifacts in the selected route bounded material closure.'
+          : 'The explicitly declared participant Role has no exact qualified Role material in the selected route bounded material closure.', { routeWorkspaceId, routePath, roleLabel: label, candidateCount: candidates.length }));
+        continue;
+      }
+      derived.push(Object.freeze({ declaration: entries[0], role: candidates[0] }));
+    }
+
+    const explicit = explicitByRoute.get(key)?.roles || [];
+    if (!declarations.length && explicit.length) {
+      routeBlocked = true;
+      findings.push(finding('error', 'portable.handoff-manufacture.participant-role.semantic-authority-not-established', 'Route-level participant Role transport input cannot create a participant pointer when the controlling current-work artifact establishes no semantic participant authority.', { routeWorkspaceId, routePath, explicitCount: explicit.length }));
+    }
+
+    let semanticDescriptors = [];
+    if (declarations.length && !routeBlocked) {
+      semanticDescriptors = derived.map(({ declaration, role }) => semanticParticipantDescriptor(routeWorkspaceId, routePath, declaration, role));
+      const explicitValidation = validateExplicitParticipantInputs(explicit, semanticDescriptors, routeWorkspaceId, routePath);
+      if (!explicitValidation.valid) {
+        routeBlocked = true;
+        findings.push(...explicitValidation.findings);
+      }
+      if (!routeBlocked) participantRoles.push(...projectParticipantRoleRequirements(semanticDescriptors, { workspaceId: routeWorkspaceId, routePath }));
+    } else if (!declarations.length && explicit.length === 0) {
+      // No semantic participant authority and no participant transport request is a valid empty participant set.
+    }
+
+    semanticRoutes.push(Object.freeze({
+      routeWorkspaceId,
+      routePath,
+      currentTask: task ? Object.freeze({ path: task.path, schemaId: task.schemaId }) : null,
+      declarations: Object.freeze(declarations),
+      participantRoles: Object.freeze(routeBlocked ? [] : semanticDescriptors),
+      participantCount: routeBlocked ? 0 : derived.length,
+      state: routeBlocked ? 'blocked' : declarations.length ? 'qualified' : 'not-established'
+    }));
+  }
+
+  return Object.freeze({
+    requirements: Object.freeze({
+      ...requirements,
+      participantRoles: Object.freeze(participantRoles),
+      counts: Object.freeze({ ...(requirements.counts || {}), participantRoles: participantRoles.length }),
+      findings: Object.freeze(findings),
+      semanticParticipantRoutes: Object.freeze(semanticRoutes)
+    }),
+    semanticRoutes: Object.freeze(semanticRoutes)
+  });
+}
+
+function resolveNearestQualifiedTaskRecord({ workspaceId, path: sourcePath, workspaceRuntimeById }) {
+  let currentWorkspaceId = String(workspaceId || '').trim();
+  let currentPath = normalizeRelativePath(sourcePath);
+  const visited = new Set();
+  for (let depth = 0; depth < 256; depth += 1) {
+    const key = routeKey(currentWorkspaceId, currentPath);
+    if (!currentWorkspaceId || !currentPath || visited.has(key)) return null;
+    visited.add(key);
+    const runtime = workspaceRuntimeById.get(currentWorkspaceId);
+    const entry = runtime ? entryFromEnumeration(runtime.enumeration, currentPath) : null;
+    if (!entry) return null;
+    const markdown = decodeUtf8(entry.data);
+    if (!markdown) return null;
+    let parsed;
+    try { parsed = parseArtifactMarkdown(markdown); } catch { return null; }
+    const schemaId = String(parsed.envelope?.current?.schema?.id || '');
+    if (schemaId === 'tiinex.task.v1') {
+      if (!parsed.hasContinuityContext || !parsed.hasIntegrity) return null;
+      return Object.freeze({
+        id: `${currentWorkspaceId}/${currentPath}`,
+        path: `${currentWorkspaceId}/${currentPath}`,
+        workspaceId: currentWorkspaceId,
+        workspaceRelativePath: currentPath,
+        schemaId,
+        markdown,
+        hasContinuityContext: true,
+        hasIntegrity: true
+      });
+    }
+    const parent = parsed.envelope?.parent || {};
+    const reference = String(parent.trace || (parent.originEntries || []).find((item) => String(item?.label || '').trim() === 'relative')?.target || '').trim();
+    if (!reference) return null;
+    const qualified = parseWorkspaceQualifiedReference(reference);
+    if (qualified) {
+      currentWorkspaceId = qualified.workspaceId;
+      currentPath = normalizeRelativePath(qualified.path);
+      continue;
+    }
+    if (isExternalReference(reference) || reference.startsWith('#')) return null;
+    const resolved = resolveRelativeWorkspaceTarget(currentPath, reference);
+    if (!resolved) return null;
+    currentPath = resolved;
+  }
+  return null;
+}
+
+function qualifiedRouteRoleMaterials({ requirements = {}, materials = [], routeWorkspaceId, routePath }) {
+  const byId = new Map();
+  for (const key of ['required', 'reference', 'endpointRoles']) {
+    for (const requirement of requirements[key] || []) {
+      if (String(requirement.routeWorkspaceId || '') !== routeWorkspaceId || normalizeRelativePath(requirement.routePath || '') !== routePath) continue;
+      byId.set(String(requirement.id || ''), requirement);
+    }
+  }
+  const out = [];
+  for (const material of materials || []) {
+    const requirement = byId.get(String(material.requirementId || ''));
+    if (!requirement) continue;
+    const markdown = decodeUtf8(material.data);
+    if (!markdown) continue;
+    const parsed = parseRoleMaterial({ path: String(material.path || requirement.reference?.target || requirement.name || ''), markdown, explicit: false });
+    if (!parsed || parsed.schemaId !== 'tiinex.party.role.v1' || !parsed.label) continue;
+    const actualSha = String(material.sha256 || sha256Hex(packageFileBytes(material))).trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/u.test(actualSha) || parsed.sha256 !== actualSha) continue;
+    const sourceWorkspaceId = String(material.provenance?.workspaceId || requirement.targetWorkspaceId || '').trim();
+    const sourcePath = normalizeRelativePath(material.provenance?.path || requirement.targetPath || material.path || '');
+    const reference = String(requirement.reference?.target || (sourceWorkspaceId && sourcePath ? `${sourceWorkspaceId}::${sourcePath}` : '')).trim();
+    if (!sourceWorkspaceId || !sourcePath || !reference) continue;
+    out.push(Object.freeze({
+      label: parsed.label,
+      roleKind: parsed.roleKind,
+      sha256: actualSha,
+      workspaceId: sourceWorkspaceId,
+      path: sourcePath,
+      reference,
+      requirementId: String(requirement.id || ''),
+      classification: String(requirement.classification || '')
+    }));
+  }
+  return Object.freeze(out);
+}
+
+function semanticParticipantDescriptor(routeWorkspaceId, routePath, declaration, role) {
+  return Object.freeze({
+    label: role.label,
+    workspaceId: role.workspaceId,
+    path: role.path,
+    reference: role.reference,
+    semanticAuthority: Object.freeze({
+      basis: 'exact-current-work-participant-declaration-plus-exact-qualified-role-material',
+      routeWorkspaceId,
+      routePath,
+      declarationSourceArtifact: declaration.sourceArtifact,
+      declaration: declaration.declaration,
+      roleSourceArtifact: Object.freeze({ workspaceId: role.workspaceId, path: role.reference, sha256: role.sha256, schemaId: 'tiinex.party.role.v1' })
+    })
+  });
+}
+
+function validateExplicitParticipantInputs(explicit = [], semantic = [], routeWorkspaceId = '', routePath = '') {
+  if (!explicit.length) return Object.freeze({ valid: true, findings: Object.freeze([]) });
+  const findings = [];
+  if (explicit.length !== semantic.length) findings.push(finding('error', 'portable.handoff-manufacture.participant-role.explicit-set-cardinality-mismatch', 'Explicit route-level participant Role input must match the exact qualified semantic participant set; missing or extra participant Role input is not accepted.', { routeWorkspaceId, routePath, explicitCount: explicit.length, semanticCount: semantic.length }));
+  const remaining = [...semantic];
+  for (const entry of explicit) {
+    const normalized = normalizeExplicitParticipantInput(entry);
+    const index = remaining.findIndex((candidate) => explicitMatchesSemantic(normalized, candidate));
+    if (index < 0) {
+      findings.push(finding('error', 'portable.handoff-manufacture.participant-role.explicit-set-mismatch', 'Explicit route-level participant Role input does not match an exact qualified semantic participant Role artifact for this route.', { routeWorkspaceId, routePath, explicit: normalized }));
+      continue;
+    }
+    remaining.splice(index, 1);
+  }
+  if (remaining.length) findings.push(finding('error', 'portable.handoff-manufacture.participant-role.explicit-set-missing', 'Explicit route-level participant Role input omits one or more exact qualified semantic participant Roles.', { routeWorkspaceId, routePath, missing: remaining.map((item) => ({ label: item.label, workspaceId: item.workspaceId, path: item.path })) }));
+  return Object.freeze({ valid: findings.length === 0, findings: Object.freeze(findings) });
+}
+
+function normalizeExplicitParticipantInput(value) {
+  const role = typeof value === 'string' ? { reference: value } : (value || {});
+  const rawReference = String(role.reference || role.referenceTarget || '').trim();
+  const qualified = parseWorkspaceQualifiedReference(rawReference);
+  return Object.freeze({
+    label: String(role.label || role.roleLabel || '').trim(),
+    workspaceId: String(role.workspaceId || role.targetWorkspaceId || qualified?.workspaceId || '').trim(),
+    path: normalizeRelativePath(role.path || role.targetPath || qualified?.path || ''),
+    reference: rawReference
+  });
+}
+
+function explicitMatchesSemantic(explicit, semantic) {
+  if (explicit.label && normalizeRoleLabel(explicit.label) !== normalizeRoleLabel(semantic.label)) return false;
+  if (explicit.workspaceId && explicit.workspaceId !== semantic.workspaceId) return false;
+  if (explicit.path && explicit.path !== normalizeRelativePath(semantic.path)) return false;
+  if (explicit.reference) {
+    const qualified = parseWorkspaceQualifiedReference(explicit.reference);
+    if (qualified) return qualified.workspaceId === semantic.workspaceId && normalizeRelativePath(qualified.path) === normalizeRelativePath(semantic.path);
+    if (explicit.reference !== semantic.reference) return false;
+  }
+  return Boolean(explicit.label || explicit.workspaceId || explicit.path || explicit.reference);
+}
+
+function groupParticipantDeclarations(declarations = []) {
+  const grouped = new Map();
+  for (const declaration of declarations || []) {
+    const key = normalizeRoleLabel(declaration.roleLabel);
+    if (!key) continue;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(declaration);
+  }
+  return grouped;
+}
+
+function dedupeQualifiedRoleMaterials(roles = []) {
+  const map = new Map();
+  for (const role of roles || []) {
+    const key = `${normalizeRoleLabel(role.label)}\u0000${String(role.sha256 || '')}\u0000${String(role.workspaceId || '')}\u0000${normalizeRelativePath(role.path || '')}`;
+    if (!map.has(key)) map.set(key, role);
+  }
+  return [...map.values()];
+}
+
+function routeKey(workspaceId = '', routePath = '') { return `${String(workspaceId || '').trim()}\u0000${normalizeRelativePath(routePath)}`; }
+function normalizeRoleLabel(value = '') { return String(value || '').trim().toLowerCase(); }
+function finding(severity, code, message, extra = {}) { return Object.freeze({ severity, code, message, ...extra }); }
 
 function scopeRouteRequirement(requirement, routeWorkspaceId, routePath, preserveId = false) {
   return Object.freeze({

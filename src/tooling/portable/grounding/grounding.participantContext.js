@@ -9,11 +9,12 @@ export function projectGroundingParticipantContext(authority = null) {
     roles: Object.freeze([...(item.roles || [])].map(String)),
     verification: String(item.verification || 'declared'),
     semanticParticipant: true,
-    basis: 'explicit-participant-declaration',
+    basis: String(item.basis || 'explicit-participant-declaration'),
     provenance: Object.freeze({
-      basis: 'explicit-qualified-participation-input',
-      source: String(item.source || item.provenance?.source || ''),
-      boundary: 'Only explicit semantic participant authority is projected as participation.'
+      ...(item.provenance || {}),
+      basis: String(item.provenance?.basis || 'explicit-qualified-participation-input'),
+      source: String(item.source || item.provenance?.source || item.provenance?.declarationSourceArtifact?.path || ''),
+      boundary: String(item.provenance?.boundary || 'Only explicit semantic participant authority is projected as participation.')
     })
   }));
   const roleGrounding = (participation.packageRoleGrounding || participation.packageRoleParticipants || []).slice(0, MAX_ROLES).map((item) => Object.freeze({

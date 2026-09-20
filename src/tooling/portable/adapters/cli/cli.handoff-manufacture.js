@@ -24,6 +24,9 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   const continuationState = parsed.surfaceCommand === 'handoff'
     ? await readGroundContinuationState(workspaceRoot)
     : {};
+  const explicitPackageParentPath = String(flags['package-parent'] || '').trim();
+  const continuationPackageParentPath = String(continuationState.packageParentPath || '').trim();
+  const continuationPackageParentInferred = parsed.surfaceCommand === 'handoff' && !explicitPackageParentPath && Boolean(continuationPackageParentPath);
   const handoffPath = flags.handoff || parsed.positionals?.[1] || continuationState.returnHandoffPath || '';
   if (!flags['workspace-id'] && continuationState.workspaceId) flags['workspace-id'] = continuationState.workspaceId;
   if (!flags['workspace-target'] && continuationState.workspaceTarget) flags['workspace-target'] = continuationState.workspaceTarget;
@@ -58,7 +61,12 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   let carrierAllocation = Object.freeze({ state: 'root', allocationMode: 'initial-root', siblingIndex: null, provenance: Object.freeze({ basis: 'initial-carrier-root' }) });
   if (parentPackagePath) {
     const resolvedParent = path.resolve(parentPackagePath);
-    const parentBytes = new Uint8Array(await readFile(resolvedParent));
+    let parentBytes;
+    try { parentBytes = new Uint8Array(await readFile(resolvedParent)); }
+    catch (error) {
+      if (continuationPackageParentInferred) throw new Error(`portable.cli.handoff-carrier.received-package-parent.unavailable: ${resolvedParent}. Restore the exact received Handoff package used by ground --continue and rerun handoff; Tooling will not emit a partial return without it.`);
+      throw error;
+    }
     const parentBundle = await loadNodePortableInput([resolvedParent], { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] });
     packageParentBundle = parentBundle;
     inheritedCarrierProfile = parentHandoffCarrierProfileFromBundle(parentBundle);
@@ -87,6 +95,10 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
       major: Boolean(flags['package-major']),
       majorReason: flags['major-reason'] || ''
     });
+    const expectedContinuationParentSha256 = continuationPackageParentInferred ? String(continuationState.packageParentSha256 || '').trim().toLowerCase() : '';
+    if (expectedContinuationParentSha256 && provisionalLineage.parentPackageSha256 !== expectedContinuationParentSha256) {
+      throw new Error(`portable.cli.handoff-carrier.received-package-parent.identity-mismatch: expected ${expectedContinuationParentSha256} at ${resolvedParent}, observed ${provisionalLineage.parentPackageSha256}. Restore the exact received package used by ground --continue; Tooling will not substitute a different carrier by path.`);
+    }
     if (flags['package-major']) {
       carrierLineage = provisionalLineage;
       carrierAllocation = Object.freeze({
@@ -152,6 +164,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     packageParentBundle,
     packageParentPath: parentPackagePath ? path.resolve(parentPackagePath) : '',
     packageParentSha256,
+    packageParentRoutePointer: continuationState.selectedRoutePointer || flags['package-parent-route-pointer'] || '',
+    packageParentRouteId: continuationState.selectedRouteId || flags['package-parent-route-id'] || '',
     packageParentWorkspaceIds,
     packageParentWorkspaceAliases,
     reconciliationProof,

@@ -3,6 +3,7 @@ import { projectWorkProvenance } from './grounding.workProvenance.js';
 import { projectGroundingSourceEvidence } from './grounding.sourceEvidence.js';
 import { projectGroundingPlanningContext } from './grounding.planningContext.js';
 import { projectGroundingParticipantContext } from './grounding.participantContext.js';
+import { projectGroundingParticipantArtifactAuthority } from './grounding.participantArtifactAuthority.js';
 import { projectGroundingProcessApplicability } from './grounding.processApplicability.js';
 import { projectGroundingImplementationSourceAuthority } from './grounding.implementationSourceAuthority.js';
 import { projectGroundingDelegationReadiness } from './grounding.delegationReadiness.js';
@@ -17,9 +18,10 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
   const routeRecords = selectedRouteRecords(authority, records);
   const workProvenance = projectWorkProvenance({ records, topology });
   const participantAuthority = projectParticipantAuthority(authority);
-  const participantContext = projectGroundingParticipantContext(authority);
+  const participantArtifactAuthority = projectGroundingParticipantArtifactAuthority({ authority, requiredContext, records, topology });
+  const participantContext = projectGroundingParticipantContext(mergeArtifactParticipantAuthority(authority, participantArtifactAuthority));
   const sourceEvidence = projectGroundingSourceEvidence({ records, contextAudit, continuation, requiredContext });
-  const delegationArtifactAuthority = projectGroundingDelegationArtifactAuthority({ authority, records, topology, sourceEvidence });
+  const delegationArtifactAuthority = projectGroundingDelegationArtifactAuthority({ authority, records, topology, sourceEvidence, requiredContext });
   const effectiveAuthority = mergeArtifactDelegationAuthority(authority, delegationArtifactAuthority);
   const processApplicability = projectGroundingProcessApplicability(effectiveAuthority);
   const implementationSourceAuthority = projectGroundingImplementationSourceAuthority({ authority: effectiveAuthority, records, contextAudit, requiredContext });
@@ -45,6 +47,7 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
       durableIdentityState: String(authority?.holderBinding?.durableIdentity?.state || 'not-established')
     }),
     participantAuthority,
+    participantArtifactAuthority,
     participantContext,
     processApplicability,
     implementationSourceAuthority,
@@ -53,6 +56,7 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
     workProvenance,
     unresolved: Object.freeze([
       ...workProvenance.unresolved,
+      ...participantArtifactAuthority.unresolved,
       ...participantContext.unresolved,
       ...processApplicability.unresolved,
       ...implementationSourceAuthority.unresolved,
@@ -60,6 +64,21 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
       ...sourceEvidence.blockers.map((item) => ({ code: item.code, detail: item.request }))
     ]),
     boundary: 'Full Required Context bodies remain selector-gated.'
+  });
+}
+
+
+function mergeArtifactParticipantAuthority(authority = null, artifact = null) {
+  const base = authority && typeof authority === 'object' ? authority : {};
+  const participation = base.participation && typeof base.participation === 'object' ? base.participation : {};
+  const derived = Array.isArray(artifact?.participants) ? artifact.participants : [];
+  if (!derived.length) return base;
+  return Object.freeze({
+    ...base,
+    participation: Object.freeze({
+      ...participation,
+      participants: Object.freeze([...(participation.participants || []), ...derived])
+    })
   });
 }
 

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { projectGroundingParticipantContext } from '../src/tooling/portable/grounding/grounding.participantContext.js';
+import { projectGroundingParticipantArtifactAuthority } from '../src/tooling/portable/grounding/grounding.participantArtifactAuthority.js';
 import { projectGroundingSourceEvidence } from '../src/tooling/portable/grounding/grounding.sourceEvidence.js';
 import { projectGroundingOrchestrationReadiness } from '../src/tooling/portable/grounding/grounding.orchestrationReadiness.js';
 import { projectGroundingProcessApplicability } from '../src/tooling/portable/grounding/grounding.processApplicability.js';
@@ -16,6 +17,97 @@ import { normalizePortableInput } from '../src/tooling/portable/input/portable.i
 import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
 import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integrity/integrity.c14nV2.js';
 import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodReference.js';
+import { sha256Hex } from '../src/export/package.bytes.js';
+
+
+function participantTaskRecord(objective, path = 'core/.topics/grounding/participant-task.trace.md') {
+  return {
+    id: path,
+    path,
+    schemaId: 'tiinex.task.v1',
+    hasContinuityContext: true,
+    hasIntegrity: true,
+    markdown: `# Continuity Context\n\n- Current\n  - Current Schema: tiinex.task.v1\n\n---\n\n# Participant Task\n\n## Objective\n\n${objective}\n\n## Scope\n\nFixture only.\n\n# Continuity Integrity\n\n- Towards: self\n`
+  };
+}
+
+function participantRoleContext(label, requirementId = `required:${label.toLowerCase()}-role`) {
+  const content = `# Continuity Context\n\n- Current\n  - Current Schema: tiinex.party.role.v1\n\n---\n\n# ${label} Role\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: fixture participant\n\n## Role Boundary\n\n- In Scope: bounded participant fixture\n- Out Of Scope: unrelated work\n\n## Authority And Responsibility Boundary\n\n- May Do: participate when explicitly required\n- Does Not Authorize: participation by carriage\n\n## Holder Relationship\n\n- Holder State: explicitly assignable\n- Assignment Modes: explicit-participation\n\n## Interpretation Limits\n\n- Does Not Prove: participation by presence\n- Must Not Be Treated As: participant authority without current-work declaration\n`;
+  const sha256 = sha256Hex(new TextEncoder().encode(content));
+  return {
+    requirementId,
+    name: `${label.toLowerCase()}-role`,
+    state: 'qualified',
+    contentState: 'hydrated-text',
+    content,
+    workspaceId: 'business',
+    innerPath: `.topics/roles/${label.toLowerCase()}.trace.md`,
+    referenceTarget: `business::.topics/roles/${label.toLowerCase()}.trace.md`,
+    providerMode: 'cache',
+    sha256,
+    actualSha256: sha256
+  };
+}
+
+test('artifact-derived participant authority binds closed current-work declarations to exact qualified Role material', () => {
+  const task = participantTaskRecord(
+    `Sigma is an explicitly required human participant in this current work because one human-visible confirmation is required. Sigma participation remains bounded to this Task.\n\nPilot is an explicitly required participant in this current work because one bounded specialist observation is required.`
+  );
+  const projected = projectGroundingParticipantArtifactAuthority({
+    requiredContext: [participantRoleContext('Pilot'), participantRoleContext('Sigma')],
+    records: [task],
+    topology: { currentFrontier: [{ id: task.id, path: task.path }] }
+  });
+  assert.equal(projected.state, 'explicit-qualified-artifact-participants');
+  assert.deepEqual(projected.participants.map((item) => item.label), ['Pilot', 'Sigma']);
+  assert.equal(projected.participants.every((item) => item.basis === 'explicit-current-work-participant-declaration'), true);
+  assert.equal(projected.participants.find((item) => item.label === 'Sigma')?.provenance?.declarationSourceArtifact?.path, task.path);
+  assert.equal(projected.participants.find((item) => item.label === 'Sigma')?.provenance?.roleSourceArtifact?.path, 'business::.topics/roles/sigma.trace.md');
+  assert.deepEqual(projected.unresolved, []);
+});
+
+test('artifact-derived participant authority fails closed for carriage-only, endpoint-only, missing material, duplicate declarations, and near-match prose', () => {
+  const sigmaRole = participantRoleContext('Sigma');
+  const packageGroundingOnly = {
+    participation: {
+      packageRoleGrounding: [{
+        label: 'Sigma', groundingOnly: true, materialQualification: 'qualified', pointerPath: 'sigma-pointer.trace.md',
+        roleArtifact: { reference: sigmaRole.referenceTarget, sha256: sigmaRole.sha256, schemaId: 'tiinex.party.role.v1', roleLabel: 'Sigma', roleKind: 'fixture participant' }
+      }]
+    }
+  };
+  const endpointOnly = {
+    role: {
+      state: 'qualified', endpoint: { label: 'Sigma', kind: 'role' }, material: { state: 'qualified', artifact: { reference: sigmaRole.referenceTarget, sha256: sigmaRole.sha256, schemaId: 'tiinex.party.role.v1', roleLabel: 'Sigma' } }
+    }
+  };
+  const noDeclaration = participantTaskRecord('Sigma Role material is available, but no semantic participant is explicitly declared.');
+  for (const input of [
+    { authority: packageGroundingOnly, requiredContext: [], records: [noDeclaration] },
+    { authority: endpointOnly, requiredContext: [], records: [noDeclaration] },
+    { authority: null, requiredContext: [sigmaRole], records: [noDeclaration] }
+  ]) {
+    const projected = projectGroundingParticipantArtifactAuthority({ ...input, topology: { currentFrontier: [{ id: noDeclaration.id, path: noDeclaration.path }] } });
+    assert.equal(projected.state, 'not-established');
+    assert.deepEqual(projected.participants, []);
+    assert.deepEqual(projected.declarations, []);
+  }
+
+  const missing = participantTaskRecord('Sigma is an explicitly required human participant in this current work because one bounded confirmation is required.');
+  const missingProjected = projectGroundingParticipantArtifactAuthority({ records: [missing], topology: { currentFrontier: [{ id: missing.id, path: missing.path }] } });
+  assert.deepEqual(missingProjected.participants, []);
+  assert.equal(missingProjected.unresolved[0].code, 'explicit-participant-role-material-not-established');
+
+  const duplicate = participantTaskRecord('Sigma is an explicitly required human participant in this current work because one confirmation is required.\n\nSigma is an explicitly required human participant in this current work because another confirmation is required.');
+  const duplicateProjected = projectGroundingParticipantArtifactAuthority({ requiredContext: [sigmaRole], records: [duplicate], topology: { currentFrontier: [{ id: duplicate.id, path: duplicate.path }] } });
+  assert.deepEqual(duplicateProjected.participants, []);
+  assert.equal(duplicateProjected.unresolved[0].code, 'explicit-participant-declaration-ambiguous');
+
+  const nearMatch = participantTaskRecord('Sigma is a required human participant in this current work because one confirmation is required.');
+  const nearMatchProjected = projectGroundingParticipantArtifactAuthority({ requiredContext: [sigmaRole], records: [nearMatch], topology: { currentFrontier: [{ id: nearMatch.id, path: nearMatch.path }] } });
+  assert.deepEqual(nearMatchProjected.declarations, []);
+  assert.deepEqual(nearMatchProjected.participants, []);
+});
 
 test('package-carried Role grounding never becomes semantic participation', () => {
   const projected = projectGroundingParticipantContext({
@@ -668,6 +760,43 @@ test('current-work selector keeps inbound recipient distinct from downstream del
   assert.equal(changedProjected.state, 'qualified-forward-artifact-closure');
   assert.equal(changedProjected.provenance.recipientRole.path, 'business::.topics/roles/loom.trace.md');
   assert.equal(changedProjected.delegateCapabilityAuthority.delegate.label, 'Axiom');
+});
+
+test('current-work delegate selector can qualify its exact selected Role from qualified Required Context without selection by carriage', () => {
+  const base = artifactDelegationFixture();
+  const authority = { ...base.authority, participation: { ...base.authority.participation, packageRoleGrounding: [] } };
+  const axiom = participantRoleContext('Axiom', 'required:axiom-role');
+  const projected = projectGroundingDelegationArtifactAuthority({ ...base, authority, requiredContext: [axiom] });
+  assert.equal(projected.state, 'qualified-forward-artifact-closure');
+  assert.equal(projected.delegateCapabilityAuthority.delegate.label, 'Axiom');
+  assert.equal(projected.delegateCapabilityAuthority.sourceArtifact.path, 'business::.topics/roles/axiom.trace.md');
+  assert.equal(projected.delegateCapabilityAuthority.provenance.materialResolution.kind, 'selected-handoff-required-context-role');
+  assert.equal(projected.delegateCapabilityAuthority.provenance.materialResolution.requirementId, 'required:axiom-role');
+});
+
+test('Required Context Role material never selects a delegate and exact selected-role qualification fails closed on missing, near-match, ambiguous, or unrelated material', () => {
+  const base = artifactDelegationFixture();
+  const authority = { ...base.authority, participation: { ...base.authority.participation, packageRoleGrounding: [] } };
+  const noSelectorRecords = base.records.map((record) => ({ ...record, markdown: record.markdown.replace('Axiom is the explicitly selected specialist for this review.', 'Obtain an independent specialist review.') }));
+  const axiom = participantRoleContext('Axiom', 'required:axiom-role');
+  const noSelector = projectGroundingDelegationArtifactAuthority({ ...base, authority, records: noSelectorRecords, requiredContext: [axiom] });
+  assert.equal(noSelector.delegateCapabilityAuthority, null);
+  assert.equal(noSelector.unresolved.some((item) => item.code === 'forward-delegate-selector-not-established'), true);
+
+  const missing = projectGroundingDelegationArtifactAuthority({ ...base, authority, requiredContext: [] });
+  assert.equal(missing.delegateCapabilityAuthority, null);
+
+  const near = participantRoleContext('Axiom Review', 'required:axiom-near-role');
+  const nearMatch = projectGroundingDelegationArtifactAuthority({ ...base, authority, requiredContext: [near] });
+  assert.equal(nearMatch.delegateCapabilityAuthority, null);
+
+  const duplicate = { ...axiom, requirementId: 'required:axiom-role-duplicate', innerPath: '.topics/roles/axiom-duplicate.trace.md', referenceTarget: 'business::.topics/roles/axiom-duplicate.trace.md' };
+  const ambiguous = projectGroundingDelegationArtifactAuthority({ ...base, authority, requiredContext: [axiom, duplicate] });
+  assert.equal(ambiguous.delegateCapabilityAuthority, null);
+  assert.equal(ambiguous.unresolved.some((item) => item.code === 'exact-forward-selected-delegate-role-authority-not-established'), true);
+
+  const unrelated = projectGroundingDelegationArtifactAuthority({ ...base, authority, requiredContext: [participantRoleContext('Pilot')] });
+  assert.equal(unrelated.delegateCapabilityAuthority, null);
 });
 
 test('artifact delegation closure fails closed when any required forward authority link is removed', () => {

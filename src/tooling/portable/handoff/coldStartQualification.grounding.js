@@ -20,6 +20,7 @@ import {
   recipientFactsIndexForColdStart,
   resolveReferencedRoleMaterial,
   resolveReferencedEndpointRoleMaterial,
+  resolveSelectedEndpointRoleMaterial,
   selectGroundingRoute
 } from './coldStartQualification.materials.js';
 import {
@@ -133,16 +134,10 @@ function groundSenderRole(handoff, bundle, orientation, selectedRoute, materialC
     authorityBoundaryLoaded: null,
     boundary: 'Sender endpoint is not declared as Role; no sender Role authority is invented.'
   });
-  if (!handoff.fromReference) return deepFreeze({
-    state: 'unresolved',
-    endpoint: Object.freeze({ label: handoff.from || '', kind: handoff.fromKind || (handoff.from ? 'role' : ''), bounded: Boolean(handoff.from) }),
-    material: Object.freeze({ state: 'missing-exact-reference', artifact: null }),
-    exactBoundaryLoaded: null,
-    authorityBoundaryLoaded: null,
-    boundary: 'Delegation projection requires an exact Handoff From Reference; Role inventory and endpoint labels are not substituted.'
-  });
   const localFindings = [];
-  const material = resolveReferencedEndpointRoleMaterial(bundle, handoff, orientation, selectedRoute, localFindings, materialContext, 'from');
+  const material = handoff.fromReference
+    ? resolveReferencedEndpointRoleMaterial(bundle, handoff, orientation, selectedRoute, localFindings, materialContext, 'from')
+    : resolveSelectedEndpointRoleMaterial(bundle, orientation, selectedRoute, localFindings, materialContext, 'from');
   const parsed = material ? parseRoleMaterial(material) : null;
   const target = normalizeComparable(handoff.from || '');
   if (!parsed || (target && normalizeComparable(parsed.label) !== target)) return deepFreeze({
@@ -151,19 +146,19 @@ function groundSenderRole(handoff, bundle, orientation, selectedRoute, materialC
     material: Object.freeze({ state: localFindings.length ? 'unresolved-exact-reference' : 'missing', artifact: null }),
     exactBoundaryLoaded: null,
     authorityBoundaryLoaded: null,
-    boundary: 'Exact sender Role material did not qualify; sender authority is not inferred from carried Role inventory.'
+    boundary: 'Exact selected-route sender Role material did not qualify; sender authority is not inferred from carried Role inventory or endpoint labels.'
   });
   return deepFreeze({
     state: 'qualified',
     endpoint: Object.freeze({ label: handoff.from || parsed.label || '', kind: handoff.fromKind || 'role', bounded: Boolean(handoff.from) }),
     material: Object.freeze({
       state: 'qualified',
-      artifact: Object.freeze({ path: parsed.path, sha256: parsed.sha256, schemaId: parsed.schemaId, title: parsed.title, roleLabel: parsed.label, roleKind: parsed.roleKind, reference: handoff.fromReference || '' })
+      artifact: Object.freeze({ path: parsed.path, sha256: parsed.sha256, schemaId: parsed.schemaId, title: parsed.title, roleLabel: parsed.label, roleKind: parsed.roleKind, reference: handoff.fromReference || material?.exactReference || '' })
     }),
     exactBoundaryLoaded: parsed.boundary,
     authorityBoundaryLoaded: parsed.authorityBoundary,
     interpretationLimitsLoaded: parsed.interpretationLimits,
-    boundary: 'Exact Handoff From Reference Role material only. Sender Role authority remains separate from Handoff transfer and is never inferred from endpoint naming or cache inventory.'
+    boundary: 'Exact Handoff From Reference or exact selected-route From endpoint Role Pointer material only. Sender Role authority remains separate from Handoff transfer and is never inferred from endpoint naming or cache inventory.'
   });
 }
 
@@ -182,7 +177,9 @@ function groundRecipientRole(input, handoff, bundle, orientation, selectedRoute,
 
   const explicitMaterials = normalizeRoleMaterials(input.roleMaterials || input.roleMaterial || []);
   const packageMaterials = collectPackageRoleMaterials(bundle);
-  const referencedMaterial = handoff.toReference ? resolveReferencedRoleMaterial(bundle, handoff, orientation, selectedRoute, findings, materialContext) : null;
+  const referencedMaterial = handoff.toReference
+    ? resolveReferencedRoleMaterial(bundle, handoff, orientation, selectedRoute, findings, materialContext)
+    : resolveSelectedEndpointRoleMaterial(bundle, orientation, selectedRoute, findings, materialContext, 'to');
   const all = dedupeRoleMaterials([...(referencedMaterial ? [referencedMaterial] : []), ...explicitMaterials, ...packageMaterials]);
   const parsed = all.map((entry) => parseRoleMaterial(entry)).filter(Boolean);
   const target = normalizeComparable(handoff.to || input.recipientRole || input.roleLabel || '');
@@ -204,7 +201,7 @@ function groundRecipientRole(input, handoff, bundle, orientation, selectedRoute,
   } else if (exactReferenced) {
     selected = exactReferenced;
     state = 'qualified';
-    compatibility = 'compatible-exact-reference';
+    compatibility = handoff.toReference ? 'compatible-exact-reference' : 'compatible-exact-route-endpoint-binding';
   } else if (matches.length === 1) {
     selected = matches[0];
     state = 'qualified';
@@ -223,7 +220,7 @@ function groundRecipientRole(input, handoff, bundle, orientation, selectedRoute,
     endpoint: Object.freeze({ label: handoff.to || input.recipientRole || '', kind: handoff.toKind || (handoff.to ? 'role' : ''), bounded: Boolean(handoff.to) }),
     material: Object.freeze({
       state: selected ? 'qualified' : state === 'blocked' ? compatibility : 'missing',
-      artifact: selected ? Object.freeze({ path: selected.path, sha256: selected.sha256, schemaId: selected.schemaId, title: selected.title, roleLabel: selected.label, roleKind: selected.roleKind, reference: handoff.toReference || '' }) : null,
+      artifact: selected ? Object.freeze({ path: selected.path, sha256: selected.sha256, schemaId: selected.schemaId, title: selected.title, roleLabel: selected.label, roleKind: selected.roleKind, reference: handoff.toReference || referencedMaterial?.exactReference || '' }) : null,
       candidatesInspected: parsed.length
     }),
     transition: Object.freeze({ state: transitionId ? 'declared' : 'unresolved', id: transitionId, predecessor: String(transitionInput.predecessor || transitionInput.predecessorId || '') }),
@@ -233,7 +230,7 @@ function groundRecipientRole(input, handoff, bundle, orientation, selectedRoute,
     authorityBoundaryLoaded: selected ? selected.authorityBoundary : null,
     holderRelationshipLoaded: selected ? selected.holderRelationship : null,
     interpretationLimitsLoaded: selected ? selected.interpretationLimits : null,
-    boundary: 'A Handoff `To Kind: role` endpoint remains bounded even when current Role material is missing. Matching Role material qualifies the loaded boundary but does not prove a human holder, consent, or authority beyond the Role artifact itself.'
+    boundary: 'A Handoff `To Kind: role` endpoint remains bounded even when current Role material is missing. Exact Handoff Reference material, or one exact selected-route To endpoint Role Pointer when the Handoff omits a Reference, may qualify the loaded boundary; endpoint labels and nearby Role inventory never select the source. Qualification does not prove a human holder, consent, or authority beyond the Role artifact itself.'
   });
 }
 

@@ -62,6 +62,32 @@ export function resolveReferencedRoleMaterial(bundle = {}, handoff = {}, orienta
   return resolveReferencedEndpointRoleMaterial(bundle, handoff, orientation, selectedRoute, findings, context, 'to');
 }
 
+export function resolveSelectedEndpointRoleMaterial(bundle = {}, orientation = null, selectedRoute = null, findings = [], context = null, endpointParty = 'to') {
+  const party = String(endpointParty || 'to').trim().toLowerCase() === 'from' ? 'from' : 'to';
+  const endpointPointerMatches = [];
+  const factsIndex = recipientFactsIndexForColdStart(bundle, context).map;
+  for (const pointerPath of selectedRoute?.endpointRolePointers || []) {
+    const compatibilityFacts = factsIndex.get(String(pointerPath || '')) || null;
+    const projectedFacts = (orientation?.endpointRoles || []).find((item) => String(item.pointerPath || '') === String(pointerPath || '')) || null;
+    const facts = compatibilityFacts?.role === 'endpoint-role'
+      ? compatibilityFacts
+      : projectedFacts
+        ? { role: 'endpoint-role', ...projectedFacts }
+        : {};
+    if (facts.role !== 'endpoint-role' || String(facts.endpointParty || '').toLowerCase() !== party) continue;
+    const material = resolveColdStartRolePointerMaterial(bundle, facts, findings, String(pointerPath || ''), 'endpoint-role');
+    if (material) endpointPointerMatches.push(Object.freeze({
+      ...material,
+      exactReference: String(facts.referenceTarget || ''),
+      endpointParty: party,
+      pointerPath: String(pointerPath || '')
+    }));
+  }
+  if (endpointPointerMatches.length === 1) return endpointPointerMatches[0];
+  if (endpointPointerMatches.length > 1) findings.push(portableFinding('error', 'portable.cold-start.endpoint-role.route-binding.ambiguous', 'Selected Handoff route resolves through multiple qualified Role Pointers for the same endpoint party.', { endpointParty: party, count: endpointPointerMatches.length }));
+  return null;
+}
+
 export function resolveReferencedEndpointRoleMaterial(bundle = {}, handoff = {}, orientation = null, selectedRoute = null, findings = [], context = null, endpointParty = 'to') {
   const party = String(endpointParty || 'to').trim().toLowerCase() === 'from' ? 'from' : 'to';
   const reference = String(party === 'from' ? handoff.fromReference : handoff.toReference || '').trim();

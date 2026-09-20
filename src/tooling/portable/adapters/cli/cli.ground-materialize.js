@@ -1,7 +1,8 @@
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { inspectRecipientFacingV2Topology } from '../../handoff/recipientV2.inspect.js';
 import { handoffWorkspaceProviderForId } from '../../handoff/workspaceByteProvider.js';
+import { sha256Hex } from '../../../../export/package.bytes.js';
 
 export function groundContinuationOperationInput(input = {}, flags = {}) {
   return Object.freeze({
@@ -39,10 +40,14 @@ export async function materializeGroundWorkspaceCliOutput(result = {}, input = {
   const selectedLeafPath = String(result?.lineage?.selectedRouteLeaves?.[0]?.path || '');
   const selectedHandoffPath = selectedLeafPath.startsWith(`${workspaceId}/`) ? selectedLeafPath.slice(workspaceId.length + 1) : '';
   const workspaceInspection = (inspection.workspaces || []).find((item) => String(item.workspaceId || '') === workspaceId) || {};
+  const packageParentPath = path.resolve(String(input.packageSourcePath || ''));
+  const packageParentBytes = new Uint8Array(await readFile(packageParentPath));
   const continuationState = Object.freeze({
     schema: 'tiinex.portable.ground-continuation-state.v1',
     version: 1,
-    packageParentPath: path.resolve(String(input.packageSourcePath || '')),
+    packageParentPath,
+    packageParentSha256: sha256Hex(packageParentBytes),
+    packageParentFilename: path.basename(packageParentPath),
     selectedRoutePointer: String(result?.authority?.route?.pointerPath || input.route || ''),
     selectedRouteId: String(result?.authority?.route?.id || ''),
     selectedHandoffPath,

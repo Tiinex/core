@@ -177,7 +177,14 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
   const routePointers = generatedArtifacts.filter((item) => item.schemaId === 'tiinex.pointer.v1' && item.facts?.role === 'handoff-route' && item.status === 'qualified');
   const endpointRolePointers = generatedArtifacts.filter((item) => item.schemaId === 'tiinex.pointer.v1' && item.facts?.role === 'endpoint-role' && item.status === 'qualified');
   const participantRolePointers = generatedArtifacts.filter((item) => item.schemaId === 'tiinex.pointer.v1' && item.facts?.role === 'participant-role' && item.status === 'qualified');
-  const lineage = packageContract ? Object.freeze({ dimension: packageContract.carrierDimension, parentDimension: packageContract.parentCarrierDimension, checkpointKind: packageContract.carrierCheckpoint, majorReason: packageContract.majorReason || '' }) : null;
+  const lineage = packageContract ? Object.freeze({
+    dimension: packageContract.carrierDimension,
+    parentDimension: packageContract.parentCarrierDimension,
+    parentPackageSha256: packageContract.parentPackageSha256 || '',
+    parentPackageFilename: packageContract.parentPackageFilename || '',
+    checkpointKind: packageContract.carrierCheckpoint,
+    majorReason: packageContract.majorReason || ''
+  }) : null;
   const packageRole = String(packageContract?.packageRole || '');
   const workspaceMode = packageRole === WORKSPACE_PACKAGE_ROLE;
   const bootstrapMode = packageRole === BOOTSTRAP_PACKAGE_ROLE;
