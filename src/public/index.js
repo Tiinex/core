@@ -53,3 +53,8 @@ export {
   projectPortableSourceReconciliationProofSummary,
   qualifyPortableSourceReconciliationProofForManufacture
 } from '../tooling/portable/comparison/sourceFrontierReconciliationProof.js';
+
+export {
+  HANDOFF_CARRIER_CONTINUATION_PROJECTION_SCHEMA_ID,
+  projectHandoffCarrierContinuation
+} from '../tooling/portable/handoff/carrierContinuationProjection.js';

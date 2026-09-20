@@ -48,6 +48,7 @@ export * from './transfer/transfer.plan.js';
 
 export * from './handoff/manufacture.js';
 export * from './handoff/carrierProfile.js';
+export * from './handoff/carrierContinuationProjection.js';
 export * from './handoff/toolingBootstrap.js';
 export * from './handoff/coldStartQualification.js';
 export * from './handoff/transportEnvelopeV1.js';

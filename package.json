@@ -141,7 +141,8 @@
     "./tooling/portable/adapters/node/sourceFrontierComparison.js": "./src/tooling/portable/adapters/node/sourceFrontierComparison.js",
     "./tooling/portable/handoff/recoveryAcceptanceAudit.js": "./src/tooling/portable/handoff/recoveryAcceptanceAudit.js",
     "./tooling/portable/grounding/grounding.delegationReadiness.js": "./src/tooling/portable/grounding/grounding.delegationReadiness.js",
-    "./tooling/portable/workspace/workspace.initialize.js": "./src/tooling/portable/workspace/workspace.initialize.js"
+    "./tooling/portable/workspace/workspace.initialize.js": "./src/tooling/portable/workspace/workspace.initialize.js",
+    "./tooling/portable/handoff/carrierContinuationProjection.js": "./src/tooling/portable/handoff/carrierContinuationProjection.js"
   },
   "files": [
     "src",
