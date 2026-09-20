@@ -63,6 +63,9 @@ test('artifact-derived participant authority binds closed current-work declarati
   assert.equal(projected.participants.every((item) => item.basis === 'explicit-current-work-participant-declaration'), true);
   assert.equal(projected.participants.find((item) => item.label === 'Sigma')?.provenance?.declarationSourceArtifact?.path, task.path);
   assert.equal(projected.participants.find((item) => item.label === 'Sigma')?.provenance?.roleSourceArtifact?.path, 'business::.topics/roles/sigma.trace.md');
+  assert.equal(projected.participants.find((item) => item.label === 'Sigma')?.roleIdentity?.state, 'qualified');
+  assert.equal(projected.participants.find((item) => item.label === 'Sigma')?.holderAssignmentAuthorization?.state, 'qualified');
+  assert.deepEqual(projected.participants.find((item) => item.label === 'Sigma')?.holderAssignmentAuthorization?.modes, ['explicit-participation']);
   assert.deepEqual(projected.unresolved, []);
 });
 
@@ -107,6 +110,10 @@ test('artifact-derived participant authority fails closed for carriage-only, end
   const nearMatchProjected = projectGroundingParticipantArtifactAuthority({ requiredContext: [sigmaRole], records: [nearMatch], topology: { currentFrontier: [{ id: nearMatch.id, path: nearMatch.path }] } });
   assert.deepEqual(nearMatchProjected.declarations, []);
   assert.deepEqual(nearMatchProjected.participants, []);
+
+  const mismatched = projectGroundingParticipantArtifactAuthority({ requiredContext: [participantRoleContext('Pilot')], records: [missing], topology: { currentFrontier: [{ id: missing.id, path: missing.path }] } });
+  assert.deepEqual(mismatched.participants, []);
+  assert.equal(mismatched.unresolved[0].code, 'explicit-participant-role-material-not-established');
 });
 
 test('package-carried Role grounding never becomes semantic participation', () => {
@@ -139,8 +146,98 @@ test('only explicit semantic participant declarations establish the bounded part
   assert.equal(projected.state, 'explicit-semantic-participants');
   assert.equal(projected.participantMapState, 'explicit-bounded-map');
   assert.equal(projected.semanticParticipants[0].semanticParticipant, true);
+  assert.equal(projected.semanticParticipants[0].participantAuthority.state, 'qualified');
+  assert.equal(projected.semanticParticipants[0].roleIdentity.state, 'not-established');
+  assert.equal(projected.semanticParticipants[0].holderAssignmentAuthorization.state, 'not-established');
+  assert.equal(projected.semanticParticipants[0].holderBinding.state, 'not-established');
   assert.equal(projected.roleGrounding[0].semanticParticipant, false);
+  assert.equal(projected.speakerStateBoundary.state, 'external-host-local-non-authoritative');
+  assert.equal(projected.speakerStateBoundary.transported, false);
   assert.deepEqual(projected.unresolved, []);
+});
+
+test('qualified participant Role assignment authorization and current session holder binding remain independent claims', () => {
+  const task = participantTaskRecord('Sigma is an explicitly required human participant in this current work because one bounded operator observation is required.');
+  const artifact = projectGroundingParticipantArtifactAuthority({
+    requiredContext: [participantRoleContext('Sigma')],
+    records: [task],
+    topology: { currentFrontier: [{ id: task.id, path: task.path }] }
+  });
+  const sigma = artifact.participants[0];
+  assert.equal(sigma.roleIdentity.state, 'qualified');
+  assert.equal(sigma.holderAssignmentAuthorization.state, 'qualified');
+  assert.deepEqual(sigma.holderAssignmentAuthorization.modes, ['explicit-participation']);
+
+  const withoutOccurrence = projectGroundingParticipantContext({ participation: { participants: [sigma] } });
+  assert.equal(withoutOccurrence.semanticParticipants[0].participantAuthority.state, 'qualified');
+  assert.equal(withoutOccurrence.semanticParticipants[0].roleIdentity.state, 'qualified');
+  assert.equal(withoutOccurrence.semanticParticipants[0].holderAssignmentAuthorization.state, 'qualified');
+  assert.equal(withoutOccurrence.semanticParticipants[0].holderBinding.state, 'not-established');
+
+  const withOccurrence = projectGroundingParticipantContext({
+    participation: { participants: [sigma] },
+    holderBinding: {
+      state: 'qualified', roleLabel: 'Sigma', holderId: 'session-human', assertionMode: 'explicit-participation', source: 'explicit-input',
+      authorization: { state: 'qualified', assignmentMode: 'explicit-participation', provenance: { roleArtifactSha256: sigma.roleIdentity.sourceArtifact.sha256 } },
+      sourceDetail: { kind: 'operator-session-input', locator: 'fixture.session', semanticAuthorityState: 'qualified-bounded-session-assignment', roleArtifactSha256: sigma.roleIdentity.sourceArtifact.sha256 },
+      durableIdentity: { state: 'not-established' },
+      boundary: 'fixture bounded consuming-session holder binding'
+    }
+  });
+  assert.equal(withOccurrence.semanticParticipants[0].holderBinding.state, 'qualified');
+  assert.equal(withOccurrence.semanticParticipants[0].holderBinding.bindingPresent, true);
+  assert.equal(withOccurrence.semanticParticipants[0].holderBinding.assignmentMode, 'explicit-participation');
+  assert.equal(withOccurrence.semanticParticipants[0].holderBinding.durableIdentityState, 'not-established');
+});
+
+test('qualified Role holder binding without participant authority does not create a semantic participant', () => {
+  const projected = projectGroundingParticipantContext({
+    participation: {
+      participants: [],
+      packageRoleGrounding: [{
+        label: 'Sigma', pointerPath: 'sigma-role-pointer.trace.md', groundingOnly: true, materialQualification: 'qualified',
+        roleArtifact: { path: 'business::.topics/roles/sigma.trace.md', sha256: 'a'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Sigma' },
+        holderRelationshipLoaded: { assignmentModes: 'explicit-participation', holderState: 'assignable' }
+      }]
+    },
+    holderBinding: { state: 'qualified', roleLabel: 'Sigma', assertionMode: 'explicit-participation' }
+  });
+  assert.equal(projected.participantMapState, 'not-established');
+  assert.equal(projected.semanticParticipants.length, 0);
+  assert.equal(projected.roleGrounding[0].semanticParticipant, false);
+  assert.equal(projected.roleGrounding[0].holderAssignmentAuthorization.state, 'available-role-material');
+  assert.equal(projected.unresolved[0].code, 'participant-map-not-established');
+});
+
+test('speaker labels and contribution speaker state remain outside semantic participant authority', () => {
+  const projected = projectGroundingParticipantContext({
+    speakerLabel: 'Sigma',
+    activeSpeaker: 'Sigma',
+    participation: {
+      participants: [],
+      currentContribution: { state: 'declared-unverified', speakerLabel: 'Sigma', attribution: 'declared' }
+    }
+  });
+  assert.equal(projected.participantMapState, 'not-established');
+  assert.deepEqual(projected.semanticParticipants, []);
+  assert.equal(projected.speakerStateBoundary.state, 'external-host-local-non-authoritative');
+  assert.equal(projected.speakerStateBoundary.consumedAsSemanticAuthority, false);
+  assert.match(projected.boundary, /Active speaker value remains host-local non-authoritative state outside semantic grounding/);
+});
+
+test('multiple bounded semantic participants preserve deterministic declaration authority without order-derived holder state', () => {
+  const task = participantTaskRecord('Sigma is an explicitly required human participant in this current work because one human observation is required.\n\nPilot is an explicitly required participant in this current work because one specialist observation is required.');
+  const artifact = projectGroundingParticipantArtifactAuthority({
+    requiredContext: [participantRoleContext('Sigma'), participantRoleContext('Pilot')],
+    records: [task],
+    topology: { currentFrontier: [{ id: task.id, path: task.path }] }
+  });
+  assert.deepEqual(artifact.participants.map((item) => item.label), ['Pilot', 'Sigma']);
+  const projected = projectGroundingParticipantContext({ participation: { participants: artifact.participants } });
+  assert.deepEqual(projected.semanticParticipants.map((item) => item.label), ['Pilot', 'Sigma']);
+  assert.equal(projected.semanticParticipants.every((item) => item.participantAuthority.state === 'qualified'), true);
+  assert.equal(projected.semanticParticipants.every((item) => item.roleIdentity.state === 'qualified'), true);
+  assert.equal(projected.semanticParticipants.every((item) => item.holderBinding.state === 'not-established'), true);
 });
 
 test('source projection preserves complete, bounded, cache, explicit requirement, and unavailable authority states', () => {

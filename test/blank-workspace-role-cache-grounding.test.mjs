@@ -834,6 +834,15 @@ test('ordinary ground qualifies Pilot delegation and Sigma participation from ex
   assert.equal(sigma.basis, 'explicit-current-work-participant-declaration');
   assert.equal(sigma.provenance.declarationSourceArtifact.path, `docs/${taskPath}`);
   assert.equal(sigma.provenance.roleSourceArtifact.path, `business::${SIGMA_ROLE_PATH}`);
+  assert.equal(sigma.participantAuthority.state, 'qualified');
+  assert.equal(sigma.roleIdentity.state, 'qualified');
+  assert.equal(sigma.roleIdentity.sourceArtifact.path, `business::${SIGMA_ROLE_PATH}`);
+  assert.equal(sigma.holderAssignmentAuthorization.state, 'qualified');
+  assert.deepEqual(sigma.holderAssignmentAuthorization.modes, ['explicit-participation']);
+  assert.equal(sigma.holderBinding.state, 'not-established');
+  assert.equal(grounded.capsule.roleState.holder, 'Anchor');
+  assert.equal(grounded.capsule.participantContext.speakerStateBoundary.state, 'external-host-local-non-authoritative');
+  assert.equal(grounded.capsule.participantContext.speakerStateBoundary.transported, false);
   assert.equal(grounded.capsule.delegationReadiness.state, 'qualified-for-delegation-authoring', JSON.stringify(grounded.capsule.delegationReadiness, null, 2));
   assert.equal(grounded.capsule.delegationReadiness.delegateCapabilityAuthority.delegate.label, 'Pilot');
   assert.equal(grounded.capsule.delegationArtifactAuthority.provenance.delegateRole.path, `business::${PILOT_ROLE_PATH}`);

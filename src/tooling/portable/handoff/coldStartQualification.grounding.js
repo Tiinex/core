@@ -157,6 +157,7 @@ function groundSenderRole(handoff, bundle, orientation, selectedRoute, materialC
     }),
     exactBoundaryLoaded: parsed.boundary,
     authorityBoundaryLoaded: parsed.authorityBoundary,
+    holderRelationshipLoaded: parsed.holderRelationship,
     interpretationLimitsLoaded: parsed.interpretationLimits,
     boundary: 'Exact Handoff From Reference or exact selected-route From endpoint Role Pointer material only. Sender Role authority remains separate from Handoff transfer and is never inferred from endpoint naming or cache inventory.'
   });
@@ -458,6 +459,7 @@ function resolvePackageParticipantRoles(bundle = {}, orientation = null, selecte
       }),
       exactBoundaryLoaded: parsed.boundary,
       authorityBoundaryLoaded: parsed.authorityBoundary,
+      holderRelationshipLoaded: parsed.holderRelationship,
       interpretationLimitsLoaded: parsed.interpretationLimits,
       pointerPath
     }));

@@ -1,5 +1,6 @@
 import { sha256Hex } from '../../../export/package.bytes.js';
 import { parseRoleMaterial } from '../handoff/coldStartQualification.materials.js';
+import { projectHolderAssignmentModeAuthority } from './grounding.holderAssignmentModes.js';
 
 const CURRENT_TASK_SCHEMA = 'tiinex.task.v1';
 const ROLE_SCHEMA = 'tiinex.party.role.v1';
@@ -138,7 +139,8 @@ function qualifiedEndpointRole(role = null, declaredReference = '') {
     label,
     roleKind: String(artifact.roleKind || ''),
     sourceArtifact: sourceArtifactFromReference(reference, sha256, ROLE_SCHEMA),
-    materialResolution: Object.freeze({ kind: 'selected-handoff-endpoint-role' })
+    materialResolution: Object.freeze({ kind: 'selected-handoff-endpoint-role' }),
+    holderAssignmentAuthorization: projectHolderAssignmentModeAuthority(role)
   });
 }
 
@@ -154,7 +156,14 @@ function qualifiedPackageGroundingRole(entry = {}) {
     label,
     roleKind: String(artifact.roleKind || ''),
     sourceArtifact: sourceArtifactFromReference(reference, sha256, ROLE_SCHEMA),
-    materialResolution: Object.freeze({ kind: 'package-role-grounding-pointer', pointerPath: String(entry.pointerPath || ''), groundingOnly: true })
+    materialResolution: Object.freeze({ kind: 'package-role-grounding-pointer', pointerPath: String(entry.pointerPath || ''), groundingOnly: true }),
+    holderAssignmentAuthorization: projectHolderAssignmentModeAuthority(roleProjection({
+      label,
+      roleKind: String(artifact.roleKind || ''),
+      reference,
+      sha256,
+      holderRelationship: entry.holderRelationshipLoaded || null
+    }))
   });
 }
 
@@ -176,7 +185,14 @@ function qualifiedRequiredContextRole(entry = {}) {
       providerMode: String(entry.providerMode || ''),
       workspaceId: String(entry.workspaceId || ''),
       innerPath: String(entry.innerPath || '')
-    })
+    }),
+    holderAssignmentAuthorization: projectHolderAssignmentModeAuthority(roleProjection({
+      label: parsed.label,
+      roleKind: parsed.roleKind,
+      reference,
+      sha256: expectedSha,
+      holderRelationship: parsed.holderRelationship
+    }))
   });
 }
 
@@ -190,6 +206,15 @@ function participantProjection(declaration, role) {
     basis: 'explicit-current-work-participant-declaration',
     source: declaration.sourceArtifact.path,
     declaration,
+    roleIdentity: Object.freeze({
+      state: 'qualified',
+      label: role.label,
+      kind: role.roleKind,
+      sourceArtifact: role.sourceArtifact,
+      materialResolution: role.materialResolution,
+      boundary: 'Exact Role material qualifies the declared participant Role identity only. It does not establish holder assignment, a current holder, participation, or durable person identity by itself.'
+    }),
+    holderAssignmentAuthorization: projectAssignmentAuthorization(role.holderAssignmentAuthorization),
     roleSourceArtifact: role.sourceArtifact,
     materialResolution: role.materialResolution,
     provenance: Object.freeze({
@@ -201,6 +226,32 @@ function participantProjection(declaration, role) {
       materialResolution: role.materialResolution,
       boundary: 'The current-work declaration establishes participation. Exact Role material only qualifies the declared Role; its presence alone is non-participant grounding evidence.'
     })
+  });
+}
+
+function roleProjection({ label = '', roleKind = '', reference = '', sha256 = '', holderRelationship = null } = {}) {
+  return Object.freeze({
+    state: 'qualified',
+    endpoint: Object.freeze({ label, kind: 'role', bounded: true }),
+    material: Object.freeze({
+      state: 'qualified',
+      artifact: Object.freeze({ path: reference, reference, sha256, schemaId: ROLE_SCHEMA, roleLabel: label, roleKind })
+    }),
+    holderRelationshipLoaded: holderRelationship || Object.freeze({}),
+    boundary: 'Synthetic projection of one exact already-qualified Role artifact for assignment-mode qualification only.'
+  });
+}
+
+function projectAssignmentAuthorization(value = null) {
+  const supplied = value && typeof value === 'object' ? value : {};
+  return Object.freeze({
+    state: String(supplied.state || 'unresolved'),
+    modes: Object.freeze([...(supplied.modes || [])]),
+    holderState: String(supplied.holderState || ''),
+    source: String(supplied.source || 'none'),
+    reasonCode: String(supplied.reasonCode || 'holder-assignment-mode-authority-unresolved'),
+    provenance: supplied.provenance ? Object.freeze({ ...(supplied.provenance || {}) }) : null,
+    boundary: String(supplied.boundary || 'Participant Role assignment-mode authorization remains unresolved and never establishes a holder or participation occurrence by itself.')
   });
 }
 
