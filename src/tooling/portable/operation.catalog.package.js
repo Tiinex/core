@@ -14,6 +14,7 @@ import { projectPortableAuthoringParent } from './editor/authoring.parent.js';
 import { projectQualifiedWorkspacePackageSources } from './handoff/workspacePackageSources.js';
 import { projectPortableHandoffAuthoringPlan } from './handoff/handoffAuthoringPlan.js';
 import { projectQualifiedHandoffEndpoints } from './handoff/handoffEndpointProjection.js';
+import { projectPortableHandoffParticipants } from './handoff/handoffParticipantProjection.js';
 import { projectPortableOperatorContext } from './handoff/operatorContextProjection.js';
 import { projectPortableStagedValidation } from './editor/staged.validation.js';
 
@@ -116,6 +117,13 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     safety: 'planning-only-read-only',
     inputSchema: 'tiinex.portable.input.v1',
     handler: (input = {}) => wrapPortableResult('project-handoff-endpoints', projectQualifiedHandoffEndpoints(input))
+  }),
+  'project-handoff-participants': operation({
+    name: 'project-handoff-participants',
+    description: 'Qualify exactly one Handoff route and project its Core-owned semantic participant authority without manufacturing a package.',
+    safety: 'planning-only-read-only',
+    inputSchema: 'tiinex.portable.handoff-manufacturing.request.v2',
+    handler: (input = {}) => wrapPortableResult('project-handoff-participants', projectPortableHandoffParticipants(input))
   }),
   'project-operator-context': operation({
     name: 'project-operator-context',

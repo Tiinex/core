@@ -74,10 +74,10 @@ export function projectHandoffHumanOutput(input = {}) {
   const selected = selectRoute(projection, input.route || input.routePath || input.routeId || '');
   if (selected.state !== 'qualified') findings.push(finding('error', `portable.handoff-human-output.route.${selected.state}`, selected.state === 'selection-required' ? 'Shared carrier output requires explicit selection of one qualified Handoff route.' : 'Requested Handoff route is not qualified by the carrier projection.', { selector: String(input.route || input.routePath || input.routeId || '') }));
   const instance = normalizeInstance(input.collisionInstance || input.instance || 1);
-  const filename = selected.route ? carrierFilenameForInstance(projectedOuterFilename(projection, selected.route), instance) : '';
+  const filename = selected.route ? carrierFilenameForInstance(projectedOuterFilename(projection, selected.route, input.carrierPrefix || ''), instance) : '';
   const routeWorkspace = selected.route ? findProjectedHandoffCarrierWorkspace(projection, selected.route.workspaceId) : null;
   const transportText = selected.route ? transportTextForRoute(routeWorkspace || projection.workspace || {}, selected.route) : '';
-  const sharedRouting = projectSharedRouting(projection, instance);
+  const sharedRouting = projectSharedRouting(projection, instance, input.carrierPrefix || '');
   const status = findings.some((item) => item.severity === 'error') ? (selected.state === 'selection-required' ? 'selection-required' : 'blocked') : 'ready';
   return deepFreeze({
     schema: HANDOFF_HUMAN_OUTPUT_SCHEMA_ID,
@@ -112,11 +112,11 @@ export function carrierFilenameForInstance(filename = '', instance = 1) {
 
 
 
-function projectSharedRouting(projection = {}, instance = 1) {
+function projectSharedRouting(projection = {}, instance = 1, carrierPrefix = '') {
   if (String(projection.mode || '') !== 'shared') return null;
   const routes = (projection.routes || []).filter((route) => route.state === 'qualified');
   if (!routes.length) return null;
-  const filename = carrierFilenameForInstance(projectedOuterFilename(projection, routes[0]), instance);
+  const filename = carrierFilenameForInstance(projectedOuterFilename(projection, routes[0], carrierPrefix), instance);
   return Object.freeze({
     mode: 'one-shared-package-many-exact-route-texts',
     primary: Object.freeze({ kind: 'handoff-package', filename }),
@@ -136,16 +136,23 @@ function projectSharedRouting(projection = {}, instance = 1) {
   });
 }
 
-function projectedOuterFilename(projection = {}, selectedRoute = {}) {
-  if (String(projection.mode || '') !== 'shared') return String(selectedRoute.projectedFilename || '');
+function projectedOuterFilename(projection = {}, selectedRoute = {}, carrierPrefix = '') {
+  const explicitPrefix = slug(carrierPrefix || '');
+  const dimension = String(projection.lineage?.dimension || selectedRoute.dimension || '').trim();
+  if (String(projection.mode || '') !== 'shared') {
+    if (!explicitPrefix || !dimension) return String(selectedRoute.projectedFilename || '');
+    const from = slug(selectedRoute.parties?.from || '');
+    const to = slug(selectedRoute.parties?.to || '');
+    return from && to ? `${explicitPrefix}-${slug(dimension)}-${from}-to-${to}.handoff-package.zip` : String(selectedRoute.projectedFilename || '');
+  }
   const routes = (projection.routes || []).filter((route) => route.state === 'qualified');
   const recipients = [...new Set(routes.map((route) => String(route.parties?.to || '').trim()).filter(Boolean))];
   const senders = [...new Set(routes.map((route) => String(route.parties?.from || '').trim()).filter(Boolean))];
   const workspace = projection.workspace || findProjectedHandoffCarrierWorkspace(projection, selectedRoute.workspaceId) || {};
-  const dimension = String(projection.lineage?.dimension || selectedRoute.dimension || '').trim();
-  if (senders.length !== 1 || !recipients.length || !workspace.slug || !dimension) return String(selectedRoute.projectedFilename || '');
+  const prefix = explicitPrefix || slug(workspace.slug || '');
+  if (senders.length !== 1 || !recipients.length || !prefix || !dimension) return String(selectedRoute.projectedFilename || '');
   const recipientSegment = recipients.map(slug).filter(Boolean).join('-and-');
-  return `${slug(workspace.slug)}-${slug(dimension)}-${slug(senders[0])}-to-${recipientSegment}.handoff-package.zip`;
+  return `${prefix}-${slug(dimension)}-${slug(senders[0])}-to-${recipientSegment}.handoff-package.zip`;
 }
 
 function slug(value = '') {

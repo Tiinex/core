@@ -190,7 +190,8 @@ export async function materializeHandoffManufactureCliOutput(result = {}, flags 
   let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput(result, flags) : bootstrapMode ? projectBootstrapCarrierHumanOutput(result, flags) : projectHandoffHumanOutput({
     projection: result.carrierProjection || {},
     route: flags.route || '',
-    collisionInstance: flags['collision-instance'] || 1
+    collisionInstance: flags['collision-instance'] || 1,
+    carrierPrefix: flags['carrier-prefix'] || ''
   });
   if (result.bundle?.transportFormat) humanOutput = projectRecipientV2HumanOutput(humanOutput, result.inspection || {});
   const wantsWrite = Boolean(flags.output || flags['output-dir']);
@@ -361,6 +362,25 @@ export function summarizeHandoffManufactureCliOutput(result = {}, writeReceipt =
       semanticHandoffStatus: String(result.plan?.semanticHandoffStatus || 'unknown'),
       required: Object.freeze((result.plan?.requirements?.required || []).map(summarizeRequirement)),
       reference: Object.freeze((result.plan?.requirements?.reference || []).map(summarizeRequirement)),
+      participantRoles: Object.freeze((result.plan?.requirements?.participantRoles || []).map((item = {}) => Object.freeze({
+        requirementId: String(item.id || item.requirementId || ''),
+        label: String(item.roleLabel || item.name || item.requirementName || ''),
+        reference: String(item.materialReference || item.reference?.target || item.referenceTarget || ''),
+        workspaceId: String(item.targetWorkspaceId || ''),
+        path: String(item.targetPath || '')
+      }))),
+      semanticParticipantRoutes: Object.freeze((result.plan?.requirements?.semanticParticipantRoutes || []).map((route = {}) => Object.freeze({
+        routeWorkspaceId: String(route.routeWorkspaceId || ''),
+        routePath: String(route.routePath || ''),
+        state: String(route.state || 'not-established'),
+        currentTask: route.currentTask ? Object.freeze({ path: String(route.currentTask.path || ''), schemaId: String(route.currentTask.schemaId || '') }) : null,
+        participants: Object.freeze((route.participantRoles || []).map((role = {}) => Object.freeze({
+          label: String(role.label || ''),
+          reference: String(role.reference || ''),
+          workspaceId: String(role.workspaceId || ''),
+          path: String(role.path || '')
+        })))
+      }))),
       workspaces: Object.freeze((result.plan?.workspaceMaterializations || []).map(summarizeWorkspace))
     }),
     carrierProjection: Object.freeze({

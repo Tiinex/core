@@ -42,7 +42,19 @@ export function planRecipientRelativeHandoffMaterialClosure(input = {}, options 
     handoff: requirements.handoff,
     inputBinding,
     policy,
-    requirements: Object.freeze({ required: Object.freeze(required), reference: Object.freeze(reference), endpointRoles: Object.freeze(endpointRoles), participantRoles: Object.freeze(participantRoles), dependencies: Object.freeze(dependencies) }),
+    requirements: Object.freeze({
+      required: Object.freeze(required),
+      reference: Object.freeze(reference),
+      endpointRoles: Object.freeze(endpointRoles),
+      participantRoles: Object.freeze(participantRoles),
+      dependencies: Object.freeze(dependencies),
+      // Semantic participant authority is projected before closure planning by
+      // shared Core manufacturing. Preserve that exact route-scoped projection
+      // through the disposable closure plan so host adapters can present the
+      // qualified participant set without reconstructing it from transport
+      // requirements, Role inventory, or endpoint labels.
+      semanticParticipantRoutes: Object.freeze([...(requirements.semanticParticipantRoutes || [])])
+    }),
     materialized: Object.freeze(materialized),
     workspaceMaterializations: Object.freeze(workspaces),
     bootstrap: Object.freeze({ status: policy.bootstrap, boundary: 'Optional transport orientation only; not Handoff semantics, workspace authority, or artifact identity.' }),

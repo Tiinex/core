@@ -157,7 +157,7 @@ export async function commandInput(parsed, runtime = {}) {
     return prepareSourceFrontierReconciliationCliInput(flags, dispositions);
   }
 
-  if (parsed.command === 'manufacture-handoff-package') {
+  if (parsed.command === 'manufacture-handoff-package' || parsed.command === 'project-handoff-participants') {
     return prepareHandoffManufactureCliCommand(parsed, runtime);
   }
   if (parsed.command === 'describe-checkpoint-gate') return { input: { profile: flags.profile || parsed.positionals[0] || 'source-clean' }, options: {} };
