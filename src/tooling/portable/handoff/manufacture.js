@@ -5,10 +5,14 @@ import { buildRecipientRelativeHandoffV2DirectBaseline } from './materialClosure
 import { qualifyMajorCarrierReadiness } from './carrierLineage.js';
 import { manufactureRecipientRelativeWorkspacePackage } from './workspaceCarrier.manufacture.js';
 import { manufactureRecipientRelativeBootstrapPackage } from './bootstrapCarrier.manufacture.js';
+import { planRecipientRelativeHandoffMaterialClosure } from './materialClosure.plan.js';
+import { qualifyHandoffMaterialClosurePlanReadiness } from './materialClosure.readiness.js';
 
 export function manufactureRecipientRelativeHandoffPackage(input = {}, options = {}) {
   if (String(input.carrierMode || '') === 'workspace') return manufactureRecipientRelativeWorkspacePackage(input, options);
   if (String(input.carrierMode || '') === 'bootstrap') return manufactureRecipientRelativeBootstrapPackage(input, options);
+  const preflight = qualifyRecipientRelativeHandoffManufacturePreflight(input, options);
+  if (preflight.state === 'blocked') return blockedManufactureResult(input, preflight);
   const baseline = buildRecipientRelativeHandoffV2DirectBaseline(input, options);
   const upgraded = upgradeRecipientRelativeHandoffTransportPackageV2(baseline, input, options);
   const toolingBootstrapInspection = upgraded.inspection?.bootstrapInspection || inspectPortableToolingBootstrap(baseline.bundle || upgraded.bundle || {});
@@ -101,5 +105,102 @@ export function manufactureRecipientRelativeHandoffPackage(input = {}, options =
     findings,
     findingSummary: summarizePortableFindings(findings),
     boundary: 'Canonical archive-backed Handoff manufacturing facade. It fails closed unless every selected source-material binding qualifies under tiinex.handoff.package.v1, the exact authoritative selected Handoff is contained by clear qualified carried material, the actively selected local Handoff candidate satisfies prospective per-field exact schema-reference authority, and any required reconciliation proof matches the exact source selected for manufacture.'
+  });
+}
+
+
+export function qualifyRecipientRelativeHandoffManufacturePreflight(input = {}, options = {}) {
+  const plan = input.plan || planRecipientRelativeHandoffMaterialClosure(input, options);
+  const planReadiness = qualifyHandoffMaterialClosurePlanReadiness(plan);
+  const schemaReferencePreflight = input.schemaReferencePreflight || input.manufacturingEvidence?.schemaReferencePreflight || null;
+  const returnCarrierReservationPreflight = input.returnCarrierReservationPreflight || input.manufacturingEvidence?.returnCarrierReservationPreflight || null;
+  const reconciliationProofQualification = input.reconciliationProofQualification || input.manufacturingEvidence?.reconciliationProof || null;
+  const externalFindings = [
+    ...(schemaReferencePreflight?.findings || []),
+    ...(returnCarrierReservationPreflight?.findings || []),
+    ...(reconciliationProofQualification?.findings || [])
+  ];
+  const findings = Object.freeze([...(plan.findings || []), ...externalFindings]);
+  const findingBlocked = findings.some((item) => String(item?.severity || '').toLowerCase() === 'error');
+  const stateBlocked = [schemaReferencePreflight, returnCarrierReservationPreflight, reconciliationProofQualification]
+    .some((item) => String(item?.state || '') === 'blocked');
+  const closureBlocked = planReadiness.state !== 'qualified' || !planReadiness.expectedRequiredClosureReady;
+  return Object.freeze({
+    state: findingBlocked || stateBlocked || closureBlocked ? 'blocked' : 'qualified',
+    plan,
+    planReadiness,
+    findings,
+    blockers: Object.freeze({ findingBlocked, stateBlocked, closureBlocked }),
+    boundary: 'Pure manufacture preflight. It qualifies selected-Handoff/current-work findings and material closure before bootstrap construction or recipient package assembly; it creates no package bytes.'
+  });
+}
+
+function blockedManufactureResult(input = {}, preflight = {}) {
+  const schemaReferencePreflight = input.schemaReferencePreflight || input.manufacturingEvidence?.schemaReferencePreflight || null;
+  const returnCarrierReservationPreflight = input.returnCarrierReservationPreflight || input.manufacturingEvidence?.returnCarrierReservationPreflight || null;
+  const reconciliationProofQualification = input.reconciliationProofQualification || input.manufacturingEvidence?.reconciliationProof || null;
+  const findings = Object.freeze([...(preflight.findings || [])]);
+  return Object.freeze({
+    schema: 'tiinex.portable.handoff-manufacturing.v2',
+    status: 'blocked',
+    executable: false,
+    transportExecutable: false,
+    verification: Object.freeze({
+      baselineManufacture: 'not-entered-preflight-blocked',
+      manufacturePath: 'preflight-blocked-before-recipient-package-assembly',
+      packageInspection: 'not-run',
+      closureInspection: 'not-run',
+      carrierInspection: 'not-run',
+      selectedHandoffConformance: 'not-run',
+      pointerEntrypointInspection: 'not-run',
+      coldConsumerEntrypointInspection: 'not-run',
+      companionInspection: 'not-run',
+      roundtrip: 'not-run',
+      toolingBootstrap: 'not-inspected',
+      schemaReferencePreflight: String(schemaReferencePreflight?.state || 'not-run'),
+      returnCarrierReservationPreflight: String(returnCarrierReservationPreflight?.state || 'not-run'),
+      reconciliationProof: String(reconciliationProofQualification?.state || 'not-required')
+    }),
+    plan: preflight.plan || null,
+    bundle: null,
+    descriptor: null,
+    transportCompanion: null,
+    inspection: null,
+    closureInspection: null,
+    carrierProjection: null,
+    carrierInspection: null,
+    pointerEntrypointProjection: null,
+    pointerEntrypointInspection: null,
+    coldConsumerProjection: null,
+    coldConsumerEntrypointInspection: null,
+    companionInspection: null,
+    roundtrip: null,
+    toolingBootstrap: input.toolingBootstrap || null,
+    manufacturingEvidence: input.manufacturingEvidence || null,
+    carrierAllocation: input.carrierAllocation || input.manufacturingEvidence?.carrierAllocation || null,
+    schemaReferencePreflight,
+    returnCarrierReservationPreflight,
+    reconciliationProofQualification,
+    toolingBootstrapInspection: null,
+    carrierLineage: input.carrierLineage || null,
+    majorReadiness: null,
+    operationBoundary: Object.freeze({
+      operationClass: 'local-handoff-package-manufacture',
+      inputScope: 'caller-provided-local-workspace-material-and-optional-parent-package',
+      localPackageConstruction: false,
+      sourceMutation: false,
+      remoteMutation: false,
+      physicalRoundtripVerification: 'not-run-preflight-blocked',
+      schemaReferencePreflight: String(schemaReferencePreflight?.state || 'not-run'),
+      returnCarrierReservationPreflight: String(returnCarrierReservationPreflight?.state || 'not-run'),
+      reconciliationProof: String(reconciliationProofQualification?.state || 'not-required'),
+      hostBehaviorAuthority: 'none'
+    }),
+    migration: null,
+    baseline: Object.freeze({ schema: 'tiinex.portable.handoff-v2-direct-baseline.v1', status: 'not-entered-preflight-blocked', packageRepresentationSha256: '', representation: 'not-assembled' }),
+    preflight,
+    findings,
+    findingSummary: summarizePortableFindings(findings),
+    boundary: 'Canonical archive-backed Handoff manufacturing facade. Blocking selected-Handoff/current-work/material findings stop manufacture before recipient package assembly.'
   });
 }

@@ -232,6 +232,16 @@ None.
   assert.ok((routeCache.materials || []).some((item) => item.referenceTarget === `business::${AXIOM_ROLE_PATH}`));
   assert.equal((result.inspection.participantRoles || []).length, 0);
   assert.ok((routeCache.materials || []).some((item) => item.classification === 'parent-boundary' && (item.targetPath === PARENT_PATH || item.originalPath === PARENT_PATH)));
+  const governanceMaterial = (routeCache.materials || []).find((item) => item.referenceTarget === `business::${GOVERNANCE_PATH}`);
+  assert.equal(governanceMaterial?.mediaType, 'text/markdown');
+  assert.match(governanceMaterial?.archiveEntry || '', /^material\/\d+-business\/.topics\/governance\/current\.trace\.md$/);
+  const cacheArchiveFile = result.bundle.files.find((file) => file.path === routeCache.archivePath);
+  const cacheArchiveInspection = inspectStoredWorkspaceArchive(packageFileBytes(cacheArchiveFile), { ownedBytes: true });
+  assert.equal(cacheArchiveInspection.state, 'qualified', JSON.stringify(cacheArchiveInspection.findings || [], null, 2));
+  const governanceArchiveEntry = (cacheArchiveInspection.entries || []).find((entry) => entry.path === governanceMaterial.archiveEntry);
+  assert.ok(governanceArchiveEntry);
+  assert.equal(new TextDecoder().decode(governanceArchiveEntry.data), governance);
+  assert.equal(governanceArchiveEntry.sha256, governanceMaterial.sha256);
 
   const orientation = orientColdConsumerFromHandoffPackage({ bundle: result.bundle });
   assert.equal(orientation.status, 'ready');
@@ -887,6 +897,124 @@ test('ordinary ground qualifies Pilot delegation and Sigma participation from ex
   assert.equal(negativeGrounded.capsule.participantArtifactAuthority.state, 'not-established');
   assert.equal(negativeGrounded.capsule.participantContext.participantMapState, 'not-established');
   assert.equal(negativeGrounded.capsule.participantContext.semanticParticipants.length, 0);
+});
+
+test('tampered current-work Task blocks participant authority and produces no participant requirement', () => {
+  const taskPath = '.topics/grounding/participant-task.trace.md';
+  const routePath = '.topics/grounding/handoffs/participant-route.trace.md';
+  const participantDeclaration = "Sigma is an explicitly required human participant in this current work because Pilot's bounded execution requires one human-visible confirmation from Sigma. Sigma participation is semantic current-work authority from this Task; it must not be inferred from Role/cache presence, chat identity, package placement, or user identity.";
+  const qualifiedTask = selectedAxiomTaskFixture({ selectorDeclaration: 'Pilot is the explicitly selected specialist for this sanity test.', participantDeclaration });
+  const route = anchorToAnchorDelegationHandoffFixture(taskPath, qualifiedTask);
+  const staleTask = qualifiedTask.replace('Obtain one bounded independent semantic review.', 'Obtain one bounded independent semantic review. Tampered after sealing.');
+  assert.equal(validatedC14nV2PrimarySelfDigest(staleTask).state, 'mismatch');
+  const sigmaRole = roleFixture('Sigma', 'explicit-participation');
+  const sigmaBytes = new TextEncoder().encode(sigmaRole);
+  const requirement = Object.freeze({
+    id: 'required:sigma-role', classification: 'required', routeWorkspaceId: 'docs', routePath,
+    targetWorkspaceId: 'business', targetPath: SIGMA_ROLE_PATH,
+    reference: Object.freeze({ target: `business::${SIGMA_ROLE_PATH}` })
+  });
+  const workspaceRuntimeById = new Map([['docs', {
+    enumeration: { materialization: { entries: [
+      { path: taskPath, data: new TextEncoder().encode(staleTask) },
+      { path: routePath, data: new TextEncoder().encode(route) }
+    ] } }
+  }]]);
+  const projection = projectSemanticParticipantManufacturingRequirements({
+    requirements: {
+      required: [requirement], reference: [], endpointRoles: [], participantRoles: [], dependencies: [], findings: [], counts: {},
+      participantRoleInputs: [{ routeWorkspaceId: 'docs', routePath, roles: [] }]
+    },
+    materials: [{ requirementId: requirement.id, path: SIGMA_ROLE_PATH, data: sigmaBytes, sha256: sha256Hex(sigmaBytes), provenance: { workspaceId: 'business', path: SIGMA_ROLE_PATH } }],
+    routeSpecs: [{ workspaceId: 'docs', path: routePath }],
+    workspaceRuntimeById
+  });
+  assert.equal(projection.semanticRoutes[0].state, 'blocked');
+  assert.equal(projection.semanticRoutes[0].declarations.length, 0);
+  assert.equal(projection.requirements.participantRoles.length, 0);
+  assert.ok(projection.requirements.findings.some((item) => item.code === 'portable.handoff-manufacture.participant-role.current-task-unqualified' && item.selfIntegrityState === 'mismatch'));
+});
+
+test('self-verified but non-canonical current-work Task blocks participant authority', () => {
+  const taskPath = '.topics/grounding/noncanonical-participant-task.trace.md';
+  const routePath = '.topics/grounding/handoffs/noncanonical-participant-route.trace.md';
+  const participantDeclaration = "Sigma is an explicitly required human participant in this current work because one bounded confirmation is required. Sigma participation is semantic current-work authority from this Task; it must not be inferred from transport presence.";
+  const canonical = selectedAxiomTaskFixture({ participantDeclaration });
+  const withoutScope = canonical
+    .replace(/\n## Scope\n[\s\S]*?\n## Dependencies\n/, '\n## Dependencies\n')
+    .replace(/(- Towards: self\n\s+- Value:)\s*[^\n]*/, '$1 ');
+  const resealed = sealC14nV2Self(withoutScope);
+  assert.equal(resealed.state, 'sealed');
+  const malformedTask = `${resealed.markdown}\n`;
+  assert.equal(validatedC14nV2PrimarySelfDigest(malformedTask).state, 'verified');
+  const route = anchorToAnchorDelegationHandoffFixture(taskPath, malformedTask);
+  const projection = projectSemanticParticipantManufacturingRequirements({
+    requirements: { required: [], reference: [], endpointRoles: [], participantRoles: [], dependencies: [], findings: [], counts: {}, participantRoleInputs: [{ routeWorkspaceId: 'docs', routePath, roles: [] }] },
+    materials: [], routeSpecs: [{ workspaceId: 'docs', path: routePath }],
+    workspaceRuntimeById: new Map([['docs', { enumeration: { materialization: { entries: [
+      { path: taskPath, data: new TextEncoder().encode(malformedTask) }, { path: routePath, data: new TextEncoder().encode(route) }
+    ] } } }]])
+  });
+  assert.equal(projection.semanticRoutes[0].state, 'blocked');
+  assert.equal(projection.requirements.participantRoles.length, 0);
+  const finding = projection.requirements.findings.find((item) => item.code === 'portable.handoff-manufacture.participant-role.current-task-unqualified');
+  assert.ok(finding);
+  assert.equal(finding.selfIntegrityState, 'verified');
+  assert.ok((finding.reasons || []).includes('task-schema:task.scope.missing'));
+});
+
+test('participant preflight blocks before tooling bootstrap construction', async (t) => {
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'tiinex-core-participant-preflight-'));
+  t.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+  const docsRoot = path.join(fixtureRoot, 'docs');
+  const businessRoot = path.join(fixtureRoot, 'business');
+  await mkdir(docsRoot, { recursive: true });
+  await mkdir(businessRoot, { recursive: true });
+  const taskPath = '.topics/grounding/participant-task.trace.md';
+  const routePath = '.topics/grounding/handoffs/participant-route.trace.md';
+  const participantDeclaration = "Sigma is an explicitly required human participant in this current work because Pilot's bounded execution requires one human-visible confirmation from Sigma. Sigma participation is semantic current-work authority from this Task; it must not be inferred from Role/cache presence, chat identity, package placement, or user identity.";
+  const qualifiedTask = selectedAxiomTaskFixture({ selectorDeclaration: 'Pilot is the explicitly selected specialist for this sanity test.', participantDeclaration });
+  const route = anchorToAnchorDelegationHandoffFixture(taskPath, qualifiedTask, { requiredContextExtra: `- sigma-role\n  - Material: exact current canonical Sigma Role authority.\n  - Material Reference: [Sigma Role](business::${SIGMA_ROLE_PATH})\n  - Purpose: qualify the Role material for the participant declaration.\n  - Availability: available` });
+  const staleTask = qualifiedTask.replace('Obtain one bounded independent semantic review.', 'Obtain one bounded independent semantic review. Tampered after sealing.');
+  await writeWorkspaceFile(docsRoot, DOCS_WORKSPACE_PATH, workspaceFixture('Tiinex Docs Participant Preflight Fixture', 'Tiinex/docs'));
+  await writeWorkspaceFile(docsRoot, taskPath, staleTask);
+  await writeWorkspaceFile(docsRoot, routePath, route);
+  await writeWorkspaceFile(businessRoot, BUSINESS_WORKSPACE_PATH, workspaceFixture('Tiinex Business Participant Preflight Fixture', 'Tiinex/business'));
+  await writeWorkspaceFile(businessRoot, ANCHOR_ROLE_PATH, roleFixture('Anchor'));
+  await writeWorkspaceFile(businessRoot, SIGMA_ROLE_PATH, roleFixture('Sigma', 'explicit-participation'));
+  const prepared = await prepareNodeHandoffManufacturingInput({
+    workspaceRoot: docsRoot, workspaceId: 'docs', workspaceTargetPath: DOCS_WORKSPACE_PATH, handoffPath: routePath,
+    additionalWorkspaces: [{ id: 'business', root: businessRoot, workspaceTargetPath: BUSINESS_WORKSPACE_PATH }],
+    workspaceScopes: [{ workspaceId: 'docs', coverage: 'bounded', include: [taskPath, routePath] }, { workspaceId: 'business', coverage: 'bounded', include: [] }],
+    transportRoutes: [{ workspaceId: 'docs', path: routePath, participantRoles: [] }],
+    carrierLineage: { mode: 'continue', dimension: '001-1', parentDimension: '001', parentPackageSha256: '0'.repeat(64), parentPackageFilename: 'parent.zip', checkpointKind: 'progression' },
+    runtimeRoot: path.join(fixtureRoot, 'intentionally-missing-runtime-root'), verifyRoundtrip: true
+  });
+  assert.equal(prepared.toolingBootstrap.state, 'not-built-preflight-blocked');
+  assert.equal(prepared.manufacturingEvidence.manufacturingPreflight.state, 'blocked');
+  assert.ok(prepared.requirements.findings.some((item) => item.code === 'portable.handoff-manufacture.participant-role.current-task-unqualified'));
+  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.verification.baselineManufacture, 'not-entered-preflight-blocked');
+  assert.equal(result.bundle, null);
+});
+
+test('material preflight blocks before recipient package assembly', () => {
+  let workspaceAccesses = 0;
+  const poisonWorkspace = new Proxy({}, { get() { workspaceAccesses += 1; throw new Error('recipient-package-builder-entered'); } });
+  const result = manufactureRecipientRelativeHandoffPackage({
+    workspace: poisonWorkspace,
+    requirements: {
+      handoff: { semanticStatus: 'unknown' },
+      required: [{ id: 'required:missing', classification: 'required', reference: { target: 'business::.topics/missing.trace.md' } }],
+      reference: [], endpointRoles: [], participantRoles: [], dependencies: [], findings: []
+    },
+    materials: [], workspaceMaterializations: [], recipient: {}, bootstrap: { present: false }
+  });
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.verification.baselineManufacture, 'not-entered-preflight-blocked');
+  assert.equal(workspaceAccesses, 0);
+  assert.ok(result.findings.some((item) => item.code === 'portable.handoff-material.required.unresolved'));
 });
 
 test('exact Task 028-2 / Handoff 069 cannot manufacture Sigma participant transport from manual route input without closed semantic authority', async () => {

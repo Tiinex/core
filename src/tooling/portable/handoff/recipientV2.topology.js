@@ -17,6 +17,7 @@ import {
   bindingForWorkspace,
   boundedWorkspaceClaimsDetachedRecovery,
   coalesceDetachedCacheMaterials,
+  detachedCacheArchiveEntryPath,
   detachedCacheRepresentationKey,
   deepFreeze,
   detachedMaterial,
@@ -150,7 +151,7 @@ function buildRecipientFacingV2TopologyLegacy(input = {}) {
     if (!materials.length) continue;
     const artifactPath = `001-${workspacePlan.ordinal}-1-cache.trace.md`;
     const archivePath = `001-${workspacePlan.ordinal}-1-cache.zip`;
-    const cacheEntries = materials.map((item, index) => ({ path: `material/${index + 1}-${safeToken(item.requirementId || item.referenceTarget || 'material')}.bin`, data: item.data }));
+    const cacheEntries = materials.map((item, index) => ({ path: detachedCacheArchiveEntryPath(item, index), data: item.data }));
     const cacheBytes = exportFileMapZipUint8Array(cacheEntries, 'portable.handoff-v2-surface.cache.path.invalid');
     const cacheFile = finalizeFile({ path: archivePath, kind: 'handoff-material-cache', logicalKind: 'recipient-v2-workspace-dependency-cache', mediaType: 'application/zip', data: cacheBytes, boundary: 'Exact detached dependency bytes required by Handoff routes owned by this Workspace and absent from all qualified Workspace payloads. No Workspace byte may be duplicated here.' });
     const cacheFacts = {
@@ -158,7 +159,7 @@ function buildRecipientFacingV2TopologyLegacy(input = {}) {
       archivePath,
       archiveBytes: cacheFile.bytes,
       archiveSha256: cacheFile.sha256,
-      materials: materials.map((item, index) => ({ requirementId: item.requirementId, classification: item.classification, referenceTarget: item.referenceTarget, routeWorkspaceId: item.routeWorkspaceId, routePath: item.routePath, sourceRequirementId: item.sourceRequirementId, sourceWorkspaceId: item.sourceWorkspaceId, sourcePath: item.sourcePath, targetWorkspaceId: item.targetWorkspaceId, targetPath: item.targetPath, originalPath: item.originalPath, archiveEntry: cacheEntries[index].path, bytes: item.bytes, sha256: item.sha256 }))
+      materials: materials.map((item, index) => ({ requirementId: item.requirementId, classification: item.classification, referenceTarget: item.referenceTarget, routeWorkspaceId: item.routeWorkspaceId, routePath: item.routePath, sourceRequirementId: item.sourceRequirementId, sourceWorkspaceId: item.sourceWorkspaceId, sourcePath: item.sourcePath, targetWorkspaceId: item.targetWorkspaceId, targetPath: item.targetPath, originalPath: item.originalPath, mediaType: item.mediaType, archiveEntry: cacheEntries[index].path, bytes: item.bytes, sha256: item.sha256 }))
     };
     const cacheArtifact = finalizeFile({ path: artifactPath, kind: 'tiinex-external-payload-artifact', logicalKind: 'recipient-v2-workspace-dependency-cache-reference', mediaType: 'text/markdown', transportFacts: recipientV2TransportFacts('workspace-scoped Handoff dependency cache', cacheFacts), content: renderRecipientV2ExternalPayload({ createdAt, parent: workspace.parent, title: `Workspace Dependency Cache — ${workspace.workspaceId}`, summary: 'Exact recipient-relative dependency bytes not satisfied by any qualified Workspace archive.', label: `${workspace.workspaceId} Handoff dependency cache`, kind: 'zip export', role: 'workspace-scoped Handoff dependency cache', location: archivePath, bytes: cacheFile.bytes, sha256: cacheFile.sha256, materials: cacheFacts.materials }) });
     files.push(cacheArtifact, cacheFile);

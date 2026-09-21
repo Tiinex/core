@@ -115,7 +115,7 @@ function parsePhase1MaterialBindings(markdown = '') {
     const requirement = line.match(/^\s*-\s+Requirement Id:\s*(.*?)\s*$/i);
     if (requirement) {
       if (current) out.push(Object.freeze(current));
-      current = { requirementId: String(requirement[1] || '').trim(), classification: '', referenceTarget: '', routeWorkspaceId: '', routePath: '', sourceRequirementId: '', sourceWorkspaceId: '', sourcePath: '', targetWorkspaceId: '', targetPath: '', originalPath: '', archiveEntry: '', bytes: null, sha256: '' };
+      current = { requirementId: String(requirement[1] || '').trim(), classification: '', referenceTarget: '', routeWorkspaceId: '', routePath: '', sourceRequirementId: '', sourceWorkspaceId: '', sourcePath: '', targetWorkspaceId: '', targetPath: '', originalPath: '', mediaType: '', archiveEntry: '', bytes: null, sha256: '' };
       continue;
     }
     if (!current) continue;
@@ -130,6 +130,7 @@ function parsePhase1MaterialBindings(markdown = '') {
     const targetWorkspaceId = line.match(/^\s+-\s+Target Workspace Id:\s*(.*?)\s*$/i);
     const targetPath = line.match(/^\s+-\s+Target Path:\s*(.*?)\s*$/i);
     const originalPath = line.match(/^\s+-\s+Original Path:\s*(.*?)\s*$/i);
+    const mediaType = line.match(/^\s+-\s+Media Type:\s*(.*?)\s*$/i);
     const bytes = line.match(/^\s+-\s+Byte Size:\s*(.*?)\s*$/i);
     const sha256 = line.match(/^\s+-\s+SHA256:\s*(.*?)\s*$/i);
     if (classification) current.classification = String(classification[1] || '').trim();
@@ -143,6 +144,7 @@ function parsePhase1MaterialBindings(markdown = '') {
     else if (targetWorkspaceId) current.targetWorkspaceId = String(targetWorkspaceId[1] || '').trim();
     else if (targetPath) current.targetPath = String(targetPath[1] || '').trim();
     else if (originalPath) current.originalPath = String(originalPath[1] || '').trim();
+    else if (mediaType) current.mediaType = String(mediaType[1] || '').trim();
     else if (bytes) current.bytes = Number(bytes[1] || 0);
     else if (sha256) current.sha256 = String(sha256[1] || '').trim();
   }
@@ -221,7 +223,7 @@ export function qualifyPhase1CachePayload(cachePayload = null, semanticFiles = [
     const entrySha256 = entryBytes.byteLength ? sha256Hex(entryBytes) : '';
     if (material.bytes !== null && material.bytes !== undefined && Number(material.bytes) !== entryBytes.byteLength) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-byte-size-mismatch', 'Visible cache material Byte Size must equal the exact owned archive entry bytes.', { requirementId, archiveEntry, declaredBytes: Number(material.bytes), actualBytes: entryBytes.byteLength }));
     if (material.sha256 && String(material.sha256) !== entrySha256) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-sha256-mismatch', 'Visible cache material SHA256 must equal the exact owned archive entry digest.', { requirementId, archiveEntry }));
-    materialQualifications.push(deepFreeze({ requirementId, classification: String(material.classification || ''), referenceTarget, routeWorkspaceId: String(material.routeWorkspaceId || ''), routePath: String(material.routePath || ''), sourceRequirementId: String(material.sourceRequirementId || ''), sourceWorkspaceId: String(material.sourceWorkspaceId || ''), sourcePath: String(material.sourcePath || ''), targetWorkspaceId: String(material.targetWorkspaceId || ''), targetPath: String(material.targetPath || ''), originalPath: String(material.originalPath || ''), archiveEntry, bytes: entryBytes.byteLength, sha256: entrySha256 }));
+    materialQualifications.push(deepFreeze({ requirementId, classification: String(material.classification || ''), referenceTarget, routeWorkspaceId: String(material.routeWorkspaceId || ''), routePath: String(material.routePath || ''), sourceRequirementId: String(material.sourceRequirementId || ''), sourceWorkspaceId: String(material.sourceWorkspaceId || ''), sourcePath: String(material.sourcePath || ''), targetWorkspaceId: String(material.targetWorkspaceId || ''), targetPath: String(material.targetPath || ''), originalPath: String(material.originalPath || ''), mediaType: String(material.mediaType || ''), archiveEntry, bytes: entryBytes.byteLength, sha256: entrySha256 }));
   }
   if (!(cachePayload.parsed?.materials || []).length) localFindings.push(finding('error', 'portable.handoff-v2-phase1.cache.material-bindings-missing', 'Selected-route cache External Payload must visibly bind every owned detached material to one archive entry.'));
   findings.push(...localFindings);

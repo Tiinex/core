@@ -5,6 +5,7 @@ import { buildToolingBootstrapTransportFiles, PORTABLE_TOOLING_BOOTSTRAP_MANIFES
 import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runtimeSource.js';
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
+import { qualifyRecipientRelativeHandoffManufacturePreflight } from '../../handoff/manufacture.js';
 import { enumerateNodeWorkspace, PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID } from './handoff.manufacture.enumeration.js';
 import { preparePackageParentExactMaterialProvider, preparePackageParentWorkspaceReuse, projectPackageParentMaterialClosurePreflight, projectRequiredContextWorkspaceSelectionPreflight, rebindPackageParentEndpointRoleRequirements, resolvePackageParentRequirementMaterials } from './handoff.manufacture.packageParent.js';
 import { qualifyPortableSourceReconciliationProofForManufacture } from '../../comparison/sourceFrontierReconciliationProof.js';
@@ -38,15 +39,6 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   const absoluteHandoff = path.resolve(workspaceRoot, handoffPath);
   assertInside(workspaceRoot, absoluteHandoff, 'portable.handoff-manufacture.handoff-path.outside-workspace');
   const handoffMarkdownPromise = readFile(absoluteHandoff, 'utf8');
-  const toolingBootstrapPromise = buildToolingBootstrapTransportFiles({
-    delivery: input.toolingBootstrap || input.bootstrapDelivery || 'embedded',
-    runtimeRoot: input.runtimeRoot || options.runtimeRoot,
-    expected: input.expectedToolingBootstrap || null,
-    maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
-  }).then(
-    (value) => Object.freeze({ value, error: null }),
-    (error) => Object.freeze({ value: null, error })
-  );
   const additionalWorkspaceDescriptors = normalizeAdditionalWorkspaceDescriptors(input.additionalWorkspaces || input.workspaceRoots || input.workspaceDescriptors || []);
   const seenWorkspaceIds = new Set([workspaceId]);
   const additionalWorkspaceInputs = additionalWorkspaceDescriptors.map((descriptor) => {
@@ -200,20 +192,44 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   const parentBoundaryClosure = expandBoundedParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById });
   requirements = parentBoundaryClosure.requirements;
   materials = appendMissingRequirementMaterials(parentBoundaryClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
-  const toolingBootstrapResult = await toolingBootstrapPromise;
-  if (toolingBootstrapResult.error) throw toolingBootstrapResult.error;
-  const toolingBootstrap = toolingBootstrapResult.value;
-  const runtimeSourceAlignment = await qualifyToolingRuntimeSourceAlignment({
-    runtimeIdentity: toolingBootstrap.runtimeIdentity,
-    localWorkspaces: [
-      Object.freeze({ id: workspaceId, root: workspaceRoot, materialization: primaryMaterialization }),
-      ...additionalEnumerations.map(({ id, root, enumerated }) => Object.freeze({ id, root, materialization: enumerated.materialization }))
-    ],
-    maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
-  });
   const orientationBootstrap = input.transportBootstrapContent
     ? Object.freeze({ present: true, path: String(input.transportBootstrapPath || 'tiinex.package/bootstrap.md'), content: String(input.transportBootstrapContent), mediaType: 'text/markdown' })
     : Object.freeze({ present: false });
+  const manufacturingPreflight = qualifyRecipientRelativeHandoffManufacturePreflight({
+    requirements,
+    materials,
+    workspaceMaterializations,
+    recipient: Object.freeze({ referenceTargets: Object.freeze([...(input.referenceTargets || [])].map(String)) }),
+    bootstrap: orientationBootstrap,
+    schemaReferencePreflight,
+    returnCarrierReservationPreflight,
+    reconciliationProofQualification
+  });
+  let toolingBootstrap;
+  let runtimeSourceAlignment;
+  if (manufacturingPreflight.state === 'blocked') {
+    toolingBootstrap = Object.freeze({
+      files: Object.freeze([]),
+      summary: Object.freeze({ state: 'not-built-preflight-blocked', boundary: 'Tooling bootstrap construction was skipped because selected-Handoff/current-work/material preflight blocked manufacture.' }),
+      runtimeIdentity: null
+    });
+    runtimeSourceAlignment = Object.freeze({ state: 'not-run-preflight-blocked', boundary: 'Runtime source alignment is only evaluated after manufacture preflight qualifies.' });
+  } else {
+    toolingBootstrap = await buildToolingBootstrapTransportFiles({
+      delivery: input.toolingBootstrap || input.bootstrapDelivery || 'embedded',
+      runtimeRoot: input.runtimeRoot || options.runtimeRoot,
+      expected: input.expectedToolingBootstrap || null,
+      maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
+    });
+    runtimeSourceAlignment = await qualifyToolingRuntimeSourceAlignment({
+      runtimeIdentity: toolingBootstrap.runtimeIdentity,
+      localWorkspaces: [
+        Object.freeze({ id: workspaceId, root: workspaceRoot, materialization: primaryMaterialization }),
+        ...additionalEnumerations.map(({ id, root, enumerated }) => Object.freeze({ id, root, materialization: enumerated.materialization }))
+      ],
+      maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
+    });
+  }
 
   return Object.freeze({
     handoff,
@@ -238,6 +254,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
       workspaceEnumerations: Object.freeze(workspaceEnumerations),
       toolingBootstrap: toolingBootstrap.summary,
       runtimeSourceAlignment,
+      manufacturingPreflight: Object.freeze({ state: manufacturingPreflight.state, blockers: manufacturingPreflight.blockers, findingSummary: manufacturingPreflight.findings.length }),
       reconciliationProof: reconciliationProofQualification,
       schemaReferencePreflight,
       returnCarrierReservationPreflight,

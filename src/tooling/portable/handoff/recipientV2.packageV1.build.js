@@ -9,7 +9,7 @@ import { RECIPIENT_V2_ROUTE_SELECTION_AUTHORITY, RECIPIENT_V2_SIBLING_ROUTE_INFE
 import { recipientV2TransportFacts } from './recipientV2.transportManifest.js';
 import { buildRecipientV2BootstrapCarrier, buildRecipientV2WorkspaceCarriers, recipientV2ParentAuthority } from './recipientV2.topology.workspaces.js';
 import { buildEndpointRolePointerChain, buildParticipantRolePointerChain } from './recipientV2.endpointRolePointers.js';
-import { bindingForWorkspace, boundedWorkspaceClaimsDetachedRecovery, coalesceDetachedCacheMaterials, detachedMaterial, duplicates, finding, roleMaterialTarget, routeClaimsDetachedMaterial, safeToken, uniqueFileIndex } from './recipientV2.topology.materials.js';
+import { bindingForWorkspace, boundedWorkspaceClaimsDetachedRecovery, coalesceDetachedCacheMaterials, detachedCacheArchiveEntryPath, detachedMaterial, duplicates, finding, roleMaterialTarget, routeClaimsDetachedMaterial, safeToken, uniqueFileIndex } from './recipientV2.topology.materials.js';
 import { RECIPIENT_V2_PACKAGE_V1_FORMAT_ID, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH, RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID, RECIPIENT_V2_PACKAGE_V1_SCHEMA_TARGET } from './recipientV2.packageV1.constants.js';
 import { renderHandoffPackageV1 } from './recipientV2.packageV1.contract.js';
 import { inspectRecipientFacingV2PackageV1 } from './recipientV2.packageV1.inspect.js';
@@ -140,12 +140,12 @@ function buildRecipientFacingV2PackageV1Prepared(input = {}, sealedByWorkspaceId
     if (!materials.length) continue;
     const artifactPath = `${plan.prefix}-1-cache.trace.md`;
     const archivePath = `${plan.prefix}-1-cache.zip`;
-    const cacheEntries = materials.map((item, index) => ({ path: `material/${index + 1}-${safeToken(item.requirementId || item.referenceTarget || 'material')}.bin`, data: item.data }));
+    const cacheEntries = materials.map((item, index) => ({ path: detachedCacheArchiveEntryPath(item, index), data: item.data }));
     const cacheBytes = exportFileMapZipUint8Array(cacheEntries, 'portable.handoff-package-v1.cache.path.invalid');
     const cacheFile = finalizeFile({ path: archivePath, kind: 'handoff-material-cache', logicalKind: 'recipient-v2-package-v1-workspace-dependency-cache', mediaType: 'application/zip', data: cacheBytes });
     const cacheFacts = {
       workspaceId: workspace.workspaceId, archivePath, archiveBytes: cacheFile.bytes, archiveSha256: cacheFile.sha256,
-      materials: materials.map((item, index) => ({ requirementId: item.requirementId, classification: item.classification, referenceTarget: item.referenceTarget, routeWorkspaceId: item.routeWorkspaceId, routePath: item.routePath, sourceRequirementId: item.sourceRequirementId, sourceWorkspaceId: item.sourceWorkspaceId, sourcePath: item.sourcePath, targetWorkspaceId: item.targetWorkspaceId, targetPath: item.targetPath, originalPath: item.originalPath, archiveEntry: cacheEntries[index].path, bytes: item.bytes, sha256: item.sha256 }))
+      materials: materials.map((item, index) => ({ requirementId: item.requirementId, classification: item.classification, referenceTarget: item.referenceTarget, routeWorkspaceId: item.routeWorkspaceId, routePath: item.routePath, sourceRequirementId: item.sourceRequirementId, sourceWorkspaceId: item.sourceWorkspaceId, sourcePath: item.sourcePath, targetWorkspaceId: item.targetWorkspaceId, targetPath: item.targetPath, originalPath: item.originalPath, mediaType: item.mediaType, archiveEntry: cacheEntries[index].path, bytes: item.bytes, sha256: item.sha256 }))
     };
     const cacheArtifact = finalizeFile({ path: artifactPath, kind: 'tiinex-external-payload-artifact', logicalKind: 'recipient-v2-package-v1-workspace-dependency-cache-reference', mediaType: 'text/markdown', transportFacts: recipientV2TransportFacts('workspace-scoped Handoff dependency cache', cacheFacts), content: renderRecipientV2ExternalPayload({ createdAt, parent: workspace.parent, title: `Workspace Dependency Cache — ${workspace.workspaceId}`, summary: 'Exact route-bounded or bounded-Workspace recovery dependency bytes outside the carried Workspace representation.', label: `${workspace.workspaceId} Handoff dependency cache`, kind: 'zip export', role: 'workspace-scoped Handoff dependency cache', location: archivePath, bytes: cacheFile.bytes, sha256: cacheFile.sha256, materials: cacheFacts.materials }) });
     files.push(cacheArtifact, cacheFile);

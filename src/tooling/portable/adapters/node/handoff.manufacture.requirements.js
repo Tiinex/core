@@ -3,6 +3,8 @@ import { access, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { packageFileBytes, sha256Hex } from '../../../../export/package.bytes.js';
 import { parseArtifactMarkdown } from '../../../../artifacts/artifact.parse.js';
+import { validatedC14nV2PrimarySelfDigest } from '../../../../integrity/integrity.c14nV2.js';
+import { taskValidate } from '../../../../schemas/core/task/tiinex.task.v1.validate.js';
 import { projectHandoffMaterialRequirements, projectParticipantRoleRequirements } from '../../handoff/materialClosure.requirements.js';
 import { explicitTaskParticipantDeclarations } from '../../grounding/grounding.participantArtifactAuthority.js';
 import { parseRoleMaterial } from '../../handoff/coldStartQualification.materials.js';
@@ -68,12 +70,25 @@ export function projectSemanticParticipantManufacturingRequirements({ requiremen
     const routePath = normalizeRelativePath(route.path || route.workspaceRelativePath || '');
     if (!routeWorkspaceId || !routePath) continue;
     const key = routeKey(routeWorkspaceId, routePath);
-    const task = resolveNearestQualifiedTaskRecord({ workspaceId: routeWorkspaceId, path: routePath, workspaceRuntimeById });
-    const declarations = task ? [...explicitTaskParticipantDeclarations(task)] : [];
+    const taskQualification = resolveNearestQualifiedTaskRecord({ workspaceId: routeWorkspaceId, path: routePath, workspaceRuntimeById });
+    const task = taskQualification.task || null;
+    const declarations = taskQualification.state === 'qualified' && task ? [...explicitTaskParticipantDeclarations(task)] : [];
     const declarationGroups = groupParticipantDeclarations(declarations);
     const routeMaterials = qualifiedRouteRoleMaterials({ requirements, materials, routeWorkspaceId, routePath });
     const derived = [];
-    let routeBlocked = false;
+    let routeBlocked = taskQualification.state === 'blocked';
+    if (taskQualification.state === 'blocked') {
+      findings.push(finding('error', 'portable.handoff-manufacture.participant-role.current-task-unqualified', 'Participant authority requires the exact current-work Task to satisfy the canonical Task schema and verified c14n-v2 self-integrity before participant transport requirements can be manufactured.', {
+        routeWorkspaceId,
+        routePath,
+        taskWorkspaceId: taskQualification.candidate?.workspaceId || '',
+        taskPath: taskQualification.candidate?.workspaceRelativePath || '',
+        expectedSchemaId: taskQualification.expectedSchemaId || 'tiinex.task.v1',
+        actualSchemaId: taskQualification.actualSchemaId || '',
+        selfIntegrityState: taskQualification.selfIntegrityState || 'unavailable',
+        reasons: taskQualification.reasons || []
+      }));
+    }
 
     for (const [normalizedLabel, entries] of [...declarationGroups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
       const label = String(entries[0]?.roleLabel || '').trim();
@@ -115,7 +130,7 @@ export function projectSemanticParticipantManufacturingRequirements({ requiremen
     semanticRoutes.push(Object.freeze({
       routeWorkspaceId,
       routePath,
-      currentTask: task ? Object.freeze({ path: task.path, schemaId: task.schemaId }) : null,
+      currentTask: task ? Object.freeze({ path: task.path, schemaId: task.schemaId }) : (taskQualification.candidate ? Object.freeze({ path: taskQualification.candidate.path, schemaId: taskQualification.actualSchemaId || '' }) : null),
       declarations: Object.freeze(declarations),
       participantRoles: Object.freeze(routeBlocked ? [] : semanticDescriptors),
       participantCount: routeBlocked ? 0 : derived.length,
@@ -211,22 +226,42 @@ function bindExplicitRouteEndpointRoles(requirements = [], explicitRoles = [], r
 function resolveNearestQualifiedTaskRecord({ workspaceId, path: sourcePath, workspaceRuntimeById }) {
   let currentWorkspaceId = String(workspaceId || '').trim();
   let currentPath = normalizeRelativePath(sourcePath);
+  let expectedSchemaId = '';
   const visited = new Set();
   for (let depth = 0; depth < 256; depth += 1) {
     const key = routeKey(currentWorkspaceId, currentPath);
-    if (!currentWorkspaceId || !currentPath || visited.has(key)) return null;
+    if (!currentWorkspaceId || !currentPath || visited.has(key)) return noQualifiedTask();
     visited.add(key);
     const runtime = workspaceRuntimeById.get(currentWorkspaceId);
     const entry = runtime ? entryFromEnumeration(runtime.enumeration, currentPath) : null;
-    if (!entry) return null;
+    if (!entry) return noQualifiedTask();
     const markdown = decodeUtf8(entry.data);
-    if (!markdown) return null;
+    if (!markdown) return expectedSchemaId === 'tiinex.task.v1'
+      ? blockedTaskQualification({ currentWorkspaceId, currentPath, expectedSchemaId, reasons: ['task-target-unreadable'] })
+      : noQualifiedTask();
     let parsed;
-    try { parsed = parseArtifactMarkdown(markdown); } catch { return null; }
+    try { parsed = parseArtifactMarkdown(markdown); } catch {
+      return expectedSchemaId === 'tiinex.task.v1'
+        ? blockedTaskQualification({ currentWorkspaceId, currentPath, expectedSchemaId, reasons: ['task-target-unparseable'] })
+        : noQualifiedTask();
+    }
     const schemaId = String(parsed.envelope?.current?.schema?.id || '');
+    if (expectedSchemaId === 'tiinex.task.v1' && schemaId !== 'tiinex.task.v1') {
+      return blockedTaskQualification({ currentWorkspaceId, currentPath, expectedSchemaId, actualSchemaId: schemaId, markdown, reasons: ['task-schema-mismatch'] });
+    }
     if (schemaId === 'tiinex.task.v1') {
-      if (!parsed.hasContinuityContext || !parsed.hasIntegrity) return null;
-      return Object.freeze({
+      const self = validatedC14nV2PrimarySelfDigest(markdown);
+      const validationFindings = taskValidate(parsed);
+      const taskErrors = validationFindings.filter((item) => String(item?.severity || '') === 'error');
+      const reasons = [];
+      if (!parsed.hasContinuityContext) reasons.push('task-continuity-context-missing');
+      if (!parsed.hasIntegrity) reasons.push('task-integrity-section-missing');
+      if (String(self.state || '') !== 'verified') reasons.push(`task-self-integrity-${String(self.state || 'unavailable')}`);
+      for (const item of taskErrors) reasons.push(`task-schema:${String(item.code || 'validation-error')}`);
+      if (reasons.length) {
+        return blockedTaskQualification({ currentWorkspaceId, currentPath, expectedSchemaId: expectedSchemaId || 'tiinex.task.v1', actualSchemaId: schemaId, markdown, selfIntegrityState: String(self.state || 'unavailable'), reasons });
+      }
+      const task = Object.freeze({
         id: `${currentWorkspaceId}/${currentPath}`,
         path: `${currentWorkspaceId}/${currentPath}`,
         workspaceId: currentWorkspaceId,
@@ -236,22 +271,39 @@ function resolveNearestQualifiedTaskRecord({ workspaceId, path: sourcePath, work
         hasContinuityContext: true,
         hasIntegrity: true
       });
+      return Object.freeze({ state: 'qualified', task, candidate: task, expectedSchemaId: expectedSchemaId || 'tiinex.task.v1', actualSchemaId: schemaId, selfIntegrityState: 'verified', reasons: Object.freeze([]) });
     }
     const parent = parsed.envelope?.parent || {};
     const reference = String(parent.trace || (parent.originEntries || []).find((item) => String(item?.label || '').trim() === 'relative')?.target || '').trim();
-    if (!reference) return null;
+    if (!reference) return noQualifiedTask();
+    expectedSchemaId = String(parent.schema?.id || '').trim();
     const qualified = parseWorkspaceQualifiedReference(reference);
     if (qualified) {
       currentWorkspaceId = qualified.workspaceId;
       currentPath = normalizeRelativePath(qualified.path);
       continue;
     }
-    if (isExternalReference(reference) || reference.startsWith('#')) return null;
+    if (isExternalReference(reference) || reference.startsWith('#')) return noQualifiedTask();
     const resolved = resolveRelativeWorkspaceTarget(currentPath, reference);
-    if (!resolved) return null;
+    if (!resolved) return noQualifiedTask();
     currentPath = resolved;
   }
-  return null;
+  return noQualifiedTask();
+}
+
+function noQualifiedTask() {
+  return Object.freeze({ state: 'not-established', task: null, candidate: null, expectedSchemaId: '', actualSchemaId: '', selfIntegrityState: 'unavailable', reasons: Object.freeze([]) });
+}
+
+function blockedTaskQualification({ currentWorkspaceId = '', currentPath = '', expectedSchemaId = 'tiinex.task.v1', actualSchemaId = '', markdown = '', selfIntegrityState = 'unavailable', reasons = [] } = {}) {
+  const candidate = Object.freeze({
+    id: currentWorkspaceId && currentPath ? `${currentWorkspaceId}/${currentPath}` : '',
+    path: currentWorkspaceId && currentPath ? `${currentWorkspaceId}/${currentPath}` : '',
+    workspaceId: currentWorkspaceId,
+    workspaceRelativePath: currentPath,
+    markdown
+  });
+  return Object.freeze({ state: 'blocked', task: null, candidate, expectedSchemaId, actualSchemaId, selfIntegrityState, reasons: Object.freeze([...reasons]) });
 }
 
 function qualifiedRouteRoleMaterials({ requirements = {}, materials = [], routeWorkspaceId, routePath }) {
