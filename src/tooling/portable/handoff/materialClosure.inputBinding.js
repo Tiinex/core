@@ -249,6 +249,7 @@ function requirementBinding(entry = {}) {
     requirementId: String(entry.id || entry.requirementId || ''),
     name: String(entry.name || ''),
     classification: String(entry.classification || ''),
+    closureStrength: String(entry.closureStrength || 'required'),
     material: String(entry.material || ''),
     purpose: String(entry.purpose || ''),
     availability: String(entry.availability || ''),
@@ -298,6 +299,7 @@ function resolutionBinding(entry = {}) {
   return Object.freeze({
     requirementId: String(entry.requirementId || ''),
     classification: String(entry.classification || ''),
+    closureStrength: String(entry.closureStrength || 'required'),
     referenceTarget: String(entry.referenceTarget || ''),
     disposition: String(entry.disposition || ''),
     recipientReferenceCapability: Boolean(entry.recipientReferenceCapability),
@@ -343,6 +345,7 @@ function bindingResolutionAsResolution(entry = {}) {
   return {
     requirementId: String(entry.requirementId || ''),
     classification: String(entry.classification || ''),
+    closureStrength: String(entry.closureStrength || 'required'),
     referenceTarget: String(entry.referenceTarget || ''),
     disposition: String(entry.disposition || ''),
     recipientReferenceCapability: Boolean(entry.recipientReferenceCapability),

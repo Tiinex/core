@@ -6,7 +6,7 @@ export function qualifyHandoffMaterialClosurePlanReadiness(plan = {}) {
     ...(plan.requirements?.dependencies || [])
   ];
   const requiredBlockers = Object.freeze(blockingRequirements
-    .filter((entry) => ['unresolved', 'ambiguous', 'integrity-conflict'].includes(String(entry?.disposition || '')))
+    .filter(requirementBlocks)
     .map((entry) => Object.freeze({ requirementId: String(entry?.requirementId || ''), disposition: String(entry?.disposition || '') })));
   const workspaceBlockers = Object.freeze((plan.workspaceMaterializations || [])
     .filter((entry) => String(entry?.qualification || '') !== 'qualified')
@@ -27,6 +27,14 @@ export function qualifyHandoffMaterialClosurePlanReadiness(plan = {}) {
     blockers: Object.freeze({ required: requiredBlockers, workspaces: workspaceBlockers }),
     findings: Object.freeze(findings)
   });
+}
+
+function requirementBlocks(entry = {}) {
+  const disposition = String(entry?.disposition || '');
+  if (disposition === 'ambiguous' || disposition === 'integrity-conflict') return true;
+  if (disposition !== 'unresolved') return false;
+  if (String(entry?.classification || '') !== 'endpoint-role') return true;
+  return String(entry?.closureStrength || 'required') !== 'optional';
 }
 
 function deepFreeze(value) {

@@ -11,6 +11,7 @@ export function buildEndpointRolePointerChain(input = {}) {
   for (const requirement of orderedEndpointRequirements(input.requirements || [])) {
     const target = input.resolveRoleMaterialTarget(requirement, input.descriptor, input.workspaceById, input.cache, input.route);
     if (target.state !== 'qualified') {
+      if (optionalEndpointMayRemainUnresolved(requirement, input.descriptor, input.route)) continue;
       findings.push(finding('error', `portable.handoff-v2-surface.endpoint-role.${target.reason || 'unresolved'}`, 'Endpoint Role requirement did not resolve to one exact carried Workspace/cache representation.', { routeId: String(input.route?.id || ''), requirementId: String(requirement.id || '') }));
       continue;
     }
@@ -89,6 +90,23 @@ export function buildEndpointRolePointerChain(input = {}) {
     lineageParent,
     nextDimension
   });
+}
+
+
+function optionalEndpointMayRemainUnresolved(requirement = {}, descriptor = {}, route = {}) {
+  if (String(requirement.closureStrength || 'required') !== 'optional') return false;
+  const routeWorkspaceId = String(route.workspaceId || '');
+  const routePath = String(route.workspaceRelativePath || route.path || '').replace(/\\/g, '/').replace(/^\.\//, '');
+  const requirementId = String(requirement.id || '');
+  const matches = (descriptor.requirements?.endpointRoles || []).filter((item) => {
+    const sourceId = String(item.sourceRequirementId || item.requirementId || '');
+    return sourceId === requirementId
+      && String(item.routeWorkspaceId || '') === routeWorkspaceId
+      && String(item.routePath || '').replace(/\\/g, '/').replace(/^\.\//, '') === routePath;
+  });
+  if (matches.length !== 1) return false;
+  const closure = matches[0];
+  return String(closure.closureStrength || 'required') === 'optional' && String(closure.disposition || '') === 'unresolved';
 }
 
 

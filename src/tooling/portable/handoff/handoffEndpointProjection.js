@@ -1,6 +1,7 @@
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { auditPortableRecord } from '../audit/audit.capability.js';
 import { portableRuntimeValidationAuthorityForRecord } from '../schema/qualifiedLocalRoot.runtime.js';
+import { projectQualifiedWorkspacePackageSources } from './workspacePackageSources.js';
 
 export const PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID = 'tiinex.portable.handoff-endpoint-projection.v1';
 
@@ -9,8 +10,23 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
   const records = normalizeRecords(input);
   const candidates = [];
   const findings = [];
+  const sourceAuthority = qualifyEndpointSourceAuthority(records, workspaceId);
+  if (sourceAuthority.state !== 'qualified') {
+    findings.push(finding('error', `portable.handoff-endpoint.source-authority.${sourceAuthority.reason || 'unqualified'}`, 'Handoff endpoint projection requires exactly one qualified Workspace authority for the requested workspace id before Role/Party material becomes eligible.', { workspaceId, candidateCount: sourceAuthority.candidateCount || 0 }));
+    return freeze({
+      schema: PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID,
+      status: 'blocked',
+      workspaceId,
+      sourceAuthority,
+      candidates,
+      findings,
+      operationBoundary: { sourceMutation: false, remoteWrite: false, identityInference: false },
+      boundary: 'Endpoint choices are projected only from the bounded .topics material surface owned by the one exact qualified requested Workspace artifact. Nested fixture Workspaces, repository-wide scans, schema/example trees outside that surface, caches, chronology, filenames, and holder labels cannot create endpoint authority.'
+    });
+  }
   for (const record of records) {
     const path = norm(record.path || record.id || '');
+    if (!pathWithinMaterialRoot(path, sourceAuthority.materialRoot)) continue;
     if (!path || !/\.md$/i.test(path)) continue;
     let parsed;
     try { parsed = parseArtifactMarkdown(record.markdown || ''); } catch { continue; }
@@ -45,12 +61,36 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     schema: PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID,
     status: 'ready',
     workspaceId,
+    sourceAuthority,
     candidates,
     findings,
     operationBoundary: { sourceMutation: false, remoteWrite: false, identityInference: false },
-    boundary: 'Projects only exactly qualified Role/Party artifact choices. target/reference preserves explicit Workspace artifact identity as workspaceId::artifact-path; holder labels, transport identity, chronology, filenames, and repository basenames never infer endpoint identity.'
+    boundary: 'Projects only exactly qualified Role/Party artifacts from the bounded .topics material surface owned by one exact qualified requested Workspace artifact. target/reference preserves explicit Workspace artifact identity as workspaceId::artifact-path; nested fixture Workspaces, repository-wide scans, caches, chronology, filenames, holder labels, and repository basenames never infer endpoint identity.'
   });
 }
+
+function qualifyEndpointSourceAuthority(records = [], workspaceId = '') {
+  const sources = projectQualifiedWorkspacePackageSources({ records });
+  const qualified = (sources.candidates || []).filter((item) => String(item.workspaceId || '') === workspaceId);
+  if (qualified.length !== 1) return freeze({ state: 'blocked', reason: qualified.length > 1 ? 'ambiguous' : 'unresolved', workspaceId, candidateCount: qualified.length, sourceFindings: sources.findings || [] });
+  const selected = qualified[0];
+  const materialRoot = topicsMaterialRoot(selected.workspaceTargetPath);
+  if (!materialRoot) return freeze({ state: 'blocked', reason: 'material-root-unqualified', workspaceId, candidateCount: 1, workspaceTargetPath: selected.workspaceTargetPath });
+  return freeze({ state: 'qualified', workspaceId, workspaceTargetPath: selected.workspaceTargetPath, materialRoot, candidateCount: 1, basis: 'exact-qualified-workspace-package-source-material-surface' });
+}
+function topicsMaterialRoot(workspaceTargetPath = '') {
+  const parts = norm(workspaceTargetPath).split('/').filter(Boolean);
+  const index = parts.lastIndexOf('.topics');
+  return index >= 0 ? parts.slice(0, index + 1).join('/') : '';
+}
+function pathWithinMaterialRoot(path = '', root = '') {
+  const candidate = norm(path);
+  const materialRoot = norm(root);
+  if (!candidate || !materialRoot || (candidate !== materialRoot && !candidate.startsWith(`${materialRoot}/`))) return false;
+  const relative = candidate === materialRoot ? '' : candidate.slice(materialRoot.length + 1);
+  return !relative.split('/').filter(Boolean).includes('.topics');
+}
+function finding(severity, code, message, context = {}) { return freeze({ severity, code, message, context }); }
 
 function normalizeRecords(input = {}) {
   if (Array.isArray(input.records)) return input.records;

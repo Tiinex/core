@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
+import { projectQualifiedHandoffEndpoints } from '../src/tooling/portable/handoff/handoffEndpointProjection.js';
+import { projectHandoffMaterialRequirements } from '../src/tooling/portable/handoff/materialClosure.requirements.js';
+import { planRecipientRelativeHandoffMaterialClosure } from '../src/tooling/portable/handoff/materialClosure.plan.js';
 import {
   projectManufacturingRequirements,
   resolveWorkspaceRequirementMaterials
@@ -9,6 +12,13 @@ import {
 const routePath = '.topics/handoffs/test.trace.md';
 const anchorPath = '.topics/roles/anchor.trace.md';
 const sigmaPath = '.topics/roles/sigma.trace.md';
+
+function projectHandoffMaterialRequirementsForRegression(markdown) {
+  return projectHandoffMaterialRequirements({ path: routePath, markdown });
+}
+function planEndpointMaterialClosureForRegression(markdown, requirements) {
+  return planRecipientRelativeHandoffMaterialClosure({ handoff: { path: routePath, markdown }, requirements });
+}
 
 function enumeration(entries = []) {
   const enc = new TextEncoder();
@@ -218,4 +228,74 @@ test('two Handoff routes with exact endpoint Role bindings manufacture and each 
     assert.notEqual(grounded.readiness.state, 'blocked', JSON.stringify(grounded.readiness, null, 2));
     assert.equal(grounded.authority.holderBinding?.state, 'qualified', JSON.stringify(grounded.authority.holderBinding || {}, null, 2));
   }
+});
+
+test('recipient-v2 manufacture preserves optional unresolved Role endpoints when the Handoff omits References and no transport binding exists', async (t) => {
+  const scratch = await mkdtemp(path.join(tmpdir(), 'tiinex-optional-endpoint-unresolved-'));
+  t.after(() => rm(scratch, { recursive: true, force: true }));
+  const extensionRoot = path.join(scratch, 'extension-vscode');
+  const extensionWorkspacePath = '.topics/.workspaces/tiinex-extension-vscode.workspace.md';
+  await mkdir(extensionRoot, { recursive: true });
+  await put(extensionRoot, extensionWorkspacePath, workspaceFixture('Extension VS Code', 'Tiinex/extension-vscode'));
+  await put(extensionRoot, routePath, qualifiedHandoffFixture({ from: 'Sigma', to: 'Anchor' }));
+
+  const prepared = await prepareNodeHandoffManufacturingInput({
+    workspaceRoot: extensionRoot,
+    workspaceId: 'extension-vscode',
+    workspaceTargetPath: extensionWorkspacePath,
+    handoffPath: routePath,
+    transportRoutes: [{ workspaceId: 'extension-vscode', path: routePath }],
+    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'),
+    verifyRoundtrip: true
+  });
+
+  assert.equal((prepared.requirements.findings || []).some((item) => item.severity === 'error'), false, JSON.stringify(prepared.requirements.findings || [], null, 2));
+  assert.deepEqual(prepared.requirements.endpointRoles.map((item) => item.closureStrength), ['optional', 'optional']);
+  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
+  assert.equal(result.status, 'ready', JSON.stringify(result.findings || [], null, 2));
+  assert.equal(result.verification.packageInspection, 'valid');
+  assert.equal(result.verification.roundtrip, 'passed');
+  assert.equal((result.inspection.endpointRoles || []).length, 0);
+  assert.equal((result.plan.requirements.endpointRoles || []).every((item) => item.disposition === 'unresolved' && item.closureStrength === 'optional'), true, JSON.stringify(result.plan.requirements.endpointRoles || [], null, 2));
+});
+
+test('endpoint source eligibility is bounded by the explicitly selected qualified Workspace material root', () => {
+  const nestedWorkspacePath = 'test/extension-host/fixtures/source-workspace/.topics/.workspaces/tiinex-source-workspace.workspace.md';
+  const files = [
+    { path: '.topics/.workspaces/tiinex-extension-vscode.workspace.md', content: workspaceFixture('Extension VS Code', 'Tiinex/extension-vscode') },
+    { path: nestedWorkspacePath, content: workspaceFixture('Source Workspace Fixture', 'Tiinex/source-workspace') },
+    { path: 'test/extension-host/fixtures/source-workspace/.topics/roles/fixture.trace.md', content: roleFixture('Sigma') },
+    { path: 'schemas/examples/bounded-role-example.md', content: roleFixture('Anchor') }
+  ];
+
+  const production = projectQualifiedHandoffEndpoints({ files, workspaceId: 'extension-vscode' });
+  assert.equal(production.status, 'ready', JSON.stringify(production.findings || [], null, 2));
+  assert.equal(production.sourceAuthority.workspaceTargetPath, '.topics/.workspaces/tiinex-extension-vscode.workspace.md');
+  assert.equal(production.sourceAuthority.materialRoot, '.topics');
+  assert.equal((production.candidates || []).some((item) => item.artifactPath.startsWith('test/')), false);
+  assert.equal((production.candidates || []).some((item) => item.artifactPath.startsWith('schemas/')), false);
+
+  const explicitlySelectedFixture = projectQualifiedHandoffEndpoints({ files, workspaceId: 'source-workspace' });
+  assert.equal(explicitlySelectedFixture.status, 'ready', JSON.stringify(explicitlySelectedFixture.findings || [], null, 2));
+  assert.equal(explicitlySelectedFixture.sourceAuthority.workspaceTargetPath, nestedWorkspacePath);
+  assert.equal(explicitlySelectedFixture.sourceAuthority.materialRoot, 'test/extension-host/fixtures/source-workspace/.topics');
+
+  const unqualified = projectQualifiedHandoffEndpoints({ files, workspaceId: 'missing-workspace' });
+  assert.equal(unqualified.status, 'blocked');
+  assert.equal(unqualified.candidates.length, 0);
+  assert.equal(unqualified.findings.some((item) => item.code === 'portable.handoff-endpoint.source-authority.unresolved'), true);
+});
+
+test('an explicit endpoint Reference remains required transport closure and fails closed when exact material is absent', () => {
+  const markdown = qualifiedHandoffFixture({
+    from: 'Sigma', to: 'Anchor',
+    fromReference: 'business::.topics/roles/sigma.trace.md',
+    toReference: 'business::.topics/roles/anchor.trace.md'
+  });
+  const requirements = projectHandoffMaterialRequirementsForRegression(markdown);
+  assert.deepEqual(requirements.endpointRoles.map((item) => item.closureStrength), ['required', 'required']);
+  const plan = planEndpointMaterialClosureForRegression(markdown, requirements);
+  assert.equal(plan.status, 'blocked');
+  assert.equal(plan.requirements.endpointRoles.every((item) => item.disposition === 'unresolved'), true);
+  assert.equal(plan.findings.some((item) => item.severity === 'error' && item.code === 'portable.handoff-material.endpoint-role.unresolved'), true);
 });

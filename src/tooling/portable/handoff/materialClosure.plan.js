@@ -22,13 +22,16 @@ export function planRecipientRelativeHandoffMaterialClosure(input = {}, options 
   const workspaces = qualifyWorkspaceMaterializations(input.workspaceMaterializations || [], findings);
   const inputBinding = buildHandoffMaterialClosurePlanInputBinding(requirements, input.recipient || {}, { required, reference, endpointRoles, participantRoles, dependencies }, { policy, bootstrap: input.bootstrap || {} });
   const requiredBlocked = required.some((item) => ['unresolved', 'ambiguous', 'integrity-conflict'].includes(item.disposition));
-  const endpointRoleBlocked = endpointRoles.some((item) => ['unresolved', 'ambiguous', 'integrity-conflict'].includes(item.disposition));
+  const endpointRoleBlocked = endpointRoles.some(endpointRoleResolutionBlocks);
   const participantRoleBlocked = participantRoles.some((item) => ['unresolved', 'ambiguous', 'integrity-conflict'].includes(item.disposition));
   const dependencyBlocked = dependencies.some((item) => ['unresolved', 'ambiguous', 'integrity-conflict'].includes(item.disposition));
   const workspaceBlocked = workspaces.some((item) => String(item.qualification || '').startsWith('invalid-'));
   const ready = !requiredBlocked && !endpointRoleBlocked && !participantRoleBlocked && !dependencyBlocked && !workspaceBlocked;
   for (const item of required) if (['unresolved', 'ambiguous', 'integrity-conflict'].includes(item.disposition)) findings.push(finding('error', `portable.handoff-material.required.${item.disposition}`, item.reason, { requirementId: item.requirementId, referenceTarget: item.referenceTarget }));
-  for (const item of endpointRoles) if (['unresolved', 'ambiguous', 'integrity-conflict'].includes(item.disposition)) findings.push(finding('error', `portable.handoff-material.endpoint-role.${item.disposition}`, item.reason, { requirementId: item.requirementId, referenceTarget: item.referenceTarget }));
+  for (const item of endpointRoles) {
+    if (endpointRoleResolutionBlocks(item)) findings.push(finding('error', `portable.handoff-material.endpoint-role.${item.disposition}`, item.reason, { requirementId: item.requirementId, referenceTarget: item.referenceTarget, closureStrength: item.closureStrength }));
+    else if (item.disposition === 'unresolved') findings.push(finding('info', 'portable.handoff-material.endpoint-role.optional-unresolved', item.reason, { requirementId: item.requirementId, referenceTarget: item.referenceTarget, closureStrength: item.closureStrength }));
+  }
   for (const item of participantRoles) if (['unresolved', 'ambiguous', 'integrity-conflict'].includes(item.disposition)) findings.push(finding('error', `portable.handoff-material.participant-role.${item.disposition}`, item.reason, { requirementId: item.requirementId, referenceTarget: item.referenceTarget }));
   for (const item of dependencies) if (['unresolved', 'ambiguous', 'integrity-conflict'].includes(item.disposition)) findings.push(finding('error', `portable.handoff-material.dependency.${item.disposition}`, item.reason, { requirementId: item.requirementId, referenceTarget: item.referenceTarget }));
   for (const item of reference) if (item.disposition === 'ambiguous' || item.disposition === 'integrity-conflict') findings.push(finding('warning', `portable.handoff-material.reference.${item.disposition}`, item.reason, { requirementId: item.requirementId, referenceTarget: item.referenceTarget }));
@@ -60,6 +63,14 @@ export function planRecipientRelativeHandoffMaterialClosure(input = {}, options 
     bootstrap: Object.freeze({ status: policy.bootstrap, boundary: 'Optional transport orientation only; not Handoff semantics, workspace authority, or artifact identity.' }),
     findings: Object.freeze([...(requirements.findings || []), ...findings])
   });
+}
+
+
+function endpointRoleResolutionBlocks(item = {}) {
+  const disposition = String(item.disposition || '');
+  if (disposition === 'ambiguous' || disposition === 'integrity-conflict') return true;
+  if (disposition !== 'unresolved') return false;
+  return String(item.closureStrength || 'required') !== 'optional';
 }
 
 function referenceDisposition(requirement, candidates, recipient, policy) {

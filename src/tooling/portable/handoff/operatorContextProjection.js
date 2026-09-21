@@ -21,8 +21,9 @@ export function projectPortableOperatorContext(input = {}) {
 
   for (const root of roots) {
     const rootFiles = files.filter((file) => fileBelongsToRoot(file, root.root));
+    const workspaceSurfaceFiles = rootFiles.filter((file) => fileBelongsToRootWorkspaceSurface(file, root.root));
     const rootRepositories = repositories.filter((repository) => samePath(repository.root, root.root));
-    const sources = projectQualifiedWorkspacePackageSources({ files: rootFiles, repositories: rootRepositories.length ? rootRepositories : repositories });
+    const sources = projectQualifiedWorkspacePackageSources({ files: workspaceSurfaceFiles, repositories: rootRepositories.length ? rootRepositories : repositories });
     const workspaces = [];
     for (const candidate of sources.candidates || []) {
       const leaves = projectQualifiedHandoffLeaves({ files: rootFiles });
@@ -69,7 +70,7 @@ export function projectPortableOperatorContext(input = {}) {
     pointerless,
     findings,
     operationBoundary: { sourceMutation: false, remoteWrite: false, manufacture: false, identityInference: false },
-    boundary: 'Projects one multi-root operator context from explicit host roots. Qualified Workspace artifact identity remains distinct from physical repository identity; Role/Party endpoints and Handoff leaves are shared-core projections, and No Handoff pointer remains explicit.'
+    boundary: 'Projects one multi-root operator context from explicit host roots. Top-level Workspace candidates are limited to direct artifacts on each selected root\'s canonical .topics/.workspaces surface; nested independent .topics surfaces require their own explicit host root. Qualified Workspace artifact identity remains distinct from physical repository identity; Role/Party endpoints and Handoff leaves are shared-core projections, and No Handoff pointer remains explicit.'
   });
 }
 
@@ -94,6 +95,15 @@ function fileBelongsToRoot(file = {}, root = '') {
   if (!localPath || !root) return false;
   const base = String(root).replace(/\\/g, '/').replace(/\/$/, '');
   return localPath === base || localPath.startsWith(`${base}/`);
+}
+function fileBelongsToRootWorkspaceSurface(file = {}, root = '') {
+  const localPath = String(file?.locator?.localPath || '').replace(/\\/g, '/');
+  if (!localPath || !root) return false;
+  const base = String(root).replace(/\\/g, '/').replace(/\/$/, '');
+  const prefix = `${base}/.topics/.workspaces/`;
+  if (!localPath.startsWith(prefix)) return false;
+  const relative = localPath.slice(prefix.length);
+  return Boolean(relative) && !relative.includes('/');
 }
 function samePath(a = '', b = '') { return String(a || '').replace(/\\/g, '/').replace(/\/$/, '') === String(b || '').replace(/\\/g, '/').replace(/\/$/, ''); }
 function dedupeEndpoints(candidates = []) {

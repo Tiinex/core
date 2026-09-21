@@ -91,7 +91,7 @@ function projectEndpointRoleRequirements(markdown, findings) {
     if (kind !== 'role') continue;
     const reference = parseMaterialReference(rawReference);
     if (rawReference && !reference.exactTargetDeclared) findings.push(finding('warning', 'portable.handoff-material.endpoint-role.reference-opaque', 'Role endpoint declares a Reference that is not an exact Markdown-link target.', { side: side.toLowerCase(), reference: rawReference }));
-    if (!rawReference) findings.push(finding('warning', 'portable.handoff-material.endpoint-role.reference-missing', 'Role endpoint has no exact Reference; endpoint material closure remains required and must be supplied by an exact qualified binding.', { side: side.toLowerCase(), roleLabel: field(section, side) }));
+    if (!rawReference) findings.push(finding('info', 'portable.handoff-material.endpoint-role.reference-absent-optional', "Role endpoint has no Reference. Endpoint identity remains unresolved at the Handoff schema's allowed strength unless an exact qualified transport binding is explicitly supplied.", { side: side.toLowerCase(), roleLabel: field(section, side) }));
     out.push(Object.freeze({
       id: `endpoint-role:${side.toLowerCase()}`,
       name: field(section, side) || `${side} Role`,
@@ -102,6 +102,7 @@ function projectEndpointRoleRequirements(markdown, findings) {
       material: `${side} endpoint Role artifact`,
       purpose: 'cold-start endpoint Role grounding',
       availability: 'declared',
+      closureStrength: rawReference ? 'required' : 'optional',
       materialReference: rawReference,
       reference,
       source: null,

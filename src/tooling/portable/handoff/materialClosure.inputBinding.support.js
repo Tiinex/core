@@ -13,6 +13,7 @@ function bindingRequirementAsRequirement(entry = {}) {
   return {
     id: String(entry.requirementId || ''),
     classification: String(entry.classification || ''),
+    closureStrength: String(entry.closureStrength || 'required'),
     reference: { target: String(entry.referenceTarget || ''), exactTargetDeclared: Boolean(entry.exactTargetDeclared) }
   };
 }
