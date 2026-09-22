@@ -35,8 +35,8 @@ function buildRecipientFacingV2PackageV1Prepared(input = {}, sealedByWorkspaceId
   const routes = (carrier.routes || []).filter((route) => route.state === 'qualified');
   const selector = String(input.routeSelector || input.routeId || '').trim();
   const selected = selector ? routes.filter((route) => route.id === selector || route.workspaceRelativePath === selector || `${String(route.workspaceId || '')}:${String(route.workspaceRelativePath || '')}` === selector || `handoff-route:${String(route.workspaceId || '')}:${String(route.workspaceRelativePath || '')}` === selector) : routes;
-  if (selected.length !== 1) return blocked('route-selection-unresolved', [finding('error', 'portable.handoff-package-v1.route-selection-unresolved', 'Package v1 manufacture requires exactly one qualified selected Handoff route.', { count: selected.length })]);
-  const route = selected[0];
+  if (!selected.length || (selector && selected.length !== 1)) return blocked('route-selection-unresolved', [finding('error', 'portable.handoff-package-v1.route-selection-unresolved', 'Package v1 manufacture requires at least one qualified Handoff route, and an explicit route selector must resolve exactly one route.', { count: selected.length, selectorPresent: Boolean(selector) })]);
+  const selectedRoutes = [...selected].sort(comparePackageRoutes);
   const sourceWorkspaceById = new Map((sourceSurface.topology?.workspaces || []).map((item) => [String(item.workspaceId || ''), item]));
   const sourceByPath = new Map((sourceSurface.files || []).map((file) => [String(file.path || ''), file]));
   const descriptorBindingById = new Map((descriptor.workspaceArchiveBindings || []).map((binding) => [String(binding.workspaceId || ''), binding]));
@@ -136,7 +136,8 @@ function buildRecipientFacingV2PackageV1Prepared(input = {}, sealedByWorkspaceId
     const workspace = workspaceById.get(plan.workspaceId);
     if (!workspace) continue;
     const binding = bindingForWorkspace(descriptor, workspace.workspaceId);
-    const materials = coalesceDetachedCacheMaterials(detached.filter((item) => (workspace.workspaceId === String(route.workspaceId || '') && routeClaimsDetachedMaterial(route, item)) || boundedWorkspaceClaimsDetachedRecovery(binding, item)));
+    const workspaceRoutes = selectedRoutes.filter((route) => String(route.workspaceId || '') === workspace.workspaceId);
+    const materials = coalesceDetachedCacheMaterials(detached.filter((item) => workspaceRoutes.some((route) => routeClaimsDetachedMaterial(route, item)) || boundedWorkspaceClaimsDetachedRecovery(binding, item)));
     if (!materials.length) continue;
     const artifactPath = `${plan.prefix}-1-cache.trace.md`;
     const archivePath = `${plan.prefix}-1-cache.zip`;
@@ -153,16 +154,35 @@ function buildRecipientFacingV2PackageV1Prepared(input = {}, sealedByWorkspaceId
     topology.caches.push(Object.freeze({ workspaceId: cache.workspaceId, artifactPath, archivePath, materials: cache.materials }));
     cachePlanByWorkspace.set(workspace.workspaceId, cache);
   }
-  const owningWorkspace = workspaceById.get(String(route.workspaceId || ''));
-  const cache = owningWorkspace ? (cachePlanByWorkspace.get(owningWorkspace.workspaceId) || null) : null;
+  const routeOrdinalByWorkspace = new Map();
+  const routeCountByWorkspace = new Map();
+  for (const route of selectedRoutes) {
+    const workspaceId = String(route.workspaceId || '');
+    routeCountByWorkspace.set(workspaceId, (routeCountByWorkspace.get(workspaceId) || 0) + 1);
+  }
 
-  if (!owningWorkspace) findings.push(finding('error', 'portable.handoff-package-v1.route.workspace-unresolved', 'Selected Handoff route owning Workspace is not carried.'));
-  else if (owningWorkspace.sealed) findings.push(finding('error', 'portable.handoff-package-v1.route.workspace-sealed-forbidden', 'Selected authoritative Handoff route must remain inside clear qualified carried material in Secure Transport V1.', { workspaceId: owningWorkspace.workspaceId }));
-  else {
+  for (const route of selectedRoutes) {
+    const routeWorkspaceId = String(route.workspaceId || '');
+    const owningWorkspace = workspaceById.get(routeWorkspaceId);
+    const cache = owningWorkspace ? (cachePlanByWorkspace.get(owningWorkspace.workspaceId) || null) : null;
+    if (!owningWorkspace) {
+      findings.push(finding('error', 'portable.handoff-package-v1.route.workspace-unresolved', 'Selected Handoff route owning Workspace is not carried.', { routeId: String(route.id || ''), workspaceId: routeWorkspaceId }));
+      continue;
+    }
+    if (owningWorkspace.sealed) {
+      findings.push(finding('error', 'portable.handoff-package-v1.route.workspace-sealed-forbidden', 'Selected authoritative Handoff route must remain inside clear qualified carried material in Secure Transport V1.', { workspaceId: owningWorkspace.workspaceId, routeId: String(route.id || '') }));
+      continue;
+    }
+
     const plan = workspacePlans.find((item) => item.workspaceId === owningWorkspace.workspaceId);
     const binding = bindingForWorkspace(descriptor, owningWorkspace.workspaceId);
+    const routeOrdinal = (routeOrdinalByWorkspace.get(routeWorkspaceId) || 0) + 1;
+    routeOrdinalByWorkspace.set(routeWorkspaceId, routeOrdinal);
+    const siblingCount = routeCountByWorkspace.get(routeWorkspaceId) || 1;
+    const ancestorDimension = cache ? `${plan.prefix}-1` : plan.prefix;
     let lineageParent = cache?.parent || owningWorkspace.parent;
-    let nextDimension = cache ? `${plan.prefix}-1-1` : `${plan.prefix}-1`;
+    let nextDimension = siblingCount > 1 ? `${ancestorDimension}-${routeOrdinal}` : `${ancestorDimension}-1`;
+
     const participantChain = buildParticipantRolePointerChain({ requirements: route.materialRequirements?.participantRoles || [], descriptor, workspaceById, cache, workspace: owningWorkspace, route, createdAt, lineageParent, nextDimension, resolveRoleMaterialTarget: roleMaterialTarget, parentAuthority: recipientV2ParentAuthority });
     files.push(...participantChain.files); topology.participantRoles.push(...participantChain.roles); findings.push(...participantChain.findings); lineageParent = participantChain.lineageParent; nextDimension = participantChain.nextDimension;
     const endpointChain = buildEndpointRolePointerChain({ requirements: route.materialRequirements?.endpointRoles || [], descriptor, workspaceById, cache, workspace: owningWorkspace, route, createdAt, lineageParent, nextDimension, resolveRoleMaterialTarget: roleMaterialTarget, parentAuthority: recipientV2ParentAuthority });
@@ -191,6 +211,13 @@ function buildRecipientFacingV2PackageV1Prepared(input = {}, sealedByWorkspaceId
   const bundle = { ...(input.bundle || {}), files: Object.freeze(sortedFiles), handoffClosure: null, transportFormat: RECIPIENT_V2_PACKAGE_V1_FORMAT_ID };
   const inspection = inspectRecipientFacingV2PackageV1(bundle);
   return Object.freeze({ status: inspection.status === 'valid' && !findings.some((item) => item.severity === 'error') ? 'ready' : 'blocked', files: Object.freeze(sortedFiles), topology: deepFreeze(topology), inspection, findings: Object.freeze([...findings, ...(inspection.findings || [])]), boundary: 'Recipient-facing tiinex.handoff.package.v1 carrier with direct complete Workspace bindings and/or generic complete/bounded Workspace Representation bindings; bootstrap/cache ownership is explicit and transport projection creates no semantic authority.' });
+}
+
+
+function comparePackageRoutes(left = {}, right = {}) {
+  return String(left.workspaceId || '').localeCompare(String(right.workspaceId || ''))
+    || String(left.workspaceRelativePath || left.path || '').localeCompare(String(right.workspaceRelativePath || right.path || ''))
+    || String(left.id || '').localeCompare(String(right.id || ''));
 }
 
 

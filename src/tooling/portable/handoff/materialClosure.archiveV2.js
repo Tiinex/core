@@ -139,9 +139,10 @@ export function upgradeRecipientRelativeHandoffTransportPackageV2(baseline = {},
     legacyRecipientV2Compatibility: options.legacyRecipientV2Compatibility === true || input.legacyRecipientV2Compatibility === true
   });
   findings.push(...(recipientSurface.findings || []));
-  const bundle = deepFreeze({ ...baselineBundle, status: transportStatus, files: recipientSurface.files, fileMap: null, packageRepresentationSha256: '', handoffClosure: null, transportFormat: RECIPIENT_V2_FORMAT_ID, boundary: `${baselineBundle.boundary || ''} Recipient-facing v2 exposes a flat qualified-artifact/payload root; legacy control JSON is not serialized.` });
+  const recipientFormat = String(recipientSurface.inspection?.format || RECIPIENT_V2_FORMAT_ID);
+  const bundle = deepFreeze({ ...baselineBundle, status: transportStatus, files: recipientSurface.files, fileMap: null, packageRepresentationSha256: '', handoffClosure: null, transportFormat: recipientFormat, boundary: `${baselineBundle.boundary || ''} Recipient-facing v2 exposes the qualified ${recipientFormat} artifact/payload root; legacy control JSON is not serialized.` });
   const fullRecipientVerificationRequested = options.verifyRoundtrip !== false && input.verifyRoundtrip !== false;
-  const constructionInspection = constructionRecipientV2Inspection(recipientSurface, carrierProjection, descriptor);
+  const constructionInspection = constructionRecipientV2Inspection(recipientSurface, carrierProjection, descriptor, recipientFormat);
   const normalReadyPath = carrierProjection.status === 'ready' && constructionInspection.status === 'valid';
   // On the normal ready path, full verification needs one independent inspection of the
   // physically serialized carrier, not two equivalent logical inspections of the same
@@ -182,14 +183,14 @@ export function upgradeRecipientRelativeHandoffTransportPackageV2(baseline = {},
     companionInspection,
     roundtrip: runtime,
     findings: Object.freeze(dedupeFindings(findings)),
-    migration: Object.freeze({ mode: 'canonical-archive-backed-recipient', recipientTopology: RECIPIENT_V2_FORMAT_ID, manufacturePath: directSourcesByCorrelation.size ? 'direct-qualified-workspace-to-archive' : 'archive-baseline-upgrade', removedExplodedWorkspaceFiles: removedWorkspacePaths.size, avoidedExplodedWorkspaceFiles, deduplicatedDetachedMaterialFiles: removedMaterialPaths.size, exposedWorkspaceTargets: archiveBindings.length, workspaceArchives: archiveBindings.length }),
+    migration: Object.freeze({ mode: 'canonical-archive-backed-recipient', recipientTopology: recipientFormat, manufacturePath: directSourcesByCorrelation.size ? 'direct-qualified-workspace-to-archive' : 'archive-baseline-upgrade', removedExplodedWorkspaceFiles: removedWorkspacePaths.size, avoidedExplodedWorkspaceFiles, deduplicatedDetachedMaterialFiles: removedMaterialPaths.size, exposedWorkspaceTargets: archiveBindings.length, workspaceArchives: archiveBindings.length }),
     boundary: 'Canonical recipient transport representation only. No semantic Workspace identity is minted and this result carries no remote mutation authority.'
   });
   return __out;
 }
 
 
-function constructionRecipientV2Inspection(recipientSurface = {}, carrierProjection = {}, descriptor = {}) {
+function constructionRecipientV2Inspection(recipientSurface = {}, carrierProjection = {}, descriptor = {}, recipientFormat = RECIPIENT_V2_FORMAT_ID) {
   const topology = recipientSurface.topology || {};
   const findings = Object.freeze([...(recipientSurface.findings || [])]);
   const status = recipientSurface.status === 'ready' && !findings.some((item) => item.severity === 'error') ? 'valid' : 'invalid';
@@ -197,7 +198,7 @@ function constructionRecipientV2Inspection(recipientSurface = {}, carrierProject
     schema: 'tiinex.portable.recipient-facing-handoff-v2.construction-inspection.v1',
     detected: true,
     status,
-    format: RECIPIENT_V2_FORMAT_ID,
+    format: recipientFormat,
     verificationMode: 'construction-qualified; physical re-ingest required for independent recipient verification',
     rootArtifact: topology.root ? Object.freeze({ path: String(topology.root.path || ''), sha256: String(topology.root.sha256 || '') }) : null,
     readArtifact: topology.read ? Object.freeze({ path: String(topology.read.path || ''), status: 'qualified' }) : null,

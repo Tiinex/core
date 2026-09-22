@@ -157,7 +157,10 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     maxFiles: flags['max-files'],
     bootstrapMaxFiles: flags['bootstrap-max-files'],
     verifyRoundtrip,
-    recipientRouteSelector: flags.route || '',
+    // `--route` selects the recipient-facing human/transport projection. When the host
+    // supplies an explicit shared route set, manufacture must carry that whole qualified
+    // set; otherwise the presentation selector would silently collapse Pack multi.
+    recipientRouteSelector: recipientRouteSelectorForManufacture(flags.route || '', handoffRoutes),
     carrierLineage,
     carrierAllocation,
     carrierProfile,
@@ -181,6 +184,11 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
       packageInput: { builtAt: flags['built-at'] || undefined }
     }
   };
+}
+
+
+export function recipientRouteSelectorForManufacture(route = '', handoffRoutes = []) {
+  return Array.isArray(handoffRoutes) && handoffRoutes.length > 1 ? '' : String(route || '').trim();
 }
 
 export async function materializeHandoffManufactureCliOutput(result = {}, flags = {}) {

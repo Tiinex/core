@@ -12,16 +12,17 @@ import {
 import { createDeterministicStoredZip, safeZipPath } from './deterministic.zip.js';
 
 export function recipientFacingV2PackageZipBuffer(bundle = {}, options = {}) {
-  if (String(bundle.transportFormat || '') !== RECIPIENT_V2_FORMAT_ID) throw new Error('portable.recipient-v2.zip.format.invalid');
-  const inspection = options.inspection || inspectRecipientFacingV2Topology(bundle);
-  const inspectionFormat = String(inspection?.format || '');
   const serializableFormats = new Set([
     RECIPIENT_V2_FORMAT_ID,
     RECIPIENT_V2_ARTIFACT_FIRST_PHASE1_FORMAT_ID,
     RECIPIENT_V2_ARTIFACT_FIRST_PHASE2_CLEAN_FORMAT_ID,
     RECIPIENT_V2_PACKAGE_V1_FORMAT_ID
   ]);
-  if (inspection?.status !== 'valid' || !serializableFormats.has(inspectionFormat)) throw new Error('portable.recipient-v2.zip.bundle.invalid');
+  const bundleFormat = String(bundle.transportFormat || '');
+  if (!serializableFormats.has(bundleFormat)) throw new Error('portable.recipient-v2.zip.format.invalid');
+  const inspection = options.inspection || inspectRecipientFacingV2Topology(bundle);
+  const inspectionFormat = String(inspection?.format || '');
+  if (inspection?.status !== 'valid' || !serializableFormats.has(inspectionFormat) || inspectionFormat !== bundleFormat) throw new Error('portable.recipient-v2.zip.bundle.invalid');
   const entries = (bundle.files || []).map((file) => {
     const name = safeZipPath(file.path);
     const data = bufferViewOfPackageFile(file);
@@ -44,7 +45,7 @@ export async function writeRecipientFacingV2PackageZip(bundle = {}, outputPath =
     status: exactWrite.status,
     path: target,
     bytes: buffer.length,
-    transportFormat: RECIPIENT_V2_FORMAT_ID,
+    transportFormat: String(bundle.transportFormat || ''),
     boundary: Object.freeze({ localFilesystemWrite: true, remoteWrite: false, sourceMutation: false })
   });
 }

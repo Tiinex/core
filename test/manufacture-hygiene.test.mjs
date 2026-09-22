@@ -23,7 +23,13 @@ for (const excluded of ['.release/old.tgz', '.outgoing-handoff-packages/old.zip'
   });
 }
 
-import { materializeHandoffManufactureCliOutput } from '../src/tooling/portable/adapters/cli/cli.handoff-manufacture.js';
+import { materializeHandoffManufactureCliOutput, recipientRouteSelectorForManufacture } from '../src/tooling/portable/adapters/cli/cli.handoff-manufacture.js';
+test('shared explicit Handoff routes keep --route as presentation selection instead of collapsing manufacture', () => {
+  assert.equal(recipientRouteSelectorForManufacture('core:.topics/handoffs/one.trace.md', [{ path: 'one' }, { path: 'two' }]), '');
+  assert.equal(recipientRouteSelectorForManufacture('core:.topics/handoffs/one.trace.md', [{ path: 'one' }]), 'core:.topics/handoffs/one.trace.md');
+  assert.equal(recipientRouteSelectorForManufacture('', [{ path: 'one' }, { path: 'two' }]), '');
+});
+
 test('pointerless filename is a safe transport label, exposes only generic transport, and never invents route or lineage', async () => {
   const result = { status: 'ready', carrierProjection: { status: 'ready', mode: 'workspace', lineage: { dimension: '001' }, routes: [] } };
   const receipt = await materializeHandoffManufactureCliOutput(result, { 'projected-filename': 'business-001-7.handoff-package.zip' });

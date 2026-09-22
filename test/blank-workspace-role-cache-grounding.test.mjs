@@ -14,7 +14,7 @@ import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifi
 import { orientColdConsumerFromHandoffPackage } from '../src/tooling/portable/handoff/coldConsumerEntrypoint.js';
 import { groundPortableColdConsumer } from '../src/tooling/portable/handoff/coldStartQualification.grounding.js';
 import { projectPortableGroundingReadiness } from '../src/tooling/portable/grounding/grounding.readiness.js';
-import { inspectRecipientFacingV2PackageV1 } from '../src/tooling/portable/handoff/recipientV2.packageV1.js';
+import { inspectRecipientFacingV2PackageV1, RECIPIENT_V2_PACKAGE_V1_FORMAT_ID } from '../src/tooling/portable/handoff/recipientV2.packageV1.js';
 import { inspectRecipientFacingV2Topology } from '../src/tooling/portable/handoff/recipientV2.inspect.js';
 import { projectPortableHandoffCarrierOutputFromPackage } from '../src/tooling/portable/handoff/recipientV2.humanOutput.js';
 import { roleMaterialTarget } from '../src/tooling/portable/handoff/recipientV2.topology.materials.js';
@@ -1234,6 +1234,8 @@ test('two sibling routes share one bounded cache while each route remains indepe
   const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
   assert.equal(result.status, 'ready', JSON.stringify(result.findings, null, 2));
   assert.equal(result.roundtrip?.status, 'passed', JSON.stringify(result.roundtrip?.findings || [], null, 2));
+  assert.equal(result.inspection.format, RECIPIENT_V2_PACKAGE_V1_FORMAT_ID);
+  assert.equal(result.bundle.transportFormat, RECIPIENT_V2_PACKAGE_V1_FORMAT_ID);
   assert.equal((result.inspection.routes || []).length, 2);
   const coreCaches = (result.inspection.caches || []).filter((item) => item.workspaceId === 'core');
   assert.equal(coreCaches.length, 1);
@@ -1248,6 +1250,11 @@ test('two sibling routes share one bounded cache while each route remains indepe
   assert.equal(routeWithParticipant.endpointRolePointers.length, 2);
   assert.equal(routeWithoutParticipant.endpointRolePointers.length, 2);
   assert.ok(routeWithParticipant.pointerPath !== routeWithoutParticipant.pointerPath);
+  const cacheDimension = coreCaches[0].artifactPath.match(/^(\d+(?:-\d+)*)-/)?.[1] || '';
+  assert.ok(cacheDimension);
+  assert.match(routeWithParticipant.pointerPath, new RegExp(`^${cacheDimension.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-1(?:-|$)`));
+  assert.match(routeWithoutParticipant.pointerPath, new RegExp(`^${cacheDimension.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-2(?:-|$)`));
+  assert.equal(result.bundle.files.some((file) => /(?:^|-)e(?:-|\d)|(?:^|-)p(?:-|\d)/i.test(String(file.path || ''))), false);
   assert.equal(result.bundle.files.some((file) => String(file.path || '') === 'tiinex-recipient-v2.transport.json'), false);
 
   const firstProjection = projectPortableHandoffCarrierOutputFromPackage({ bundle: result.bundle, route: routeWithParticipant.pointerPath });
@@ -1270,7 +1277,7 @@ test('two sibling routes share one bounded cache while each route remains indepe
   };
   const missingInspection = inspectRecipientFacingV2Topology(missingOwnAncestor);
   assert.equal(missingInspection.status, 'invalid');
-  assert.equal(missingInspection.findings.some((item) => String(item.code || '') === 'portable.handoff-v2-phase1.role.pointer-missing'), true);
+  assert.equal(missingInspection.findings.some((item) => String(item.code || '') === 'portable.handoff-package-v1.route-ancestor-unknown'), true);
 });
 
 test('fresh Axiom route continues external Parent closure through exact package-parent cache material to a qualified root', async (t) => {

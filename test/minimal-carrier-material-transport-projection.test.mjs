@@ -12,6 +12,8 @@ import { manufactureRecipientRelativeHandoffPackage } from '../src/tooling/porta
 import { orientColdConsumerFromHandoffPackage } from '../src/tooling/portable/handoff/coldConsumerEntrypoint.js';
 import { projectPortableHandoffCarrierOutputFromPackage } from '../src/tooling/portable/handoff/recipientV2.humanOutput.js';
 import { BOOTSTRAP_PACKAGE_ROLE, WORKSPACE_PACKAGE_ROLE } from '../src/tooling/portable/handoff/recipientV2.packageV1.contract.js';
+import { RECIPIENT_V2_PACKAGE_V1_FORMAT_ID } from '../src/tooling/portable/handoff/recipientV2.packageV1.constants.js';
+import { recipientFacingV2PackageZipBuffer } from '../src/tooling/portable/output/recipientV2.zip.js';
 import { auditHandoffPackageContextCarriage } from '../src/tooling/portable/handoff/contextAudit.js';
 import { auditPortableRecoveryAcceptance } from '../src/tooling/portable/handoff/recoveryAcceptanceAudit.js';
 
@@ -97,6 +99,9 @@ test('pointerless bounded Workspace package uses generic material representation
   assert.equal(result.inspection.workspaces.length, 1);
   assert.equal(result.inspection.workspaces[0].coverage, 'bounded');
   assert.equal(result.inspection.routes.length, 0);
+  assert.equal(result.inspection.format, RECIPIENT_V2_PACKAGE_V1_FORMAT_ID);
+  assert.equal(result.bundle.transportFormat, RECIPIENT_V2_PACKAGE_V1_FORMAT_ID);
+  assert.ok(recipientFacingV2PackageZipBuffer(result.bundle, { inspection: result.inspection }).byteLength > 0);
   const contextAudit = auditHandoffPackageContextCarriage({ bundle: result.bundle });
   assert.equal(contextAudit.workspaceMaterializations[0].coverage, 'bounded');
   assert.equal(contextAudit.workspaceMaterializations[0].reason, 'bounded-workspace-archive-representation');

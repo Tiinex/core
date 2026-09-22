@@ -241,7 +241,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     bootstrap: orientationBootstrap,
     additionalTransportFiles: toolingBootstrap.files,
     transportRoutes: effectiveTransportRoutes,
-    recipientRouteSelector: String(input.recipientRouteSelector || handoffPath || '').trim(),
+    recipientRouteSelector: String(input.recipientRouteSelector || '').trim(),
     workspaceTargets,
     carrierLineage: normalizeHandoffCarrierLineage(input.carrierLineage || null),
     carrierAllocation: input.carrierAllocation ? Object.freeze({ ...input.carrierAllocation }) : null,

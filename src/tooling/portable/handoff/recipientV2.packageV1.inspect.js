@@ -220,7 +220,7 @@ export function inspectRecipientFacingV2PackageV1(bundle = {}, options = {}) {
     if (carrierProjection.status !== 'ready') findings.push(finding('error', 'portable.handoff-package-v1.routes-unqualified', 'Selected Handoff Pointer does not independently resolve to qualified authoritative Handoff bytes.', { causes: carrierProjection.findings || [] }));
     inspectRoutePointers(routePointers, carrierProjection, workspaceParts, endpointRolePointers, participantRolePointers, index, findings);
     validateRouteClosure(routePointers, endpointRolePointers, participantRolePointers, caches, workspaceParts, findings);
-    if (routePointers.length !== 1) findings.push(finding('error', 'portable.handoff-package-v1.route-count-invalid', 'Qualified Handoff-carrier package-v1 delivery requires exactly one selected Handoff Pointer.', { count: routePointers.length }));
+    if (!routePointers.length) findings.push(finding('error', 'portable.handoff-package-v1.route-count-invalid', 'Qualified Handoff-carrier package-v1 delivery requires at least one qualified Handoff Pointer.', { count: routePointers.length }));
     const sealedWorkspaceIds = new Set(sealedWorkspaceBindings.map((item) => String(item.workspaceId || '')));
     for (const route of carrierProjection.routes || []) {
       const unresolved = (route.requiredClosure?.requirements || []).filter((requirement) => requirement.state !== 'qualified');
