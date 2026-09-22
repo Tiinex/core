@@ -25,25 +25,30 @@ export function qualifyPhase1RequiredContextClosure({ markdown = '', routePath =
         const candidate = candidates[0];
         const matches = (candidate.entries || []).filter((entry) => String(entry.path || '') === qualified.path);
         if (matches.length > 1) reasons.push('required-workspace-qualified-entry-ambiguous');
-        else if (matches.length < 1) reasons.push('required-workspace-qualified-entry-missing');
-        else {
+        else if (matches.length === 1) {
           const entry = matches[0];
           const data = packageFileBytes({ data: entry.data });
           const digest = sha256Hex(data);
           if (Number(entry.bytes || 0) !== data.byteLength || String(entry.sha256 || '') !== digest) reasons.push('required-workspace-qualified-byte-mismatch');
           else resolution = deepFreeze({ state: 'qualified', kind: 'workspace-archive-entry', workspaceId: qualified.workspaceId, workspaceRelativePath: qualified.path, providerMode: 'archive', packagePath: String(candidate.archivePath || ''), archivePackagePath: String(candidate.archivePath || ''), innerPath: qualified.path, bytes: data.byteLength, sha256: digest });
         }
+        else {
+          const detached = matchingRouteCacheMaterials(caches, requirement, target, workspaceId, routePath).filter(({ material }) => {
+            const targetWorkspaceId = String(material.targetWorkspaceId || '');
+            const targetPath = normalizeRoutePath(material.targetPath || material.originalPath || '');
+            return (!targetWorkspaceId || targetWorkspaceId === qualified.workspaceId) && (!targetPath || targetPath === normalizeRoutePath(qualified.path));
+          });
+          if (detached.length > 1) reasons.push('required-workspace-qualified-detached-material-ambiguous');
+          else if (detached.length < 1) reasons.push('required-workspace-qualified-entry-missing');
+          else resolution = cacheMaterialResolution(detached[0], workspaceId, reasons);
+        }
       }
     }
     else if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('//')) {
-      const matches = caches.flatMap((cache) => (cache?.state === 'qualified' ? (cache.materials || []).filter((material) => String(material.referenceTarget || '') === target && (!requirement.id || String(material.requirementId || '') === String(requirement.id || ''))).map((material) => ({ cache, material })) : []));
+      const matches = matchingRouteCacheMaterials(caches, requirement, target, workspaceId, routePath);
       if (matches.length > 1) reasons.push('required-cache-material-ambiguous');
       else if (matches.length < 1) reasons.push('required-cache-material-missing');
-      else {
-        const { cache, material } = matches[0];
-        if (!material.sha256 || !material.bytes) reasons.push('required-cache-material-byte-identity-unresolved');
-        else resolution = deepFreeze({ state: 'qualified', kind: 'workspace-cache-entry', workspaceId: String(cache.workspaceId || workspaceId || ''), workspaceRelativePath: '', providerMode: 'cache', packagePath: String(cache.payloadPath || ''), archivePackagePath: String(cache.payloadPath || ''), innerPath: String(material.archiveEntry || ''), archiveEntry: String(material.archiveEntry || ''), bytes: Number(material.bytes || 0), sha256: String(material.sha256 || '') });
-      }
+      else resolution = cacheMaterialResolution(matches[0], workspaceId, reasons);
     }
     else {
       const resolvedPath = resolveRelativeWorkspacePath(routePath, target);
@@ -67,6 +72,30 @@ export function qualifyPhase1RequiredContextClosure({ markdown = '', routePath =
   });
   const qualifiedCount = requirements.filter((entry) => entry.state === 'qualified').length;
   return deepFreeze({ state: qualifiedCount === requirements.length ? 'qualified' : 'blocked', requiredCount: requirements.length, qualifiedCount, requirements: Object.freeze(requirements), findings: Object.freeze(findings), boundary: 'Artifact-first Phase 1 Required Context closure. Every Required Context item must resolve to exact inner bytes of the selected qualified Workspace, an explicitly workspace-qualified already-carried Workspace, or qualified selected-route cache; Reference Context and compatibility JSON are intentionally excluded from blocking receiver truth.' });
+}
+
+function matchingRouteCacheMaterials(caches = [], requirement = {}, target = '', workspaceId = '', routePath = '') {
+  const normalizedRoutePath = normalizeRoutePath(routePath);
+  return caches.flatMap((cache) => cache?.state === 'qualified' ? (cache.materials || []).filter((material) => {
+    if (String(material.referenceTarget || '') !== String(target || '')) return false;
+    const requirementId = String(requirement.id || '');
+    if (requirementId && ![String(material.requirementId || ''), String(material.sourceRequirementId || '')].includes(requirementId)) return false;
+    const scopedWorkspaceId = String(material.routeWorkspaceId || '');
+    const scopedRoutePath = normalizeRoutePath(material.routePath || '');
+    if (scopedWorkspaceId && scopedWorkspaceId !== String(workspaceId || '')) return false;
+    if (scopedRoutePath && scopedRoutePath !== normalizedRoutePath) return false;
+    return true;
+  }).map((material) => ({ cache, material })) : []);
+}
+
+function cacheMaterialResolution(match = null, fallbackWorkspaceId = '', reasons = []) {
+  const cache = match?.cache || null;
+  const material = match?.material || null;
+  if (!cache || !material || !material.sha256 || !material.bytes) {
+    reasons.push('required-cache-material-byte-identity-unresolved');
+    return null;
+  }
+  return deepFreeze({ state: 'qualified', kind: 'workspace-cache-entry', workspaceId: String(material.targetWorkspaceId || cache.workspaceId || fallbackWorkspaceId || ''), workspaceRelativePath: normalizeRoutePath(material.targetPath || material.originalPath || ''), providerMode: 'cache', packagePath: String(cache.payloadPath || ''), archivePackagePath: String(cache.payloadPath || ''), innerPath: String(material.archiveEntry || ''), archiveEntry: String(material.archiveEntry || ''), bytes: Number(material.bytes || 0), sha256: String(material.sha256 || '') });
 }
 
 export function resolveArchiveParent(routePath = '', entries = [], parent = {}, targetEntry = {}, parentCandidates = []) {

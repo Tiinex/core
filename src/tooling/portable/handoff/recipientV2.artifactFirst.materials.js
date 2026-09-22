@@ -8,6 +8,7 @@ import { PHASE1_BOOTSTRAP_ROLE, PHASE1_CACHE_ROLE, currentSchemaId, decodeUtf8, 
 export function deriveRecipientV2ArtifactFirstPhase1Facts(files = []) {
   const facts = new Map();
   const payloadByPath = new Map();
+  const cacheArtifactByWorkspace = new Map();
   const archiveByLocation = new Map();
   const archiveIdentity = (location = '') => {
     const key = String(location || '');
@@ -24,7 +25,11 @@ export function deriveRecipientV2ArtifactFirstPhase1Facts(files = []) {
     const path = String(file.path || '');
     if (!/\.md$/i.test(path)) continue;
     const markdown = decodeUtf8(packageFileBytes(file));
-    if (currentSchemaId(markdown) === 'tiinex.external.payload.v1') payloadByPath.set(path, parsePhase1Payload(markdown));
+    if (currentSchemaId(markdown) === 'tiinex.external.payload.v1') {
+      const parsed = parsePhase1Payload(markdown);
+      payloadByPath.set(path, parsed);
+      if (parsed.payloadRole === PHASE1_CACHE_ROLE && parsed.workspaceId) cacheArtifactByWorkspace.set(String(parsed.workspaceId), path);
+    }
   }
   for (const file of files) {
     const path = String(file.path || '');
@@ -62,6 +67,7 @@ export function deriveRecipientV2ArtifactFirstPhase1Facts(files = []) {
           payloadArtifactPath: parsed.workspacePayload || '',
           workspaceRelativeHandoffPath: parsed.handoffWorkspacePath || '',
           routeId: parsed.routeId || '',
+          cacheArtifactPath: parsed.role === 'handoff-route' ? String(cacheArtifactByWorkspace.get(String(parsed.workspaceId || '')) || '') : undefined,
           routeSelection: parsed.role === 'recovery-orientation' ? Object.freeze({ mode: parsed.routeSelection || '', selectedRouteId: parsed.selectedRouteId || '', candidateCount: Number(parsed.candidateRouteCount || 0) }) : undefined,
           carrierLineage: parsed.role === 'recovery-orientation' ? Object.freeze({ dimension: parsed.carrierDimension || '', parentDimension: parsed.parentCarrierDimension || '', checkpointKind: parsed.carrierCheckpoint || '' }) : undefined
         }));

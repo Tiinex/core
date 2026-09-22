@@ -16,6 +16,7 @@ import { groundPortableColdConsumer } from '../src/tooling/portable/handoff/cold
 import { projectPortableGroundingReadiness } from '../src/tooling/portable/grounding/grounding.readiness.js';
 import { inspectRecipientFacingV2PackageV1 } from '../src/tooling/portable/handoff/recipientV2.packageV1.js';
 import { inspectRecipientFacingV2Topology } from '../src/tooling/portable/handoff/recipientV2.inspect.js';
+import { projectPortableHandoffCarrierOutputFromPackage } from '../src/tooling/portable/handoff/recipientV2.humanOutput.js';
 import { roleMaterialTarget } from '../src/tooling/portable/handoff/recipientV2.topology.materials.js';
 import { packageFileBytes, sha256Hex } from '../src/export/package.bytes.js';
 import { exportFileMapZipUint8Array } from '../src/export/package.zip.js';
@@ -1247,6 +1248,21 @@ test('two sibling routes share one bounded cache while each route remains indepe
   assert.equal(routeWithParticipant.endpointRolePointers.length, 2);
   assert.equal(routeWithoutParticipant.endpointRolePointers.length, 2);
   assert.ok(routeWithParticipant.pointerPath !== routeWithoutParticipant.pointerPath);
+  assert.equal(result.bundle.files.some((file) => String(file.path || '') === 'tiinex-recipient-v2.transport.json'), false);
+
+  const firstProjection = projectPortableHandoffCarrierOutputFromPackage({ bundle: result.bundle, route: routeWithParticipant.pointerPath });
+  assert.equal(firstProjection.status, 'ready', JSON.stringify(firstProjection.findings, null, 2));
+  assert.equal(firstProjection.humanOutput.selectedRoute.id, routeWithParticipant.routeId);
+  assert.match(firstProjection.humanOutput.normalInlineRouting.content, new RegExp(routeWithParticipant.pointerPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.equal(firstProjection.humanOutput.sharedRouting.routes.length, 2);
+
+  const secondProjection = projectPortableHandoffCarrierOutputFromPackage({ bundle: result.bundle, route: routeWithoutParticipant.pointerPath });
+  assert.equal(secondProjection.status, 'ready', JSON.stringify(secondProjection.findings, null, 2));
+  assert.equal(secondProjection.humanOutput.selectedRoute.id, routeWithoutParticipant.routeId);
+  assert.match(secondProjection.humanOutput.normalInlineRouting.content, new RegExp(routeWithoutParticipant.pointerPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  const invalidProjection = projectPortableHandoffCarrierOutputFromPackage({ bundle: result.bundle, route: '999-invalid-handoff-pointer.trace.md' });
+  assert.equal(invalidProjection.status, 'blocked');
 
   const missingOwnAncestor = {
     ...result.bundle,
@@ -1254,7 +1270,7 @@ test('two sibling routes share one bounded cache while each route remains indepe
   };
   const missingInspection = inspectRecipientFacingV2Topology(missingOwnAncestor);
   assert.equal(missingInspection.status, 'invalid');
-  assert.equal(missingInspection.findings.some((item) => /parent|ancestor|route/i.test(String(item.code || ''))), true);
+  assert.equal(missingInspection.findings.some((item) => String(item.code || '') === 'portable.handoff-v2-phase1.role.pointer-missing'), true);
 });
 
 test('fresh Axiom route continues external Parent closure through exact package-parent cache material to a qualified root', async (t) => {

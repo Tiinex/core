@@ -40,7 +40,10 @@ function recipientV2InvocationForRoute(route = {}, inspection = {}) {
 
 export function projectRecipientV2HumanOutput(humanOutput = {}, inspection = {}) {
   if (humanOutput.status !== 'ready' && humanOutput.status !== 'selection-required') return humanOutput;
-  const routed = String(inspection.packageContract?.packageRole || '') === 'recipient-facing-handoff-carrier';
+  const packageRole = String(inspection.packageContract?.packageRole || '');
+  const routed = packageRole
+    ? packageRole === 'recipient-facing-handoff-carrier'
+    : (inspection.routes || []).length > 0;
   const invocation = humanOutput.primary ? (routed ? recipientV2StandardInvocation(humanOutput, inspection) : recipientV2GenericInvocation(inspection)) : '';
   if (humanOutput.primary && !invocation) return Object.freeze({ ...humanOutput, status: 'blocked', findings: Object.freeze([...(humanOutput.findings || []), Object.freeze({ severity: 'error', code: routed ? 'portable.handoff-v2-human-output.route-pointer.unresolved' : 'portable.handoff-v2-human-output.start.unresolved', message: routed ? 'Recipient-v2 human output requires one exact package-local Handoff route pointer for the selected semantic Handoff.' : 'Recipient-v2 generic human output requires one exact qualified package-local Start artifact.' })]) });
   const sharedRoutes = (humanOutput.sharedRouting?.routes || []).map((item) => {
@@ -67,9 +70,17 @@ export function projectPortableHandoffCarrierOutputFromPackage(input = {}) {
   const bundle = input.bundle || input;
   const inspection = inspectRecipientFacingV2Topology(bundle);
   if (inspection.detected !== true) return projectHandoffCarrierOutputFromPackage(input);
-  const routed = String(inspection.packageContract?.packageRole || '') === 'recipient-facing-handoff-carrier';
+  const packageRole = String(inspection.packageContract?.packageRole || '');
+  const routed = packageRole
+    ? packageRole === 'recipient-facing-handoff-carrier'
+    : (inspection.routes || []).length > 0;
+  const requestedRoute = String(input.route || input.routePath || input.routeId || '').trim();
+  const pointerSelectedRoute = requestedRoute
+    ? (inspection.routes || []).find((item) => String(item.pointerPath || '') === requestedRoute) || null
+    : null;
+  const routeSelector = String(pointerSelectedRoute?.routeId || requestedRoute || '');
   const baseHumanOutput = routed
-    ? projectHandoffHumanOutput({ projection: inspection.carrierProjection || {}, route: input.route || input.routePath || input.routeId || '', collisionInstance: input.collisionInstance || input.instance || 1 })
+    ? projectHandoffHumanOutput({ projection: inspection.carrierProjection || {}, route: routeSelector, collisionInstance: input.collisionInstance || input.instance || 1 })
     : genericPackageHumanOutput(inspection, input);
   const humanOutput = projectRecipientV2HumanOutput(baseHumanOutput, inspection);
   const findings = Object.freeze([...(inspection.findings || []), ...(humanOutput.findings || [])]);

@@ -51,7 +51,7 @@ export function buildRecipientFacingV2Topology(input = {}) {
   if (input.artifactFirstDualProjectionPhase1 === true) return buildRecipientFacingV2ArtifactFirstPhase1({ ...input, sourceSurface });
   if (input.artifactFirstCleanCarrierPhase2 === true) return buildRecipientFacingV2ArtifactFirstPhase2Clean({ ...input, sourceSurface });
   const explicitRouteSelector = String(input.routeSelector || input.routeId || '').trim();
-  if (!explicitRouteSelector && (sourceSurface.topology?.routes || []).length > 1) return sourceSurface;
+  if ((sourceSurface.topology?.routes || []).length > 1) return buildRecipientFacingV2ArtifactFirstPhase2Clean({ ...input, routeSelector: explicitRouteSelector, sourceSurface });
   return buildRecipientFacingV2PackageV1({ ...input, sourceSurface });
 }
 

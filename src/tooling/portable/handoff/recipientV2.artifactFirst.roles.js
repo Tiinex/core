@@ -132,7 +132,8 @@ export function qualifyPhase1RolePointer(pointer = null, context = {}, findings 
     if (parsed.roleLabelHint && roleLabel && normalizeToken(parsed.roleLabelHint) !== normalizeToken(roleLabel)) localFindings.push(finding('error', `portable.handoff-v2-phase1.${kind}-role.label-mismatch`, `${kind} Role Pointer label hint conflicts with the exact carried Role artifact.`, { hint: parsed.roleLabelHint, roleLabel }));
   }
   const requirementId = kind === 'endpoint' ? String(parsed.endpointRequirementId || '') : String(parsed.participantRequirementId || '');
-  if (!requirementId || !parsed.roleReference) localFindings.push(finding('error', `portable.handoff-v2-phase1.${kind}-role.binding-incomplete`, `${kind} Role Pointer must visibly preserve its requirement id and Role reference.`));
+  const bindingIncomplete = !requirementId || (kind !== 'endpoint' && !parsed.roleReference);
+  if (bindingIncomplete) localFindings.push(finding('error', `portable.handoff-v2-phase1.${kind}-role.binding-incomplete`, kind === 'endpoint' ? 'Endpoint Role Pointer must visibly preserve its requirement id; an optional Handoff Role Reference is preserved when declared but is not required when exact explicit transport binding supplies the qualified Role target.' : 'Participant Role Pointer must visibly preserve its requirement id and Role reference.'));
   if (kind === 'endpoint' && !['from', 'to'].includes(String(parsed.endpointParty || '').toLowerCase())) localFindings.push(finding('error', 'portable.handoff-v2-phase1.endpoint-role.party-invalid', 'Endpoint Role Pointer must visibly declare endpoint party from or to.'));
   findings.push(...localFindings);
   return Object.freeze({

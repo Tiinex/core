@@ -104,21 +104,14 @@ export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
   }) : null;
 
   const sourceCaches = [...(sourceInspection.caches || [])];
-  const sourceCache = sourceCaches.find((item) => String(item.workspaceId || '') === workspaceId) || null;
-  const selectedRouteCacheMaterials = sourceCache ? (sourceCache.materials || []).filter((item) => cacheMaterialBelongsToRoute(item, workspaceId, route.workspaceRelativeHandoffPath)) : [];
-  const siblingDetachedMaterials = routePlans
-    .filter((plan) => plan.routeId !== selectedRouteId)
-    .flatMap((plan) => sourceCaches.flatMap((cache) => (cache.materials || []).filter((item) => cacheMaterialBelongsToRoute(item, plan.workspaceId, plan.workspaceRelativeHandoffPath) && !cacheMaterialIsBoundedWorkspaceRecovery(item, plan.workspaceId))));
-  if (siblingDetachedMaterials.length) return blocked('shared-route-detached-cache-unsupported', [finding('error', 'portable.handoff-v2-phase1.shared-route.detached-cache-unsupported', 'Shared artifact-first carriage currently supports route-specific detached cache material only for the explicitly selected route; bounded Workspace recovery remains independently carryable for every bounded Workspace.', { count: siblingDetachedMaterials.length })]);
-
   const cacheBuilds = [];
-  let cacheArtifact = null;
-  let selectedCacheMaterials = [];
   let auxiliaryCacheOrdinal = 0;
   for (const candidateCache of sourceCaches) {
     const cacheWorkspaceId = String(candidateCache.workspaceId || '');
     const recoveryMaterials = (candidateCache.materials || []).filter((item) => cacheMaterialIsBoundedWorkspaceRecovery(item, cacheWorkspaceId));
-    const routeMaterials = cacheWorkspaceId === workspaceId ? selectedRouteCacheMaterials : [];
+    const routeMaterials = routePlans
+      .filter((plan) => plan.workspaceId === cacheWorkspaceId)
+      .flatMap((plan) => (candidateCache.materials || []).filter((item) => cacheMaterialBelongsToRoute(item, plan.workspaceId, plan.workspaceRelativeHandoffPath)));
     const byMaterialKey = new Map();
     for (const material of [...routeMaterials, ...recoveryMaterials]) {
       const key = `${String(material.requirementId || '')}\u0000${String(material.archiveEntry || '')}`;
@@ -193,10 +186,6 @@ export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
     const projection = Object.freeze({ workspaceId: cacheWorkspaceId, artifactPath: builtArtifactPath, archivePath: builtArchivePath, materials: Object.freeze(materialBindings) });
     const built = Object.freeze({ workspaceId: cacheWorkspaceId, artifact: builtArtifact, archiveFile: builtArchiveFile, projection, sourceMaterials: Object.freeze(carriedMaterials) });
     cacheBuilds.push(built);
-    if (selectedWorkspaceCache) {
-      cacheArtifact = builtArtifact;
-      selectedCacheMaterials = carriedMaterials;
-    }
   }
 
   const endpointRoleArtifacts = [];
@@ -206,14 +195,17 @@ export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
   const routePointers = [];
   const routeTopology = [];
   for (const plan of routePlans) {
-    const ownsSelectedCache = plan.routeId === selectedRouteId;
+    const routeCacheBuild = cacheBuilds.find((item) => item.workspaceId === plan.workspaceId) || null;
+    const routeCacheMaterials = routeCacheBuild
+      ? routeCacheBuild.sourceMaterials.filter((item) => cacheMaterialBelongsToRoute(item, plan.workspaceId, plan.workspaceRelativeHandoffPath))
+      : [];
     const endpointRoleBuild = buildPhase1RolePointers({
       kind: 'endpoint',
       sourcePointerPaths: plan.sourceRoute?.endpointRolePointers || [],
       sourceFactsByPath,
       workspaceCarriers,
-      cacheArtifact: ownsSelectedCache ? cacheArtifact : null,
-      selectedCacheMaterials: ownsSelectedCache ? selectedCacheMaterials : [],
+      cacheArtifact: routeCacheBuild?.artifact || null,
+      selectedCacheMaterials: routeCacheMaterials,
       routeWorkspaceId: plan.workspaceId,
       selectedRouteId: plan.routeId,
       pathPrefix: plan.rolePathPrefix,
@@ -224,8 +216,8 @@ export function buildRecipientV2ArtifactFirstPhase1Specimen(input = {}) {
       sourcePointerPaths: plan.sourceRoute?.participantRolePointers || [],
       sourceFactsByPath,
       workspaceCarriers,
-      cacheArtifact: ownsSelectedCache ? cacheArtifact : null,
-      selectedCacheMaterials: ownsSelectedCache ? selectedCacheMaterials : [],
+      cacheArtifact: routeCacheBuild?.artifact || null,
+      selectedCacheMaterials: routeCacheMaterials,
       routeWorkspaceId: plan.workspaceId,
       selectedRouteId: plan.routeId,
       pathPrefix: plan.rolePathPrefix,
