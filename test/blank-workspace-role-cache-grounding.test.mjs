@@ -1018,7 +1018,7 @@ test('material preflight blocks before recipient package assembly', () => {
   assert.ok(result.findings.some((item) => item.code === 'portable.handoff-material.required.unresolved'));
 });
 
-test('exact Task 028-2 / Handoff 069 cannot manufacture Sigma participant transport from manual route input without closed semantic authority', async () => {
+test('explicit participant selection without Task participant declaration still blocks when exact Role material is unavailable', async () => {
   const taskPath = '.topics/grounding/028-2-pilot-sigma-positive-participant-behavioral-sanity-exact-partici.trace.md';
   const routePath = '.topics/grounding/handoffs/069-anchor-to-pilot-positive-participant-behavioral-sanity-exact-sig.trace.md';
   const [taskMarkdown, routeMarkdown] = await Promise.all([
@@ -1056,7 +1056,7 @@ test('exact Task 028-2 / Handoff 069 cannot manufacture Sigma participant transp
   assert.equal(projection.semanticRoutes[0].declarations.length, 0);
   assert.equal(projection.semanticRoutes[0].state, 'blocked');
   assert.equal(projection.requirements.participantRoles.length, 0);
-  assert.equal(projection.requirements.findings.some((item) => item.code === 'portable.handoff-manufacture.participant-role.semantic-authority-not-established'), true, JSON.stringify(projection.requirements.findings, null, 2));
+  assert.equal(projection.requirements.findings.some((item) => item.code === 'portable.handoff-manufacture.participant-role.explicit-material-not-established'), true, JSON.stringify(projection.requirements.findings, null, 2));
 });
 
 test('cache inventory stays availability-only unless explicit semantic authority is independently qualified', () => {
@@ -1396,4 +1396,174 @@ test('route-scoped Role material ambiguity fails closed instead of borrowing a s
   const resolved = roleMaterialTarget(requirement, { materialized: [duplicate('a'), duplicate('b')] }, new Map(), { materials: [] }, { workspaceId: 'core', workspaceRelativePath: ROUTE_PATH });
   assert.equal(resolved.state, 'ambiguous');
   assert.equal(resolved.reason, 'material-ambiguous');
+});
+
+
+test('Major 008 explicit participant selection resolves directly from an already-carried Workspace without cache duplication', async (t) => {
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'tiinex-major-008-carried-participant-'));
+  t.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+  const coreRoot = path.join(fixtureRoot, 'core');
+  const businessRoot = path.join(fixtureRoot, 'business');
+  await mkdir(coreRoot, { recursive: true });
+  await mkdir(businessRoot, { recursive: true });
+  const routePath = '.topics/handoffs/major-008-carried-participant.trace.md';
+  const route = qualifiedHandoffFixture({ title: 'Major 008 carried participant', from: 'External', to: 'Anchor', fromReference: '', toReference: '' });
+  await writeWorkspaceFile(coreRoot, CORE_WORKSPACE_PATH, workspaceFixture('Tiinex Core Major 008 Fixture', 'Tiinex/core'));
+  await writeWorkspaceFile(coreRoot, routePath, route);
+  await writeWorkspaceFile(businessRoot, BUSINESS_WORKSPACE_PATH, workspaceFixture('Tiinex Business Major 008 Fixture', 'Tiinex/business'));
+  await writeWorkspaceFile(businessRoot, SIGMA_ROLE_PATH, roleFixture('Sigma'));
+
+  const prepared = await prepareNodeHandoffManufacturingInput({
+    workspaceRoot: coreRoot, workspaceId: 'core', workspaceTargetPath: CORE_WORKSPACE_PATH, handoffPath: routePath,
+    additionalWorkspaces: [{ id: 'business', root: businessRoot, workspaceTargetPath: BUSINESS_WORKSPACE_PATH }],
+    transportRoutes: [{ workspaceId: 'core', path: routePath, participantRoles: [
+      { label: 'Sigma', workspaceId: 'business', path: SIGMA_ROLE_PATH, reference: `business::${SIGMA_ROLE_PATH}` },
+      { label: 'Sigma', workspaceId: 'business', path: SIGMA_ROLE_PATH, reference: `business::${SIGMA_ROLE_PATH}` }
+    ] }],
+    carrierLineage: { mode: 'continue', dimension: '001-1', parentDimension: '001', parentPackageSha256: '0'.repeat(64), parentPackageFilename: 'parent.zip', checkpointKind: 'progression' },
+    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'), verifyRoundtrip: true
+  });
+  const routeSemantic = prepared.requirements.semanticParticipantRoutes[0];
+  assert.equal(routeSemantic.state, 'qualified', JSON.stringify(prepared.requirements.findings, null, 2));
+  assert.equal(routeSemantic.participantRoles.length, 1, 'duplicate Attach selection must dedupe by exact Workspace/path identity');
+  assert.equal(routeSemantic.participantRoles[0].semanticAuthority.basis, 'explicit-qualified-participant-selection-plus-exact-qualified-role-material');
+  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
+  assert.equal(result.status, 'ready', JSON.stringify(result.findings, null, 2));
+  assert.equal(result.roundtrip?.status, 'passed');
+  assert.equal((result.inspection.participantRoles || []).length, 1);
+  assert.equal((result.inspection.caches || []).length, 0, 'carried Workspace Role must not be duplicated into cache');
+});
+
+test('Major 008 explicit participant selection from discovery-only Workspace carries only bounded Role material in cache', async (t) => {
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'tiinex-major-008-external-participant-'));
+  t.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+  const coreRoot = path.join(fixtureRoot, 'core');
+  const discoveryRoot = path.join(fixtureRoot, 'business-discovery-only');
+  await mkdir(coreRoot, { recursive: true });
+  await mkdir(discoveryRoot, { recursive: true });
+  const routePath = '.topics/handoffs/major-008-external-participant.trace.md';
+  const rolePath = SIGMA_ROLE_PATH;
+  const reference = `business::${rolePath}`;
+  const route = qualifiedHandoffFixture({
+    title: 'Major 008 external participant',
+    from: 'Anchor', to: 'Loom',
+    fromReference: `core::${ANCHOR_ROLE_PATH}`,
+    toReference: `core::${LOOM_ROLE_PATH}`
+  });
+  await writeWorkspaceFile(coreRoot, CORE_WORKSPACE_PATH, workspaceFixture('Tiinex Core Major 008 External Fixture', 'Tiinex/core'));
+  await writeWorkspaceFile(coreRoot, routePath, route);
+  await writeWorkspaceFile(coreRoot, ANCHOR_ROLE_PATH, roleFixture('Anchor'));
+  await writeWorkspaceFile(coreRoot, LOOM_ROLE_PATH, roleFixture('Loom'));
+  await writeWorkspaceFile(discoveryRoot, BUSINESS_WORKSPACE_PATH, workspaceFixture('Tiinex Business Discovery Fixture', 'Tiinex/business'));
+  await writeWorkspaceFile(discoveryRoot, rolePath, roleFixture('Sigma'));
+  const roleSourcePath = path.join(discoveryRoot, ...rolePath.split('/'));
+
+  const prepared = await prepareNodeHandoffManufacturingInput({
+    workspaceRoot: coreRoot, workspaceId: 'core', workspaceTargetPath: CORE_WORKSPACE_PATH, handoffPath: routePath,
+    transportRoutes: [{ workspaceId: 'core', path: routePath, participantRoles: [{ label: 'Sigma', workspaceId: 'business', path: rolePath, reference }] }],
+    materialBindings: {
+      [reference]: { sourcePath: roleSourcePath, referenceTarget: reference, provenance: { workspaceId: 'business', path: rolePath } }
+    },
+    carrierLineage: { mode: 'continue', dimension: '001-1', parentDimension: '001', parentPackageSha256: '0'.repeat(64), parentPackageFilename: 'parent.zip', checkpointKind: 'progression' },
+    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'), verifyRoundtrip: true
+  });
+  assert.deepEqual(prepared.workspaceMaterializations.map((item) => item.id), ['core'], 'discovery-only participant Workspace must not be silently added to Outgoing');
+  const routeSemantic = prepared.requirements.semanticParticipantRoutes[0];
+  assert.equal(routeSemantic.state, 'qualified', JSON.stringify(prepared.requirements.findings, null, 2));
+  assert.equal(routeSemantic.participantRoles.length, 1);
+  assert.equal((prepared.transportRoutes?.[0]?.participantRoles || []).length, 1, 'prospective Core route preparation must expose the same explicit participant count later projected by Pack');
+  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
+  assert.equal(result.status, 'ready', JSON.stringify(result.findings, null, 2));
+  assert.equal(result.roundtrip?.status, 'passed', JSON.stringify(result.roundtrip?.findings || [], null, 2));
+  assert.equal((result.inspection.participantRoles || []).length, 1);
+  assert.deepEqual((result.inspection.endpointRoles || []).map((item) => item.endpointParty).sort(), ['from', 'to']);
+  const routeProjection = result.inspection.routes[0];
+  assert.deepEqual(carrierAncestorKinds(result.bundle, result.inspection, routeProjection), ['endpoint:to', 'endpoint:from', 'participant']);
+  const cache = (result.inspection.caches || []).find((item) => item.workspaceId === 'core');
+  assert.ok(cache, 'bounded external participant Role should create the normal route Workspace cache');
+  const participantPointerPath = String(result.inspection.participantRoles[0]?.pointerPath || '');
+  const participantPointerFile = (result.bundle.files || []).find((item) => String(item.path || '') === participantPointerPath);
+  assert.equal(parentTraceFromCarrierFile(participantPointerFile), String(cache.artifactPath || ''), 'external participant pointer must descend directly from the Workspace cache on the numeric carrier chain');
+  assert.equal((cache.materials || []).some((item) => String(item.referenceTarget || '') === reference), true, JSON.stringify(cache.materials, null, 2));
+  assert.equal((result.inspection.workspaces || []).some((item) => item.workspaceId === 'business'), false, 'discovery-only participant Workspace must not be carried wholesale');
+});
+
+
+test('Major 008 mixed external participant and From/To Roles use only Workspace-relative cache identity while preserving Package V1 lineage', async (t) => {
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'tiinex-major-008-mixed-external-roles-'));
+  t.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+  const coreRoot = path.join(fixtureRoot, 'core');
+  const discoveryRoot = path.join(fixtureRoot, 'business-discovery-only');
+  await mkdir(coreRoot, { recursive: true });
+  await mkdir(discoveryRoot, { recursive: true });
+  const routePath = '.topics/handoffs/major-008-mixed-external-roles.trace.md';
+  const fromReference = `business::${ANCHOR_ROLE_PATH}`;
+  const toReference = `business::${LOOM_ROLE_PATH}`;
+  const participantReference = `business::${SIGMA_ROLE_PATH}`;
+  const route = qualifiedHandoffFixture({
+    title: 'Major 008 mixed external Role cache identity',
+    from: 'Anchor', to: 'Loom',
+    fromReference,
+    toReference
+  });
+  await writeWorkspaceFile(coreRoot, CORE_WORKSPACE_PATH, workspaceFixture('Tiinex Core Major 008 Mixed External Fixture', 'Tiinex/core'));
+  await writeWorkspaceFile(coreRoot, routePath, route);
+  await writeWorkspaceFile(discoveryRoot, BUSINESS_WORKSPACE_PATH, workspaceFixture('Tiinex Business Mixed External Discovery Fixture', 'Tiinex/business'));
+  await writeWorkspaceFile(discoveryRoot, ANCHOR_ROLE_PATH, roleFixture('Anchor'));
+  await writeWorkspaceFile(discoveryRoot, LOOM_ROLE_PATH, roleFixture('Loom'));
+  await writeWorkspaceFile(discoveryRoot, SIGMA_ROLE_PATH, roleFixture('Sigma'));
+
+  const roleBinding = (rolePath, referenceTarget) => ({
+    sourcePath: path.join(discoveryRoot, ...rolePath.split('/')),
+    referenceTarget,
+    provenance: { workspaceId: 'business', path: rolePath }
+  });
+  const prepared = await prepareNodeHandoffManufacturingInput({
+    workspaceRoot: coreRoot, workspaceId: 'core', workspaceTargetPath: CORE_WORKSPACE_PATH, handoffPath: routePath,
+    transportRoutes: [{ workspaceId: 'core', path: routePath, participantRoles: [
+      { label: 'Sigma', workspaceId: 'business', path: SIGMA_ROLE_PATH, reference: participantReference }
+    ] }],
+    materialBindings: {
+      [fromReference]: roleBinding(ANCHOR_ROLE_PATH, fromReference),
+      [toReference]: roleBinding(LOOM_ROLE_PATH, toReference),
+      [participantReference]: roleBinding(SIGMA_ROLE_PATH, participantReference)
+    },
+    carrierLineage: { mode: 'continue', dimension: '001-1', parentDimension: '001', parentPackageSha256: '0'.repeat(64), parentPackageFilename: 'parent.zip', checkpointKind: 'progression' },
+    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'), verifyRoundtrip: true
+  });
+
+  assert.deepEqual(prepared.workspaceMaterializations.map((item) => item.id), ['core'], 'discovery-only Role Workspace must not be carried wholesale');
+  assert.equal((prepared.transportRoutes?.[0]?.participantRoles || []).length, 1, 'prospective preparation must preserve the explicit participant');
+  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
+  assert.equal(result.status, 'ready', JSON.stringify(result.findings, null, 2));
+  assert.equal(result.roundtrip?.status, 'passed', JSON.stringify(result.roundtrip?.findings || [], null, 2));
+  assert.equal((result.inspection.participantRoles || []).length, 1);
+  assert.deepEqual((result.inspection.endpointRoles || []).map((item) => item.endpointParty).sort(), ['from', 'to']);
+  const routeProjection = result.inspection.routes[0];
+  assert.deepEqual(carrierAncestorKinds(result.bundle, result.inspection, routeProjection), ['endpoint:to', 'endpoint:from', 'participant']);
+
+  const cache = (result.inspection.caches || []).find((item) => item.workspaceId === 'core');
+  assert.ok(cache, 'mixed external Role material must use the route Workspace cache');
+  const expected = new Map([
+    [fromReference, ANCHOR_ROLE_PATH],
+    [toReference, LOOM_ROLE_PATH],
+    [participantReference, SIGMA_ROLE_PATH]
+  ]);
+  for (const [referenceTarget, rolePath] of expected) {
+    const material = (cache.materials || []).find((item) => item.referenceTarget === referenceTarget);
+    assert.ok(material, `missing cached Role material for ${referenceTarget}`);
+    assert.match(material.archiveEntry, /^material\/\d+-business\//u);
+    assert.equal(material.archiveEntry.endsWith(`-business/${rolePath}`), true);
+    assert.equal(material.archiveEntry.includes(fixtureRoot.replace(/\\/g, '/')), false, 'recipient cache identity must never include the execution fixture root');
+    assert.doesNotMatch(material.archiveEntry, /(?:^|\/)(?:mnt|tmp|private|home)(?:\/|$)/u);
+  }
+  const cacheArchiveFile = (result.bundle.files || []).find((file) => file.path === cache.archivePath);
+  assert.ok(cacheArchiveFile);
+  const cacheArchiveInspection = inspectStoredWorkspaceArchive(packageFileBytes(cacheArchiveFile), { ownedBytes: true });
+  assert.equal(cacheArchiveInspection.state, 'qualified', JSON.stringify(cacheArchiveInspection.findings || [], null, 2));
+  const archivePaths = (cacheArchiveInspection.entries || []).map((entry) => entry.path).sort();
+  const declaredArchivePaths = [...expected.keys()].map((referenceTarget) => (cache.materials || []).find((item) => item.referenceTarget === referenceTarget)?.archiveEntry).filter(Boolean).sort();
+  assert.deepEqual(archivePaths, declaredArchivePaths);
+  assert.equal(archivePaths.some((entry) => entry.includes(fixtureRoot.replace(/\\/g, '/'))), false);
+  assert.equal((result.inspection.workspaces || []).some((item) => item.workspaceId === 'business'), false);
 });

@@ -55,6 +55,17 @@ export function qualifyCompiledSchemaLineageSourceAuthority(validationContract =
 
     const expected = exactCandidates[0];
     if (!sameSourceTuple(parentSource, expected)) {
+      if (qualifiesSameSnapshotRelativeParentAuthority(parent?.source || {}, child?.source || {}, expected)) {
+        edges.push(freezeEdge({
+          state: 'qualified-local-relative-parent-supersession',
+          parentSchemaId,
+          childSchemaId,
+          actual: parentSource,
+          candidates,
+          reason: 'qualified-local-same-snapshot-relative-parent-authority'
+        }));
+        continue;
+      }
       findings.push(`Compiled lineage substitutes source authority for ${childSchemaId} -> ${parentSchemaId}: declared ${formatSource(expected)} but compiled ${formatSource(parentSource)}.`);
       edges.push(freezeEdge({ state: 'contradictory', parentSchemaId, childSchemaId, actual: parentSource, candidates, reason: 'compiled-parent-source-substitution' }));
       continue;
@@ -73,13 +84,30 @@ export function qualifyCompiledSchemaLineageSourceAuthority(validationContract =
     lineage: Object.freeze([...lineage]),
     edges: Object.freeze(edges),
     findings: Object.freeze(findings),
-    boundary: 'Exact runtime validation authority requires source-coherent compiled inheritance. Qualified local unpublished Parent authority may intentionally supersede published Parent locators; all other inheritance edges require one exact declared Parent source tuple matching the compiled Parent material.'
+    boundary: 'Exact runtime validation authority requires source-coherent compiled inheritance. Qualified local unpublished Parent authority may intentionally supersede published Parent locators. A qualified local unpublished child may also use an exact same-repository/same-commit carried Parent representation when that Parent path is the same declared Parent target and the carried Parent belongs to the exact current Docs snapshot; this preserves truthful relative Parent recovery without turning an older browse+git recovery locator into exclusive source authority. All other inheritance edges require one exact declared Parent source tuple matching the compiled Parent material.'
   });
 }
 
 export function isQualifiedLocalUnpublishedSchemaSource(source = {}) {
   return String(source?.publicationState || '').trim().toLowerCase() === 'accepted-local-unpublished'
     && String(source?.snapshotCompleteness || '').trim() === 'exact-axiom-canonical-unpublished-bounded-workspace-contract';
+}
+
+function qualifiesSameSnapshotRelativeParentAuthority(parentSource = {}, childSource = {}, declaredCandidate = {}) {
+  if (!isQualifiedLocalUnpublishedSchemaSource(childSource)) return false;
+  if (String(parentSource?.snapshotCompleteness || '').trim() !== 'exact-carried-docs-snapshot') return false;
+  const parent = normalizeSourceTuple(parentSource);
+  const child = normalizeSourceTuple(childSource);
+  const declared = normalizeSourceTuple(declaredCandidate);
+  return Boolean(
+    completeSourceTuple(parent)
+    && completeSourceTuple(child)
+    && completeSourceTuple(declared)
+    && parent.repository === child.repository
+    && parent.commit === child.commit
+    && parent.repository === declared.repository
+    && parent.path === declared.path
+  );
 }
 
 function normalizeSourceTuple(value = {}) {

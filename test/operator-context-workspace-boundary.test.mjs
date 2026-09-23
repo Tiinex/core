@@ -3,7 +3,7 @@ import test from 'node:test';
 import path from 'node:path';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodReference.js';
-import { projectPortableOperatorContext } from '../src/tooling/portable/handoff/operatorContextProjection.js';
+import { projectParticipantCandidatesFromEndpoints, projectPortableOperatorContext } from '../src/tooling/portable/handoff/operatorContextProjection.js';
 
 const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
 const WORKSPACE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.workspace.v1.schema.md';
@@ -47,4 +47,21 @@ test('operator context exposes only root-owned top-level Workspace artifacts whi
     '.topics/.workspaces/tiinex-vscode.workspace.md'
   ]);
   assert.equal(result.workspaces.some((item) => item.workspaceTargetPath === nested), false);
+});
+
+
+test('operator context participant projection keeps only exact Role candidates with deterministic target dedupe', () => {
+  const candidates = [
+    { kind: 'role', label: 'Loom', workspaceId: 'business', target: 'business::.topics/roles/loom.trace.md', qualification: 'qualified-exact' },
+    { kind: 'role', label: 'Loom duplicate', workspaceId: 'business', target: 'business::.topics/roles/loom.trace.md', qualification: 'qualified-exact' },
+    { kind: 'party', label: 'Anchor Party', workspaceId: 'business', target: 'business::.topics/parties/anchor.trace.md', qualification: 'qualified-exact' },
+    { kind: 'role', label: 'Anchor', workspaceId: 'core', target: 'core::.topics/roles/anchor.trace.md', qualification: 'qualified-exact' }
+  ];
+
+  const participants = projectParticipantCandidatesFromEndpoints(candidates);
+  assert.deepEqual(participants.map((item) => ({ label: item.label, target: item.target })), [
+    { label: 'Anchor', target: 'core::.topics/roles/anchor.trace.md' },
+    { label: 'Loom duplicate', target: 'business::.topics/roles/loom.trace.md' }
+  ]);
+  assert.equal(participants.every((item) => item.kind === 'role'), true);
 });

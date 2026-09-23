@@ -118,9 +118,14 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
     if ((fieldBindings.length || groupBindings.length) && declarationBindings.length) throw new Error(`creation-section-binding-ambiguous:${section}`);
     if (declarationBindings.length > 1 || groupBindings.length > 1) throw new Error(`creation-section-binding-ambiguous:${section}`);
     if (fieldBindings.length) {
+      const optionalInputs = new Set((creation.optionalInputs || []).map((value) => String(value || '').trim()).filter(Boolean));
       for (const binding of fieldBindings) {
         const value = creationValue(values, binding.input);
-        if (value === undefined) throw new Error(`creation-required-input-missing:${binding.input}`);
+        const optional = String(binding?.requirement || '').trim() === 'optional' || optionalInputs.has(String(binding?.input || '').trim());
+        if (value === undefined) {
+          if (optional) continue;
+          throw new Error(`creation-required-input-missing:${binding.input}`);
+        }
         lines.push(`- ${binding.field || binding.input}: ${exactOneLineValue(value, binding.input)}`);
       }
       for (const supplemental of supplementalRequiredFields.filter((item) => String(item?.section || '') === String(section || ''))) {

@@ -249,6 +249,8 @@ function composeCreationAuthority(module = null, authority = {}, localCreation =
     }
   }
 
+  augmentQualifiedOptionalOrdinaryCreationBindings({ module, validationContract, bindingByInput, optionalInputSet, requiredInputSet, requiredHeadingSet });
+
   const bindings = [];
   for (const item of bindingByInput.values()) if (!String(item?.section || '').trim()) bindings.push(item);
   for (const section of requiredHeadingOrder) {
@@ -276,6 +278,30 @@ function composeCreationAuthority(module = null, authority = {}, localCreation =
     supplementalRequiredFields: Object.freeze([...supplementalByKey.values()]),
     requiredShape: Object.freeze([...shapeByKey.values()])
   });
+}
+
+function augmentQualifiedOptionalOrdinaryCreationBindings({ module = null, validationContract = null, bindingByInput = new Map(), optionalInputSet = new Set(), requiredInputSet = new Set(), requiredHeadingSet = new Set() } = {}) {
+  if (String(module?.id || '') !== 'tiinex.handoff.v1') return;
+  const ordinaryGroups = Array.isArray(validationContract?.validation?.ordinaryGroups) ? validationContract.validation.ordinaryGroups : [];
+  const parties = ordinaryGroups.find((group) => String(group?.group || '') === 'Handoff Parties' && String(group?.qualification || '') === 'valid');
+  if (!parties) return;
+  const allowedOptional = new Set((parties.optionalFields || []).map((value) => String(value || '').trim()).filter(Boolean));
+  const section = String(parties?.target?.title || parties?.group || '').trim();
+  if (!section || (requiredHeadingSet.size && !requiredHeadingSet.has(section))) return;
+  for (const input of ['From Reference', 'To Reference']) {
+    if (!allowedOptional.has(input) || requiredInputSet.has(input)) continue;
+    optionalInputSet.add(input);
+    if (!bindingByInput.has(input)) bindingByInput.set(input, Object.freeze({
+      input,
+      kind: 'ordinary-field',
+      section,
+      group: String(parties.group || section),
+      field: input,
+      sourceSchemaId: String(module.id || ''),
+      requirement: 'optional',
+      authorityBasis: 'qualified-validation-optional-ordinary-field'
+    }));
+  }
 }
 
 function uniqueStrings(values = []) {

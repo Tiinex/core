@@ -5,6 +5,22 @@ import { projectQualifiedWorkspacePackageSources } from './workspacePackageSourc
 
 export const PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID = 'tiinex.portable.handoff-endpoint-projection.v1';
 
+export function canonicalHandoffEndpointReference(candidate = {}) {
+  const qualification = String(candidate?.qualification || '').trim();
+  const workspaceId = token(candidate?.workspaceId || '');
+  const artifactPath = norm(candidate?.artifactPath || candidate?.path || '');
+  const target = String(candidate?.target || candidate?.reference || '').trim();
+  const expectedTarget = workspaceId && artifactPath ? `${workspaceId}::${artifactPath}` : '';
+  const kind = String(candidate?.kind || '').trim().toLowerCase();
+  if (qualification !== 'qualified-exact' || !workspaceId || !artifactPath || !target || target !== expectedTarget || !['role', 'party'].includes(kind)) {
+    return freeze({ state: 'blocked', reference: '', reason: 'endpoint-candidate-not-exact-qualified' });
+  }
+  if (/\s|\)/u.test(target)) return freeze({ state: 'blocked', reference: '', reason: 'endpoint-target-not-markdown-link-safe' });
+  const rawLabel = String(candidate?.label || '').replaceAll(']', ' ').replace(/[\r\n]+/gu, ' ').replace(/\s+/gu, ' ').trim();
+  const label = rawLabel || (kind === 'role' ? 'Role' : 'Party');
+  return freeze({ state: 'qualified', reference: `[${label}](${target})`, target, label, kind, workspaceId, artifactPath, basis: 'exact-qualified-endpoint-candidate' });
+}
+
 export function projectQualifiedHandoffEndpoints(input = {}) {
   const workspaceId = token(input.workspaceId || input.workspace || 'workspace') || 'workspace';
   const records = normalizeRecords(input);
@@ -44,12 +60,16 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
         : '';
     if (!kind) continue;
     const target = `${workspaceId}::${path}`;
+    const label = String(parsed.title || record.title || path);
+    const canonicalReference = canonicalHandoffEndpointReference({ target, label, kind, workspaceId, artifactPath: path, qualification: 'qualified-exact' });
+    if (canonicalReference.state !== 'qualified') continue;
     candidates.push(freeze({
       id: target,
       target,
       reference: target,
+      canonicalReference: canonicalReference.reference,
       kind,
-      label: String(parsed.title || record.title || path),
+      label,
       workspaceId,
       artifactPath: path,
       schemaId,

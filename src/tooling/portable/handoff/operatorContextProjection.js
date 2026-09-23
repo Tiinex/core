@@ -67,6 +67,7 @@ export function projectPortableOperatorContext(input = {}) {
     workspaces: flattenedWorkspaces.sort((a, b) => a.workspaceId.localeCompare(b.workspaceId) || a.workspaceTargetPath.localeCompare(b.workspaceTargetPath)),
     handoffLeaves: flattenedLeaves.sort((a, b) => a.workspaceId.localeCompare(b.workspaceId) || a.path.localeCompare(b.path)),
     endpoints: dedupeEndpoints(flattenedEndpoints),
+    participants: projectParticipantCandidatesFromEndpoints(flattenedEndpoints),
     pointerless,
     findings,
     operationBoundary: { sourceMutation: false, remoteWrite: false, manufacture: false, identityInference: false },
@@ -106,6 +107,9 @@ function fileBelongsToRootWorkspaceSurface(file = {}, root = '') {
   return Boolean(relative) && !relative.includes('/');
 }
 function samePath(a = '', b = '') { return String(a || '').replace(/\\/g, '/').replace(/\/$/, '') === String(b || '').replace(/\\/g, '/').replace(/\/$/, ''); }
+export function projectParticipantCandidatesFromEndpoints(candidates = []) {
+  return dedupeEndpoints((Array.isArray(candidates) ? candidates : []).filter((candidate) => String(candidate?.kind || '') === 'role'));
+}
 function dedupeEndpoints(candidates = []) {
   const byTarget = new Map();
   for (const candidate of candidates) byTarget.set(candidate.target, candidate);

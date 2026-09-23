@@ -1,15 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { schemaRegistry } from '../src/schemas/registry.js';
 import { qualifyCompiledSchemaLineageSourceAuthority } from '../src/schemas/schema.lineageAuthority.js';
-import { portableRuntimeValidationContractForSchema } from '../src/tooling/portable/schema/qualifiedLocalRoot.runtime.js';
+import { portableRuntimeValidationAuthorityForRecord, portableRuntimeValidationContractForSchema } from '../src/tooling/portable/schema/qualifiedLocalRoot.runtime.js';
 
 const EXPECTED_MISMATCHED_REGISTERED_SCHEMAS = Object.freeze([
   'tiinex.discovery.finding.v1',
   'tiinex.evidence.v1',
   'tiinex.feedback.v1',
   'tiinex.party.organization.v1',
-  'tiinex.party.role.v1',
   'tiinex.workspace.representation.v1'
 ]);
 
@@ -46,7 +46,7 @@ function exactChain({ parentCommit = '1'.repeat(40), childCandidateCommit = pare
   };
 }
 
-test('registered runtime projections preserve the exact six source-substitution mismatches as qualification contradictions', () => {
+test('registered runtime projections preserve unrelated source-substitution mismatches as qualification contradictions', () => {
   const mismatched = (schemaRegistry.modules || [])
     .flatMap((module) => {
       const qualification = module.schemaSource?.qualify?.();
@@ -54,6 +54,34 @@ test('registered runtime projections preserve the exact six source-substitution 
     })
     .sort();
   assert.deepEqual(mismatched, [...EXPECTED_MISMATCHED_REGISTERED_SCHEMAS].sort());
+});
+
+test('current Party Role runtime qualifies the exact carried same-snapshot Parent instead of preferring its older browse+git recovery locator', () => {
+  const module = moduleFor('tiinex.party.role.v1');
+  assert.ok(module);
+  const source = module.schemaSource.qualify();
+  assert.equal(source.state, 'qualified');
+  assert.equal(source.validationLineageAuthority.state, 'qualified', JSON.stringify(source.validationLineageAuthority, null, 2));
+  assert.equal(source.validationLineageAuthority.edges.at(-1).state, 'qualified-local-relative-parent-supersession');
+  assert.equal(source.validationLineageAuthority.edges.at(-1).reason, 'qualified-local-same-snapshot-relative-parent-authority');
+
+  const runtime = portableRuntimeValidationContractForSchema('tiinex.party.role.v1');
+  assert.equal(runtime.state, 'qualified', JSON.stringify(runtime, null, 2));
+});
+
+test('actual current canonical Loom Role artifact qualifies against the same-snapshot Role runtime authority', async () => {
+  const fixtureUrl = new URL('./fixtures/roles/001-3-1-loom-canonical-holder-cutover-role.trace.md', import.meta.url);
+  const markdown = await readFile(fixtureUrl, 'utf8');
+  const authority = portableRuntimeValidationAuthorityForRecord({
+    path: '.topics/roles/001-3-1-loom-canonical-holder-cutover-role.trace.md',
+    markdown,
+    schemaId: 'tiinex.party.role.v1',
+    currentSchemaId: 'tiinex.party.role.v1'
+  });
+  assert.equal(authority.state, 'qualified', JSON.stringify(authority, null, 2));
+  assert.equal(authority.schemaId, 'tiinex.party.role.v1');
+  assert.equal(authority.currentReference.state, 'qualified');
+  assert.equal(authority.lineage.at(-1).schemaId, 'tiinex.party.role.v1');
 });
 
 test('organization and Evidence exact runtime validation authority fail closed at schema-lineage source qualification', () => {
