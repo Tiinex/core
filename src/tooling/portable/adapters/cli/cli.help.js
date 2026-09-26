@@ -8,9 +8,11 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
     'Tiinex portable tooling',
     '',
     'Common path (same command for humans and LLMs):',
-    `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>]`,
-    `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> --continue <workspace-dir>`,
-    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>]`,
+    `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>] [--holder-assignment-mode <mode>] [--recipient]`,
+    `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> [--holder-assignment-mode <mode>] --recipient --continue <workspace-dir>`,
+    `${command} qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>`,
+    `${command} prepare-return <continued-workspace-dir>`,
+    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
     `${command} handoff <workspace-dir>`,
     `${command} compare --left-kind <kind> --left <path> --right-kind <kind> --right <path> [side selectors]`,
     `${command} reconcile --base-kind <kind> --base <path> --incoming-kind <kind> --incoming <path> --current-kind <kind> --current <path> --reconciled-kind <kind> --reconciled <path> [--dispositions <json-file>]`,
@@ -60,21 +62,42 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'ground') return [
     'Tiinex portable tooling — ground',
     '',
-    `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>]`,
-    `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> --continue <workspace-dir>`,
+    `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>] [--holder-assignment-mode <mode>] [--recipient]`,
+    `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> [--holder-assignment-mode <mode>] --recipient --continue <workspace-dir>`,
     '',
     'Reads and qualifies the exact selected Handoff route. The default projection keeps readiness, recipient authority boundary, consuming-session holder binding, Required Context closure, continuity/blockers, current Task identity, and exact next action compact; add `--full` for the full qualified receipt.',
-    'Add `--include-required-context <requirement-id,name|all>` and/or `--include-current-work` only when exact body text is needed. `ground --continue` includes the bounded current Task body needed to proceed, retains Required Context counts and continuity/recovery state, and does not repeat qualified Required Context item paths or root-detail receipts unless explicitly requested (or `--full` is used).',
-    'For a Role recipient, exact qualified consumption of the selected Handoff may establish the bounded consuming-session Role-capacity binding when the exact qualified recipient Role authorizes canonical Assignment Mode `handoff`. `--holder-role <recipient-role>` remains an explicit consuming-session assertion and must match the selected recipient; mismatches block and never fall back to Handoff assignment. No binding is inferred from package delivery, route orientation alone, provider identity, or assistant/user position. After `grounded-to-act`, `--continue` materializes the selected carried Workspace into an empty local directory and writes runtime-only `.tiinex/continuation.json`. The grounding operation itself is non-mutating; downstream work authority comes from qualified Handoff/Task/Role artifacts, not from that operation-safety fact.',
+    'Use `--recipient` for one-pass recipient grounding: it projects all exact qualified Required Context bodies plus bounded current-work body text in the same grounding operation. When the recipient intends to act locally, combine it with `--continue <empty-workspace-dir>` in that same command; Tooling materializes only after the same operation reaches `grounded-to-act` while keeping material qualification separate from cognitive interpretation. Add `--include-required-context <requirement-id,name|all>` and/or `--include-current-work` for narrower manual body selection. `ground --continue` includes the bounded current Task body needed to proceed, retains Required Context counts and continuity/recovery state, and does not repeat qualified Required Context item paths or root-detail receipts unless explicitly requested (or `--full` is used).',
+    'For a Role recipient, exact qualified consumption of the selected Handoff may establish the bounded consuming-session Role-capacity binding when the exact qualified recipient Role authorizes canonical Assignment Mode `handoff`. `--holder-role <recipient-role>` remains an explicit consuming-session assertion and must match the selected recipient. When that Role requires an explicit canonical assignment mode such as `explicit-participation`, supply it exactly with `--holder-assignment-mode <mode>`; Tooling checks it against the qualified Role authority and never infers a human/LLM-specific mode. Mismatches block and never fall back to Handoff assignment. No binding is inferred from package delivery, route orientation alone, provider identity, or assistant/user position. After `grounded-to-act`, `--continue` materializes the selected carried Workspace into an empty local directory and writes runtime-only `.tiinex/continuation.json`. The grounding operation itself is non-mutating; downstream work authority comes from qualified Handoff/Task/Role artifacts, not from that operation-safety fact.',
+    'Recipient completion remains inside the continued Workspace until return manufacture. When the selected Handoff declares a return, first establish a Tooling-qualified return transition for one exact bounded result with `qualify-return`; `prepare-return` fails closed without that byte-current receipt. This transition gate does not establish Task completion/closure. After return authoring qualification, run `handoff <workspace-dir>`. Normal external completion is exactly one `.handoff-package.zip` plus Tooling\'s exact adjacent routing text; do not return loose result/Evidence/Handoff/Workspace files as extra transport payloads.',
+    '',
+    `Advanced/internal catalog: ${command} operations`
+  ];
+  if (surfaceCommand === 'qualify-return') return [
+    'Tiinex portable tooling — qualify return transition',
+    '',
+    `${command} qualify-return <continued-workspace-dir> --result <workspace-relative-result> --expected <workspace-relative-expected-file>`,
+    '',
+    'Reads qualified runtime continuation state and the exact selected Handoff return protocol. It compares the exact local result bytes to one explicit expected local file, writes runtime-only `.tiinex/return-transition.json`, and qualifies only that result-specific return transition when the bytes match. It does not establish Task completion, Task closure, acceptance, or remote-write authority.',
+    'After it reports `qualified`, run `prepare-return <continued-workspace-dir>`. Prepare-return rechecks the transition receipt and both byte sets and fails closed if either changed.',
+    '',
+    `Advanced/internal catalog: ${command} operations`
+  ];
+  if (surfaceCommand === 'prepare-return') return [
+    'Tiinex portable tooling — prepare return',
+    '',
+    `${command} prepare-return <continued-workspace-dir>`,
+    '',
+    'Requires a byte-current qualified `.tiinex/return-transition.json` created by `qualify-return`, then reads qualified runtime continuation state plus the exact selected incoming Handoff. It writes one runtime-only `.tiinex/return-handoff.body.md` scaffold with exact From/To Role endpoints and required structural sections. Replace every `<<TIINEX_REQUIRED:...>>` marker with exact supported return semantics. The scaffold already contains complete nested field shapes. Run the emitted `author ... --preflight` command first; it renders, seals, audits, and stages without retaining the candidate or mutating continuation state. After it qualifies, run the emitted `author` command to retain the Handoff. After qualification run the emitted `handoff` command to manufacture exactly one canonical return carrier plus routing text.',
+    'The scaffold is runtime-only and excluded from canonical Workspace/Handoff Package manufacture. The exact returned Material Reference is locked to the result qualified by `qualify-return`. The command does not claim Task completion/closure, acceptance, source facts, or remote-write authority.',
     '',
     `Advanced/internal catalog: ${command} operations`
   ];
   if (surfaceCommand === 'author') return [
     'Tiinex portable tooling — author',
     '',
-    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>]`,
+    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
     '',
-    'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted. Supply `--path` for an exact requested coordinate or `--directory` to let Tooling allocate inside that directory-local filename namespace. For a Workspace-qualified Parent such as `business::.topics/...`, also supply `--parent-source` so Tooling reads and seals against the exact Parent bytes without treating the foreign address as a local path. Authoring seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. Invalid output is not retained.',
+    'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted. Supply `--path` for an exact requested coordinate or `--directory` to let Tooling allocate inside that directory-local filename namespace. For a Workspace-qualified Parent such as `business::.topics/...`, also supply `--parent-source` so Tooling reads and seals against the exact Parent bytes without treating the foreign address as a local path. Authoring seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. `--preflight` uses that exact qualification path but removes the candidate and leaves continuation state unchanged; use it before the durable author step when validating a filled runtime scaffold. Invalid output is not retained.',
     '',
     `Advanced/internal catalog: ${command} operations`
   ];

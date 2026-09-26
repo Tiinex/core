@@ -26,7 +26,7 @@ export function partyRoleValidate(artifact = {}) {
 
 function sectionBody(markdown = '', heading = '') {
   const escaped = escapeRegExp(heading);
-  const match = String(markdown || '').match(new RegExp(`^##\\s+${escaped}\\s*$([\\s\\S]*?)(?=^##\\s+|\\Z)`, 'm'));
+  const match = String(markdown || '').match(new RegExp(`^##\\s+${escaped}\\s*$([\\s\\S]*?)(?=^##\\s+|(?![\\s\\S]))`, 'm'));
   return match?.[1] || '';
 }
 function fieldValues(section = '', label = '') {

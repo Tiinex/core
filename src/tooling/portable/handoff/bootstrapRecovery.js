@@ -2,7 +2,6 @@ import { packageFileBytes } from '../../../export/package.bytes.js';
 
 const BOOTSTRAP_CODE_PREFIXES = Object.freeze([
   'portable.handoff-package-v1.bootstrap-',
-  'portable.handoff-v2-surface.bootstrap.',
   'portable.tooling-bootstrap.'
 ]);
 

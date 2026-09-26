@@ -1,0 +1,24 @@
+{
+  "schemaId": "tiinex.redaction.v1",
+  "kind": "concrete",
+  "role": "redaction-artifact",
+  "module": "./tiinex.redaction.v1.schema.js",
+  "snapshot": "./tiinex.redaction.v1.schema.md",
+  "canonicalUri": "tiinex://schemas/reduction/redaction/tiinex.redaction.v1",
+  "permalink": "https://github.com/Tiinex/docs/blob/8435cd46a3773a38301659da716785dc6465072c/.topics/.schemas/reduction/redaction/tiinex.redaction.v1.schema.md",
+  "rawUrl": "https://raw.githubusercontent.com/Tiinex/docs/8435cd46a3773a38301659da716785dc6465072c/.topics/.schemas/reduction/redaction/tiinex.redaction.v1.schema.md",
+  "sourcePath": ".topics/.schemas/reduction/redaction/tiinex.redaction.v1.schema.md",
+  "sourceRepository": "Tiinex/docs",
+  "sourceCommit": "8435cd46a3773a38301659da716785dc6465072c",
+  "sourceBlobSha": "9bc2a30e8408535e2fab44d14946c09b13d909b6",
+  "checksum": {
+    "algorithm": "sha256",
+    "value": "d27dd3d4f2a7d3856eebaa9335b1178310f5ba3efbffb951c302a1ae9a04af65"
+  },
+  "capabilityContract": "tiinex.schema.module.v1",
+  "snapshotCompleteness": "exact-carried-docs-snapshot",
+  "bindingVersion": "tiinex.web.schema-binding.v1",
+  "originId": "tiinex-docs-8435cd46",
+  "originTrustRole": "canonical-core",
+  "schemaReferencePublicationState": "published-immutable-canonical"
+}

@@ -185,7 +185,7 @@ function bootstrapBinding(value = {}, status = bootstrapStatus(value)) {
   const data = normalizedStatus === 'present' ? packageFileBytes(value) : new Uint8Array();
   return Object.freeze({
     status: normalizedStatus,
-    path: normalizedStatus === 'present' ? String(value.path || 'tiinex.package/bootstrap.md') : '',
+    path: normalizedStatus === 'present' ? String(value.path || '001-2-bootstrap.trace.md') : '',
     bytes: data.byteLength,
     sha256: normalizedStatus === 'present' ? sha256Hex(data) : ''
   });

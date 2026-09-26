@@ -119,12 +119,12 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   const primaryMaterialization = Object.freeze({ ...enumeration.materialization, title: workspaceTitle });
   const workspaceMaterializations = [primaryMaterialization];
   const workspaceEnumerations = [Object.freeze({ id: workspaceId, root: workspaceRoot, evidence: enumeration.evidence })];
-  const workspaceRuntimeById = new Map([[workspaceId, Object.freeze({ id: workspaceId, root: workspaceRoot, enumeration })]]);
-  for (const { id, root, requestedTitle, enumerated } of additionalEnumerations) {
+  const workspaceRuntimeById = new Map([[workspaceId, Object.freeze({ id: workspaceId, root: workspaceRoot, enumeration, workspaceTargetPath: normalizeRelativePath(input.workspaceTargetPath || input.workspaceArtifactPath || '') })]]);
+  for (const { descriptor, id, root, requestedTitle, enumerated } of additionalEnumerations) {
     const title = requestedTitle || inferWorkspaceTitle(enumerated) || id;
     workspaceMaterializations.push(Object.freeze({ ...enumerated.materialization, title }));
     workspaceEnumerations.push(Object.freeze({ id, root, evidence: enumerated.evidence }));
-    workspaceRuntimeById.set(id, Object.freeze({ id, root, enumeration: enumerated }));
+    workspaceRuntimeById.set(id, Object.freeze({ id, root, enumeration: enumerated, workspaceTargetPath: normalizeRelativePath(descriptor.workspaceTargetPath || descriptor.workspaceArtifactPath || '') }));
   }
   for (const inherited of packageParentReuse.inherited || []) {
     const id = safeWorkspaceToken(inherited.id || inherited.enumeration?.materialization?.id || '');
@@ -151,6 +151,11 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     explicitBindings: input.workspaceTargets || input.workspaceTargetBindings || [],
     additionalWorkspaceDescriptors
   }), packageParentReuse.workspaceTargets || []);
+  const workspaceTargetById = new Map(workspaceTargets.map((item) => [String(item.workspaceId || ''), normalizeRelativePath(item.path || '')]));
+  for (const [id, runtime] of workspaceRuntimeById.entries()) {
+    const targetPath = workspaceTargetById.get(String(id || '')) || normalizeRelativePath(runtime.workspaceTargetPath || '');
+    if (targetPath && targetPath !== runtime.workspaceTargetPath) workspaceRuntimeById.set(id, Object.freeze({ ...runtime, workspaceTargetPath: targetPath }));
+  }
   const workspaceScopes = normalizeWorkspaceScopes(input.workspaceScopes || input.workspaceScopeBindings || []);
   for (let index = 0; index < workspaceMaterializations.length; index += 1) {
     const materialization = workspaceMaterializations[index];
@@ -193,7 +198,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   requirements = parentBoundaryClosure.requirements;
   materials = appendMissingRequirementMaterials(parentBoundaryClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
   const orientationBootstrap = input.transportBootstrapContent
-    ? Object.freeze({ present: true, path: String(input.transportBootstrapPath || 'tiinex.package/bootstrap.md'), content: String(input.transportBootstrapContent), mediaType: 'text/markdown' })
+    ? Object.freeze({ present: true, path: String(input.transportBootstrapPath || '001-2-bootstrap.trace.md'), content: String(input.transportBootstrapContent), mediaType: 'text/markdown' })
     : Object.freeze({ present: false });
   const manufacturingPreflight = qualifyRecipientRelativeHandoffManufacturePreflight({
     requirements,

@@ -16,7 +16,7 @@ export function resolveColdStartRolePointerMaterial(bundle, facts, findings, poi
     findings.push(portableFinding('error', `portable.cold-start.${codeKind}.archive.invalid`, `${labelKind} Pointer target archive is not qualified.`, { pointerPath, archivePath }));
     return null;
   }
-  const targetPath = String(facts.targetCarrierKind || '') === 'workspace-cache-entry'
+  const targetPath = String(facts.targetCarrierKind || '') === 'bounded-cache-entry'
     ? String(facts.targetArchiveEntry || '')
     : String(facts.targetInnerPath || '');
   const matches = (archive.entries || []).filter((entry) => normalizePath(entry.path || '') === normalizePath(targetPath));

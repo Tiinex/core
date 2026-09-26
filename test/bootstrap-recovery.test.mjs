@@ -28,7 +28,7 @@ test('bootstrap recovery derives explicit Start/root bootstrap ownership when pa
     packageContract: null,
     findings: [
       { severity: 'error', code: 'portable.route-artifact.integrity.self.unverified', path: '001-2-bootstrap.trace.md' },
-      { severity: 'error', code: 'portable.handoff-v2-surface.payload.field-missing', path: '001-2-bootstrap.trace.md' },
+      { severity: 'error', code: 'portable.handoff-package-v1.bootstrap-payload.field-missing', path: '001-2-bootstrap.trace.md' },
       { severity: 'error', code: 'portable.handoff-package-v1.unknown-package-artifact', path: '001-2-bootstrap.zip' }
     ]
   }));

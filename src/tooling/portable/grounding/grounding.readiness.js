@@ -2,11 +2,11 @@ import { resolveLineage } from '../../../lineage/lineage.resolve.js';
 import { normalizePortableInput } from '../input/portable.input.js';
 import { projectPortableOperatingOverview } from '../overview/operatingOverview.js';
 import { summarizePortableFindings } from '../findings.js';
-import { directedLineageCone, isRoutedHandoffBundle, materializeQualifiedDetachedLineage, materializeQualifiedWorkspaceSnapshot, normalizeSelectors, projectBlockers, projectRelevantTopology, projectRequiredContext, relevantLineageIssues, resolveRequiredContextRecords, resolveSelectedRouteRecords } from './grounding.readiness.support.js';
+import { directedLineageCone, isRoutedHandoffBundle, materializeQualifiedDetachedLineage, materializeQualifiedWorkspaceSnapshot, normalizeSelectors, projectBlockers, projectRelevantTopology, projectRequiredContext, projectSelectedHandoffCurrentWork, relevantLineageIssues, resolveRequiredContextRecords, resolveSelectedRouteRecords } from './grounding.readiness.support.js';
 import { groundPortableColdConsumer } from '../handoff/coldStartQualification.grounding.js';
 import { createColdStartMaterialContext, projectGroundedContinuation } from '../handoff/coldStartQualification.materials.js';
 import { auditHandoffPackageContextCarriage } from '../handoff/contextAudit.js';
-import { acceptedRecoveryMaterial, projectColdStartContinuity } from './grounding.continuity.js';
+import { acceptedRecoveryMaterial, projectColdStartContinuity, projectExactReferenceRecovery } from './grounding.continuity.js';
 import { projectGroundingAuthority } from './grounding.readiness.authority.js';
 import { projectGroundingCapsule } from './grounding.capsule.js';
 import { projectGroundingOrchestrationReadiness } from './grounding.orchestrationReadiness.js';
@@ -93,6 +93,8 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   const relevantRecords = records.filter((record) => relevantIds.has(record.id));
   const overview = projectPortableOperatingOverview({ records: relevantRecords });
   const topology = projectRelevantTopology(lineage, relevantIds, overview.frontierCandidates || [], routeRecordIds);
+  const currentWorkAuthority = projectSelectedHandoffCurrentWork(authority, records, topology);
+  const effectiveTopology = Object.freeze({ ...topology, currentFrontier: currentWorkAuthority.frontier });
   const lineageIssues = relevantLineageIssues(lineage, relevantIds);
   const routeBlockingLineageIssues = relevantLineageIssues(lineage, routeRecordIds);
   const continuity = projectColdStartContinuity({ mode, lineage, routeRecordIds, authority, material });
@@ -151,6 +153,12 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     if (unresolvedRequired.length) missing(missingEvidence, unresolved, 'required-context-unqualified', `${unresolvedRequired.length} declared Required Context item(s) are not exact-qualified.`);
     else known.push(evidence('required-context-closure', 'qualified', `${required.length} item(s)`));
     if (String(continuation?.state || '') !== 'ready') missing(missingEvidence, unresolved, 'continuation-not-ready', 'The grounded continuation is not ready for substantive work.');
+    const returnPackage = continuation?.returnPackage || {};
+    if (returnPackage.expected && !String(returnPackage.returnToReference || '').trim()) {
+      missing(missingEvidence, unresolved, 'return-endpoint-reference-unqualified', `Completion Expectation declares Return To ${String(returnPackage.returnTo || '').trim() || 'an endpoint'}, but no explicit Return To Reference is qualified. Canonical return authoring must not infer the return endpoint from Handoff parties, labels, participant presence, or transport context.`);
+    } else if (returnPackage.expected) {
+      known.push(evidence('return-endpoint-reference', 'qualified', String(returnPackage.returnToReference || '')));
+    }
     const workspaceCoverage = projectWorkspaceActionCoverage(contextAudit);
     if (!workspaceCoverage.qualified) missing(missingEvidence, unresolved, 'workspace-snapshot-coverage-unqualified', workspaceCoverage.message);
     else known.push(evidence('workspace-snapshot-coverage', 'qualified', `${workspaceCoverage.count} workspace representation(s): ${workspaceCoverage.completeCount} complete, ${workspaceCoverage.boundedCount} bounded`));
@@ -189,25 +197,34 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     else missing(missingEvidence, unresolved, 'cold-start-root-continuity-unproven', `Cold-start continuity to a qualified semantic root is unproven; ${continuity.blockingIssues.length} blocking Parent/root issue(s) remain.`);
   }
 
-  if (topology.currentTasks.length) known.push(evidence('declared-current-work', 'qualified-candidates', `${topology.currentTasks.length} Task candidate(s) on the selected route lineage`));
-  else unresolved.push(evidence('declared-current-work', 'unresolved', 'no exact-qualified nonterminal Task candidate on the selected route lineage'));
+  if (topology.currentTasks.length) known.push(evidence('declared-current-work-candidates', 'qualified-candidates', `${topology.currentTasks.length} exact-qualified nonterminal Task candidate(s) are present on the selected route lineage; candidate presence alone does not establish selected-Handoff currentness.`));
+  else unresolved.push(evidence('declared-current-work-candidates', 'unresolved', 'no exact-qualified nonterminal Task candidate on the selected route lineage'));
 
-  if (topology.currentFrontier.length) known.push(evidence('declared-current-frontier', 'resolved', `${topology.currentFrontier.length} nearest current Task anchor(s) to the selected route leaf`));
-  else reasons.push(reason('current-frontier-not-resolved', 'Authority grounding is not act-ready until declared current-work evidence is resolved on the selected Handoff route lineage.'));
+  if (currentWorkAuthority.state === 'selected-handoff-task-frontier-resolved') {
+    known.push(evidence('selected-handoff-current-task', 'resolved', `${currentWorkAuthority.frontier.length} exact Task control target(s) selected by the current Handoff.`));
+  } else if (currentWorkAuthority.state === 'selected-handoff-bounded-work') {
+    known.push(evidence('selected-handoff-bounded-work', 'resolved', 'The selected Handoff explicitly controls current bounded work through qualified non-Task artifacts; nearest Task ancestry remains context-only.'));
+  } else if (currentWorkAuthority.state === 'nearest-task-frontier-resolved') {
+    known.push(evidence('declared-current-frontier', 'resolved-fallback', `${currentWorkAuthority.frontier.length} nearest current Task anchor(s) are used only because the selected Handoff declares no Controlling Artifact target.`));
+  } else {
+    reasons.push(reason('current-frontier-not-resolved', 'Selected-Handoff current-work control is not qualified enough for bounded action. Explicit Handoff control declarations fail closed and cannot be replaced by nearest-Task ancestry.'));
+  }
+  if ((currentWorkAuthority.contextCandidates || []).length) inferred.push(evidence('nearest-task-context-only', 'context-only', `${currentWorkAuthority.contextCandidates.length} nearest Task ancestor(s) remain visible as context but are not selected current work.`));
 
-  const frontierTaskIds = new Set((topology.currentFrontier || []).map((item) => String(item.id || '')));
+  const frontierTaskIds = new Set((currentWorkAuthority.frontier || []).map((item) => String(item.id || '')));
   const blockers = projectBlockers(overview.blockerSignals || [], frontierTaskIds);
-  const currentWorkProjection = projectCurrentWork(topology, records, includeCurrentWork);
-  const capsule = projectGroundingCapsule({ authority, continuation, contextAudit, requiredContext, records, topology, blockers });
+  const currentWorkProjection = projectCurrentWork(currentWorkAuthority, records, includeCurrentWork);
+  const completionQualification = projectCurrentWorkCompletionQualification({ currentWorkAuthority, records, authority, handoffMode });
+  const capsule = projectGroundingCapsule({ authority, continuation, contextAudit, requiredContext, records, topology: effectiveTopology, blockers, currentWorkAuthority });
   if (continuity.losses?.items?.length) unresolved.push(evidence('non-critical-material-loss', 'degraded-nonblocking', `${continuity.losses.items.length} unavailable non-lineage asset/reference item(s) remain visible without blocking unrelated work.`));
   const externalHumanGates = Array.isArray(authority?.humanOnlyGates) ? authority.humanOnlyGates : [];
   for (const gate of externalHumanGates) humanOnly.push(evidence('human-only-gate', 'declared', String(gate?.label || gate || 'human gate')));
 
   let state = 'grounded-to-act';
   if (missingEvidence.length) state = 'insufficient-grounding';
-  else if (!handoffMode || !holderBindingActReady || !topology.currentFrontier.length || humanOnly.length) state = 'grounded-to-discuss';
-  if (state === 'grounded-to-act') reasons.push(reason('bounded-act-ready', 'Selected Handoff authority, explicit consuming-session holder Role binding, exact qualified holder-assignment authorization where the recipient is a Role, exact Required Context, qualified carried Workspace coverage (complete or bounded as declared), cold-start continuity to a qualified semantic root, the selected-route Parent-lineage leaf, and declared current-work frontier evidence are all resolved enough for the next bounded action.'));
-  const orchestrationReadiness = projectGroundingOrchestrationReadiness({ readinessState: state, participantContext: capsule.participantContext, processApplicability: capsule.processApplicability, sourceEvidence: capsule.sourceEvidence, topology });
+  else if (!handoffMode || !holderBindingActReady || !currentWorkAuthority.actReady || humanOnly.length) state = 'grounded-to-discuss';
+  if (state === 'grounded-to-act') reasons.push(reason('bounded-act-ready', 'Selected Handoff authority, explicit consuming-session holder Role binding, exact qualified holder-assignment authorization where the recipient is a Role, exact Required Context, qualified carried Workspace coverage (complete or bounded as declared), cold-start continuity to a qualified semantic root, the selected-route Parent-lineage leaf, and selected-Handoff current-work control are all resolved enough for the next bounded action.'));
+  const orchestrationReadiness = projectGroundingOrchestrationReadiness({ readinessState: state, participantContext: capsule.participantContext, guidanceAuthority: capsule.guidanceAuthority, sourceEvidence: capsule.sourceEvidence, topology: effectiveTopology, currentWorkAuthority });
 
   return Object.freeze({
     schema: PORTABLE_GROUNDING_READINESS_SCHEMA_ID,
@@ -216,7 +233,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
       state,
       reasons: Object.freeze(reasons.slice(0, MAX_ITEMS)),
       missingEvidence: Object.freeze(missingEvidence.slice(0, MAX_ITEMS)),
-      nextAction: nextActionFor(state, topology, continuity, authority)
+      nextAction: nextActionFor(state, topology, currentWorkAuthority, continuity, authority, capsule)
     }),
     authority: projectGroundingAuthority(authority, mode),
     coverage: Object.freeze({
@@ -254,15 +271,26 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
       boundary: 'Leaf/root roles are derived only from loaded declared Parent edges produced by the shared lineage resolver. Filename numbering, carrier dimensions, directory depth, branch names, and Task lifecycle labels are never substituted for Parent topology.'
     }),
     continuity,
+    returnPackage: continuation?.returnPackage || null,
+    completionQualification,
     orchestrationReadiness,
     delegationReadiness: capsule.delegationReadiness,
     capsule,
     currentWork: Object.freeze({
-      state: topology.currentFrontier.length ? 'current-frontier-resolved' : topology.currentTasks.length ? 'current-candidates-without-frontier' : 'unresolved',
+      state: currentWorkAuthority.state,
+      authorityMode: currentWorkAuthority.mode,
       frontier: currentWorkProjection.frontier,
-      frontierOmitted: Math.max(0, topology.currentFrontier.length - MAX_ITEMS),
+      frontierOmitted: Math.max(0, (currentWorkAuthority.frontier || []).length - MAX_ITEMS),
       candidates: Object.freeze(topology.currentTasks.slice(0, MAX_ITEMS)),
       candidatesOmitted: Math.max(0, topology.currentTasks.length - MAX_ITEMS),
+      contextCandidates: Object.freeze((currentWorkAuthority.contextCandidates || []).slice(0, MAX_ITEMS)),
+      contextCandidatesOmitted: Math.max(0, (currentWorkAuthority.contextCandidates || []).length - MAX_ITEMS),
+      handoffContract: Object.freeze({
+        selectedHandoff: String(currentWorkAuthority.selectedHandoff || ''),
+        controls: Object.freeze((currentWorkAuthority.controls || []).slice(0, MAX_ITEMS)),
+        unresolved: Object.freeze((currentWorkAuthority.unresolved || []).slice(0, MAX_ITEMS)),
+        boundary: String(currentWorkAuthority.boundary || '')
+      }),
       blockers: Object.freeze(blockers.slice(0, MAX_ITEMS)),
       blockersOmitted: Math.max(0, blockers.length - MAX_ITEMS),
       bodiesProjected: currentWorkProjection.bodiesProjected,
@@ -282,7 +310,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     actionableFindingsOmitted: Math.max(0, combinedFindings.filter((item) => item.severity === 'error' || item.severity === 'warning').length - MAX_ITEMS),
     deeper: Object.freeze({
       requiredContextBodies: handoffMode ? 'Re-run the same ground command with --include-required-context <requirement-id,name|all> only when exact qualified body text is needed.' : 'not-applicable',
-      currentWorkBody: handoffMode ? 'Re-run the same ground command with --include-current-work when the exact current Task body is needed; --continue <workspace-dir> includes it automatically.' : 'not-applicable',
+      currentWorkBody: handoffMode ? (currentWorkAuthority.frontier.length ? 'Re-run the same ground command with --include-current-work when the exact selected-Handoff-controlled Task body is needed; --continue <workspace-dir> includes it automatically.' : 'The selected Handoff itself is the bounded current-work contract; no Task body is promoted merely from nearest ancestry.') : 'not-applicable',
       lineage: 'Use resolve-lineage/search-lineage only when the bounded selected-route leaf/current-work pointers above are insufficient.',
       coldStartQualification: handoffMode ? 'Use qualify-cold-start only when cold-start process qualification/evidence is itself required; ground does not claim pre-takeover host observations.' : 'not-applicable'
     }),
@@ -345,9 +373,65 @@ function workspaceCoverageState(workspace = {}) {
   return 'unresolved';
 }
 
-function projectCurrentWork(topology = {}, records = [], includeCurrentWork = false) {
+function projectCurrentWorkCompletionQualification({ currentWorkAuthority = {}, records = [], authority = null, handoffMode = false } = {}) {
+  if (!handoffMode) return Object.freeze({
+    state: 'not-applicable',
+    taskLifecycle: 'not-applicable',
+    doneCriteriaEvaluation: 'not-applicable',
+    returnExpectation: 'not-applicable',
+    taskStatuses: Object.freeze([]),
+    doneCriteria: Object.freeze([]),
+    boundary: 'Loaded-material grounding without an exact selected Handoff does not project a Handoff completion contract.'
+  });
+
+  const completion = authority?.handoff?.completionExpectation || {};
+  const signalKind = String(completion.signalKind || '').trim().toLowerCase();
+  const returnExpectation = signalKind && !['none', 'unknown'].includes(signalKind) ? 'declared' : 'not-declared';
   const recordById = new Map((records || []).map((record) => [String(record.id || ''), record]));
-  const frontier = (topology.currentFrontier || []).slice(0, MAX_ITEMS).map((item) => {
+  const taskStatuses = [];
+  const doneCriteria = [];
+  for (const item of currentWorkAuthority.frontier || []) {
+    const id = String(item.id || '');
+    const status = String(item.declaredStatus || '').trim();
+    if (status) taskStatuses.push(Object.freeze({ id, path: String(item.path || ''), status }));
+    const record = recordById.get(id);
+    const criteria = taskDoneCriteria(record?.markdown || '');
+    if (criteria) doneCriteria.push(Object.freeze({ id, path: String(item.path || ''), text: compactText(criteria, 600) }));
+  }
+
+  const taskFrontierPresent = (currentWorkAuthority.frontier || []).length > 0;
+  const boundedNonTask = String(currentWorkAuthority.state || '') === 'selected-handoff-bounded-work';
+  const state = taskFrontierPresent || boundedNonTask ? 'not-established' : 'unresolved';
+  return Object.freeze({
+    state,
+    taskLifecycle: taskFrontierPresent ? 'qualified-task-frontier-nonterminal' : boundedNonTask ? 'selected-bounded-work-without-task-terminal' : 'current-work-unresolved',
+    doneCriteriaEvaluation: taskFrontierPresent ? 'qualified-lifecycle-evaluation-required' : 'not-machine-evaluated',
+    boundedWorkCompletion: taskFrontierPresent || boundedNonTask ? 'not-established' : 'unresolved',
+    taskClosure: taskFrontierPresent ? 'not-established' : 'not-applicable',
+    lifecycleQualificationOperation: taskFrontierPresent ? 'project-lifecycle-readiness' : '',
+    returnExpectation,
+    returnDisposition: returnExpectation === 'declared' ? 'bounded-result-return-permitted-without-task-closure' : 'no-return-protocol-declared',
+    returnTransition: returnExpectation === 'declared' ? 'not-established-by-grounding' : 'not-applicable',
+    returnTiming: returnExpectation === 'declared' ? 'not-qualified-by-grounding' : 'not-applicable',
+    signalKind: String(completion.signalKind || ''),
+    signalMeaning: String(completion.signalMeaning || ''),
+    returnTo: String(completion.returnTo || ''),
+    returnToReference: String(completion.returnToReference || ''),
+    taskStatuses: Object.freeze(taskStatuses),
+    doneCriteria: Object.freeze(doneCriteria),
+    boundary: 'Grounding qualifies the exact bounded work and any declared return protocol, but does not evaluate free-text Done Criteria, mutate Task lifecycle, prove bounded-work completion, establish Task closure, or establish that return is the current transition. A declared return protocol and availability of prepare-return define how a bounded result may be returned, not when return is due. A canonical return Handoff may carry a bounded result without closing the controlling Task only after the recipient has produced or verified that bounded result from the qualified work authority. Any Task completion/closure claim requires a separately qualified lifecycle projection (project-lifecycle-readiness) from explicit qualified facts; recipient/model judgment over free-text Done Criteria is not lifecycle authority.'
+  });
+}
+
+function taskDoneCriteria(markdown = '') {
+  const normalized = String(markdown || '').replace(/\r\n?/g, '\n');
+  const match = normalized.match(/(?:^|\n)##\s+Done Criteria\s*\n([\s\S]*?)(?=\n##\s+|\n#\s+Continuity Integrity|$)/i);
+  return match ? String(match[1] || '').trim() : '';
+}
+
+function projectCurrentWork(currentWorkAuthority = {}, records = [], includeCurrentWork = false) {
+  const recordById = new Map((records || []).map((record) => [String(record.id || ''), record]));
+  const frontier = (currentWorkAuthority.frontier || []).slice(0, MAX_ITEMS).map((item) => {
     const record = recordById.get(String(item.id || ''));
     const available = Boolean(record && typeof record.markdown === 'string' && record.markdown.length > 0);
     return Object.freeze({
@@ -356,7 +440,7 @@ function projectCurrentWork(topology = {}, records = [], includeCurrentWork = fa
       ...(includeCurrentWork && available ? { content: record.markdown } : {})
     });
   });
-  const bodiesAvailable = (topology.currentFrontier || []).filter((item) => {
+  const bodiesAvailable = (currentWorkAuthority.frontier || []).filter((item) => {
     const record = recordById.get(String(item.id || ''));
     return Boolean(record && typeof record.markdown === 'string' && record.markdown.length > 0);
   }).length;
@@ -367,21 +451,40 @@ function projectCurrentWork(topology = {}, records = [], includeCurrentWork = fa
   });
 }
 
-function nextActionFor(state, topology, continuity = {}, authority = null) {
-  if (state === 'grounded-to-act') return Object.freeze({ kind: 'continue-bounded-handoff-work', target: topology.currentFrontier[0]?.path || '', basis: 'qualified authority + qualified session holder Role binding (explicit or exact selected-Handoff consumption) + exact qualified holder-assignment authorization when Role-recipient + required context + cold-start root continuity + selected-route Parent leaf + declared current-work frontier' });
+function nextActionFor(state, topology, currentWorkAuthority = {}, continuity = {}, authority = null, capsule = null) {
+  if (state === 'grounded-to-act') {
+    if (currentWorkAuthority.mode === 'selected-handoff-explicit-control') return Object.freeze({
+      kind: 'continue-selected-handoff-bounded-work',
+      target: currentWorkAuthority.frontier?.length === 1 ? currentWorkAuthority.frontier[0]?.path || currentWorkAuthority.selectedHandoff || '' : currentWorkAuthority.selectedHandoff || '',
+      basis: currentWorkAuthority.frontier?.length ? 'exact selected Handoff explicitly controls the qualified nonterminal Task target(s); nearest Task ancestry is context-only; grounding does not establish Task completion or evaluate Done Criteria' : 'exact selected Handoff explicitly controls qualified non-Task work artifacts; no Task is promoted from nearest ancestry; grounding does not establish bounded-work completion'
+    });
+    return Object.freeze({ kind: 'continue-bounded-handoff-work', target: currentWorkAuthority.frontier?.[0]?.path || topology.currentFrontier[0]?.path || '', basis: 'qualified authority + qualified session holder Role binding + exact Required Context + cold-start continuity + selected-route Parent leaf + compatibility nearest-Task fallback because the selected Handoff declares no explicit Controlling Artifact target' });
+  }
   if (state === 'grounded-to-discuss' && String(authority?.holderBinding?.state || 'unresolved') === 'unresolved') return Object.freeze({ kind: 'establish-session-holder-role-binding', target: authority?.role?.endpoint?.label || authority?.handoff?.to || '', basis: 'recipient Role qualification is separate from consuming-session holder binding; exact qualified selected-Handoff consumption may establish `handoff` assignment when authorized, otherwise an explicit authorized binding is required; no transport/provider/assistant-user identity inference is permitted' });
   if (state === 'grounded-to-discuss' && String(authority?.holderBinding?.state || '') === 'qualified' && String(authority?.holderBinding?.authorization?.state || 'unresolved') !== 'qualified') return Object.freeze({
     kind: 'resolve-session-holder-binding-authorization',
     target: authority?.holderBinding?.authorization?.provenance?.roleArtifactPath || authority?.role?.endpoint?.label || authority?.handoff?.to || '',
     basis: 'a matching session Role binding is not semantic authorization by itself; exact qualified recipient Role Holder Relationship authority must establish the selected assignment mode'
   });
-  if (state === 'grounded-to-discuss') return Object.freeze({ kind: topology.currentFrontier.length ? 'obtain-bounded-action-authority-or-human-gate' : 'resolve-current-work-frontier', target: topology.currentTasks[0]?.path || '', basis: 'discussion-ready but act-readiness condition is unresolved' });
+  if (state === 'grounded-to-discuss') return Object.freeze({ kind: currentWorkAuthority.mode === 'selected-handoff-explicit-control' ? 'resolve-selected-handoff-current-work-control' : (currentWorkAuthority.frontier?.length ? 'obtain-bounded-action-authority-or-human-gate' : 'resolve-current-work-frontier'), target: currentWorkAuthority.selectedHandoff || currentWorkAuthority.frontier?.[0]?.path || topology.currentTasks[0]?.path || '', basis: 'discussion-ready but selected-Handoff current-work control or another act-readiness condition is unresolved' });
   if (continuity?.state === 'unproven') return Object.freeze({
     kind: continuity.recovery?.state === 'host-action-available' ? 'recover-required-parent-with-host-action' : 'request-exact-required-parent-material',
     target: continuity.recovery?.target || '',
     basis: 'cold-start continuity to a qualified semantic root is required before substantive work',
     recovery: continuity.recovery || null
   });
+  const missingContext = (capsule?.sourceEvidence?.blockers || []).find((item) => item.code === 'authoritative-material-unavailable' && String(item.referenceTarget || '').trim());
+  if (missingContext) {
+    const recovery = projectExactReferenceRecovery(String(missingContext.referenceTarget || ''), authority, {
+      materialLabel: `Required Context material ${missingContext.name || missingContext.requirementId || ''}`.trim(),
+      whyRequired: String(missingContext.blockingReason || 'Exact declared Required Context material is required before substantive work.'),
+      purpose: `recover exact Required Context material ${missingContext.name || missingContext.requirementId || ''}`.trim()
+    });
+    return Object.freeze({
+      kind: recovery.state === 'host-action-available' ? 'recover-required-context-with-host-action' : 'request-exact-required-context-material',
+      target: recovery.target || '', basis: 'exact declared Required Context is unresolved; recovery remains read-only and exact-target bounded', recovery
+    });
+  }
   return Object.freeze({ kind: 'resolve-missing-grounding-evidence', target: '', basis: 'one or more blocking authority/context/lineage conditions remain' });
 }
 

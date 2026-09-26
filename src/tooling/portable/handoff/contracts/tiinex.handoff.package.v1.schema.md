@@ -20,7 +20,11 @@
       - Target: Core Semantics / Package Identity / Workspace Snapshot Bindings / Material Representation Bindings / Route Discovery / Transport Projection / Qualification Boundary
       - Note: Adds an explicit bootstrap-only carrier role, permits zero source-material bindings only in that role, composes complete or bounded Workspace Representation authority for qualified contextual material, keeps Role presence separate from recipient/holder semantics, and makes generic versus route-specific transport text a projection rule rather than a new semantic sidecar.
       - Reason: A recipient may need only Start plus qualified portable Tooling, or a bounded material carrier, without fake Workspaces, fake Handoffs, inferred recipients, or host-private package meaning.
-  - Summary: Receiver-facing carrier schema for package identity, Start/bootstrap exposure, optional qualified source-material carriage through complete package-local Workspace snapshots or generic complete/bounded Workspace Representations, explicit Handoff-route, pointerless material, or bootstrap-only roles, and carrier/transport projection boundaries without owning Handoff transfer, Role holder state, cryptographic profile, or generic Workspace representation semantics.
+    - Package-local bounded Handoff route closure cache
+      - Target: Core Semantics / Material Representation Bindings / Route Discovery / Qualification Boundary
+      - Note: Adds one Handoff-carrier-only bounded cache mode for exact selected-route closure bytes absent from carried Workspaces, with visible External Payload integrity, deterministic adapter-native cache paths, exact grounding Pointers, and no independent Workspace Representation lifecycle.
+      - Reason: Exact route-only Role, process/guidance, dependency, or lineage material needs readable self-contained carriage without hidden mapping truth or extra representation artifacts that would falsely imply an independent representation lifecycle.
+  - Summary: Receiver-facing carrier schema for package identity, Start/bootstrap exposure, optional qualified source-material carriage through complete package-local Workspace snapshots, generic complete/bounded Workspace Representations, or Handoff-route-local bounded cache closure, explicit Handoff-route, pointerless material, or bootstrap-only roles, and carrier/transport projection boundaries without owning Handoff transfer, Role holder state, cryptographic profile, or generic Workspace representation semantics.
 
 ---
 
@@ -30,7 +34,7 @@
 
 ## Summary
 
-Defines one receiver-facing carrier identity/discovery contract with three explicit Package Roles: an exact Handoff-route carrier, a pointerless Workspace-material carrier, and a bootstrap-only carrier with no project/source material. Complete Workspace carriage may continue to use the package-local clear verified or password-sealed complete-snapshot shortcut. Complete or intentionally bounded material whose representation semantics matter independently must use a qualified `tiinex.workspace.representation.v1` binding instead of being squeezed into that shortcut.
+Defines one receiver-facing carrier identity/discovery contract with three explicit Package Roles: an exact Handoff-route carrier, a pointerless Workspace-material carrier, and a bootstrap-only carrier with no project/source material. Complete Workspace carriage may continue to use the package-local clear verified or password-sealed complete-snapshot shortcut. Complete or intentionally bounded material whose representation semantics matter independently uses a qualified `tiinex.workspace.representation.v1` binding; exact selected-route closure material with no independent representation lifecycle may instead use the Handoff-carrier-only package-local bounded cache defined below.
 
 `tiinex.handoff.package.v1` owns only carrier facts: how a recipient enters the carrier, which package role is declared, which qualified source-material bindings are selected for carriage, how an explicit Handoff route is discovered when present, how generic and route-specific transport text is projected, and how carrier convenience lineage is represented. It does not own the carried Workspace, Role, Handoff, Representation Payload, cryptographic profile, recipient-slot, holder, delegation, acceptance, project-membership, or post-open provider semantics that belong to their own artifacts.
 
@@ -48,7 +52,7 @@ Despite its namespace, this schema is not a specialization of `tiinex.handoff.v1
 - That package-specific complete binding is not a `tiinex.workspace.representation.v1` artifact and does not activate generic Workspace Representation authority outside this carrier.
 - A standalone `tiinex.external.payload.v1` artifact is not required for the same package-local complete Workspace snapshot when no independent payload identity, location, access, retention, or recovery semantics need to survive apart from the package binding.
 - A standalone `tiinex.workspace.representation.v1` artifact is not required for the same package-local complete snapshot when no independently selectable representation relation, bounded scope, multiple-representation choice, external provider contract, or separate representation lifecycle needs to survive apart from the package binding.
-- When complete or bounded material needs independent representation semantics, the package selects a qualified `tiinex.workspace.representation.v1` artifact through `Material Representation Bindings`; the referenced representation, Workspace, Representation Payload authority, exact carried payload bytes, scope, correlation, and provider qualification remain owned by those artifacts.
+- When complete or bounded material needs independent representation semantics, the package selects a qualified `tiinex.workspace.representation.v1` artifact through `Material Representation Bindings`; when exact route-closure material has no independent representation lifecycle and is absent from carried Workspaces, Handoff-carrier mode may instead use the package-local bounded-cache binding defined by that section; the referenced representation, Workspace, Representation Payload authority, exact carried payload bytes, scope, correlation, and provider qualification remain owned by those artifacts.
 - A Role, Handoff, Task, Evidence, or other artifact that appears only inside carried source material remains owned/interpreted through its own qualified artifact and representation closure. Package placement or byte presence does not create Role holder, recipient, participant, consent, delegation, organization membership, responsibility, or work ownership.
 - A password-sealed Workspace binding always has independent payload access/recovery and cryptographic open semantics. Its ciphertext bytes therefore remain under `tiinex.external.payload.v1`, while deterministic non-secret profile, password-recipient-slot, open/recovery, and authentication semantics remain under `tiinex.transport.envelope.v1`.
 - A sealed carrier binding may qualify as a carrier-level statement that one protected complete Workspace representation is present, but it never qualifies or activates the protected Workspace source provider while locked.
@@ -237,7 +241,7 @@ Rules
 - The literal `none` is allowed only as the sole `## Workspace Snapshot Bindings` entry. It declares that this package uses no package-local direct complete-Workspace shortcut and must not be replaced by a fake Workspace declaration.
 - `Workspace Id` is a package-local readability/routing handle. It does not replace the Workspace artifact as semantic Workspace identity.
 - `Workspace Artifact` must resolve to exactly one carried artifact whose Current Schema is `tiinex.workspace.v1`.
-- `Coverage: complete` is required in both direct binding modes. `bounded`, `partial`, and `unknown` are not allowed in this package-local carrier shortcut; bounded source material belongs under `Material Representation Bindings` through `tiinex.workspace.representation.v1`.
+- `Coverage: complete` is required in both direct Workspace Snapshot binding modes. `bounded`, `partial`, and `unknown` are not allowed in that complete-Workspace shortcut; bounded material with independent representation semantics uses generic `tiinex.workspace.representation.v1`, while exact Handoff-route closure material with no independent representation lifecycle may use the bounded-cache mode under `Material Representation Bindings`.
 - `Snapshot Kind: exact-workspace-byte-tree-archive` preserves the existing clear direct-binding shortcut. It requires `Snapshot Path`, `Workspace Artifact Inner Path`, `Integrity Method`, and `Integrity Value`; it forbids the sealed-only fields.
 - In clear mode, `Snapshot Path` must resolve to one package-local payload entry containing the exact complete Workspace byte-tree snapshot for this binding. External URLs and inferred filenames are not allowed.
 - In clear mode, `Workspace Artifact Inner Path` is the exact normalized Workspace-relative path at which the bound Workspace artifact must occur inside the snapshot.
@@ -269,16 +273,24 @@ Declaration Shape
 Required Fields
 
 - Material Id
-- Workspace Representation
 - Carriage State
 
 Optional Fields
 
+- Workspace Representation
+- Cache Descriptor
+- Cache Payload
 - Notes
 
 Field Value Constraints
 
 - Workspace Representation
+  - Allowed Shape: Markdown Link
+  - Domain Policy: closed
+- Cache Descriptor
+  - Allowed Shape: Markdown Link
+  - Domain Policy: closed
+- Cache Payload
   - Allowed Shape: Markdown Link
   - Domain Policy: closed
 - Carriage State
@@ -288,19 +300,21 @@ Field Value Constraints
 
 Rules
 
-- The literal `none` is allowed only as the sole `## Material Representation Bindings` entry. It declares that no generic Workspace Representation is selected for source-material carriage.
+- The literal `none` is allowed only as the sole `## Material Representation Bindings` entry. It declares that no generic Workspace Representation or package-local bounded cache binding is selected for source-material carriage.
 - `Material Id` is a package-local readability handle only. It is not artifact identity, Workspace identity, Role identity, Handoff identity, recipient identity, or provider identity.
-- `Workspace Representation` must resolve to exactly one carried artifact whose Current Schema is `tiinex.workspace.representation.v1`.
-- A `Carriage State: verified` binding requires the referenced Workspace Representation to qualify in a provider-ready `Binding State: verified` form with `Coverage: complete` or `Coverage: bounded`; `partial`, `unknown`, stale, declared, or unresolved representation states do not qualify a ready material binding.
-- The referenced Workspace Representation remains the owner of the Workspace-to-representation relation, coverage/scope, path correlation, provider activation boundary, and selection semantics. Its referenced Workspace Artifact remains the semantic Workspace identity, and its referenced External Payload remains the owner of payload identity, location, exact payload-byte integrity, access, and recovery semantics.
-- The package must carry the exact visible Workspace Representation artifact, its explicit Workspace Artifact endpoint, its explicit Representation Payload artifact, and the exact payload bytes required to requalify the selected binding. Missing or externally guessed closure fails closed.
-- The package must not duplicate the referenced representation's coverage, scope, payload digest, mapping, provider, or path-set authority merely for convenience.
-- For `Coverage: bounded`, the qualified decoded representation-entry set is the exact carried source-material scope. Omitted Workspace paths remain outside the representation and must not be inferred absent from the source Workspace.
+- Each declaration uses exactly one carriage mode: either `Workspace Representation`, or the pair `Cache Descriptor` + `Cache Payload`. Mixing both modes in one declaration fails closed.
+- `Workspace Representation` mode is unchanged: it must resolve to exactly one carried `tiinex.workspace.representation.v1` artifact, and `Carriage State: verified` requires its complete generic Workspace/External-Payload/provider closure to requalify exactly as declared.
+- `Cache Descriptor` + `Cache Payload` is a narrow Handoff-carrier-only shortcut for exact selected-route Required Context, endpoint Role, participant Role, declared dependency, or lineage-closure bytes that are not already present in a carried qualified Workspace. It does not create a `tiinex.workspace.representation.v1` relation.
+- `Cache Descriptor` must resolve to exactly one carried `tiinex.external.payload.v1` artifact whose package-local Location and integrity qualify the exact `Cache Payload` ZIP bytes. `Cache Payload` must resolve to exactly one package-local readable ZIP payload.
+- A verified package-local bounded cache must be minimal: every payload entry must be justified by at least one exact package-local grounding Pointer for the selected Handoff route closure, and material already exact-qualified through a carried Workspace must not be duplicated into cache.
+- Cache entry paths must be deterministically derived by the owning source adapter from the qualified source reference. The adapter namespace is the first cache path segment; each adapter owns a readable collision-safe identity layout beneath it. For GitHub the required layout is `github/<owner>/<repo>/<exact-commit>/<repo-relative-path>`. Generic `material/` indirection, hash-to-file lookup tables, opaque `.bin` material paths, and hidden JSON mapping truth are not Package V1 authority.
+- Adapter-native source/version authority remains with the exact qualified reference and owning provider/source evidence. A readable cache path is navigation and collision avoidance only; it does not replace provider identity or source version authority.
+- A Handoff-carrier authoritative selected Handoff itself must remain in clear qualified carried Workspace material; the bounded cache shortcut must not become an alternate Handoff representation.
+- When source material needs an independently selectable representation lifecycle, bounded scope authority, provider activation semantics, multiple-representation choice, or meaning outside this carrier, use the unchanged generic `Workspace Representation` mode instead of the package-local cache shortcut.
 - Material carriage through this section is clear/readable in V1. A locked or protected generic material representation does not satisfy `Carriage State: verified` unless a later explicit contract defines its protected generic-material opening semantics.
-- A carried Role, Handoff, Task, Evidence, Decision, Relation, or other artifact inside the selected representation remains semantically governed by its own artifact and explicit relations. Presence in the representation/package does not create recipient, participant, holder, consent, delegation, organization membership, responsibility, work ownership, or acceptance.
-- Package-local Pointers may aid discovery of represented artifacts only when their targets resolve through a qualified carried representation; the Pointer and package placement do not become ownership or endpoint authority.
-- A Handoff-carrier selected route may resolve its authoritative Handoff target through a verified complete Workspace Snapshot Binding or through a verified clear Material Representation Binding whose qualified scope contains the exact Handoff artifact.
-- A pointerless Workspace-carrier may use only Material Representation Bindings, only Workspace Snapshot Bindings, or both.
+- A carried Role, Handoff, Task, Evidence, Decision, Relation, Process/guidance artifact, or other artifact remains semantically governed by its own artifact and explicit relations. Presence in the representation/cache/package does not create recipient, participant, holder, process/policy applicability, consent, delegation, organization membership, responsibility, work ownership, or acceptance.
+- Package-local Pointers are discovery/grounding aids only; the Pointer and package placement do not become semantic ownership or endpoint authority.
+- A pointerless Workspace-carrier may use generic Workspace Representation bindings and/or Workspace Snapshot Bindings, but not the Handoff-route-only bounded cache shortcut.
 - A bootstrap-only carrier must declare `none` in both binding sections.
 
 ### Route Discovery
@@ -669,4 +683,4 @@ The route-specific human transport projection may add the exact Continue-From po
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: Tsl2YQ8lJo9TsPnRmbdwpSLtf7hnmLSiUBXvrAxDFCk
+  - Value: hJn7LW1ig7Em-nYvvPy3XN87Lv-meVD3wythlBqPGKM

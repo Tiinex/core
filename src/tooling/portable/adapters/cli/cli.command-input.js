@@ -117,7 +117,7 @@ export async function commandInput(parsed, runtime = {}) {
         packageSourcePath: packagePath,
         includeLegacyTopics: Boolean(flags['include-legacy-topics']),
         includeRequiredContext: flags['include-required-context'] || '',
-        holderBinding: { roleLabel: flags['holder-role'] || '', holderId: flags['holder-id'] || '', sourceLocator: holderBindingCliSource(flags) },
+        holderBinding: { roleLabel: flags['holder-role'] || '', holderId: flags['holder-id'] || '', assignmentMode: flags['holder-assignment-mode'] || '', sourceLocator: holderBindingCliSource(flags) },
         host,
         recoveryAcceptance
       },
@@ -178,7 +178,7 @@ export async function commandInput(parsed, runtime = {}) {
   const defaultSchemaMaterial = schemaTargets.length ? decorateDefaultSchemaMaterial(await loadNodePortableInput(schemaTargets, loadOptions), runtime.defaultSchemaSource) : emptyMaterial();
   const material = mergeLoadedMaterial(explicitMaterial, defaultSchemaMaterial);
   if (parsed.command === 'project-handoff-carrier-output') return {
-    input: { ...material, route: flags.route || '', collisionInstance: flags['collision-instance'] || 1 },
+    input: { ...material, route: flags.route || '', collisionInstance: flags['collision-instance'] || 1, filename: explicitTargets[0] ? path.basename(explicitTargets[0]) : '' },
     options: {}
   };
   if(parsed.command==='project-workspace-landing')return land(flags,material,readOptionalJson,splitFlag);
@@ -476,6 +476,7 @@ function holderBindingCliSource(flags = {}) {
   const fields = [];
   if (Object.prototype.hasOwnProperty.call(flags, 'holder-role')) fields.push('--holder-role');
   if (Object.prototype.hasOwnProperty.call(flags, 'holder-id')) fields.push('--holder-id');
+  if (Object.prototype.hasOwnProperty.call(flags, 'holder-assignment-mode')) fields.push('--holder-assignment-mode');
   return fields.length ? `cli:${fields.join(',')}` : '';
 }
 

@@ -3,7 +3,7 @@ import { createPortableCheckpoint, restorePortableCheckpoint } from './checkpoin
 import { buildPortableRuntimePackage, inspectPortableRuntimePackage, rehydratePortableRuntimePackage, roundTripPortableRuntimePackage } from './package/runtime.package.js';
 import { acceptPortablePublicationResult, planPortablePublication } from './publication/runtime.publication.js';
 import { manufactureRecipientRelativeHandoffPackage } from './handoff/manufacture.js';
-import { projectPortableHandoffCarrierOutputFromPackage } from './handoff/recipientV2.humanOutput.js';
+import { projectHandoffCarrierOutputFromPackage } from './handoff/carrierProjection.js';
 import { orientColdConsumerFromHandoffPackage } from './handoff/coldConsumerEntrypoint.js';
 import { auditHandoffPackageContextCarriage } from './handoff/contextAudit.js';
 import { projectPortableWorkspaceLandingPlan } from './handoff/workspaceLandingPlan.js';
@@ -38,7 +38,7 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     name: 'manufacture-handoff-package',
     description: 'Build/verify qualified Handoff packages.',
     safety: 'local-package-result',
-    inputSchema: 'tiinex.portable.handoff-manufacturing.request.v2',
+    inputSchema: 'tiinex.portable.input.v1',
     handler: (input = {}, options = {}) => wrapPortableResult('manufacture-handoff-package', manufactureRecipientRelativeHandoffPackage(input, options))
   }),
   'project-handoff-carrier-output': operation({
@@ -46,7 +46,7 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     description: 'Regenerate qualified human carrier output.',
     safety: 'read-only',
     inputSchema: 'tiinex.portable.handoff-carrier-output.request.v1',
-    handler: (input = {}) => wrapPortableResult('project-handoff-carrier-output', projectPortableHandoffCarrierOutputFromPackage(input))
+    handler: (input = {}) => wrapPortableResult('project-handoff-carrier-output', projectHandoffCarrierOutputFromPackage(input))
   }),
   'orient-handoff-package': operation({
     name: 'orient-handoff-package',
@@ -122,7 +122,7 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     name: 'project-handoff-participants',
     description: 'Qualify exactly one Handoff route and project its Core-owned semantic participant authority without manufacturing a package.',
     safety: 'planning-only-read-only',
-    inputSchema: 'tiinex.portable.handoff-manufacturing.request.v2',
+    inputSchema: 'tiinex.portable.input.v1',
     handler: (input = {}) => wrapPortableResult('project-handoff-participants', projectPortableHandoffParticipants(input))
   }),
   'project-operator-context': operation({

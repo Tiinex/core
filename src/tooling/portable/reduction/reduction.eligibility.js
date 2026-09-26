@@ -68,30 +68,33 @@ export function projectReductionDestructiveEligibility(input = {}, material = {}
   const covered = new Set();
   if (reductionRecord && reductionQualification?.qualified) {
     for (const leaf of leafEntrypoints) {
-      const matches = entries.filter((entry) => samePath(entry.leafPath, leaf.record.path));
-      if (matches.length === 0) { blockers.push(issue('disappearing-leaf-declaration-missing', leaf.record.path)); continue; }
-      if (matches.length > 1) { ambiguities.push(issue('disappearing-leaf-declaration-ambiguous', leaf.record.path)); continue; }
+      const leafRecord = resolveUniqueRecord(records, leaf.record?.path || leaf.path || '').record;
+      const leafPath = normalizePath(leafRecord?.path || leaf.record?.path || leaf.path || '');
+      if (!leafRecord) { missingEvidence.push(issue('disappearing-leaf-material-missing', leafPath || '(empty)')); continue; }
+      const matches = entries.filter((entry) => samePath(entry.leafPath, leafPath));
+      if (matches.length === 0) { blockers.push(issue('disappearing-leaf-declaration-missing', leafPath)); continue; }
+      if (matches.length > 1) { ambiguities.push(issue('disappearing-leaf-declaration-ambiguous', leafPath)); continue; }
       const entry = matches[0];
-      covered.add(normalizePath(leaf.record.path));
-      if (!entry.disposition) blockers.push(issue('disposition-required', leaf.record.path));
-      if (!entry.reason) blockers.push(issue('reason-required', leaf.record.path));
-      if (!entry.collapseToPath) blockers.push(issue('historical-closure-endpoint-required', leaf.record.path));
-      const leafLocator = immutableLocatorForLeaf(leaf.record, entry, sourceLocators);
-      if (!leafLocator.qualified) missingEvidence.push(issue('immutable-leaf-source-unresolved', leaf.record.path));
-      const proof = proveParentClosure({ leaf: leaf.record, boundaryPath: entry.collapseToPath, graph, disappearingPaths: semanticDisappearingPaths, records, sourceLocators, endpointProofs, snapshots });
+      covered.add(leafPath);
+      if (!entry.disposition) blockers.push(issue('disposition-required', leafPath));
+      if (!entry.reason) blockers.push(issue('reason-required', leafPath));
+      if (!entry.collapseToPath) blockers.push(issue('historical-closure-endpoint-required', leafPath));
+      const leafLocator = immutableLocatorForLeaf(leafRecord, entry, sourceLocators);
+      if (!leafLocator.qualified) missingEvidence.push(issue('immutable-leaf-source-unresolved', leafPath));
+      const proof = proveParentClosure({ leaf: leafRecord, boundaryPath: entry.collapseToPath, graph, disappearingPaths: semanticDisappearingPaths, records, sourceLocators, endpointProofs, snapshots });
       leafProofs.push(Object.freeze({
-        leaf: identity(leaf.record),
+        leaf: identity(leafRecord),
         immutableLocator: leafLocator,
         disposition: entry.disposition,
         reason: entry.reason,
         historicalClosureEndpoint: entry.collapseToPath,
         placementParent: reductionQualification.parentPath,
         parentSpan: proof,
-        reissue: currentnessReissueFor(leaf.record.path, currentnessFacts)
+        reissue: currentnessReissueFor(leafPath, currentnessFacts)
       }));
-      if (proof.state === 'ambiguous') ambiguities.push(issue(proof.code || 'parent-closure-ambiguous', leaf.record.path));
-      else if (proof.state === 'unresolved') missingEvidence.push(issue(proof.code || 'parent-closure-unresolved', leaf.record.path));
-      else if (proof.state === 'blocked') blockers.push(issue(proof.code || 'parent-closure-blocked', leaf.record.path));
+      if (proof.state === 'ambiguous') ambiguities.push(issue(proof.code || 'parent-closure-ambiguous', leafPath));
+      else if (proof.state === 'unresolved') missingEvidence.push(issue(proof.code || 'parent-closure-unresolved', leafPath));
+      else if (proof.state === 'blocked') blockers.push(issue(proof.code || 'parent-closure-blocked', leafPath));
       if (proof.qualified) for (const item of proof.path.slice(0, -1)) covered.add(normalizePath(item));
     }
 

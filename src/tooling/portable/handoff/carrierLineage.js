@@ -1,15 +1,11 @@
 import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
-import { canonicalC14nV2SelfState } from '../../../integrity/integrity.c14nV2.js';
-import { parseHandoffPackageV1, validatePackageFields } from './recipientV2.packageV1.contract.js';
-import { RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID } from './recipientV2.packageV1.constants.js';
-import { currentSchemaId } from './recipientV2.packageV1.shared.js';
-import { recipientV2FactsIndex } from './recipientV2.transportManifest.js';
-import { handoffCarrierProfileFromPackageContract, normalizeHandoffCarrierProfile } from './carrierProfile.js';
+import { normalizeHandoffCarrierProfile } from './carrierProfile.js';
+import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
 
 export const HANDOFF_CARRIER_LINEAGE_SCHEMA_ID = 'tiinex.portable.handoff-carrier-lineage.v1';
 
-export function initialHandoffCarrierLineage() {
-  return freezeLineage({ mode: 'root', dimension: '001', parentDimension: '', parentPackageSha256: '', parentPackageFilename: '', major: '001', majorReason: 'initial carrier root', checkpointKind: 'major' });
+export function initialHandoffCarrierLineage(prefix = '') {
+  return freezeLineage({ mode: 'root', prefix: normalizeCarrierPrefix(prefix), dimension: '001', parentDimension: '', parentPackageSha256: '', parentPackageFilename: '', major: '001', majorReason: 'initial carrier root', checkpointKind: 'major' });
 }
 
 export function continueHandoffCarrierLineage(parent = {}, siblingIndex = 1) {
@@ -18,6 +14,7 @@ export function continueHandoffCarrierLineage(parent = {}, siblingIndex = 1) {
   const childIndex = normalizeSiblingIndex(siblingIndex);
   return freezeLineage({
     mode: 'continue',
+    prefix: normalized.prefix,
     dimension: `${normalized.dimension}-${childIndex}`,
     parentDimension: normalized.dimension,
     parentPackageSha256: normalized.packageSha256,
@@ -38,6 +35,7 @@ export function advanceHandoffCarrierMajor(parent = {}, reason = '') {
   const nextMajor = String(currentMajor + 1).padStart(3, '0');
   return freezeLineage({
     mode: 'major',
+    prefix: normalized.prefix,
     dimension: nextMajor,
     parentDimension: normalized.dimension,
     parentPackageSha256: normalized.packageSha256,
@@ -55,6 +53,7 @@ export function normalizeHandoffCarrierLineage(value = null) {
   const mode = ['root', 'continue', 'major'].includes(String(value.mode || '')) ? String(value.mode) : dimension.includes('-') ? 'continue' : 'root';
   return freezeLineage({
     mode,
+    prefix: normalizeCarrierPrefix(value.prefix || ''),
     dimension,
     parentDimension: normalizeDimension(value.parentDimension || ''),
     parentPackageSha256: normalizeSha256(value.parentPackageSha256 || ''),
@@ -66,71 +65,20 @@ export function normalizeHandoffCarrierLineage(value = null) {
 }
 
 export function parentHandoffCarrierLineageFromBundle(bundle = {}, options = {}) {
-  const files = Array.isArray(bundle.files) ? bundle.files : [];
-  const factsIndex = recipientV2FactsIndex({ ...bundle, files });
-  if (factsIndex.transport?.state === 'invalid') throw new Error('portable.handoff-carrier-lineage.parent.transport-invalid');
-  const roots = [];
-  for (const file of files) {
-    if (!/\.md$/i.test(String(file.path || ''))) continue;
-    const facts = factsIndex.map.get(String(file.path || '')) || null;
-    if (facts?.role === 'package-root') roots.push({ file, facts });
-  }
-  let lineage = null;
-  if (roots.length === 1 && roots[0].facts.carrierLineage) lineage = normalizeHandoffCarrierLineage(roots[0].facts.carrierLineage);
-  if (!lineage) lineage = packageV1CarrierLineage(files);
-  if (!lineage) {
-    const dimensions = [...new Set((options.routeDimensions || []).map(normalizeDimension).filter(Boolean))];
-    if (dimensions.length === 1) lineage = normalizeHandoffCarrierLineage({ mode: dimensions[0].includes('-') ? 'continue' : 'root', dimension: dimensions[0] });
-  }
-  if (!lineage) throw new Error('portable.handoff-carrier-lineage.parent.unresolved');
+  const inspection = inspectHandoffPackageV1(bundle);
+  if (inspection.status !== 'valid') throw new Error('portable.handoff-carrier-lineage.package-parent.invalid');
+  const lineage = inspection.carrierProjection?.lineage || inspection.rootArtifact?.carrierLineage || null;
+  const dimension = normalizeDimension(lineage?.dimension || '');
+  if (!dimension) throw new Error('portable.handoff-carrier-lineage.package-parent.dimension-unresolved');
   return Object.freeze({
-    ...lineage,
+    ...normalizeHandoffCarrierLineage({ ...lineage, dimension }),
     packageSha256: normalizeSha256(options.packageSha256 || ''),
     packageFilename: String(options.packageFilename || '')
   });
 }
 
-export function parentHandoffCarrierProfileFromBundle(bundle = {}) {
-  const files = Array.isArray(bundle.files) ? bundle.files : [];
-  const candidates = files.filter((file) => {
-    if (!/\.md$/i.test(String(file.path || ''))) return false;
-    return currentSchemaId(decodeUtf8(packageFileBytes(file))) === RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID;
-  });
-  if (candidates.length !== 1) return normalizeHandoffCarrierProfile(null);
-  const file = candidates[0];
-  if (!/^\d{3}-tiinex-handoff-package\.trace\.md$/.test(String(file.path || ''))) return normalizeHandoffCarrierProfile(null);
-  const markdown = decodeUtf8(packageFileBytes(file));
-  if (canonicalC14nV2SelfState(markdown).state !== 'verified') return normalizeHandoffCarrierProfile(null);
-  const contract = parseHandoffPackageV1(markdown);
-  const findings = [];
-  validatePackageFields(contract, findings);
-  if (findings.some((item) => item.severity === 'error' && !String(item.code || '').includes('major-carrier-profile'))) return normalizeHandoffCarrierProfile(null);
-  return handoffCarrierProfileFromPackageContract(contract);
-}
-
-function packageV1CarrierLineage(files = []) {
-  const candidates = files.filter((file) => {
-    if (!/\.md$/i.test(String(file.path || ''))) return false;
-    return currentSchemaId(decodeUtf8(packageFileBytes(file))) === RECIPIENT_V2_PACKAGE_V1_SCHEMA_ID;
-  });
-  if (candidates.length !== 1) return null;
-  const file = candidates[0];
-  if (!/^\d{3}-tiinex-handoff-package\.trace\.md$/.test(String(file.path || ''))) return null;
-  const markdown = decodeUtf8(packageFileBytes(file));
-  if (canonicalC14nV2SelfState(markdown).state !== 'verified') return null;
-  const contract = parseHandoffPackageV1(markdown);
-  const findings = [];
-  validatePackageFields(contract, findings);
-  if (findings.some((item) => item.severity === 'error')) return null;
-  return normalizeHandoffCarrierLineage({
-    mode: contract.carrierCheckpoint === 'major' ? 'major' : (contract.parentCarrierDimension ? 'continue' : 'root'),
-    dimension: contract.carrierDimension,
-    parentDimension: contract.parentCarrierDimension,
-    parentPackageSha256: contract.parentPackageSha256,
-    parentPackageFilename: contract.parentPackageFilename,
-    checkpointKind: contract.carrierCheckpoint,
-    majorReason: contract.majorReason
-  });
+export function parentHandoffCarrierProfileFromBundle() {
+  return normalizeHandoffCarrierProfile(null);
 }
 
 export function qualifyMajorCarrierReadiness(input = {}, lineage = {}) {
@@ -181,36 +129,42 @@ export function carrierLineageFromCliParent({ bundle = {}, parentPath = '', pare
   return major ? advanceHandoffCarrierMajor(parent, majorReason) : continueHandoffCarrierLineage(parent, siblingIndex);
 }
 
-function normalizeSiblingIndex(value = 1) {
-  const number = Number.parseInt(value, 10);
-  if (!Number.isFinite(number) || number < 1 || number > 9999) throw new Error('portable.handoff-carrier-lineage.sibling-index.invalid');
-  return number;
-}
-
-function freezeLineage(value = {}) {
+function normalizeParentLineage(parent = {}) {
   return Object.freeze({
-    schema: HANDOFF_CARRIER_LINEAGE_SCHEMA_ID,
-    version: 1,
-    mode: String(value.mode || ''),
-    dimension: normalizeDimension(value.dimension || ''),
-    major: majorSegment(value.dimension || ''),
-    parentDimension: normalizeDimension(value.parentDimension || ''),
-    parentPackageSha256: normalizeSha256(value.parentPackageSha256 || ''),
-    parentPackageFilename: String(value.parentPackageFilename || ''),
-    checkpointKind: String(value.checkpointKind || ''),
-    majorReason: String(value.majorReason || ''),
-    authority: 'human-progress-projection-only',
-    boundary: 'Carrier lineage is a compact human progress/retention projection. It never replaces artifact Parent/Trace/Origin, Handoff authority, or source truth. Major checkpoints require complete carried Workspace snapshots and explicit semantic closure intent.'
+    prefix: normalizeCarrierPrefix(parent.prefix || ''),
+    dimension: normalizeDimension(parent.dimension || ''),
+    packageSha256: normalizeSha256(parent.packageSha256 || parent.parentPackageSha256 || ''),
+    packageFilename: String(parent.packageFilename || parent.parentPackageFilename || '')
   });
 }
-function normalizeParentLineage(value = {}) {
-  const explicitDimension = String(value?.dimension || '').trim();
-  if (explicitDimension && !normalizeDimension(explicitDimension)) return Object.freeze({ dimension: '', packageSha256: normalizeSha256(value.packageSha256 || value.parentPackageSha256 || ''), packageFilename: String(value.packageFilename || value.parentPackageFilename || '') });
-  const lineage = normalizeHandoffCarrierLineage(value);
-  return Object.freeze({ ...lineage, packageSha256: normalizeSha256(value.packageSha256 || value.parentPackageSha256 || ''), packageFilename: String(value.packageFilename || value.parentPackageFilename || '') });
+
+export function normalizeHandoffCarrierPrefix(value = '') {
+  return normalizeCarrierPrefix(value);
 }
-function normalizeDimension(value = '') { const v = String(value || '').trim(); return /^\d{3}(?:-\d+)*$/.test(v) ? v : ''; }
-function majorSegment(value = '') { return normalizeDimension(value).split('-')[0] || ''; }
-function portableBasename(value = '') { return String(value || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || ''; }
-function normalizeSha256(value = '') { const v = String(value || '').trim().toLowerCase(); return /^[a-f0-9]{64}$/.test(v) ? v : ''; }
-function decodeUtf8(data) { try { return new TextDecoder('utf-8', { fatal: true }).decode(data); } catch { return ''; } }
+
+function normalizeCarrierPrefix(value = '') {
+  const text = String(value || '').trim().replace(/-+$/u, '');
+  if (!text) return '';
+  if (text.length > 120 || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(text)) throw new Error('portable.handoff-carrier-lineage.prefix.invalid');
+  return text;
+}
+
+function freezeLineage(value) { return Object.freeze({ schema: HANDOFF_CARRIER_LINEAGE_SCHEMA_ID, ...value }); }
+function normalizeDimension(value = '') {
+  const text = String(value || '').trim();
+  return /^\d{3}(?:-\d+)*$/.test(text) ? text : '';
+}
+function normalizeSha256(value = '') {
+  const text = String(value || '').trim().toLowerCase();
+  return /^[0-9a-f]{64}$/.test(text) ? text : '';
+}
+function normalizeSiblingIndex(value) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 999999) throw new Error('portable.handoff-carrier-lineage.sibling-index.invalid');
+  return n;
+}
+function majorSegment(dimension = '') { return String(dimension || '').split('-')[0] || ''; }
+function portableBasename(value = '') {
+  const normalized = String(value || '').replace(/\\/g, '/');
+  return normalized.split('/').pop() || normalized;
+}

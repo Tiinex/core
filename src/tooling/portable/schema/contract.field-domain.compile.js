@@ -11,11 +11,19 @@ export function compileFieldValueConstraints(document = {}) {
   const constraints = [];
   for (const group of groups) {
     const category = (group.categories || []).find((item) => exactToken(item.name) === 'Field Value Constraints');
-    if (!category) continue;
+    const modernFields = new Set((category?.nodes || []).map((item) => exactToken(item.value)).filter(Boolean));
+    const declarations = [
+      ...(category?.nodes || []).map((item) => Object.freeze({ kind: 'modern', node: item })),
+      ...legacyAllowedShapeFieldDomainDeclarations(group, modernFields).map((item) => Object.freeze({ kind: 'legacy', node: item }))
+    ];
+    if (!declarations.length) continue;
 
-    for (const declaration of category.nodes || []) {
+    for (const candidate of declarations) {
+      const declaration = candidate.node;
       const field = exactToken(declaration.value);
-      const parsed = parseFieldValueConstraintDeclaration(declaration);
+      const parsed = candidate.kind === 'legacy'
+        ? parseLegacyAllowedShapeFieldDomainDeclaration(declaration)
+        : parseFieldValueConstraintDeclaration(declaration);
       const local = ownedFields(group).has(field);
       const base = {
         kind: 'field-domain',
@@ -332,6 +340,47 @@ function lineageLocalOwnershipFromMergedGroup(group = null, field = '', sourceSc
     sourceSchemaIds: Object.freeze(unique(owners.map((item) => String(item.sourceSchemaId || '')).filter(Boolean))),
     findings: Object.freeze([])
   });
+}
+
+
+function legacyAllowedShapeFieldDomainDeclarations(group = {}, modernFields = new Set()) {
+  const owned = ownedFields(group);
+  if (!owned.size) return Object.freeze([]);
+  const category = (group.categories || []).find((item) => exactToken(item.name) === 'Allowed Shapes');
+  if (!category) return Object.freeze([]);
+  const byField = new Map();
+  for (const node of category.nodes || []) {
+    if ((node.children || []).length) continue;
+    const parsed = splitLegacyAllowedShapeValue(node.value);
+    if (!parsed || !owned.has(parsed.field) || modernFields.has(parsed.field)) continue;
+    if (!byField.has(parsed.field)) byField.set(parsed.field, { field: parsed.field, values: [], line: Number(node.line || 0) });
+    const entry = byField.get(parsed.field);
+    for (const value of parsed.values) if (!entry.values.includes(value)) entry.values.push(value);
+  }
+  return Object.freeze([...byField.values()].map((entry) => Object.freeze({
+    value: entry.field,
+    rawValue: entry.field,
+    line: entry.line,
+    indent: 0,
+    children: Object.freeze(entry.values.map((value) => Object.freeze({ value: `Allowed Value: ${value}`, rawValue: `Allowed Value: ${value}`, line: entry.line, indent: 0, children: Object.freeze([]) })))
+  })));
+}
+
+function parseLegacyAllowedShapeFieldDomainDeclaration(node = {}) {
+  const parsed = parseFieldValueConstraintDeclaration(Object.freeze({
+    ...node,
+    children: Object.freeze([...(node.children || []), Object.freeze({ value: 'Domain Policy: closed', children: Object.freeze([]) })])
+  }));
+  return Object.freeze({ ...parsed });
+}
+
+function splitLegacyAllowedShapeValue(value = '') {
+  const text = String(value || '').trim();
+  const match = text.match(/^`([^`]+)`\s*:\s*(.+)$/u);
+  if (!match) return null;
+  const field = cleanToken(match[1]);
+  const values = String(match[2] || '').split(',').map(cleanToken).filter(Boolean);
+  return field && values.length ? Object.freeze({ field, values: Object.freeze(values) }) : null;
 }
 
 function parseFieldValueConstraintDeclaration(node = {}) {

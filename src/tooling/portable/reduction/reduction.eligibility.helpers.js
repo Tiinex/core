@@ -1,7 +1,7 @@
 import { inferRecordMaterialRole, isDiscoveryWorkLeafEligible, MaterialRole } from '../../../workspaces/workspace.materialRole.js';
 import {
   PORTABLE_REDUCTION_DESTRUCTIVE_CONTRACT, identity,
-  locatorForRecord, locatorFromValue, normalizePath, resolveUniqueRecord, samePath, sha256Text, stableJson
+  locatorForRecord, locatorFromValue, locatorVerifiesRecord, normalizePath, resolveUniqueRecord, sameImmutableLocatorIdentity, samePath, sha256Text, stableJson
 } from './reduction.shared.js';
 
 const FIXTURE_RE = /(^|\/)(?:fixtures?|test-fixtures?|__fixtures__)(\/|$)|\.fixture\./i;
@@ -94,6 +94,8 @@ export function proveParentClosure({ leaf, boundaryPath, graph, disappearingPath
     const record = resolveUniqueRecord(records, itemPath).record;
     let locator = record ? locatorForRecord(record, sourceLocators) : locatorForExternal(itemPath, sourceLocators, endpointProofs);
     if (!locator.qualified) return unresolvedProof('parent-hop-immutable-source-unresolved', pathItems);
+    if (record && !locatorVerifiesRecord(locator, record)) return unresolvedProof('parent-hop-immutable-content-unverified', pathItems);
+    if (!record && locator.contentQualified !== true) return unresolvedProof('parent-hop-immutable-content-unverified', pathItems);
     const snapshotMatches = snapshots.filter((snapshot) => snapshot.qualified && snapshotMatchesScope(snapshot, locator));
     if (!snapshotMatches.length) return unresolvedProof('parent-hop-snapshot-unresolved', pathItems);
     if (snapshotMatches.length > 1) return ambiguousProof('parent-hop-snapshot-ambiguous', pathItems);
@@ -156,8 +158,16 @@ function normalizeReissue(value = {}) {
 
 export function immutableLocatorForLeaf(record, entry, sources) {
   const fromEntry = locatorFromValue(entry.leafTarget || '');
-  if (fromEntry.qualified && samePath(fromEntry.path, record.path)) return fromEntry;
-  return locatorForRecord(record, sources);
+  const supplied = locatorForRecord(record, sources);
+  if (fromEntry.qualified && samePath(fromEntry.path, record.path)) {
+    if (locatorVerifiesRecord(fromEntry, record)) return fromEntry;
+    if (locatorVerifiesRecord(supplied, record) && sameImmutableLocatorIdentity(fromEntry, supplied)) {
+      return Object.freeze({ ...supplied, permalink: fromEntry.permalink || supplied.permalink || '', basis: supplied.basis || 'qualified immutable source evidence matching declared leaf permalink' });
+    }
+    return Object.freeze({ ...fromEntry, qualified: false, contentQualified: false, state: 'unresolved', blocker: 'immutable-leaf-content-binding-unresolved' });
+  }
+  if (locatorVerifiesRecord(supplied, record)) return supplied;
+  return Object.freeze({ ...supplied, qualified: false, contentQualified: false, state: 'unresolved', blocker: supplied.blocker || 'immutable-leaf-content-binding-unresolved' });
 }
 
 export function proofSnapshotScopes(candidates, leafProofs) {
@@ -230,7 +240,7 @@ export function boundCandidate(candidate) { return Object.freeze({ path: candida
 export function boundSnapshot(snapshot) { return Object.freeze({ repository: snapshot.repository, workspace: snapshot.workspace, commit: snapshot.commit, manifestDigest: snapshot.manifestDigest, localState: snapshot.localState, qualified: snapshot.qualified }); }
 export function boundCurrentnessFact(fact) { return Object.freeze({ target: normalizePath(fact.target || fact.path || fact.obligation || ''), state: String(fact.state || fact.operativeState || ''), currentness: String(fact.currentness || ''), qualification: String(fact.qualification || fact.semanticState || ''), basis: compactBasis(fact.basis), reissue: normalizeReissue(fact.reissue || {}) }); }
 export function boundParentProof(proof) { return Object.freeze({ child: proof.child, parent: proof.parent, qualified: proof.qualified, childLocator: boundLocator(proof.childLocator), parentLocator: boundLocator(proof.parentLocator) }); }
-export function boundLocator(locator) { const value = locatorFromValue(locator); return Object.freeze({ repository: value.repository, commit: value.commit, workspace: value.workspace, path: value.path, digest: value.digest, qualified: value.qualified }); }
+export function boundLocator(locator) { const value = locatorFromValue(locator); return Object.freeze({ repository: value.repository, commit: value.commit, workspace: value.workspace, path: value.path, digest: value.digest, qualified: value.qualified, contentQualified: value.contentQualified === true, evidenceQualification: value.evidenceQualification || '' }); }
 export function priorReceiptFingerprint(value = {}) { return String(value?.receipt?.inputFingerprint || value?.inputFingerprint || value?.boundInputFingerprint || ''); }
 
 export function projectPostApply(value, candidateSetDigest) {

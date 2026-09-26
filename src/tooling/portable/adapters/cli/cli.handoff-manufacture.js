@@ -3,15 +3,45 @@ import path from 'node:path';
 import { prepareNodeHandoffManufacturingInput } from '../node/handoff.manufacture.js';
 import { prepareNodeWorkspaceCarrierManufacturingInput } from '../node/workspaceCarrier.manufacture.js';
 import { prepareNodeBootstrapCarrierManufacturingInput } from '../node/bootstrapCarrier.manufacture.js';
-import { projectHandoffHumanOutput } from '../../handoff/carrierProjection.js';
+import { projectHandoffHumanOutput, projectWorkspaceCarrierHumanOutput, projectBootstrapCarrierHumanOutput } from '../../handoff/carrierProjection.js';
 import { writePortableRuntimePackageZip } from '../../output/node.zip.js';
-import { writeRecipientFacingV2PackageZip } from '../../output/recipientV2.zip.js';
-import { projectRecipientV2HumanOutput } from '../../handoff/recipientV2.humanOutput.js';
-import { inspectRecipientFacingV2Topology } from '../../handoff/recipientV2.inspect.js';
-import { carrierLineageFromCliParent, initialHandoffCarrierLineage, parentHandoffCarrierLineageFromBundle, parentHandoffCarrierProfileFromBundle } from '../../handoff/carrierLineage.js';
+import { handoffPackageV1ZipBytes } from '../../handoff/handoffPackageV1.zip.js';
+import { inspectHandoffPackageV1 } from '../../handoff/handoffPackageV1.inspect.js';
+import { carrierLineageFromCliParent, initialHandoffCarrierLineage, normalizeHandoffCarrierLineage, normalizeHandoffCarrierPrefix, parentHandoffCarrierLineageFromBundle, parentHandoffCarrierProfileFromBundle } from '../../handoff/carrierLineage.js';
 import { loadNodePortableInput } from '../../input/node.input.js';
 import { resolveHandoffSiblingAllocation } from './cli.handoff-sibling-allocation.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
+
+
+const LEGACY_CARRIER_PARENT_TOPOLOGY_CODES = new Set([
+  'portable.handoff-package-v1.root.package-namespace-invalid',
+  'portable.handoff-package-v1.start.package-namespace-invalid',
+  'portable.handoff-package-v1.bootstrap.package-namespace-invalid',
+  'portable.handoff-package-v1.artifact.package-namespace-leak',
+  'portable.handoff-package-v1.root.dimension-invalid',
+  'portable.handoff-package-v1.start.dimension-invalid',
+  'portable.handoff-package-v1.bootstrap.dimension-invalid',
+  'portable.handoff-package-v1.workspace.sibling-dimension-invalid',
+  'portable.handoff-package-v1.workspace.archive-coordinate-mismatch',
+  'portable.handoff-package-v1.route.workspace-ancestor-mismatch'
+]);
+
+export function qualifyLegacyCarrierContinuationParent(inspection = {}) {
+  if (String(inspection.status || '') === 'valid') return Object.freeze({ state: 'not-applicable', allocationInspection: inspection });
+  const errors = [...(inspection.findings || [])].filter((finding) => String(finding.severity || '').toLowerCase() === 'error');
+  if (!errors.length || errors.some((finding) => !LEGACY_CARRIER_PARENT_TOPOLOGY_CODES.has(String(finding.code || '')))) {
+    return Object.freeze({ state: 'unqualified', allocationInspection: null });
+  }
+  const lineage = inspection.carrierProjection?.lineage || inspection.rootArtifact?.carrierLineage || null;
+  const dimension = String(lineage?.dimension || '').trim();
+  if (!/^\d{3}(?:-\d+)*$/.test(dimension)) return Object.freeze({ state: 'unqualified', allocationInspection: null });
+  if (!(inspection.routes || []).every((route) => String(route.state || 'qualified') === 'qualified')) return Object.freeze({ state: 'unqualified', allocationInspection: null });
+  return Object.freeze({
+    state: 'qualified',
+    allocationInspection: Object.freeze({ ...inspection, status: 'ready', qualification: 'legacy-carrier-continuation-only' }),
+    boundary: 'Compatibility qualification for carrier-lineage continuation only. A pre-correction Package V1 may contribute its exact declared carrier lineage and qualified route order when every blocking finding is one of the known package-local namespace/workspace-topology defects corrected by current Core. The legacy package remains invalid as a Package V1 source and is never reused for Workspace or material authority through this qualification.'
+  });
+}
 
 export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime = {}) {
   const flags = parsed.flags || {};
@@ -56,7 +86,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   const parentPackagePath = String(flags['package-parent'] || '').trim();
   let packageParentBundle = null;
   let packageParentSha256 = '';
-  let carrierLineage = initialHandoffCarrierLineage();
+  const requestedCarrierPrefix = normalizeHandoffCarrierPrefix(flags['carrier-prefix'] || '');
+  let carrierLineage = initialHandoffCarrierLineage(requestedCarrierPrefix);
   let inheritedCarrierProfile = normalizeHandoffCarrierProfile(null);
   let carrierAllocation = Object.freeze({ state: 'root', allocationMode: 'initial-root', siblingIndex: null, provenance: Object.freeze({ basis: 'initial-carrier-root' }) });
   if (parentPackagePath) {
@@ -64,33 +95,21 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     let parentBytes;
     try { parentBytes = new Uint8Array(await readFile(resolvedParent)); }
     catch (error) {
-      if (continuationPackageParentInferred) throw new Error(`portable.cli.handoff-carrier.received-package-parent.unavailable: ${resolvedParent}. Restore the exact received Handoff package used by ground --continue and rerun handoff; Tooling will not emit a partial return without it.`);
+      if (continuationPackageParentInferred) throw new Error(`portable.cli.handoff-carrier.received-package-parent.unavailable: ${resolvedParent}. Restore the exact received Handoff Package V1 used by ground --continue and rerun handoff; Tooling will not emit a partial return without it.`);
       throw error;
     }
     const parentBundle = await loadNodePortableInput([resolvedParent], { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] });
+    const parentInspection = inspectHandoffPackageV1(parentBundle);
+    const legacyCarrierParent = qualifyLegacyCarrierContinuationParent(parentInspection);
+    if (parentInspection.status !== 'valid' && legacyCarrierParent.state !== 'qualified') throw new Error('portable.cli.handoff-carrier.package-parent.invalid');
+    const carrierParentInspection = parentInspection.status === 'valid' ? parentInspection : legacyCarrierParent.allocationInspection;
     packageParentBundle = parentBundle;
     inheritedCarrierProfile = parentHandoffCarrierProfileFromBundle(parentBundle);
-    let parentLineage = null;
-    let routeDimensions = [];
-    try {
-      // Modern recipient-v2 continuation needs only the qualified package-root lineage
-      // plus exact parent package identity. Avoid broad topology requalification here;
-      // manufacture performs its own full qualification on the newly produced carrier.
-      parentLineage = parentHandoffCarrierLineageFromBundle(parentBundle);
-    } catch {
-      // Explicit compatibility fallback for older carriers that lack a directly
-      // qualified package-root lineage. Preserve the prior strict inspection path.
-      const parentInspection = inspectRecipientFacingV2Topology(parentBundle);
-      parentLineage = parentInspection.carrierProjection?.lineage || null;
-      routeDimensions = (parentInspection.carrierProjection?.routes || []).map((route) => route.dimension);
-      if (parentInspection.status !== 'valid' && !parentLineage?.dimension) throw new Error('portable.cli.handoff-carrier.package-parent.invalid');
-    }
-    // Package-parent lineage is a human progress projection, not Workspace provider authority.
+    const parentLineage = carrierParentInspection.carrierProjection?.lineage || carrierParentInspection.rootArtifact?.carrierLineage || null;
     const provisionalLineage = carrierLineageFromCliParent({
       bundle: parentBundle,
       parentPath: resolvedParent,
       parentBytes,
-      routeDimensions,
       qualifiedParentLineage: parentLineage,
       major: Boolean(flags['package-major']),
       majorReason: flags['major-reason'] || ''
@@ -107,9 +126,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
         boundary: 'Carrier Major creation remains explicit and separate from non-Major pointer-order allocation.'
       });
     } else {
-      const parentInspection = inspectRecipientFacingV2Topology(parentBundle);
       const siblingAllocation = await resolveHandoffSiblingAllocation({
-        parentInspection,
+        parentInspection: carrierParentInspection,
         parentPackagePath: resolvedParent,
         parentPackageSha256: provisionalLineage.parentPackageSha256,
         parentDimension: provisionalLineage.parentDimension,
@@ -124,17 +142,17 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
         bundle: parentBundle,
         parentPath: resolvedParent,
         parentBytes,
-        routeDimensions,
         qualifiedParentLineage: parentLineage,
         siblingIndex: siblingAllocation.siblingIndex
       });
     }
     packageParentSha256 = String(carrierLineage.parentPackageSha256 || '');
-  } else if (flags['package-major']) {
-    throw new Error('portable.cli.handoff-carrier.package-major.parent-required');
-  } else if (flags['package-consolidation']) {
-    throw new Error('portable.cli.handoff-carrier.package-consolidation.parent-required');
+    const inheritedPrefix = normalizeHandoffCarrierPrefix(carrierLineage.prefix || '');
+    if (inheritedPrefix && requestedCarrierPrefix && inheritedPrefix !== requestedCarrierPrefix) throw new Error('portable.cli.handoff-carrier.carrier-prefix.parent-conflict');
+    if (!inheritedPrefix && requestedCarrierPrefix) carrierLineage = normalizeHandoffCarrierLineage({ ...carrierLineage, prefix: requestedCarrierPrefix });
   }
+  if (!parentPackagePath && flags['package-major']) throw new Error('portable.cli.handoff-carrier.package-major.parent-required');
+  if (!parentPackagePath && flags['package-consolidation']) throw new Error('portable.cli.handoff-carrier.package-consolidation.parent-required');
   const carrierProfile = selectCarrierProfile({
     operator: operatorCarrierProfile,
     inherited: inheritedCarrierProfile,
@@ -180,7 +198,6 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     input,
     options: {
       verifyRoundtrip,
-      legacyRecipientV2Compatibility: Boolean(flags['legacy-recipient-v2-compatibility']),
       packageInput: { builtAt: flags['built-at'] || undefined }
     }
   };
@@ -195,23 +212,40 @@ export async function materializeHandoffManufactureCliOutput(result = {}, flags 
   const carrierMode = String(result.carrierProjection?.mode || '');
   const workspaceMode = carrierMode === 'workspace';
   const bootstrapMode = carrierMode === 'bootstrap';
-  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput(result, flags) : bootstrapMode ? projectBootstrapCarrierHumanOutput(result, flags) : projectHandoffHumanOutput({
+  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: flags['projected-filename'] || flags.projectedFilename || result?.input?.projectedFilename || '' }) : bootstrapMode ? projectBootstrapCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: flags['projected-filename'] || flags.projectedFilename || '' }) : projectHandoffHumanOutput({
     projection: result.carrierProjection || {},
     route: flags.route || '',
     collisionInstance: flags['collision-instance'] || 1,
     carrierPrefix: flags['carrier-prefix'] || ''
   });
-  if (result.bundle?.transportFormat) humanOutput = projectRecipientV2HumanOutput(humanOutput, result.inspection || {});
   const wantsWrite = Boolean(flags.output || flags['output-dir']);
   const blocked = result.status === 'blocked' || result.transportExecutable === false || Number(result.findingSummary?.counts?.error || 0) > 0;
   if (!wantsWrite || blocked) return summarizeHandoffManufactureCliOutput(result, {}, humanOutput, null);
   const shared = result.carrierProjection?.mode === 'shared';
-  if ((shared || flags['output-dir'] || flags['transport-text']) && humanOutput.status !== 'ready') throw new Error(humanOutput.status === 'selection-required' ? 'portable.cli.handoff-carrier.route-selection.required' : 'portable.cli.handoff-carrier.output.blocked');
+  if (wantsWrite && humanOutput.status !== 'ready') {
+    if (humanOutput.status === 'selection-required') throw new Error('portable.cli.handoff-carrier.route-selection.required');
+    if (humanOutput.status === 'prefix-required') throw new Error('portable.cli.handoff-carrier.carrier-prefix.required');
+    if (humanOutput.status === 'prefix-conflict') throw new Error('portable.cli.handoff-carrier.carrier-prefix.conflict');
+    if (humanOutput.status === 'route-parties-required') throw new Error('portable.cli.handoff-carrier.route-parties.required');
+    throw new Error('portable.cli.handoff-carrier.output.blocked');
+  }
   const target = resolveHandoffOutputPath(flags, humanOutput.primary.filename);
   const writeBundle = result.bundle;
-  const writeReceipt = writeBundle?.transportFormat
-    ? await writeRecipientFacingV2PackageZip(writeBundle, target, writeBundle === result.bundle ? { inspection: result.inspection } : {})
-    : await writePortableRuntimePackageZip(writeBundle, target);
+  let writeReceipt;
+  if (String(writeBundle?.transportFormat || '') === 'tiinex-handoff-package-v1') {
+    const bytes = handoffPackageV1ZipBytes(writeBundle);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, bytes);
+    writeReceipt = Object.freeze({
+      schema: 'tiinex.portable.handoff-package-v1.zip-write.v1',
+      status: 'written',
+      path: target,
+      bytes: bytes.byteLength,
+      boundary: Object.freeze({ localFilesystemWrite: true, remoteWrite: false, sourceMutation: false })
+    });
+  } else {
+    writeReceipt = await writePortableRuntimePackageZip(writeBundle, target);
+  }
   const transportTextReceipt = flags['transport-text'] ? await writeTransportTextSidecar(humanOutput, target, flags['transport-text']) : null;
   return summarizeHandoffManufactureCliOutput(result, writeReceipt, humanOutput, transportTextReceipt);
 }
@@ -281,47 +315,6 @@ async function prepareBootstrapCarrierCliCommand(flags = {}, runtime = {}) {
     carrierLineage: Object.freeze({ ...initialHandoffCarrierLineage(), checkpointKind: 'progression', majorReason: '' }), carrierProfile
   }, runtime);
   return { input, options: { verifyRoundtrip, packageInput: { builtAt: flags['built-at'] || undefined } } };
-}
-
-function projectBootstrapCarrierHumanOutput(result = {}, flags = {}) {
-  const projection = result.carrierProjection || {};
-  const ready = result.status === 'ready' && projection.status === 'ready' && projection.mode === 'bootstrap' && (projection.routes || []).length === 0 && (projection.workspaces || []).length === 0;
-  const dimension = String(projection.lineage?.dimension || '001');
-  const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || '').trim();
-  const filename = projectedFilename || `tiinex-${dimension}.handoff-package.zip`;
-  if (filename !== filename.trim() || !filename.endsWith('.handoff-package.zip') || /[<>:"/\\|?*\x00-\x1f\x7f]/.test(filename) || /[. ]$/.test(filename) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(filename) || new TextEncoder().encode(filename).byteLength > 255) throw new Error('portable.cli.bootstrap-carrier.filename.invalid');
-  return Object.freeze({
-    schema: 'tiinex.portable.handoff-human-output.v1', status: ready ? 'ready' : 'blocked',
-    primary: ready ? Object.freeze({ kind: 'bootstrap-package', filename, dimension, parentDimension: String(projection.lineage?.parentDimension || ''), checkpointKind: String(projection.lineage?.checkpointKind || ''), routeId: '', workspaceId: '', workspaceRelativeHandoffPath: '', collisionInstance: 1, singleHumanTransportChoice: true }) : null,
-    normalInlineRouting: ready ? Object.freeze({ kind: 'transport-text', content: '', normalEmission: true, requiredForHumanCompletion: true, placement: 'adjacent-to-primary', authority: 'none' }) : null, sharedRouting: null,
-    presentation: Object.freeze({ kind: 'bootstrap-only-carrier', label: 'Bootstrap carrier', authority: 'none', recipientLabel: '' }),
-    normalEmissionBoundary: Object.freeze({ allowed: Object.freeze(['package-file', 'generic-start-transport-text']), forbidden: Object.freeze(['workspace-label', 'route-specific-continue-from', 'recipient-label', 'holder-label', 'current-work-label']) }),
-    fallbackTransportText: ready ? Object.freeze({ supported: true, filename: filename.replace(/\.handoff-package\.zip$/i, '.transport.txt'), content: '', normalEmission: false, requiredForHumanCompletion: false, authority: 'none' }) : null, selectedRoute: null, findings: Object.freeze([]),
-    boundary: 'Bootstrap-only carrier output projection. Generic Start transport text only; no Workspace, Handoff route, recipient, holder, Role, or work projection exists.'
-  });
-}
-
-function projectWorkspaceCarrierHumanOutput(result = {}, flags = {}) {
-  const projection = result.carrierProjection || {};
-  const ready = result.status === 'ready' && projection.status === 'ready' && projection.mode === 'workspace' && (projection.routes || []).length === 0;
-  const dimension = String(projection.lineage?.dimension || '001');
-  const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || result?.input?.projectedFilename || '').trim();
-  const filename = projectedFilename || `tiinex-${dimension}.handoff-package.zip`;
-  // This is a basename-only presentation label; it does not define carrier lineage.
-  if (filename !== filename.trim() || !filename.endsWith('.handoff-package.zip') ||
-      /[<>:"/\\|?*\x00-\x1f\x7f]/.test(filename) || /[. ]$/.test(filename) ||
-      /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(filename) ||
-      new TextEncoder().encode(filename).byteLength > 255) throw new Error('portable.cli.workspace-carrier.filename.invalid');
-  return Object.freeze({
-    schema: 'tiinex.portable.handoff-human-output.v1',
-    status: ready ? 'ready' : 'blocked',
-    primary: ready ? Object.freeze({ kind: 'workspace-package', filename, dimension, parentDimension: String(projection.lineage?.parentDimension || ''), checkpointKind: String(projection.lineage?.checkpointKind || ''), routeId: '', workspaceId: '', workspaceRelativeHandoffPath: '', collisionInstance: 1, singleHumanTransportChoice: true }) : null,
-    normalInlineRouting: ready ? Object.freeze({ kind: 'transport-text', content: '', normalEmission: true, requiredForHumanCompletion: true, placement: 'adjacent-to-primary', authority: 'none' }) : null, sharedRouting: null,
-    presentation: Object.freeze({ kind: 'pointerless-workspace-carrier', label: 'Workspace carrier', authority: 'none', recipientLabel: '' }),
-    normalEmissionBoundary: Object.freeze({ allowed: Object.freeze(['package-file', 'generic-start-transport-text']), forbidden: Object.freeze(['route-specific-continue-from', 'recipient-label-from-material']) }),
-    fallbackTransportText: ready ? Object.freeze({ supported: true, filename: filename.replace(/\.handoff-package\.zip$/i, '.transport.txt'), content: '', normalEmission: false, requiredForHumanCompletion: false, authority: 'none' }) : null, selectedRoute: null, findings: Object.freeze([]),
-    boundary: 'Pointerless Workspace-carrier output projection. Generic Start transport text is permitted; Handoff Continue-from and recipient projection remain absent.'
-  });
 }
 
 export function summarizeHandoffManufactureCliOutput(result = {}, writeReceipt = {}, humanOutput = null, transportTextReceipt = null) {

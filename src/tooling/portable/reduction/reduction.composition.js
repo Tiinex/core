@@ -8,7 +8,8 @@ import {
   markdownLinks,
   normalizePath,
   qualifyRecord,
-  qualifyReductionRecord,
+  isReductionFamilySchemaId,
+  qualifyReductionFamilyRecord,
   resolveUniqueRecord,
   safeCode,
   sectionText,
@@ -34,9 +35,9 @@ export function projectReductionComposition(input = {}, material = {}) {
   const lossFacts = normalizeList(input.lossFacts || input.loss || []);
 
   if (!root) missingEvidence.push(issue(rootResolution.state === 'ambiguous' ? 'reduction-artifact-ambiguous' : 'reduction-artifact-missing', requestedPath || '(empty)'));
-  else if (String(root.schemaId || '') !== 'tiinex.reduction.v1') blockers.push(issue('reduction-schema-mismatch', String(root.schemaId || 'missing')));
+  else if (!isReductionFamilySchemaId(root.schemaId || '')) blockers.push(issue('reduction-schema-mismatch', String(root.schemaId || 'missing')));
 
-  const rootQualification = root ? qualifyReductionRecord(root, records) : null;
+  const rootQualification = root ? qualifyReductionFamilyRecord(root, records) : null;
   if (root && !rootQualification.qualified) missingEvidence.push(issue('reduction-unqualified', rootQualification.reasons.join(', ')));
 
   if (root && rootQualification.qualified) visitReduction(root, [], 0);
@@ -106,7 +107,7 @@ export function projectReductionComposition(input = {}, material = {}) {
     const recordPath = normalizePath(record.path || '');
     if (depth >= MAX_COMPOSITION_NODES) return;
     if (stack.includes(recordPath)) { ambiguities.push(issue('reduction-source-cycle', [...stack, recordPath].join(' -> '))); return; }
-    const qualification = qualifyReductionRecord(record, records);
+    const qualification = qualifyReductionFamilyRecord(record, records);
     const loss = lossProjectionFor(record, lossFacts);
     const recovery = locatorForRecord(record, immutableSources);
     putNode(record, 'reduction', qualification, recovery, loss);
@@ -128,8 +129,8 @@ export function projectReductionComposition(input = {}, material = {}) {
       const sourcePath = normalizePath(source.path || '');
       const relationQualification = reference.qualification === 'unresolved' ? 'unresolved' : 'qualified';
       if (relationQualification !== 'qualified') { ambiguities.push(issue('source-edge-unqualified', `${recordPath} -> ${sourcePath}`)); continue; }
-      const isReduction = String(source.schemaId || '') === 'tiinex.reduction.v1';
-      const qualificationResult = isReduction ? qualifyReductionRecord(source, records) : qualifyRecord(source);
+      const isReduction = isReductionFamilySchemaId(source.schemaId || '');
+      const qualificationResult = isReduction ? qualifyReductionFamilyRecord(source, records) : qualifyRecord(source);
       const locator = locatorForRecord(source, immutableSources);
       const sourceLoss = isReduction ? lossProjectionFor(source, lossFacts) : null;
       putNode(source, isReduction ? 'reduction' : 'material', qualificationResult, locator, sourceLoss);

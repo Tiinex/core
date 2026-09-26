@@ -1,10 +1,10 @@
 import path from 'node:path';
 import { enumerateNodeWorkspace } from './handoff.manufacture.enumeration.js';
-import { loadNodePortableInput } from '../../input/node.input.js';
-import { inspectRecipientFacingV2Topology } from '../../handoff/recipientV2.inspect.js';
 import { handoffWorkspaceProviderForId, listHandoffWorkspaceEntries } from '../../handoff/workspaceByteProvider.js';
 import { safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
 import { portableFinding } from '../../findings.js';
+import { loadNodePortableInput } from '../../input/node.input.js';
+import { inspectHandoffPackageV1 } from '../../handoff/handoffPackageV1.inspect.js';
 import {
   PORTABLE_SOURCE_FRONTIER_SCHEMA_ID,
   compareOrReconcilePortableSourceFrontiers,
@@ -105,36 +105,25 @@ async function frontierFromHandoffPackage(descriptor, options) {
     return invalidFrontier(options.side || '', 'handoff-package-read-failed', portableFinding('error', 'portable.source-frontier.node.package-read-failed', 'Handoff package could not be read by current trusted Core Tooling.', { ref: packagePath, detail: String(error?.message || error || '') }));
   }
   const loaderErrors = (material.findings || []).filter((item) => item.severity === 'error');
-  const inspection = inspectRecipientFacingV2Topology(material);
+  const inspection = inspectHandoffPackageV1(material);
   if (loaderErrors.length || inspection.status !== 'valid') {
     return createPortableSourceFrontier({
       id: descriptor.label || options.side || '', state: 'qualification-error', source: { kind: 'handoff-package', ref: packagePath, qualification: inspection.status || 'invalid' }, workspaces: [],
       findings: [...loaderErrors, ...(inspection.findings || []).filter((item) => item.severity === 'error').map((item) => portableFinding('error', item.code || 'portable.source-frontier.package-unqualified', item.message || 'Handoff package qualification failed.', { ref: item.path || packagePath }))],
-      boundary: 'Received Handoff package failed current trusted Core package qualification; no Workspace source paths are projected for comparison.'
+      boundary: 'Received direct Package V1 carrier failed current trusted Core qualification; no Workspace source paths are projected for comparison.'
     });
   }
-
-  const availableIds = new Set([...(inspection.workspaces || []).map((item) => String(item.workspaceId || '')), ...(inspection.sealedWorkspaces || []).map((item) => String(item.workspaceId || ''))].filter(Boolean));
+  const availableIds = new Set((inspection.workspaces || []).map((item) => String(item.workspaceId || '')).filter(Boolean));
   const selectors = normalizeSelectors(descriptor.workspaceIds || descriptor.select || descriptor.workspaces);
   const ids = selectors.length ? selectors : [...availableIds].sort();
-  const openedById = new Map((descriptor.openedWorkspaces || []).map((item) => [String(item?.workspaceId || ''), item]).filter(([id]) => id));
-  const sealedById = new Map((inspection.sealedWorkspaces || []).map((item) => [String(item.workspaceId || ''), item]).filter(([id]) => id));
-  const workspaces = ids.map((workspaceId) => {
-    if (!availableIds.has(workspaceId)) return { workspaceId, state: 'unavailable', reason: 'workspace-not-carried', source: { kind: 'handoff-package', ref: packagePath } };
-    const sealedBinding = sealedById.get(workspaceId) || null;
-    const opened = openedById.get(workspaceId) || null;
-    if (sealedBinding && authorizedOpenMatchesSealedBinding(opened, sealedBinding, workspaceId)) {
-      const normalized = workspaceFromProvider(workspaceId, opened.provider, { kind: 'authorized-opened-workspace-provider', packageRef: packagePath });
-      if (normalized.state === 'qualified') return normalized;
-    }
-    if (sealedBinding) return { workspaceId, state: 'locked', qualification: 'locked-qualified-sealed-binding', reason: opened ? 'authorized-open-result-does-not-match-sealed-binding' : 'password-sealed-workspace-not-opened', source: { kind: 'handoff-package', ref: packagePath, binding: 'password-sealed-workspace-byte-tree' } };
-    return workspaceFromProvider(workspaceId, inspection.workspaceByteProvider, { kind: 'qualified-handoff-package-workspace', packageRef: packagePath });
-  });
+  const workspaces = ids.map((workspaceId) => availableIds.has(workspaceId)
+    ? workspaceFromProvider(workspaceId, inspection.workspaceByteProvider, { kind: 'qualified-handoff-package-v1-workspace', packageRef: packagePath })
+    : { workspaceId, state: 'unavailable', reason: 'workspace-not-carried', source: { kind: 'handoff-package', ref: packagePath } });
   return createPortableSourceFrontier({
     id: descriptor.label || options.side || path.basename(packagePath),
     source: { kind: 'handoff-package', ref: packagePath, qualification: 'qualified-current-tooling', format: String(inspection.format || '') },
     workspaces,
-    boundary: 'Handoff inputs are inspected by the receiver current trusted Core Tooling. Clear qualified Workspace providers expose exact path/hash source; sealed bindings remain locked unless caller supplies an already-authorized qualified opened provider.'
+    boundary: 'Direct Package V1 input is independently inspected by current trusted Core Tooling; qualified carried Workspace archive bytes expose exact comparison path/hash source with no alternate package reader.'
   });
 }
 

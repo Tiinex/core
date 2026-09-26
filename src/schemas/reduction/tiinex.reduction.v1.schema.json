@@ -19,5 +19,6 @@
   "snapshotCompleteness": "exact-carried-docs-snapshot",
   "bindingVersion": "tiinex.web.schema-binding.v1",
   "originId": "tiinex-docs-8435cd46",
-  "originTrustRole": "canonical-core"
+  "originTrustRole": "canonical-core",
+  "schemaReferencePublicationState": "published-immutable-canonical"
 }

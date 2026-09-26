@@ -2,8 +2,6 @@ import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
 import { portableFinding } from '../findings.js';
 import { inspectStoredWorkspaceArchive } from './workspaceByteProvider.js';
-import { recipientV2FactsIndex } from './recipientV2.transportManifest.js';
-import { deriveRecipientV2ArtifactFirstPhase1Facts } from './recipientV2.artifactFirst.materials.js';
 import { parseNamedDeclarationSection } from '../schema/named.declarations.js';
 import { resolveColdStartRolePointerMaterial } from './coldStartRolePointers.js';
 import {
@@ -25,12 +23,12 @@ export function createColdStartMaterialContext() {
 }
 
 export function recipientFactsIndexForColdStart(bundle = {}, context = null) {
-  if (!context?.recipientFacts || !bundle || typeof bundle !== 'object') return recipientV2FactsIndex(bundle);
+  const empty = Object.freeze({ map: new Map(), transport: null });
+  if (!context?.recipientFacts || !bundle || typeof bundle !== 'object') return empty;
   const cached = context.recipientFacts.get(bundle);
   if (cached) return cached;
-  const derived = recipientV2FactsIndex(bundle);
-  context.recipientFacts.set(bundle, derived);
-  return derived;
+  context.recipientFacts.set(bundle, empty);
+  return empty;
 }
 
 function inspectWorkspaceArchiveForColdStart(file, context = null) {
@@ -50,7 +48,7 @@ export function collectPackageRoleMaterials(bundle = {}) {
   const out = [];
   for (const file of bundle.files) {
     const path = String(file.path || '');
-    if (!/\.trace\.md$/i.test(path) || /\.schema\.md$/i.test(path) || path.startsWith('tiinex.package/') || path.startsWith('tiinex.bootstrap/')) continue;
+    if (!/\.trace\.md$/i.test(path) || /\.schema\.md$/i.test(path) || path.startsWith('tiinex.bootstrap/')) continue;
     const markdown = decodeUtf8(packageFileBytes(file));
     if (!/Current Schema:\s*(?:\[)?tiinex\.party\.role\.v1\b/i.test(markdown)) continue;
     out.push(Object.freeze({ path, markdown, explicit: false }));
@@ -246,7 +244,7 @@ export function projectGroundedContinuation({ bundle = {}, route = '', grounding
     }),
     transfer: Object.freeze([...(grounding.handoff?.transfers || [])]),
     requiredContext,
-    completionExpectation: grounding.handoff?.completionExpectation || Object.freeze({ signalKind: '', signalMeaning: '', returnTo: '' }),
+    completionExpectation: grounding.handoff?.completionExpectation || Object.freeze({ signalKind: '', signalMeaning: '', returnTo: '', returnToReference: '' }),
     returnPackage: projectReturnPackageContinuation(grounding, packageSourcePath),
     next: continuationReady
       ? 'Consume the qualified Required Context projection below, then continue substantive work within the grounded Handoff and Role boundaries. No Tooling API discovery is required.'
@@ -257,15 +255,21 @@ export function projectGroundedContinuation({ bundle = {}, route = '', grounding
 
 function projectReturnPackageContinuation(grounding = {}, packageSourcePath = '') {
   const lineage = grounding.orientation?.carrierLineage || {};
+  const carrierPrefix = String(lineage.prefix || '').trim();
   const dimension = String(lineage.dimension || '').trim();
   const expectedChild = dimension ? `${dimension}-1` : '';
   const returnTo = String(grounding.handoff?.completionExpectation?.returnTo || '').trim();
+  const returnToReference = String(grounding.handoff?.completionExpectation?.returnToReference || '').trim();
   return Object.freeze({
     expected: Boolean(returnTo),
     returnTo,
+    returnToReference,
+    endpointReferenceQualified: !returnTo || Boolean(returnToReference),
+    carrierPrefix,
     parentDimension: dimension,
     defaultMode: 'continue',
     defaultNextDimension: expectedChild,
+    filenamePattern: carrierPrefix && expectedChild ? `${carrierPrefix}-${expectedChild}-<from-role>-to-<to-role>.handoff-package.zip` : '',
     parentPackagePath: String(packageSourcePath || ''),
     manufactureRule: packageSourcePath
       ? `When manufacturing a return Handoff package derived from this carrier, pass --package-parent ${String(packageSourcePath)}. Tooling owns the next child dimension. Use --package-major --major-reason <milestone> only at an explicit self-contained checkpoint.`
@@ -325,9 +329,9 @@ function hydrateRequiredContextEntry(bundle = {}, entry = {}, context = null) {
 
 function resolveQualifiedMaterialBytes(bundle = {}, resolution = {}, context = null, requirement = {}) {
   const kind = String(resolution.kind || '');
-  if (kind === 'workspace-archive-entry' || kind === 'workspace-cache-entry') {
+  if (kind === 'workspace-archive-entry' || kind === 'workspace-cache-entry' || kind === 'bounded-cache-entry') {
     const archivePath = String(resolution.archivePackagePath || resolution.packagePath || '');
-    const innerPath = normalizePath(kind === 'workspace-cache-entry'
+    const innerPath = normalizePath((kind === 'workspace-cache-entry' || kind === 'bounded-cache-entry')
       ? (resolution.archiveEntry || resolution.innerPath || '')
       : (resolution.innerPath || resolution.workspaceRelativePath || ''));
     const archiveFile = findFile(bundle, archivePath);
@@ -345,10 +349,9 @@ function resolveQualifiedMaterialBytes(bundle = {}, resolution = {}, context = n
     const referenceTarget = String(requirement.referenceTarget || '');
     const matches = [];
     const factsIndex = recipientFactsIndexForColdStart(bundle, context).map;
-    const visibleFactsIndex = deriveRecipientV2ArtifactFirstPhase1Facts(bundle.files || []);
     for (const candidateFile of bundle.files || []) {
       const candidatePath = String(candidateFile.path || '');
-      const facts = factsIndex.get(candidatePath) || visibleFactsIndex.get(candidatePath) || null;
+      const facts = factsIndex.get(candidatePath) || null;
       if (facts?.role !== 'workspace-dependency-cache' && !/dependency cache/i.test(String(facts?.role || ''))) continue;
       for (const material of facts.materials || []) {
         if (requirementId && String(material.requirementId || '') !== requirementId) continue;
@@ -413,7 +416,8 @@ export function parseHandoffGrounding(markdown, route) {
     completionExpectation: Object.freeze({
       signalKind: sectionField(completion, 'Signal Kind'),
       signalMeaning: sectionField(completion, 'Signal Meaning'),
-      returnTo: sectionField(completion, 'Return To')
+      returnTo: sectionField(completion, 'Return To'),
+      returnToReference: sectionReferenceTarget(completion, 'Return To Reference')
     }),
     routeId: String(route?.id || ''),
     routePointerPath: String(route?.pointerPath || ''),
@@ -432,7 +436,7 @@ function markdownReferenceTarget(value = '') {
 }
 
 export function emptyHandoffGrounding() {
-  return deepFreeze({ schemaId: '', purpose: '', from: '', fromKind: '', fromReference: '', to: '', toKind: '', toReference: '', transfers: Object.freeze([]), retainedResponsibilities: Object.freeze([]), completionExpectation: Object.freeze({ signalKind: '', signalMeaning: '', returnTo: '' }), routeId: '', routePointerPath: '', workspaceId: '', workspaceRelativePath: '', packagePath: '', sha256: '', boundary: 'No Handoff material supplied.' });
+  return deepFreeze({ schemaId: '', purpose: '', from: '', fromKind: '', fromReference: '', to: '', toKind: '', toReference: '', transfers: Object.freeze([]), retainedResponsibilities: Object.freeze([]), completionExpectation: Object.freeze({ signalKind: '', signalMeaning: '', returnTo: '', returnToReference: '' }), routeId: '', routePointerPath: '', workspaceId: '', workspaceRelativePath: '', packagePath: '', sha256: '', boundary: 'No Handoff material supplied.' });
 }
 
 export function resolveGroundingRouteMarkdown(bundle = {}, selectedRoute = {}, findings = [], context = null) {
@@ -446,23 +450,23 @@ export function resolveGroundingRouteMarkdown(bundle = {}, selectedRoute = {}, f
   if (/\.zip$/i.test(packagePath) && workspaceRelativePath) {
     const archive = inspectWorkspaceArchiveForColdStart(routeFile, context);
     if (archive.state !== 'qualified') {
-      findings.push(portableFinding('error', 'portable.cold-start.handoff.route-workspace-archive.invalid', 'Selected recipient-v2 Workspace archive carrier is not a qualified readable ZIP.'));
+      findings.push(portableFinding('error', 'portable.cold-start.handoff.route-workspace-archive.invalid', 'Selected Package V1 Workspace archive carrier is not a qualified readable ZIP.'));
       return '';
     }
     const matches = (archive.entries || []).filter((entry) => normalizePath(entry.path || '') === workspaceRelativePath);
     if (matches.length !== 1) {
-      findings.push(portableFinding('error', 'portable.cold-start.handoff.route-entry.unresolved', 'Selected recipient-v2 Handoff path does not resolve to exactly one entry inside the qualified Workspace archive.'));
+      findings.push(portableFinding('error', 'portable.cold-start.handoff.route-entry.unresolved', 'Selected Package V1 Handoff path does not resolve to exactly one entry inside the qualified Workspace archive.'));
       return '';
     }
     const entry = matches[0];
     const expectedSha256 = String(selectedRoute.sha256 || '').trim();
     const observedSha256 = String(entry.sha256 || sha256Hex(entry.data || new Uint8Array())).trim();
     if (expectedSha256 && expectedSha256 !== observedSha256) {
-      findings.push(portableFinding('error', 'portable.cold-start.handoff.route-bytes.integrity-mismatch', 'Selected recipient-v2 Handoff archive entry bytes do not match the qualified route digest.'));
+      findings.push(portableFinding('error', 'portable.cold-start.handoff.route-bytes.integrity-mismatch', 'Selected Package V1 Handoff archive entry bytes do not match the qualified route digest.'));
       return '';
     }
     const markdown = decodeUtf8(entry.data || new Uint8Array());
-    if (!markdown) findings.push(portableFinding('error', 'portable.cold-start.handoff.route-bytes.unreadable', 'Selected recipient-v2 Handoff archive entry is not readable UTF-8 Markdown.'));
+    if (!markdown) findings.push(portableFinding('error', 'portable.cold-start.handoff.route-bytes.unreadable', 'Selected Package V1 Handoff archive entry is not readable UTF-8 Markdown.'));
     return markdown;
   }
   const markdown = decodeUtf8(packageFileBytes(routeFile));

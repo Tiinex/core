@@ -10,6 +10,8 @@ import { explicitTaskParticipantDeclarations } from '../../grounding/grounding.p
 import { parseRoleMaterial } from '../../handoff/coldStartQualification.materials.js';
 import { safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
 import { parseWorkspaceQualifiedReference } from '../../handoff/workspaceQualifiedReference.js';
+import { parseHandoffPackageV1Reference } from '../../handoff/handoffPackageV1.reference.js';
+import { normalizeRepositoryIdentity, parseWorkspaceEntrypoints } from '../../handoff/workspaceSourceIdentity.js';
 
 export async function projectManufacturingRequirements({ handoff, workspaceId, handoffPath, routeSpecs, workspaceRuntimeById }) {
   const primary = projectHandoffMaterialRequirements(handoff);
@@ -322,9 +324,16 @@ function qualifiedRouteRoleMaterials({ requirements = {}, materials = [], routeW
     const actualSha = String(material.sha256 || sha256Hex(packageFileBytes(material))).trim().toLowerCase();
     if (!/^[0-9a-f]{64}$/u.test(actualSha) || parsed.sha256 !== actualSha) continue;
     const sourceWorkspaceId = String(material.provenance?.workspaceId || requirement.targetWorkspaceId || '').trim();
-    const sourcePath = normalizeRelativePath(material.provenance?.path || requirement.targetPath || material.path || '');
-    const reference = String(requirement.reference?.target || (sourceWorkspaceId && sourcePath ? `${sourceWorkspaceId}::${sourcePath}` : '')).trim();
-    if (!sourceWorkspaceId || !sourcePath || !reference) continue;
+    const reference = String(requirement.reference?.target || material.referenceTarget || (sourceWorkspaceId ? `${sourceWorkspaceId}::${normalizeRelativePath(material.provenance?.path || requirement.targetPath || material.path || '')}` : '')).trim();
+    const parsedReference = parseHandoffPackageV1Reference(reference);
+    const adapterQualified = parsedReference.kind === 'adapter-reference'
+      && parsedReference.adapterId === 'github'
+      && /^[a-f0-9]{40}$/iu.test(String(parsedReference.sourceVersion || ''))
+      && Boolean(parsedReference.sourceIdentity && parsedReference.sourcePath);
+    const sourcePath = normalizeRelativePath(sourceWorkspaceId
+      ? (material.provenance?.path || requirement.targetPath || material.path || '')
+      : adapterQualified ? parsedReference.sourcePath : '');
+    if (!sourcePath || !reference || (!sourceWorkspaceId && !adapterQualified)) continue;
     out.push(Object.freeze({
       label: parsed.label,
       roleKind: parsed.roleKind,
@@ -332,6 +341,7 @@ function qualifiedRouteRoleMaterials({ requirements = {}, materials = [], routeW
       workspaceId: sourceWorkspaceId,
       path: sourcePath,
       reference,
+      identityKind: sourceWorkspaceId ? 'workspace' : 'adapter-reference',
       requirementId: String(requirement.id || ''),
       classification: String(requirement.classification || '')
     }));
@@ -362,18 +372,29 @@ function qualifyExplicitParticipantInputs(explicit = [], routeMaterials = [], ro
   const participants = [];
   for (const entry of dedupeExplicitParticipantInputs(explicit)) {
     const normalized = normalizeExplicitParticipantInput(entry);
-    if (!normalized.workspaceId || !normalized.path) {
-      findings.push(finding('error', 'portable.handoff-manufacture.participant-role.explicit-identity-incomplete', 'Explicit participant selection must identify one exact qualified Workspace id and Role artifact path.', { routeWorkspaceId, routePath, explicit: normalized }));
+    const parsedReference = parseHandoffPackageV1Reference(normalized.reference);
+    const externalQualified = !normalized.workspaceId && parsedReference.kind === 'adapter-reference'
+      && parsedReference.adapterId === 'github'
+      && /^[a-f0-9]{40}$/iu.test(String(parsedReference.sourceVersion || ''))
+      && Boolean(parsedReference.sourceIdentity && parsedReference.sourcePath);
+    if ((!normalized.workspaceId || !normalized.path) && !externalQualified) {
+      findings.push(finding('error', 'portable.handoff-manufacture.participant-role.explicit-identity-incomplete', 'Explicit participant selection must identify either one exact qualified Workspace/path Role identity or one exact adapter-native immutable Role reference.', { routeWorkspaceId, routePath, explicit: normalized }));
       continue;
     }
     if (normalized.reference) {
       const qualified = parseWorkspaceQualifiedReference(normalized.reference);
-      if (!qualified || qualified.workspaceId !== normalized.workspaceId || normalizeRelativePath(qualified.path) !== normalized.path) {
-        findings.push(finding('error', 'portable.handoff-manufacture.participant-role.explicit-reference-mismatch', 'Explicit participant selection Reference must match its exact Workspace/path identity.', { routeWorkspaceId, routePath, explicit: normalized }));
+      if (qualified && (qualified.workspaceId !== normalized.workspaceId || normalizeRelativePath(qualified.path) !== normalized.path)) {
+        findings.push(finding('error', 'portable.handoff-manufacture.participant-role.explicit-reference-mismatch', 'Explicit participant selection Workspace-qualified Reference must match its exact Workspace/path identity.', { routeWorkspaceId, routePath, explicit: normalized }));
+        continue;
+      }
+      if (!qualified && !isExternalReference(normalized.reference)) {
+        findings.push(finding('error', 'portable.handoff-manufacture.participant-role.explicit-reference-unqualified', 'Explicit participant selection Reference must be either its exact Workspace-qualified identity or an explicit external/provider reference.', { routeWorkspaceId, routePath, explicit: normalized }));
         continue;
       }
     }
-    const candidates = dedupeQualifiedRoleMaterials(routeMaterials.filter((candidate) => candidate.workspaceId === normalized.workspaceId && normalizeRelativePath(candidate.path) === normalized.path));
+    const candidates = dedupeQualifiedRoleMaterials(routeMaterials.filter((candidate) => externalQualified
+      ? String(candidate.reference || '') === normalized.reference
+      : candidate.workspaceId === normalized.workspaceId && normalizeRelativePath(candidate.path) === normalized.path));
     if (candidates.length !== 1) {
       findings.push(finding('error', candidates.length ? 'portable.handoff-manufacture.participant-role.explicit-material-ambiguous' : 'portable.handoff-manufacture.participant-role.explicit-material-not-established', candidates.length
         ? 'Explicit participant selection resolves to multiple distinct qualified Role materials.'
@@ -389,7 +410,6 @@ function qualifyExplicitParticipantInputs(explicit = [], routeMaterials = [], ro
   }
   return Object.freeze({ valid: findings.length === 0, findings: Object.freeze(findings), participants: Object.freeze(dedupeSemanticParticipantDescriptors(participants)) });
 }
-
 
 function explicitSemanticParticipantDescriptor(routeWorkspaceId, routePath, role) {
   return Object.freeze({
@@ -411,11 +431,14 @@ function dedupeSemanticParticipantDescriptors(values = []) {
   for (const value of values || []) {
     const workspaceId = String(value?.workspaceId || '').trim();
     const rolePath = normalizeRelativePath(value?.path || '');
-    if (!workspaceId || !rolePath) continue;
-    const key = `${workspaceId} ${rolePath}`;
+    const reference = String(value?.reference || '').trim();
+    const parsedReference = parseHandoffPackageV1Reference(reference);
+    const externalIdentity = !workspaceId && parsedReference.kind === 'adapter-reference' ? String(parsedReference.raw || reference) : '';
+    if ((!workspaceId || !rolePath) && !externalIdentity) continue;
+    const key = externalIdentity ? `external\u0000${externalIdentity}` : `workspace\u0000${workspaceId}\u0000${rolePath}`;
     if (!byIdentity.has(key)) byIdentity.set(key, value);
   }
-  return Object.freeze([...byIdentity.values()].sort((a, b) => String(a.workspaceId || '').localeCompare(String(b.workspaceId || '')) || normalizeRelativePath(a.path || '').localeCompare(normalizeRelativePath(b.path || ''))));
+  return Object.freeze([...byIdentity.values()].sort((a, b) => String(a.reference || '').localeCompare(String(b.reference || '')) || String(a.workspaceId || '').localeCompare(String(b.workspaceId || '')) || normalizeRelativePath(a.path || '').localeCompare(normalizeRelativePath(b.path || ''))));
 }
 
 function dedupeExplicitParticipantInputs(values = []) {
@@ -425,11 +448,13 @@ function dedupeExplicitParticipantInputs(values = []) {
     const normalized = normalizeExplicitParticipantInput(value);
     const workspaceId = String(normalized.workspaceId || '').trim();
     const rolePath = normalizeRelativePath(normalized.path || '');
-    if (!workspaceId || !rolePath) {
+    const parsedReference = parseHandoffPackageV1Reference(normalized.reference || '');
+    const externalIdentity = !workspaceId && parsedReference.kind === 'adapter-reference' ? String(parsedReference.raw || normalized.reference || '') : '';
+    if ((!workspaceId || !rolePath) && !externalIdentity) {
       unkeyed.push(value);
       continue;
     }
-    const key = `${workspaceId} ${rolePath}`;
+    const key = externalIdentity ? `external\u0000${externalIdentity}` : `workspace\u0000${workspaceId}\u0000${rolePath}`;
     if (!byIdentity.has(key)) byIdentity.set(key, value);
   }
   return Object.freeze([...byIdentity.values(), ...unkeyed]);
@@ -439,10 +464,12 @@ function normalizeExplicitParticipantInput(value) {
   const role = typeof value === 'string' ? { reference: value } : (value || {});
   const rawReference = String(role.reference || role.referenceTarget || '').trim();
   const qualified = parseWorkspaceQualifiedReference(rawReference);
+  const parsedReference = parseHandoffPackageV1Reference(rawReference);
+  const adapterPath = parsedReference.kind === 'adapter-reference' ? normalizeRelativePath(parsedReference.sourcePath || '') : '';
   return Object.freeze({
     label: String(role.label || role.roleLabel || '').trim(),
     workspaceId: String(role.workspaceId || role.targetWorkspaceId || qualified?.workspaceId || '').trim(),
-    path: normalizeRelativePath(role.path || role.targetPath || qualified?.path || ''),
+    path: normalizeRelativePath(role.path || role.targetPath || qualified?.path || adapterPath),
     reference: rawReference
   });
 }
@@ -461,7 +488,7 @@ function groupParticipantDeclarations(declarations = []) {
 function dedupeQualifiedRoleMaterials(roles = []) {
   const map = new Map();
   for (const role of roles || []) {
-    const key = `${normalizeRoleLabel(role.label)}\u0000${String(role.sha256 || '')}\u0000${String(role.workspaceId || '')}\u0000${normalizeRelativePath(role.path || '')}`;
+    const key = `${normalizeRoleLabel(role.label)}\u0000${String(role.sha256 || '')}\u0000${String(role.workspaceId || '')}\u0000${normalizeRelativePath(role.path || '')}\u0000${String(role.reference || '')}`;
     if (!map.has(key)) map.set(key, role);
   }
   return [...map.values()];
@@ -512,6 +539,13 @@ export async function resolveWorkspaceRequirementMaterials(requirements, workspa
       if (entry) out.push(materialCandidateFromWorkspaceEntry(requirement, workspaceQualified.workspaceId, workspaceQualified.path, entry, targetRuntime.enumeration, targetRuntime));
       continue;
     }
+    const adapterQualified = resolveCarriedAdapterReference(target, workspaceRuntimeById);
+    if (adapterQualified) {
+      const targetRuntime = workspaceRuntimeById.get(adapterQualified.workspaceId);
+      const entry = targetRuntime ? entryFromEnumeration(targetRuntime.enumeration, adapterQualified.path) : null;
+      if (entry) out.push(materialCandidateFromWorkspaceEntry(requirement, adapterQualified.workspaceId, adapterQualified.path, entry, targetRuntime.enumeration, targetRuntime));
+      continue;
+    }
     if (isExternalReference(target) || target.startsWith('#')) continue;
     const routeWorkspaceId = String(requirement.routeWorkspaceId || [...workspaceRuntimeById.keys()][0] || '');
     const runtime = workspaceRuntimeById.get(routeWorkspaceId);
@@ -535,6 +569,30 @@ export async function resolveWorkspaceRequirementMaterials(requirements, workspa
   return out;
 }
 
+
+
+function resolveCarriedAdapterReference(target = '', workspaceRuntimeById = new Map()) {
+  const parsed = parseHandoffPackageV1Reference(target);
+  if (parsed.kind !== 'adapter-reference' || parsed.adapterId !== 'github' || !parsed.sourceIdentity || !parsed.sourcePath) return null;
+  const repositoryIdentity = normalizeRepositoryIdentity(parsed.sourceIdentity);
+  const candidates = [];
+  for (const [workspaceId, runtime] of workspaceRuntimeById.entries()) {
+    const workspaceTargetPath = normalizeRelativePath(runtime?.workspaceTargetPath || '');
+    if (!workspaceTargetPath) continue;
+    const workspaceEntry = entryFromEnumeration(runtime?.enumeration, workspaceTargetPath);
+    if (!workspaceEntry) continue;
+    const markdown = decodeUtf8(workspaceEntry.data);
+    if (!markdown) continue;
+    const matchingEntrypoints = parseWorkspaceEntrypoints(markdown).filter((entrypoint) => normalizeRepositoryIdentity(entrypoint.repository) === repositoryIdentity);
+    if (!matchingEntrypoints.length) continue;
+    const exactRefs = matchingEntrypoints.map((entrypoint) => String(entrypoint.ref || '').trim()).filter((ref) => /^[a-f0-9]{40}$/i.test(ref));
+    if (!exactRefs.some((ref) => ref.toLowerCase() === String(parsed.sourceVersion || '').toLowerCase())) continue;
+    const targetEntry = entryFromEnumeration(runtime?.enumeration, parsed.sourcePath);
+    if (!targetEntry) continue;
+    candidates.push(Object.freeze({ workspaceId: String(workspaceId || ''), path: normalizeRelativePath(parsed.sourcePath) }));
+  }
+  return candidates.length === 1 ? candidates[0] : null;
+}
 
 export async function expandPointerDependencyClosure(input = {}) {
   let requirements = input.requirements || {};

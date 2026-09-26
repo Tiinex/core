@@ -52,7 +52,7 @@ export function buildHandoffWorkspaceByteProvider(bundle = {}, descriptor = {}) 
     status,
     workspaces: Object.freeze(workspaces),
     findings: Object.freeze(dedupeFindings(findings)),
-    boundary: 'Package-local manufacture/material-closure byte provider. Its tiinex.transport.handoff-workspace-archive-binding.v1 descriptor is mechanical transport evidence, not recipient semantic provider authority. Recipient-v2 archive activation separately requires a qualified tiinex.workspace.representation.v1 binding plus its explicit External Payload and exact payload bytes; filename, placement, declaration order, UI state, and path similarity have no semantic authority.'
+    boundary: 'Package-local manufacture/material-closure byte provider. Its tiinex.transport.handoff-workspace-archive-binding.v1 descriptor is mechanical transport evidence, not recipient semantic provider authority. Recipient-facing archive activation separately requires a qualified tiinex.workspace.representation.v1 binding plus its explicit External Payload and exact payload bytes; filename, placement, declaration order, UI state, and path similarity have no semantic authority.'
   });
 }
 

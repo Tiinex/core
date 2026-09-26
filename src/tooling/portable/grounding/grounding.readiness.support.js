@@ -1,9 +1,10 @@
+import { posix } from 'node:path';
 import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
 import { inspectStoredWorkspaceArchive } from '../handoff/workspaceByteProvider.js';
-import { RECIPIENT_V2_READ_PATH } from '../handoff/recipientV2.topology.js';
 import { decodeUtf8, findFile } from '../handoff/coldStartQualification.shared.js';
 
 const CURRENT_TASK_SCHEMA = 'tiinex.task.v1';
+const HANDOFF_PACKAGE_V1_START_PATH_RE = /^\d{3}(?:-\d+)*-1-READ-BEFORE-PROCEEDING\.trace\.md$/;
 const MAX_ITEMS = 12;
 const BLOCKING_LINEAGE_CODES = new Set([
   'lineage.target.ambiguous',
@@ -15,7 +16,7 @@ const BLOCKING_LINEAGE_CODES = new Set([
 ]);
 
 export function isRoutedHandoffBundle(bundle = {}) {
-  return Array.isArray(bundle?.files) && bundle.files.some((file) => String(file.path || '') === RECIPIENT_V2_READ_PATH);
+  return Array.isArray(bundle?.files) && bundle.files.some((file) => HANDOFF_PACKAGE_V1_START_PATH_RE.test(String(file.path || '')));
 }
 
 export function materializeQualifiedWorkspaceSnapshot(bundle, contextAudit, options = {}) {
@@ -253,6 +254,149 @@ export function projectRelevantTopology(lineage = {}, relevantIds = new Set(), f
   const currentFrontier = rankedCurrent.filter((item) => distance.get(item.id) === nearestDistance);
   const relevantPaths = Object.freeze([...relevantIds].map((id) => String(nodeById.get(id)?.path || '')).filter(Boolean));
   return Object.freeze({ roots, leaves, routeLeaves, currentTasks, currentTaskIds, currentFrontier, relevantPaths });
+}
+
+
+export function projectSelectedHandoffCurrentWork(authority = null, records = [], topology = {}) {
+  const handoff = authority?.handoff || null;
+  const selectedRoute = authority?.selectedRoute || null;
+  const fallbackFrontier = Object.freeze([...(topology?.currentFrontier || [])]);
+  const candidates = Object.freeze([...(topology?.currentTasks || [])]);
+  const handoffPath = qualifiedSelectedHandoffPath(selectedRoute);
+  const transfers = Array.isArray(handoff?.transfers) ? handoff.transfers : [];
+  const declarations = transfers
+    .map((transfer) => Object.freeze({
+      id: String(transfer?.id || ''),
+      transferKind: String(transfer?.transferKind || ''),
+      controllingArtifactTarget: String(transfer?.controllingArtifactTarget || '').trim()
+    }))
+    .filter((item) => item.controllingArtifactTarget);
+
+  if (!handoffPath || !declarations.length) {
+    return Object.freeze({
+      state: fallbackFrontier.length ? 'nearest-task-frontier-resolved' : candidates.length ? 'current-candidates-without-frontier' : 'unresolved',
+      mode: 'nearest-task-ancestor-fallback',
+      actReady: Boolean(fallbackFrontier.length),
+      frontier: fallbackFrontier,
+      candidates,
+      contextCandidates: Object.freeze([]),
+      selectedHandoff: handoffPath,
+      controls: Object.freeze([]),
+      unresolved: Object.freeze([]),
+      boundary: 'No explicit selected-Handoff Controlling Artifact declaration was available for current-work selection, so the qualified nearest nonterminal Task ancestor projection is retained as a compatibility fallback. This fallback is never used when the selected Handoff explicitly controls other work artifacts.'
+    });
+  }
+
+  const recordByPath = new Map();
+  for (const record of records || []) {
+    const path = String(record?.path || '');
+    if (!path) continue;
+    const items = recordByPath.get(path) || [];
+    items.push(record);
+    recordByPath.set(path, items);
+  }
+
+  const controls = [];
+  const unresolved = [];
+  const controlledTasks = [];
+  const taskCandidateById = new Map(candidates.map((item) => [String(item?.id || ''), item]));
+  const taskCandidateByPath = new Map(candidates.map((item) => [String(item?.path || ''), item]));
+
+  for (const declaration of declarations) {
+    const resolvedPath = resolveGroundingArtifactReference(declaration.controllingArtifactTarget, handoffPath);
+    const matches = resolvedPath ? (recordByPath.get(resolvedPath) || []) : [];
+    const qualified = matches.filter((record) => record?.hasContinuityContext && record?.hasIntegrity);
+    let state = 'unresolved';
+    let record = null;
+    if (!resolvedPath) state = 'reference-unresolvable';
+    else if (qualified.length === 1) { state = 'qualified'; record = qualified[0]; }
+    else if (qualified.length > 1) state = 'ambiguous';
+    else if (matches.length) state = 'record-not-qualified';
+    else state = 'record-not-loaded';
+    const control = Object.freeze({
+      ...declaration,
+      resolvedPath,
+      state,
+      schemaId: String(record?.schemaId || '')
+    });
+    controls.push(control);
+    if (state !== 'qualified') {
+      unresolved.push(Object.freeze({ code: `selected-handoff-control-${state}`, transferId: declaration.id, target: declaration.controllingArtifactTarget, resolvedPath }));
+      continue;
+    }
+    if (String(record.schemaId || '') !== CURRENT_TASK_SCHEMA) continue;
+    const candidate = taskCandidateById.get(String(record.id || '')) || taskCandidateByPath.get(String(record.path || '')) || null;
+    if (!candidate) {
+      unresolved.push(Object.freeze({ code: 'selected-handoff-controls-task-without-qualified-nonterminal-status', transferId: declaration.id, target: declaration.controllingArtifactTarget, resolvedPath }));
+      continue;
+    }
+    controlledTasks.push(candidate);
+  }
+
+  const taskFrontier = dedupeBy(controlledTasks, (item) => String(item.id || item.path || ''));
+  if (unresolved.length) {
+    return Object.freeze({
+      state: 'selected-handoff-current-work-unresolved',
+      mode: 'selected-handoff-explicit-control',
+      actReady: false,
+      frontier: Object.freeze([]),
+      candidates,
+      contextCandidates: fallbackFrontier,
+      selectedHandoff: handoffPath,
+      controls: Object.freeze(controls),
+      unresolved: Object.freeze(unresolved),
+      boundary: 'The selected Handoff explicitly declares current-work control artifacts, so nearest-Task ancestry cannot substitute when any declared control target is unresolved, ambiguous, unqualified, or a controlled Task is not an exact-qualified nonterminal Task candidate.'
+    });
+  }
+
+  if (taskFrontier.length) {
+    return Object.freeze({
+      state: 'selected-handoff-task-frontier-resolved',
+      mode: 'selected-handoff-explicit-control',
+      actReady: true,
+      frontier: Object.freeze(taskFrontier),
+      candidates,
+      contextCandidates: Object.freeze(fallbackFrontier.filter((item) => !taskFrontier.some((task) => String(task.id || '') === String(item.id || '')))),
+      selectedHandoff: handoffPath,
+      controls: Object.freeze(controls),
+      unresolved: Object.freeze([]),
+      boundary: 'Exact-qualified nonterminal Task current work is selected only because the exact selected Handoff explicitly names it as a Controlling Artifact. Nearest Task ancestry is context-only when it differs.'
+    });
+  }
+
+  return Object.freeze({
+    state: 'selected-handoff-bounded-work',
+    mode: 'selected-handoff-explicit-control',
+    actReady: true,
+    frontier: Object.freeze([]),
+    candidates,
+    contextCandidates: fallbackFrontier,
+    selectedHandoff: handoffPath,
+    controls: Object.freeze(controls),
+    unresolved: Object.freeze([]),
+    boundary: 'The exact selected Handoff explicitly controls the bounded work through qualified non-Task artifacts. No Task is therefore promoted to current merely because it is the nearest nonterminal Task ancestor. Such Tasks remain context-only candidates.'
+  });
+}
+
+function qualifiedSelectedHandoffPath(selectedRoute = null) {
+  const workspaceId = String(selectedRoute?.workspaceId || '').trim();
+  const inner = String(selectedRoute?.workspaceRelativeHandoffPath || '').trim().replace(/^\/+/, '');
+  return workspaceId && inner ? `${workspaceId}/${inner}` : '';
+}
+
+function resolveGroundingArtifactReference(reference = '', ownerPath = '') {
+  const raw = String(reference || '').trim();
+  if (!raw) return '';
+  const cross = raw.match(/^([^:/\\]+)::(.+)$/u);
+  if (cross) return `${cross[1]}/${String(cross[2] || '').replace(/^\/+/, '')}`;
+  if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(raw)) return '';
+  if (raw.startsWith('/')) return '';
+  const ownerWorkspace = String(ownerPath || '').split('/')[0] || '';
+  const ownerRelative = ownerWorkspace ? String(ownerPath || '').slice(ownerWorkspace.length + 1) : String(ownerPath || '');
+  if (!ownerWorkspace || !ownerRelative) return '';
+  const resolved = posix.normalize(posix.join(posix.dirname(ownerRelative), raw.replace(/\\/g, '/')));
+  if (!resolved || resolved === '.' || resolved.startsWith('../') || resolved.includes('/../')) return '';
+  return `${ownerWorkspace}/${resolved.replace(/^\.\//, '')}`;
 }
 
 export function relevantLineageIssues(lineage = {}, relevantIds = new Set()) {

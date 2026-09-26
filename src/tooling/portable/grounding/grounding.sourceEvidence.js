@@ -125,7 +125,7 @@ function projectRequirement(entry = {}, coverageByWorkspace = new Map()) {
   const workspaceCoverage = coverageByWorkspace.get(workspace) || 'unresolved';
   let materialClass = 'explicit-requirement';
   if (state === 'qualified') {
-    if (providerMode === 'cache' || String(entry.kind || '') === 'workspace-cache-entry') materialClass = 'cache';
+    if (providerMode === 'cache' || ['workspace-cache-entry', 'bounded-cache-entry'].includes(String(entry.kind || ''))) materialClass = 'cache';
     else if (providerMode === 'archive' && workspaceCoverage === 'bounded') materialClass = 'bounded-workspace';
     else if (providerMode === 'archive' && workspaceCoverage === 'complete') materialClass = 'complete-workspace';
     else if (providerMode === 'archive') materialClass = 'workspace-material';

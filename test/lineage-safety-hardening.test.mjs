@@ -7,15 +7,12 @@ import { buildArtifactCreationContract } from '../src/schemas/creation.contracts
 import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.renderer.js';
 import { rootValidate } from '../src/schemas/tiinex.root.v1.validate.js';
 import { parentRecoveryMode, recoverQualifiedRuntimeSchemaReferenceAuthority } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
-import { resolveArchiveParent } from '../src/tooling/portable/handoff/recipientV2.artifactFirst.closure.js';
 import { deriveHandoffConsolidationAllocation, deriveHandoffSiblingAllocation, reserveHandoffSiblingIndex } from '../src/tooling/portable/adapters/cli/cli.handoff-sibling-allocation.js';
 import { advanceHandoffCarrierMajor, continueHandoffCarrierLineage } from '../src/tooling/portable/handoff/carrierLineage.js';
 import { qualifyDelegationReturnReservation } from '../src/tooling/portable/handoff/delegationReturnReservation.js';
-import { writeExactRecipientTransportBytes } from '../src/tooling/portable/output/recipientV2.zip.js';
 import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integrity/integrity.c14nV2.js';
 import { sha256Hex } from '../src/export/package.bytes.js';
 import { portableCanonicalBootstrapRuntime } from '../src/tooling/portable/schema/bootstrap/canonical.pack.js';
-import { buildHandoffPointerEntrypoints } from '../src/tooling/portable/handoff/pointerEntrypoint.js';
 import { projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
 
 const encoder = new TextEncoder();
@@ -109,29 +106,6 @@ test('local/unpublished Current schema references remain truthful while editor d
   assert.ok(mixedAssistance.documents[0].diagnostics.some((item) => item.code === 'schema.reference.exact-target-omitted' && item.severity === 'warning' && item.line === 3));
 });
 
-test('portable Handoff route Pointer renderer uses the same qualified immutable Root schema target', () => {
-  const projection = buildHandoffPointerEntrypoints({
-    createdAt: '2026-09-12 01:00:00',
-    carrierProjection: {
-      status: 'ready',
-      routes: [{
-        id: 'core:.topics/handoffs/001-return.trace.md',
-        state: 'qualified',
-        workspaceId: 'core',
-        dimension: '004-1',
-        workspaceRelativePath: '.topics/handoffs/001-return.trace.md',
-        pointerTarget: 'workspaces/core/.topics/handoffs/001-return.trace.md',
-        packagePath: 'workspaces/core/.topics/handoffs/001-return.trace.md',
-        parties: { to: 'Anchor' }
-      }]
-    }
-  });
-  assert.equal(projection.status, 'ready');
-  assert.equal(projection.entries.length, 1);
-  assert.match(projection.entries[0].markdown, new RegExp(`- Envelope Schema: \\[tiinex\\.root\\.v1\\]\\(${ROOT_SCHEMA_TARGET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
-  assert.doesNotMatch(projection.entries[0].markdown, /- Envelope Schema: tiinex\.root\.v1\s*$/m);
-});
-
 test('common author recovers Parent schema authority only from exact qualified runtime schema material', async () => {
   const authority = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.validation.report.v1', portableCanonicalBootstrapRuntime);
   assert.equal(authority?.resolutionState, 'qualified');
@@ -185,28 +159,6 @@ test('Root validation rejects malformed mixed Workspace-qualified Parent recover
   assert.equal(qualifiedFindings.some((finding) => finding.code === 'root.parent.recovery.workspace-qualified.malformed'), false);
 });
 
-test('artifact-first Parent recovery cannot use matching Parent bytes to rescue a malformed locator', () => {
-  const markdown = sealedParentMarkdown();
-  const data = encoder.encode(markdown);
-  const digest = validatedC14nV2PrimarySelfDigest(markdown);
-  assert.equal(digest.state, 'verified');
-  const candidate = { workspaceId: 'business', workspaceRelativePath: '.topics/initiatives/002-parent.trace.md', data, bytes: data.byteLength, sha256: sha256Hex(data) };
-  const malformed = '../../../../business::.topics/initiatives/002-parent.trace.md';
-  const bad = resolveArchiveParent('.topics/initiatives/002-1-handoff.trace.md', [], {
-    trace: malformed,
-    originEntries: [{ label: 'relative', target: malformed }]
-  }, { value: digest.value }, [candidate]);
-  assert.equal(bad.state, 'unresolved');
-  assert.equal(bad.reason, 'parent-workspace-qualified-reference-malformed');
-
-  const qualified = 'business::.topics/initiatives/002-parent.trace.md';
-  const good = resolveArchiveParent('.topics/initiatives/002-1-handoff.trace.md', [], {
-    trace: qualified,
-    originEntries: [{ label: 'relative', target: qualified }]
-  }, { value: digest.value }, [candidate]);
-  assert.equal(good.state, 'qualified');
-  assert.equal(good.basis, 'artifact-first-workspace-qualified-reference');
-});
 
 test('qualified selected Handoff Pointer topology derives dense non-Major carrier siblings without manual reservation', () => {
   const oneRoute = { detected: true, status: 'valid', routes: [
@@ -351,16 +303,3 @@ test('return Handoff transport no longer requires a semantic or CLI sibling rese
   assert.equal(invalid.state, 'blocked');
 });
 
-test('exact carrier output is idempotent for identical bytes and fails closed on divergent bytes', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'tiinex-carrier-write-'));
-  const target = path.join(directory, 'tiinex-002-2-2-1.handoff-package.zip');
-  const firstBytes = Buffer.from('same carrier bytes');
-  const differentBytes = Buffer.from('different carrier bytes');
-  const first = await writeExactRecipientTransportBytes(target, firstBytes);
-  assert.equal(first.status, 'written');
-  const repeated = await writeExactRecipientTransportBytes(target, firstBytes);
-  assert.equal(repeated.status, 'reused-identical');
-  assert.deepEqual(await readFile(target), firstBytes);
-  await assert.rejects(() => writeExactRecipientTransportBytes(target, differentBytes), /output-collision-divergent/);
-  assert.deepEqual(await readFile(target), firstBytes);
-});

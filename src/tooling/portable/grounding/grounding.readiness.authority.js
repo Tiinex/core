@@ -3,8 +3,10 @@ export function projectGroundingAuthority(authority, mode) {
   const mutationBoundary = authority.mutationBoundary || null;
   const selectedRoute = authority.selectedRoute || null;
   const handoff = authority.handoff || null;
+  const authorityState = projectAuthorityState(authority, selectedRoute);
   return Object.freeze({
-    state: String(authority.status || ''),
+    state: authorityState,
+    groundingStatus: String(authority.status || ''),
     route: selectedRoute ? Object.freeze({
       id: selectedRoute.id || '',
       pointerPath: selectedRoute.pointerPath || '',
@@ -80,4 +82,15 @@ export function projectGroundingAuthority(authority, mode) {
       boundary: 'Describes the non-mutating behavior and host-safety limits of the current Tooling grounding operation only. It must not be interpreted as a prohibition on separately authorized downstream Workspace work.'
     }) : null
   });
+}
+
+function projectAuthorityState(authority = {}, selectedRoute = null) {
+  if (!selectedRoute || String(authority.status || '') === 'blocked' || String(authority.role?.state || '') === 'blocked' || String(authority.holderBinding?.state || '') === 'blocked') return 'blocked';
+  const roleState = String(authority.role?.state || 'unresolved');
+  const holderState = String(authority.holderBinding?.state || 'unresolved');
+  const authorizationState = String(authority.holderBinding?.authorization?.state || (holderState === 'not-applicable' ? 'not-applicable' : 'unresolved'));
+  const roleQualified = roleState === 'qualified' || roleState === 'not-applicable';
+  const holderQualified = holderState === 'qualified' || holderState === 'not-applicable';
+  const authorizationQualified = authorizationState === 'qualified' || authorizationState === 'not-applicable';
+  return roleQualified && holderQualified && authorizationQualified ? 'qualified' : 'unresolved';
 }

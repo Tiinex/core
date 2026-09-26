@@ -1,11 +1,11 @@
 import { createPortableSourceFrontier, reconcilePortableSourceFrontiers } from '../comparison/sourceFrontierComparison.js';
-import { inspectRecipientFacingV2Topology } from './recipientV2.inspect.js';
+import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
 import { parseWorkspaceEntrypoints, normalizeRepositoryIdentity } from './workspaceSourceIdentity.js';
 
 export const PORTABLE_WORKSPACE_LANDING_PLAN_SCHEMA_ID = 'tiinex.portable.workspace-landing-plan.v1';
 
 export function projectPortableWorkspaceLandingPlan(input = {}) {
-  const inspection = inspectRecipientFacingV2Topology(input.bundle || input.package || input);
+  const inspection = inspectHandoffPackageV1(input.bundle || input.package || input);
   const findings = [];
   if (String(inspection.status || '') !== 'valid') {
     findings.push(finding('error', 'portable.workspace-landing.package-unqualified', 'Workspace landing planning requires one independently qualified recipient Handoff package.'));

@@ -394,7 +394,7 @@ function groundParticipation(input, handoff, bundle, orientation, selectedRoute,
   const currentContributionId = String(input.currentContributionId || input.interaction?.currentContributionId || '').trim();
   const current = currentContributionId ? contributions.find((entry) => entry.id === currentContributionId) || null : null;
   return deepFreeze({
-    participantState: participants.length ? 'declared' : 'unresolved',
+    participantState: participants.length ? 'declared' : 'not-declared',
     participants: Object.freeze(participants),
     packageRoleParticipants: Object.freeze(packageRoleGrounding),
     packageRoleGrounding: Object.freeze(packageRoleGrounding),

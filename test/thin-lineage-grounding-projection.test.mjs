@@ -6,12 +6,14 @@ import { projectGroundingParticipantArtifactAuthority } from '../src/tooling/por
 import { projectGroundingSourceEvidence } from '../src/tooling/portable/grounding/grounding.sourceEvidence.js';
 import { projectGroundingOrchestrationReadiness } from '../src/tooling/portable/grounding/grounding.orchestrationReadiness.js';
 import { projectGroundingProcessApplicability } from '../src/tooling/portable/grounding/grounding.processApplicability.js';
+import { projectGroundingGuidanceAuthority } from '../src/tooling/portable/grounding/grounding.guidanceAuthority.js';
 import { projectGroundingImplementationSourceAuthority } from '../src/tooling/portable/grounding/grounding.implementationSourceAuthority.js';
 import { projectGroundingDelegationReadiness } from '../src/tooling/portable/grounding/grounding.delegationReadiness.js';
 import { projectGroundingDelegationArtifactAuthority } from '../src/tooling/portable/grounding/grounding.delegationArtifactAuthority.js';
 import { projectGroundingAuthority } from '../src/tooling/portable/grounding/grounding.readiness.authority.js';
 import { projectHolderBindingAuthorization } from '../src/tooling/portable/grounding/grounding.holderBindingAuthorization.js';
 import { projectCommonCliDefaultOutput } from '../src/tooling/portable/adapters/cli/cli.common-output.js';
+import { commandInput } from '../src/tooling/portable/adapters/cli/cli.command-input.js';
 import { composeGroundingReadiness } from '../src/tooling/portable/grounding/grounding.readiness.js';
 import { normalizePortableInput } from '../src/tooling/portable/input/portable.input.js';
 import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
@@ -280,8 +282,21 @@ test('orchestration diagnostic keeps grounded-to-act bounded when participant/so
   assert.equal(projection.boundedActionReadiness, 'grounded-to-act');
   assert.equal(projection.state, 'bounded-route-only');
   assert.equal(projection.widerOrchestration.state, 'not-established');
-  assert.deepEqual(projection.widerOrchestration.blockers.map((item) => item.code), ['participant-capability-map-not-established', 'source-authority-scope-bounded', 'process-applicability-semantic-authority-not-established']);
+  assert.deepEqual(projection.widerOrchestration.blockers.map((item) => item.code), ['participant-capability-map-not-established', 'source-authority-scope-bounded']);
+  assert.equal(projection.guidanceAuthority.state, 'not-declared');
   assert.match(projection.boundary, /not a new lifecycle state/);
+});
+
+test('orchestration blocks only when forward-selected guidance authority exists but is incomplete', () => {
+  const projection = projectGroundingOrchestrationReadiness({
+    readinessState: 'grounded-to-act',
+    participantContext: { participantMapState: 'explicit-bounded-map' },
+    sourceEvidence: { workspaces: [{ workspace: 'business', state: 'qualified', repository: 'Tiinex/business' }, { workspace: 'core', state: 'qualified', repository: 'Tiinex/core' }], blockers: [] },
+    guidanceAuthority: { state: 'selected-guidance-authority-incomplete', selectedRelationCount: 1, unresolved: [{ code: 'selected-guidance-relation-parent-authority-not-qualified' }] },
+    topology: { currentFrontier: [{ id: 'task-1' }] }
+  });
+  assert.equal(projection.state, 'bounded-route-only');
+  assert.deepEqual(projection.widerOrchestration.blockers.map((item) => item.code), ['selected-guidance-authority-incomplete']);
 });
 
 test('cache-carried authoritative context remains qualified when its whole Workspace is absent', () => {
@@ -312,6 +327,135 @@ test('rich lineage inventory cannot substitute for missing participant or source
   assert.equal(thin.state, 'bounded-route-only');
   assert.equal(rich.state, 'bounded-route-only');
   assert.deepEqual(rich.widerOrchestration.blockers.map((item) => item.code), thin.widerOrchestration.blockers.map((item) => item.code));
+});
+
+test('guidance authority projects only forward-selected Relation/Decision/material authority and keeps state dimensions separate', () => {
+  const taskPath='business/.topics/initiatives/current-task.trace.md';
+  const decisionPath='business/.topics/processes/operating-contract-adoption.trace.md';
+  const processPath='business/.topics/processes/grounding-process.trace.md';
+  const relationPath='business/.topics/processes/operating-contract-applicability.trace.md';
+  const task=participantTaskRecord('Independent bounded work.',taskPath);
+  const process={ id:processPath,path:processPath,schemaId:'tiinex.topic.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Current\n  - Current Schema: tiinex.topic.v1\n\n---\n\n# Grounding Process\n\n## Applicability\n\nUse after an exact fresh-recipient trigger is established by current authority.\n\n## Preferred Cold-Start Sequence\n\n1. Enter through the exact Start contract.\n2. Ground the selected route.\n\n## Re-Grounding Triggers\n\n- new carrier\n\n# Continuity Integrity\n\n- Towards: self\n` };
+  const decision={ id:decisionPath,path:decisionPath,schemaId:'tiinex.decision.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Current\n  - Current Schema: tiinex.decision.v1\n\n---\n\n# Grounding Operating Contract Adoption\n\n## Decision\n\n- State: accepted\n- Decision: adopt [Grounding Process](grounding-process.trace.md) for the bounded domain declared here.\n\n# Continuity Integrity\n\n- Towards: self\n` };
+  const relation={ id:relationPath,path:relationPath,schemaId:'tiinex.relation.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Parent\n  - Parent Schema: tiinex.decision.v1\n  - Trace: [Grounding Operating Contract Adoption](operating-contract-adoption.trace.md)\n- Current\n  - Current Schema: tiinex.relation.v1\n\n---\n\n# Grounding Applicability Relation\n\n## Relation Declaration\n\n- Relation Type: operational guidance applies to\n- Relation Direction: current adoption -> target context\n- Relation Scope: recipient grounding for this bounded replay\n- Confidence: explicit\n\n## Relation Target\n\n- Target: [Current Task](../initiatives/current-task.trace.md)\n\n# Continuity Integrity\n\n- Towards: self\n` };
+  const selected=[
+    { requirementId:'required:grounding-applicability-relation',name:'grounding-applicability-relation',purpose:'forward-selected applicability authority',state:'qualified',workspaceId:'business',innerPath:'.topics/processes/operating-contract-applicability.trace.md' },
+    { requirementId:'required:grounding-process',name:'grounding-process',material:'Grounding Process',purpose:'exact selected procedure material',state:'qualified',workspaceId:'business',innerPath:'.topics/processes/grounding-process.trace.md' }
+  ];
+  const projected=projectGroundingGuidanceAuthority({ requiredContext:selected, records:[task,decision,relation,process], topology:{currentFrontier:[{id:taskPath,path:taskPath}]} });
+  assert.equal(projected.state,'qualified-forward-selected-guidance-authority');
+  assert.equal(projected.selectedRelationCount,1);
+  assert.equal(projected.selectedMaterialCount,1);
+  const relationItem=projected.items.find((item)=>item.relation);
+  assert.equal(relationItem.relation.relationType,'operational guidance applies to');
+  assert.equal(relationItem.relation.resolvedTarget,taskPath);
+  assert.equal(relationItem.authorityArtifact.path,decisionPath);
+  assert.equal(relationItem.linkedSelectedAuthority[0].path,processPath);
+  assert.equal(projected.items.length,1);
+  assert.equal(relationItem.dimensions.availability.state,'qualified');
+  assert.equal(relationItem.dimensions.applicability.state,'qualified-relation-binding');
+  assert.equal(relationItem.dimensions.requiredness.state,'unresolved-not-declared');
+  assert.equal(relationItem.dimensions.activeExecution.state,'unresolved-not-declared');
+  assert.equal(relationItem.dimensions.ownership.state,'unresolved-not-declared');
+  assert.equal(relationItem.dimensions.completion.state,'unresolved-not-declared');
+  assert.equal(relationItem.stepSelection.state,'recipient-interpretation-required');
+  assert.ok(relationItem.stepSelection.candidateSections.some((item)=>item.heading==='Preferred Cold-Start Sequence'));
+  assert.match(relationItem.stepSelection.boundary,/does not evaluate/);
+});
+
+test('forward-selected guidance authority resolves exact GitHub permalink to selected cache-backed record without workspace pseudo-reference', () => {
+  const taskPath='coldstart/.topics/tasks/001-task.trace.md';
+  const decisionPath='coldstart/.topics/decisions/001-guidance-selection.trace.md';
+  const relationPath='coldstart/.topics/relations/001-guidance-applicability.trace.md';
+  const processPath='business/.topics/processes/gpt/grounding/002-2-1-1-grounding-major-001-operating-reliability-contract.trace.md';
+  const processRef='https://github.com/Tiinex/business/blob/a66906eef7f0033eb12893f92910336f82d01afa/.topics/processes/gpt/grounding/002-2-1-1-grounding-major-001-operating-reliability-contract.trace.md';
+  const task=participantTaskRecord('Independent bounded work.',taskPath);
+  const process={ id:processPath,path:processPath,schemaId:'tiinex.decision.v1',hasContinuityContext:true,hasIntegrity:true,source:{adapterId:'github',identity:'Tiinex/business',version:'a66906eef7f0033eb12893f92910336f82d01afa',path:'.topics/processes/gpt/grounding/002-2-1-1-grounding-major-001-operating-reliability-contract.trace.md',permalink:processRef},markdown:'# Continuity Context\n\n- Current\n  - Current Schema: tiinex.decision.v1\n\n---\n\n# Grounding Operating Contract\n\n## Preferred Cold-Start Sequence\n\n1. Ground.\n\n# Continuity Integrity\n' };
+  const decision={ id:decisionPath,path:decisionPath,schemaId:'tiinex.decision.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Current\n  - Current Schema: tiinex.decision.v1\n\n---\n\n# Guidance Selection\n\n## Decision\n\n- State: accepted\n- Decision: use [Grounding Operating Contract](${processRef}) for this bounded task.\n\n# Continuity Integrity\n` };
+  const relation={ id:relationPath,path:relationPath,schemaId:'tiinex.relation.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Parent\n  - Parent Schema: tiinex.decision.v1\n  - Trace: [Guidance Selection](../decisions/001-guidance-selection.trace.md)\n- Current\n  - Current Schema: tiinex.relation.v1\n\n---\n\n# Guidance Applicability\n\n## Relation Declaration\n\n- Relation Type: operational guidance applies to\n- Relation Direction: selected decision -> current task\n- Relation Scope: bounded recipient task\n\n## Relation Target\n\n- Target: [Current Task](../tasks/001-task.trace.md)\n\n## Relation Boundary\n\n- This relation is not Parent ancestry.\n\n# Continuity Integrity\n` };
+  const selected=[
+    { requirementId:'required:guidance-binding',name:'guidance-binding',purpose:'exact selected applicability relation',state:'qualified',workspaceId:'coldstart',innerPath:'.topics/relations/001-guidance-applicability.trace.md' },
+    { requirementId:'required:guidance-selection',name:'guidance-selection',purpose:'exact selected decision authority',state:'qualified',workspaceId:'coldstart',innerPath:'.topics/decisions/001-guidance-selection.trace.md' },
+    { requirementId:'required:operating-process',name:'operating-process',material:'operating process',purpose:'exact selected process material',state:'qualified',workspaceId:'business',innerPath:'.topics/processes/gpt/grounding/002-2-1-1-grounding-major-001-operating-reliability-contract.trace.md' }
+  ];
+  const projected=projectGroundingGuidanceAuthority({ requiredContext:selected, records:[task,decision,relation,process], topology:{currentFrontier:[{id:taskPath,path:taskPath}]} });
+  assert.equal(projected.state,'qualified-forward-selected-guidance-authority');
+  const relationItem=projected.items.find((item)=>item.relation);
+  assert.equal(relationItem.dimensions.applicability.state,'qualified-relation-binding');
+  assert.equal(relationItem.linkedSelectedAuthority.length,1);
+  assert.equal(relationItem.linkedSelectedAuthority[0].path,processPath);
+  assert.equal(relationItem.linkedSelectedAuthority[0].selectionBasis,'exact-parent-authority-forward-link-plus-selected-required-context');
+  assert.ok(relationItem.stepSelection.candidateSections.some((item)=>item.heading==='Preferred Cold-Start Sequence'));
+});
+
+test('forward-selected guidance authority hydrates exact cache Required Context bodies into runtime records without serializing new package artifacts', () => {
+  const taskPath='minimal-coldstart/.topics/tasks/001-task.trace.md';
+  const decisionPath='minimal-coldstart/.topics/decisions/001-guidance-selection.trace.md';
+  const relationPath='minimal-coldstart/.topics/relations/001-guidance-applicability.trace.md';
+  const processRef='https://github.com/Tiinex/business/blob/a66906eef7f0033eb12893f92910336f82d01afa/.topics/processes/gpt/grounding/002-2-1-1-grounding-major-001-operating-reliability-contract.trace.md';
+  const policyRef='https://github.com/Tiinex/docs/blob/3e37b0c3498b840ffc69572492636046baff0911/LINEAGE_POLICY.md';
+  const task=participantTaskRecord('Independent bounded work.',taskPath);
+  const decision={ id:decisionPath,path:decisionPath,schemaId:'tiinex.decision.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Current\n  - Current Schema: tiinex.decision.v1\n\n---\n\n# Guidance Selection\n\n## Decision\n\n- State: accepted\n- Decision: use [Operating Contract](${processRef}) and [Lineage Policy](${policyRef}).\n\n# Continuity Integrity\n` };
+  const relation={ id:relationPath,path:relationPath,schemaId:'tiinex.relation.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Parent\n  - Parent Schema: tiinex.decision.v1\n  - Trace: [Guidance Selection](../decisions/001-guidance-selection.trace.md)\n- Current\n  - Current Schema: tiinex.relation.v1\n\n---\n\n# Guidance Applicability\n\n## Relation Declaration\n\n- Relation Type: operational guidance applies to\n- Relation Direction: selected decision -> current task\n- Relation Scope: bounded task\n\n## Relation Target\n\n- Target: [Current Task](../tasks/001-task.trace.md)\n\n## Relation Boundary\n\n- Not Parent.\n\n# Continuity Integrity\n` };
+  const selected=[
+    { requirementId:'required:binding',name:'guidance-binding',purpose:'exact applicability relation',state:'qualified',workspaceId:'minimal-coldstart',innerPath:'.topics/relations/001-guidance-applicability.trace.md',contentProjected:true,content:relation.markdown },
+    { requirementId:'required:selection',name:'guidance-selection',purpose:'selection authority',state:'qualified',workspaceId:'minimal-coldstart',innerPath:'.topics/decisions/001-guidance-selection.trace.md',contentProjected:true,content:decision.markdown },
+    { requirementId:'required:process',name:'operating-process',material:'operating process',purpose:'selected process',state:'qualified',workspaceId:'',innerPath:'github/Tiinex/business/a66906eef7f0033eb12893f92910336f82d01afa/.topics/processes/gpt/grounding/002-2-1-1-grounding-major-001-operating-reliability-contract.trace.md',referenceTarget:processRef,contentProjected:true,content:'# Continuity Context\n\n- Current\n  - Current Schema: tiinex.decision.v1\n\n---\n\n# Operating Contract\n\n## Preferred Cold-Start Sequence\n\n1. Ground.\n\n# Continuity Integrity\n' },
+    { requirementId:'required:policy',name:'lineage-policy',material:'lineage policy',purpose:'selected policy',state:'qualified',workspaceId:'',innerPath:'github/Tiinex/docs/3e37b0c3498b840ffc69572492636046baff0911/LINEAGE_POLICY.md',referenceTarget:policyRef,contentProjected:true,content:'# Tiinex Lineage Policy\n\n## Interpretation Rules\n\nPreserve provenance and limits.\n' }
+  ];
+  const projected=projectGroundingGuidanceAuthority({ requiredContext:selected, records:[task,decision,relation], topology:{currentFrontier:[{id:taskPath,path:taskPath}]} });
+  assert.equal(projected.state,'qualified-forward-selected-guidance-authority');
+  assert.equal(projected.selectedRelationCount,1);
+  assert.equal(projected.selectedMaterialCount,2);
+  const relationItem=projected.items.find((item)=>item.relation);
+  assert.deepEqual(relationItem.linkedSelectedAuthority.map((item)=>item.title).sort(),['Operating Contract','Tiinex Lineage Policy']);
+  assert.equal(projected.items.length,1);
+  assert.ok(relationItem.stepSelection.candidateSections.some((item)=>item.heading==='Preferred Cold-Start Sequence'));
+  assert.ok(relationItem.stepSelection.candidateSections.some((item)=>item.heading==='Interpretation Rules'));
+});
+
+test('selected process or policy material stays readable while applicability remains unresolved without a binding', () => {
+  const taskPath='business/.topics/initiatives/current-task.trace.md';
+  const task=participantTaskRecord('Independent bounded work.',taskPath);
+  const process={ id:'business/.topics/processes/process.trace.md',path:'business/.topics/processes/process.trace.md',schemaId:'tiinex.topic.v1',hasContinuityContext:true,hasIntegrity:true,markdown:'# Continuity Context\n\n- Current\n  - Current Schema: tiinex.topic.v1\n\n---\n\n# Review Process\n\n## Applicability\n\nUse only when selected by current authority.\n\n## Steps\n\n1. Review.\n\n# Continuity Integrity\n' };
+  const policy={ id:'docs/LINEAGE_POLICY.md',path:'docs/LINEAGE_POLICY.md',schemaId:'',hasContinuityContext:true,hasIntegrity:true,markdown:'# Lineage Policy\n\n## Interpretation Rules\n\nCarrier lineage is not semantic Parent.\n' };
+  const selected=[
+    { requirementId:'required:process',name:'review-process',material:'review process',purpose:'material selected for recipient review',state:'qualified',workspaceId:'business',innerPath:'.topics/processes/process.trace.md' },
+    { requirementId:'required:policy',name:'lineage-policy',material:'lineage policy',purpose:'policy material selected for recipient interpretation',state:'qualified',workspaceId:'docs',innerPath:'LINEAGE_POLICY.md' }
+  ];
+  const projected=projectGroundingGuidanceAuthority({ requiredContext:selected, records:[task,process,policy], topology:{currentFrontier:[{id:taskPath,path:taskPath}]} });
+  assert.equal(projected.state,'selected-guidance-material-applicability-unresolved');
+  assert.equal(projected.selectedRelationCount,0);
+  assert.equal(projected.selectedMaterialCount,2);
+  assert.equal(projected.items.every((item)=>item.dimensions.availability.state==='qualified'),true);
+  assert.equal(projected.items.every((item)=>item.dimensions.applicability.state==='unresolved-not-declared'),true);
+  assert.equal(projected.items.every((item)=>item.dimensions.requiredness.state==='unresolved-not-declared'),true);
+  assert.ok(projected.items.find((item)=>item.authorityArtifact.path.endsWith('process.trace.md')).stepSelection.candidateSections.some((item)=>item.heading==='Steps'));
+});
+
+test('guidance authority does not reverse-scan relation inventory or infer applicability from unrelated carried material', () => {
+  const taskPath='business/.topics/initiatives/current-task.trace.md';
+  const task=participantTaskRecord('Independent bounded work.',taskPath);
+  const decision={ id:'business/.topics/processes/process.trace.md',path:'business/.topics/processes/process.trace.md',schemaId:'tiinex.decision.v1',hasContinuityContext:true,hasIntegrity:true,markdown:'# Continuity Context\n\n- Current\n  - Current Schema: tiinex.decision.v1\n\n---\n\n# Process\n\n## Decision\n\n- State: accepted\n\n# Continuity Integrity\n' };
+  const relation={ id:'business/.topics/processes/relation.trace.md',path:'business/.topics/processes/relation.trace.md',schemaId:'tiinex.relation.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Parent\n  - Parent Schema: tiinex.decision.v1\n  - Trace: [Process](process.trace.md)\n- Current\n  - Current Schema: tiinex.relation.v1\n\n---\n\n# Relation\n\n## Relation Declaration\n\n- Relation Type: operational guidance applies to\n- Relation Direction: current adoption -> target context\n- Relation Scope: fixture\n\n## Relation Target\n\n- Target: [Current Task](../initiatives/current-task.trace.md)\n` };
+  const unrelated=[{ requirementId:'required:notes',name:'notes',purpose:'ordinary context',state:'qualified',workspaceId:'business',innerPath:'.topics/notes.trace.md' }];
+  const notes={id:'business/.topics/notes.trace.md',path:'business/.topics/notes.trace.md',schemaId:'tiinex.topic.v1',hasContinuityContext:true,hasIntegrity:true,markdown:'# Notes'};
+  const projected=projectGroundingGuidanceAuthority({ requiredContext:unrelated, records:[task,decision,relation,notes], topology:{currentFrontier:[{id:taskPath,path:taskPath}]} });
+  assert.equal(projected.state,'not-declared');
+  assert.equal(projected.selectedRelationCount,0);
+  assert.equal(projected.selectedMaterialCount,0);
+  assert.deepEqual(projected.items,[]);
+});
+
+test('selected guidance relation fails closed when its exact parent authority is not qualified', () => {
+  const taskPath='business/.topics/initiatives/current-task.trace.md';
+  const task=participantTaskRecord('Independent bounded work.',taskPath);
+  const relation={ id:'business/.topics/processes/relation.trace.md',path:'business/.topics/processes/relation.trace.md',schemaId:'tiinex.relation.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Parent\n  - Parent Schema: tiinex.decision.v1\n  - Trace: [Missing](missing.trace.md)\n- Current\n  - Current Schema: tiinex.relation.v1\n\n---\n\n# Relation\n\n## Relation Declaration\n\n- Relation Type: operational guidance applies to\n- Relation Direction: current adoption -> target context\n- Relation Scope: fixture\n\n## Relation Target\n\n- Target: [Current Task](../initiatives/current-task.trace.md)\n` };
+  const selected=[{ requirementId:'required:relation',name:'relation',purpose:'selected relation',state:'qualified',workspaceId:'business',innerPath:'.topics/processes/relation.trace.md' }];
+  const projected=projectGroundingGuidanceAuthority({ requiredContext:selected, records:[task,relation], topology:{currentFrontier:[{id:taskPath,path:taskPath}]} });
+  assert.equal(projected.state,'selected-guidance-authority-incomplete');
+  assert.equal(projected.items[0].dimensions.applicability.state,'unresolved');
+  assert.equal(projected.unresolved[0].code,'selected-guidance-relation-parent-authority-not-qualified');
 });
 
 test('process applicability stays unresolved without upstream-qualified explicit semantic authority', () => {
@@ -354,20 +498,123 @@ test('ground authority explains exact selected route and Handoff transfers witho
   assert.equal(projected.holderBinding.provenance.basis, 'explicit-consuming-session-holder-binding');
 });
 
-test('common ground projection keeps bounded action and wider orchestration separate while exposing declared Required Context purpose', () => {
+test('authority projection stays qualified when only non-authority cold-start diagnostics are degraded', () => {
+  const projected = projectGroundingAuthority({
+    status: 'degraded',
+    selectedRoute: { id: 'handoff-route:business:x', pointerPath: '001-pointer.trace.md', workspaceId: 'business', workspaceRelativeHandoffPath: '.topics/handoffs/x.trace.md' },
+    handoff: { purpose: 'bounded work', from: 'Anchor', to: 'Anchor', transfers: [] },
+    role: { state: 'qualified', endpoint: { label: 'Anchor', kind: 'role' } },
+    holderBinding: {
+      state: 'qualified', roleLabel: 'Anchor', recipientRoleLabel: 'Anchor', recipientCompatibility: 'matched', source: 'qualified-selected-handoff-consumption', explicit: false, inferredFromTransport: false,
+      authorization: { state: 'qualified', reasonCode: 'holder-assignment-mode-authorized' }
+    },
+    mutationBoundary: { sourceMutation: false, remoteWrite: false }
+  }, 'routed-handoff-package');
+  assert.equal(projected.state, 'qualified');
+  assert.equal(projected.groundingStatus, 'degraded');
+});
+
+test('common ground projection separates epistemic basis, semantic participants, and recipient body-reading from internal capsule detail', () => {
   const output = projectCommonCliDefaultOutput({
     schema: 'result', operation: 'project-grounding-readiness', resultSchema: 'grounding', status: 'ready',
-    readiness: { state: 'grounded-to-act', reasons: [], missingEvidence: [], nextAction: null },
-    authority: { state: 'ready', route: { id: 'r', workspaceId: 'core' }, handoff: { purpose: 'p', from: 'Anchor', to: 'Loom', transfers: [] }, role: {}, holderBinding: {}, operationBoundary: {} },
-    orchestrationReadiness: { state: 'bounded-route-only', boundedActionReadiness: 'grounded-to-act', widerOrchestration: { state: 'not-established', blockers: [{ code: 'participant-capability-map-not-established', detail: 'missing' }] }, participantMap: 'not-established', sourceScope: 'bounded-current-route', processApplicability: { state: 'not-established', unresolved: [{ code: 'process-applicability-semantic-authority-not-established' }] }, boundary: 'diagnostic only' },
+    readiness: { state: 'grounded-to-act', reasons: [], missingEvidence: [], nextAction: { kind: 'continue-bounded-handoff-work', target: 'core/.topics/tasks/current.trace.md', basis: 'qualified bounded route' } },
+    authority: { state: 'qualified', groundingStatus: 'degraded', route: { id: 'r', workspaceId: 'core' }, handoff: { purpose: 'p', from: 'Anchor', to: 'Anchor', completionExpectation: { signalKind: 'return', signalMeaning: 'return bounded result', returnTo: 'Sigma' }, transfers: [] }, role: {}, holderBinding: {}, operationBoundary: { remoteWrite: false, boundary: 'bounded local work only' } },
+    orchestrationReadiness: { state: 'bounded-route-only', boundedActionReadiness: 'grounded-to-act', widerOrchestration: { state: 'not-established', blockers: [{ code: 'capability-map-not-established', detail: 'missing' }] }, participantMap: 'explicit-bounded-map', sourceScope: 'bounded-current-route', processApplicability: { state: 'explicit-qualified-authority', unresolved: [] }, boundary: 'diagnostic only' },
+    evidence: {
+      known: [{ code: 'qualified-handoff-route', state: 'qualified', detail: 'exact route' }],
+      inferred: [{ code: 'relevant-lineage-scope', state: 'bounded-inference', detail: 'bounded lineage' }],
+      unresolved: [], humanOnly: []
+    },
     coverage: { requiredContext: { declared: 1, matchedInWorkspaceSnapshots: 1, missingFromWorkspaceSnapshots: 0, items: [{ requirementId: 'required:docs', name: 'docs-workspace', material: 'current Docs Workspace', purpose: 'read-only semantic boundary', declaredAvailability: 'available', state: 'qualified', workspaceId: 'docs', innerPath: '.topics/.workspaces/tiinex-docs.workspace.md', provenance: { basis: 'selected-handoff-required-context-declaration' } }], itemsOmitted: 0, bodiesProjected: 0, bodiesAvailable: 1 } },
-    capsule: null, currentWork: { state: 'current-frontier-resolved', frontier: [], blockers: [] }, continuity: {}, findingSummary: { counts: { error: 0, warning: 0 } }, actionableFindings: [], boundary: 'bounded'
-  }, { command: 'project-grounding-readiness', flags: {} });
+    capsule: {
+      participantContext: {
+        state: 'qualified', participantMapState: 'explicit-bounded-map',
+        semanticParticipants: [{ id: 'sigma', label: 'Sigma', roles: ['Sigma'], roleIdentity: { state: 'qualified', label: 'Sigma' }, holderBinding: { state: 'not-required' }, holderAssignmentAuthorization: { state: 'not-required' }, basis: 'explicit-task-participant' }],
+        roleGrounding: [{ label: 'Anchor', pointerPath: '001-anchor-from-role-pointer.trace.md' }],
+        endpoints: [{ direction: 'from', label: 'Anchor', kind: 'role' }, { direction: 'to', label: 'Anchor', kind: 'role' }], unresolved: [], boundary: 'semantic participants remain distinct from package Role grounding'
+      },
+      sourceEvidence: { carrier: { state: 'qualified', workspaceCount: 3, completeWorkspaceCount: 3, boundedWorkspaceCount: 0 }, workspaces: [{ workspace: 'business', state: 'qualified', coverage: 'complete', repository: 'Tiinex/business', ref: 'abc' }], boundedOrCache: [], blockers: [], boundary: 'exact carried source' },
+      guidanceAuthority: { state: 'selected-guidance-authority-qualified', selectedMaterialCount: 2, items: [{ dimensions: { applicability: { state: 'qualified-relation-binding' }, activeExecution: { state: 'unresolved-not-declared' } }, stepSelection: { state: 'recipient-interpretation-required' } }] },
+      secretInternalDetail: { mustNotLeak: true }
+    },
+    currentWork: { state: 'current-frontier-resolved', frontier: [], blockers: [], bodiesProjected: 0, bodiesAvailable: 1 }, continuity: { losses: { state: 'visible-loss', blocking: false, items: [{ kind: 'reference', target: 'missing-parent', detail: 'known unavailable non-blocking material' }] } },
+    returnPackage: { expected: true, returnTo: 'Sigma', carrierPrefix: 'business', parentDimension: '001', defaultMode: 'continue', defaultNextDimension: '001-1', filenamePattern: 'business-001-1-<from-role>-to-<to-role>.handoff-package.zip', parentPackagePath: 'carrier.zip', manufactureRule: 'Use the received carrier as package parent; Tooling owns the child dimension.' },
+    deeper: { requiredContextBodies: { flag: '--include-required-context all' }, currentWorkBody: { flag: '--include-current-work' } },
+    findingSummary: { counts: { error: 0, warning: 0 } }, actionableFindings: [], boundary: 'bounded'
+  }, { command: 'project-grounding-readiness', positionals: ['carrier.zip'], flags: { route: '001-handoff-pointer.trace.md', 'holder-role': 'Anchor', recipient: true } });
   assert.equal(output.readiness.state, 'grounded-to-act');
-  assert.equal(output.orchestrationReadiness.state, 'bounded-route-only');
-  assert.equal(output.orchestrationReadiness.widerOrchestration.state, 'not-established');
+  assert.equal(output.authority.state, 'qualified');
+  assert.equal(output.orchestrationReadiness.participantMap, 'explicit-bounded-map');
   assert.equal(output.requiredContext.items[0].purpose, 'read-only semantic boundary');
   assert.equal(output.requiredContext.items[0].provenance.basis, 'selected-handoff-required-context-declaration');
+  assert.equal(output.groundingBasis.qualifiedOrKnown[0].code, 'qualified-handoff-route');
+  assert.equal(output.groundingBasis.boundedInference[0].code, 'relevant-lineage-scope');
+  assert.equal(output.groundingBasis.participants.semanticParticipants[0].label, 'Sigma');
+  assert.equal(output.groundingBasis.participants.groundingOnlyRoles[0].semanticParticipant, false);
+  assert.equal(output.groundingBasis.participants.endpoints[0].semanticParticipant, false);
+  assert.equal(output.groundingBasis.sourceSufficiency.workspaceCount, 3);
+  assert.equal(output.groundingBasis.recipientReading.state, 'qualified-material-body-read-required');
+  assert.equal(output.groundingBasis.recipientReading.qualifiedMaterialIsNotProofOfReading, true);
+  assert.equal(output.groundingBasis.recipientReading.requiredContextBodies.pending, 1);
+  assert.equal(output.groundingBasis.recipientReading.currentWorkBodies.pending, 1);
+  assert.equal(output.recipientContract.state, 'bounded-work-contract-qualified');
+  assert.equal(output.recipientContract.workspaceLifecycle.receivedSnapshot, 'immutable-qualified-carried-input');
+  assert.equal(output.recipientContract.workspaceLifecycle.continuedWorkspace, 'writable-local-continuation');
+  assert.equal(output.recipientContract.mustRead.state, 'body-read-required');
+  assert.equal(output.recipientContract.knownMissingNonBlocking[0].target, 'missing-parent');
+  assert.equal(output.recipientContract.sourceBlockingEvidence.length,0);
+  assert.deepEqual(output.recipientContract.guidance.applicabilityStates,['qualified-relation-binding']);
+  assert.deepEqual(output.recipientContract.guidance.activeExecutionStates,['unresolved-not-declared']);
+  assert.deepEqual(output.recipientContract.guidance.stepSelectionStates,['recipient-interpretation-required']);
+  assert.equal(output.recipientContract.guidance.currentStep,'not-established-by-applicability-alone');
+  assert.match(output.recipientContract.nextAction.beforeWorkspaceMutation.cli, /ground carrier\.zip .*--recipient --continue <empty-workspace-dir>/);
+  assert.equal(output.recipientContract.completion.returnTo, 'Sigma');
+  assert.equal(output.recipientContract.completion.canonicalTransport, 'one-handoff-package-plus-exact-routing-text');
+  assert.equal(output.recipientContract.completion.returnPackage.carrierPrefix, 'business');
+  assert.equal(output.recipientContract.completion.returnPackage.defaultNextDimension, '001-1');
+  assert.match(output.recipientContract.completion.localWorkProductRule, /inside the continued Workspace/);
+  assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.command, 'qualify-return');
+  assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.cli, 'qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>');
+  assert.equal(output.recipientContract.completion.returnAuthoring.prepare.command, 'prepare-return');
+  assert.equal(output.recipientContract.completion.returnAuthoring.prepare.cli, 'prepare-return <continued-workspace-dir>');
+  assert.match(output.recipientContract.completion.returnAuthoring.semanticResponsibility, /qualify-return/);
+  assert.match(output.recipientContract.completion.returnAuthoring.semanticResponsibility, /mechanically locked/);
+  assert.match(output.recipientContract.completion.returnAuthoring.integrityAndQualification, /sha256-base64url-c14n-v2/);
+  assert.equal(output.recipientContract.completion.returnAuthoring.manufacture.command, 'handoff');
+  assert.match(output.recipientContract.completion.protocol[1], /qualify-return/);
+  assert.match(output.recipientContract.completion.protocol[2], /prepare-return/);
+  assert.match(output.recipientContract.completion.protocol[3], /author \.\.\. --preflight/);
+  assert.match(output.recipientContract.completion.protocol[4], /Tooling owns canonical envelope continuity/);
+  assert.match(output.recipientContract.completion.protocol.at(-1), /Do not attach loose result\/Evidence\/Handoff\/Workspace files/);
+  assert.deepEqual(output.groundingBasis.recipientReading.nextAction, {
+    command: 'ground', package: 'carrier.zip', route: '001-handoff-pointer.trace.md', holderRole: 'Anchor', includeRequiredContext: 'all', includeCurrentWork: true,
+    boundary: 'Re-run the same exact package/route grounding and read only the qualified bodies required for recipient interpretation; this does not change semantic authority.'
+  });
+  assert.equal(Object.hasOwn(output, 'capsule'), false);
+  assert.equal(output.deeper.requiredContextBodies.flag, '--include-required-context all');
+});
+
+test('blocked orientation never emits executable ground nextAction even when a route pointer is structurally present', () => {
+  const output = projectCommonCliDefaultOutput({
+    schema: 'result', operation: 'orient-handoff-package', resultSchema: 'orientation', status: 'blocked',
+    carrierLineage: { prefix: 'minimal-coldstart', mode: 'major', dimension: '005', checkpointKind: 'major' },
+    workspaces: [{ id: 'minimal-coldstart', qualification: 'qualified' }],
+    routes: [{ id: 'r', state: 'qualified', pointerPath: '005-pointer.trace.md', workspaceId: 'minimal-coldstart', from: 'Anchor', to: 'Anchor' }],
+    findings: [{ severity: 'error', code: 'cache-integrity-invalid', message: 'cache bytes do not match qualified descriptor' }],
+    findingSummary: { status: 'invalid', counts: { error: 1, warning: 0, info: 0, total: 1 } }
+  }, { command: 'orient-handoff-package', positionals: ['carrier.zip'], flags: {} });
+  assert.equal(output.status, 'blocked');
+  assert.equal(output.nextAction, null);
+});
+
+test('common orient projection exposes exact carrier prefix with numeric lineage', () => {
+  const output = projectCommonCliDefaultOutput({
+    schema: 'result', operation: 'orient-handoff-package', resultSchema: 'orientation', status: 'ready',
+    carrierLineage: { prefix: 'my-custom-workspace', mode: 'continue', dimension: '001-1-4-2', parentDimension: '001-1-4', checkpointKind: 'progression', authority: 'human-progress-projection-only' },
+    workspaces: [], routes: [], findings: []
+  }, { command: 'orient-handoff-package', positionals: ['carrier.zip'], flags: {} });
+  assert.equal(output.carrierLineage.prefix, 'my-custom-workspace');
+  assert.equal(output.carrierLineage.dimension, '001-1-4-2');
 });
 
 
@@ -997,3 +1244,37 @@ function artifactDelegationFixture({ recipient = 'Anchor' } = {}) {
     sourceEvidence: { workspaces: [{ workspace: 'core', state: 'qualified', repository: 'Tiinex/core', rootPath: '.' }] }
   };
 }
+
+test('common handoff projection emits exact adjacent routing text for the canonical return carrier', () => {
+  const output = projectCommonCliDefaultOutput({
+    schema: 'tiinex.portable.operation.result.v1', operation: 'manufacture-handoff-package', resultSchema: 'tiinex.portable.handoff-manufacturing.v1', status: 'ready',
+    verification: { preflight: 'qualified', packageInspection: 'valid', roundtrip: 'passed' },
+    planSummary: { status: 'ready', requiredClosureReady: true, semanticHandoffStatus: 'unknown', required: [], reference: [], workspaces: [] },
+    carrierProjection: { status: 'ready', mode: 'handoff', lineage: { prefix: 'minimal-coldstart', dimension: '002-1' }, routes: [{ id: 'r', state: 'qualified', workspaceId: 'minimal-coldstart', workspaceRelativePath: '.topics/handoffs/return.trace.md', from: 'Anchor', to: 'Sigma' }] },
+    primaryOutput: { status: 'written', path: '/tmp/minimal-coldstart-002-1-anchor-to-sigma.handoff-package.zip', projectedFilename: 'minimal-coldstart-002-1-anchor-to-sigma.handoff-package.zip' },
+    humanOutput: { normalInlineRouting: { routeId: 'r', continueFrom: '002-1-3-1-1-1-1-1-handoff-pointer.trace.md' }, presentation: { kind: 'handoff-package-v1' }, normalEmissionBoundary: { allowed: ['package-file','route-specific-continue-from'] } },
+    findings: [], findingSummary: { counts: { error: 0, warning: 0 } }
+  }, { command: 'manufacture-handoff-package', surfaceCommand: 'handoff', flags: {}, positionals: ['/tmp/workspace'] });
+  assert.equal(output.transport.routing.continueFrom, '002-1-3-1-1-1-1-1-handoff-pointer.trace.md');
+  assert.match(output.transport.routingText, /^Handoff package attached\./);
+  assert.match(output.transport.routingText, /Start:\n001-1-READ-BEFORE-PROCEEDING\.trace\.md/);
+  assert.match(output.transport.routingText, /Continue from \(do not read native; pass to Tiinex after bootstrap\):\n002-1-3-1-1-1-1-1-handoff-pointer\.trace\.md/);
+  assert.doesNotMatch(output.transport.routingText, /\/tmp\//);
+});
+
+
+test('ground CLI preserves an explicit canonical holder assignment mode without recipient-class inference', async () => {
+  const { input } = await commandInput({
+    command: 'project-grounding-readiness',
+    positionals: ['test/thin-lineage-grounding-projection.test.mjs'],
+    flags: {
+      route: '001-handoff-pointer.trace.md',
+      'holder-role': 'Sigma',
+      'holder-assignment-mode': 'explicit-participation',
+      recipient: true
+    }
+  });
+  assert.equal(input.holderBinding.roleLabel, 'Sigma');
+  assert.equal(input.holderBinding.assignmentMode, 'explicit-participation');
+  assert.equal(input.holderBinding.sourceLocator, 'cli:--holder-role,--holder-assignment-mode');
+});

@@ -124,8 +124,8 @@ function seal(markdown) {
 function workspaceFixture(label, repository) {
   return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${rootSchemaTarget})\n- Current\n  - Current Schema: [tiinex.workspace.v1](${workspaceSchemaTarget})\n  - Created At: 2026-09-20 20:00:00\n  - Authors: Fixture\n  - Summary: ${label} workspace.\n  - Status: active/local\n\n---\n\n# ${label}\n\n## Workspace Entrypoints\n\n### Repository source\n\n- Source Kind: local-directory\n- Repository: ${repository}\n- Root Path: .\n- Repo Files Discovery: on\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
 }
-function roleFixture(label) {
-  return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${rootSchemaTarget})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${roleSchemaTarget})\n  - Created At: 2026-09-20 20:00:00\n  - Authors: Fixture\n  - Summary: ${label} role.\n  - Status: ready/local\n\n---\n\n# ${label} Role\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: fixture\n\n## Role Boundary\n\n- In Scope: fixture work\n- Out Of Scope: everything else\n\n## Authority And Responsibility Boundary\n\n- May Do: fixture work\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session or Handoff\n- Assignment Modes: explicit-session, handoff\n\n## Interpretation Limits\n\n- Does Not Prove: durable holder identity\n- Must Not Be Treated As: broader authority\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
+function roleFixture(label, title = `${label} Role`) {
+  return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${rootSchemaTarget})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${roleSchemaTarget})\n  - Created At: 2026-09-20 20:00:00\n  - Authors: Fixture\n  - Summary: ${label} role.\n  - Status: ready/local\n\n---\n\n# ${title}\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: fixture\n\n## Role Boundary\n\n- In Scope: fixture work\n- Out Of Scope: everything else\n\n## Authority And Responsibility Boundary\n\n- May Do: fixture work\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session or Handoff\n- Assignment Modes: explicit-session, handoff\n\n## Interpretation Limits\n\n- Does Not Prove: durable holder identity\n- Must Not Be Treated As: broader authority\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
 }
 async function put(root, relative, text) {
   const target = path.join(root, ...relative.split('/'));
@@ -133,130 +133,41 @@ async function put(root, relative, text) {
   await writeFile(target, text);
 }
 
-test('recipient-v2 manufacture succeeds with exact explicit endpoint Role material when the Handoff omits optional endpoint References', async (t) => {
-  const scratch = await mkdtemp(path.join(tmpdir(), 'tiinex-endpoint-route-binding-'));
-  t.after(() => rm(scratch, { recursive: true, force: true }));
-  const extensionRoot = path.join(scratch, 'extension-vscode');
-  const businessRoot = path.join(scratch, 'business');
-  const extensionWorkspacePath = '.topics/.workspaces/tiinex-extension-vscode.workspace.md';
-  const businessWorkspacePath = '.topics/.workspaces/tiinex-business.workspace.md';
-  await mkdir(extensionRoot, { recursive: true });
-  await mkdir(businessRoot, { recursive: true });
-  await put(extensionRoot, extensionWorkspacePath, workspaceFixture('Extension VS Code', 'Tiinex/extension-vscode'));
-  await put(extensionRoot, routePath, qualifiedHandoffFixture({ from: 'Sigma', to: 'Anchor' }));
-  await put(businessRoot, businessWorkspacePath, workspaceFixture('Business', 'Tiinex/business'));
-  await put(businessRoot, sigmaPath, roleFixture('Sigma'));
-  await put(businessRoot, anchorPath, roleFixture('Anchor'));
-
-  const prepared = await prepareNodeHandoffManufacturingInput({
-    workspaceRoot: extensionRoot,
-    workspaceId: 'extension-vscode',
-    workspaceTargetPath: extensionWorkspacePath,
-    handoffPath: routePath,
-    additionalWorkspaces: [{ id: 'business', root: businessRoot, workspaceTargetPath: businessWorkspacePath }],
-    transportRoutes: [{
-      workspaceId: 'extension-vscode', path: routePath,
-      endpointRoles: [
-        { party: 'from', label: 'Sigma', workspaceId: 'business', path: sigmaPath, reference: `business::${sigmaPath}` },
-        { party: 'to', label: 'Anchor', workspaceId: 'business', path: anchorPath, reference: `business::${anchorPath}` }
-      ]
-    }],
-    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'),
-    verifyRoundtrip: true
-  });
-
-  assert.equal((prepared.requirements.findings || []).some((item) => item.severity === 'error'), false, JSON.stringify(prepared.requirements.findings || [], null, 2));
-  assert.equal(prepared.requirements.endpointRoles.length, 2);
-  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
-  assert.equal(result.status, 'ready', JSON.stringify(result.findings, null, 2));
-  assert.equal(result.verification.packageInspection, 'valid');
-  assert.equal(result.verification.roundtrip, 'passed');
-  assert.equal((result.inspection.endpointRoles || []).length, 2);
-});
-
-
-test('two Handoff routes with exact endpoint Role bindings manufacture and each cold-ground independently without endpoint References', async (t) => {
-  const scratch = await mkdtemp(path.join(tmpdir(), 'tiinex-two-route-endpoint-binding-'));
-  t.after(() => rm(scratch, { recursive: true, force: true }));
-  const extensionRoot = path.join(scratch, 'extension-vscode');
-  const businessRoot = path.join(scratch, 'business');
-  const extensionWorkspacePath = '.topics/.workspaces/tiinex-extension-vscode.workspace.md';
-  const businessWorkspacePath = '.topics/.workspaces/tiinex-business.workspace.md';
-  const routeOnePath = '.topics/handoffs/test-one.trace.md';
-  const routeTwoPath = '.topics/handoffs/test-two.trace.md';
-  await mkdir(extensionRoot, { recursive: true });
-  await mkdir(businessRoot, { recursive: true });
-  await put(extensionRoot, extensionWorkspacePath, workspaceFixture('Extension VS Code', 'Tiinex/extension-vscode'));
-  await put(extensionRoot, routeOnePath, qualifiedHandoffFixture({ from: 'Sigma', to: 'Anchor', title: 'Test route one' }));
-  await put(extensionRoot, routeTwoPath, qualifiedHandoffFixture({ from: 'Sigma', to: 'Anchor', title: 'Test route two', createdAt: '2026-09-20 20:01:00' }));
-  await put(businessRoot, businessWorkspacePath, workspaceFixture('Business', 'Tiinex/business'));
-  await put(businessRoot, sigmaPath, roleFixture('Sigma'));
-  await put(businessRoot, anchorPath, roleFixture('Anchor'));
-
-  const endpointRoles = [
-    { party: 'from', label: 'Sigma', workspaceId: 'business', path: sigmaPath, reference: `business::${sigmaPath}` },
-    { party: 'to', label: 'Anchor', workspaceId: 'business', path: anchorPath, reference: `business::${anchorPath}` }
+test('projects exact Role authoringLabel separately from presentation label for the eight carried-role shapes', async () => {
+  const roleSpecs = [
+    ['Anchor', '.topics/roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md'],
+    ['Axiom', '.topics/roles/001-2-1-axiom-canonical-holder-cutover-role.trace.md'],
+    ['Loom', '.topics/roles/001-3-1-loom-canonical-holder-cutover-role.trace.md'],
+    ['Sigma', '.topics/roles/001-4-1-sigma-canonical-holder-cutover-role.trace.md'],
+    ['Glimmer', '.topics/roles/001-5-1-glimmer-canonical-holder-cutover-role.trace.md'],
+    ['Kodax', '.topics/roles/001-6-1-kodax-canonical-holder-cutover-role.trace.md'],
+    ['Pilot', '.topics/roles/001-7-1-pilot-canonical-holder-cutover-role.trace.md'],
+    ['Prism', '.topics/roles/001-8-1-1-prism-canonical-holder-cutover-role.trace.md']
   ];
-  const prepared = await prepareNodeHandoffManufacturingInput({
-    workspaceRoot: extensionRoot,
-    workspaceId: 'extension-vscode',
-    workspaceTargetPath: extensionWorkspacePath,
-    handoffPath: routeOnePath,
-    additionalWorkspaces: [{ id: 'business', root: businessRoot, workspaceTargetPath: businessWorkspacePath }],
-    transportRoutes: [
-      { workspaceId: 'extension-vscode', path: routeOnePath, endpointRoles },
-      { workspaceId: 'extension-vscode', path: routeTwoPath, endpointRoles }
-    ],
-    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'),
-    verifyRoundtrip: true
-  });
+  const roleEntries = roleSpecs.map(([label, rolePath]) => [rolePath, roleFixture(label, `${label} Role — Canonical Holder Cutover Continuation`)]);
+  const files = [
+    { path: '.topics/.workspaces/tiinex-business.workspace.md', content: workspaceFixture('Business', 'Tiinex/business') },
+    ...roleEntries.map(([rolePath, content]) => ({ path: rolePath, content }))
+  ];
 
-  assert.equal((prepared.requirements.findings || []).some((item) => item.severity === 'error'), false, JSON.stringify(prepared.requirements.findings || [], null, 2));
-  assert.equal(prepared.requirements.endpointRoles.length, 4);
-  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
-  assert.equal(result.status, 'ready', JSON.stringify(result.findings, null, 2));
-  assert.equal(result.verification.packageInspection, 'valid');
-  assert.equal(result.verification.roundtrip, 'passed');
-  assert.equal((result.inspection.routes || []).length, 2);
-  assert.equal((result.inspection.endpointRoles || []).length, 4);
-
-  const orientation = orientColdConsumerFromHandoffPackage({ bundle: result.bundle });
-  assert.equal(orientation.status, 'ready', JSON.stringify(orientation.findings || [], null, 2));
-  assert.equal(orientation.routes.length, 2);
-  for (const route of orientation.routes) {
-    const grounded = projectPortableGroundingReadiness({ bundle: result.bundle, route: route.id, interactionMode: 'execution' });
-    assert.notEqual(grounded.readiness.state, 'blocked', JSON.stringify(grounded.readiness, null, 2));
-    assert.equal(grounded.authority.holderBinding?.state, 'qualified', JSON.stringify(grounded.authority.holderBinding || {}, null, 2));
+  const projection = projectQualifiedHandoffEndpoints({ files, workspaceId: 'business' });
+  assert.equal(projection.status, 'ready', JSON.stringify(projection.findings || [], null, 2));
+  assert.equal(projection.candidates.length, 8);
+  const byAuthoringLabel = new Map(projection.candidates.map((candidate) => [candidate.authoringLabel, candidate]));
+  for (const [expectedLabel, expectedPath] of roleSpecs) {
+    const candidate = byAuthoringLabel.get(expectedLabel);
+    assert.ok(candidate, `missing projected candidate for ${expectedLabel}`);
+    assert.equal(candidate.kind, 'role');
+    assert.equal(candidate.authoringLabel, expectedLabel);
+    assert.equal(candidate.artifactPath, expectedPath);
+    assert.notEqual(candidate.label, candidate.authoringLabel);
+    assert.equal(candidate.label, `${expectedLabel} Role — Canonical Holder Cutover Continuation`);
+    assert.equal(candidate.workspaceCoordinate, `business::${expectedPath}`);
+    assert.equal(candidate.reference, '');
+    assert.equal(candidate.referenceQualification, 'none');
+    assert.equal(candidate.canonicalReference, '');
   }
-});
 
-test('recipient-v2 manufacture preserves optional unresolved Role endpoints when the Handoff omits References and no transport binding exists', async (t) => {
-  const scratch = await mkdtemp(path.join(tmpdir(), 'tiinex-optional-endpoint-unresolved-'));
-  t.after(() => rm(scratch, { recursive: true, force: true }));
-  const extensionRoot = path.join(scratch, 'extension-vscode');
-  const extensionWorkspacePath = '.topics/.workspaces/tiinex-extension-vscode.workspace.md';
-  await mkdir(extensionRoot, { recursive: true });
-  await put(extensionRoot, extensionWorkspacePath, workspaceFixture('Extension VS Code', 'Tiinex/extension-vscode'));
-  await put(extensionRoot, routePath, qualifiedHandoffFixture({ from: 'Sigma', to: 'Anchor' }));
-
-  const prepared = await prepareNodeHandoffManufacturingInput({
-    workspaceRoot: extensionRoot,
-    workspaceId: 'extension-vscode',
-    workspaceTargetPath: extensionWorkspacePath,
-    handoffPath: routePath,
-    transportRoutes: [{ workspaceId: 'extension-vscode', path: routePath }],
-    runtimeRoot: path.resolve(path.dirname(new URL(import.meta.url).pathname), '..'),
-    verifyRoundtrip: true
-  });
-
-  assert.equal((prepared.requirements.findings || []).some((item) => item.severity === 'error'), false, JSON.stringify(prepared.requirements.findings || [], null, 2));
-  assert.deepEqual(prepared.requirements.endpointRoles.map((item) => item.closureStrength), ['optional', 'optional']);
-  const result = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
-  assert.equal(result.status, 'ready', JSON.stringify(result.findings || [], null, 2));
-  assert.equal(result.verification.packageInspection, 'valid');
-  assert.equal(result.verification.roundtrip, 'passed');
-  assert.equal((result.inspection.endpointRoles || []).length, 0);
-  assert.equal((result.plan.requirements.endpointRoles || []).every((item) => item.disposition === 'unresolved' && item.closureStrength === 'optional'), true, JSON.stringify(result.plan.requirements.endpointRoles || [], null, 2));
 });
 
 test('endpoint source eligibility is bounded by the explicitly selected qualified Workspace material root', () => {

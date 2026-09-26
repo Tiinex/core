@@ -36,8 +36,10 @@ test('pointerless filename is a safe transport label, exposes only generic trans
   assert.equal(receipt.humanOutput.primary.filename, 'business-001-7.handoff-package.zip');
   assert.equal(receipt.humanOutput.primary.dimension, '001');
   assert.equal(receipt.humanOutput.normalInlineRouting?.kind, 'transport-text');
-  assert.equal(receipt.humanOutput.normalInlineRouting?.authority, 'none');
-  assert.equal(receipt.humanOutput.normalInlineRouting?.content, '');
+  assert.equal(receipt.humanOutput.normalInlineRouting?.authority, 'qualified-package-start-only');
+  assert.match(receipt.humanOutput.normalInlineRouting?.content || '', /Start:\n001-1-READ-BEFORE-PROCEEDING\.trace\.md/);
+  assert.match(receipt.humanOutput.normalInlineRouting?.content || '', /pointerless Workspace carrier/);
+  assert.equal(/Continue from:/i.test(receipt.humanOutput.normalInlineRouting?.content || ''), false);
   assert.equal(receipt.humanOutput.presentation?.recipientLabel, '');
   for (const filename of ['../escape.handoff-package.zip', 'CON.handoff-package.zip', 'C:\\bad.handoff-package.zip', 'bad:ads.handoff-package.zip']) {
     await assert.rejects(materializeHandoffManufactureCliOutput(result, { 'projected-filename': filename }), /filename.invalid/);
@@ -87,24 +89,4 @@ test('closure plan preserves exact semantic participant route projection for hos
     workspaceMaterializations: []
   });
   assert.deepEqual(plan.requirements.semanticParticipantRoutes, semantic);
-});
-
-import { projectHandoffHumanOutput, HANDOFF_CARRIER_PROJECTION_SCHEMA_ID } from '../src/tooling/portable/handoff/carrierProjection.js';
-test('explicit carrier prefix is preserved for shared multi-Handoff human output without semantic primary authority', () => {
-  const projection = {
-    schema: HANDOFF_CARRIER_PROJECTION_SCHEMA_ID,
-    status: 'ready', mode: 'shared', lineage: { dimension: '004-1' },
-    workspace: { id: 'extension-vscode', title: 'Extension VS Code', slug: 'tiinex-vscode' },
-    workspaces: [{ id: 'extension-vscode', title: 'Extension VS Code', slug: 'tiinex-vscode', qualification: 'qualified' }],
-    routes: [
-      { id: 'r1', state: 'qualified', workspaceId: 'extension-vscode', workspaceRelativePath: '.topics/handoffs/one.trace.md', parties: { from: 'Anchor', to: 'Sigma' }, projectedFilename: 'tiinex-vscode-004-1-anchor-to-sigma.handoff-package.zip' },
-      { id: 'r2', state: 'qualified', workspaceId: 'extension-vscode', workspaceRelativePath: '.topics/handoffs/two.trace.md', parties: { from: 'Anchor', to: 'Sigma' }, projectedFilename: 'tiinex-vscode-004-1-anchor-to-sigma.handoff-package.zip' }
-    ]
-  };
-  const result = projectHandoffHumanOutput({ projection, route: 'r1', carrierPrefix: 'test-test' });
-  assert.equal(result.status, 'ready');
-  assert.equal(result.primary.filename, 'test-test-004-1-anchor-to-sigma.handoff-package.zip');
-  assert.equal(result.sharedRouting.primary.filename, 'test-test-004-1-anchor-to-sigma.handoff-package.zip');
-  assert.equal(result.sharedRouting.routes.length, 2);
-  assert.equal(result.sharedRouting.selectionAuthority, 'exact-qualified-route-only');
 });

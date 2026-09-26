@@ -14,6 +14,7 @@ import { partyRoleSchemaModule } from './party/role/tiinex.party.role.v1.schema.
 import { partyOrganizationSchemaModule } from './party/organization/tiinex.party.organization.v1.schema.js';
 import { projectSchemaModule } from './coordination/project/tiinex.project.v1.schema.js';
 import { reductionSchemaModule } from './reduction/tiinex.reduction.v1.schema.js';
+import { redactionSchemaModule } from './reduction/redaction/tiinex.redaction.v1.schema.js';
 import { decisionSchemaModule } from './core/decision/tiinex.decision.v1.schema.js';
 import { feedbackSchemaModule } from './core/feedback/tiinex.feedback.v1.schema.js';
 import { signalSchemaModule } from './core/signal/tiinex.signal.v1.schema.js';
@@ -23,7 +24,7 @@ import { validationFindingSchemaModule } from './validation/finding/tiinex.valid
 import { validationMethodSchemaModule } from './validation/method/tiinex.validation.method.v1.schema.js';
 import { validationReportSchemaModule } from './validation/report/tiinex.validation.report.v1.schema.js';
 
-const modules = [rootSchemaModule, workspaceSchemaModule, topicSchemaModule, taskSchemaModule, interpretationSchemaModule, relationSchemaModule, workspaceRepresentationSchemaModule, preservationSchemaModule, evidenceSchemaModule, signalSchemaModule, feedbackSchemaModule, decisionSchemaModule, discoverySchemaModule, discoveryFindingSchemaModule, validationFindingSchemaModule, validationMethodSchemaModule, validationReportSchemaModule, handoffSchemaModule, partyRoleSchemaModule, partyOrganizationSchemaModule, projectSchemaModule, reductionSchemaModule, moduleSchemaModule, surfaceSchemaModule];
+const modules = [rootSchemaModule, workspaceSchemaModule, topicSchemaModule, taskSchemaModule, interpretationSchemaModule, relationSchemaModule, workspaceRepresentationSchemaModule, preservationSchemaModule, evidenceSchemaModule, signalSchemaModule, feedbackSchemaModule, decisionSchemaModule, discoverySchemaModule, discoveryFindingSchemaModule, validationFindingSchemaModule, validationMethodSchemaModule, validationReportSchemaModule, handoffSchemaModule, partyRoleSchemaModule, partyOrganizationSchemaModule, projectSchemaModule, reductionSchemaModule, redactionSchemaModule, moduleSchemaModule, surfaceSchemaModule];
 const byId = new Map(modules.map((module) => [module.id, module]));
 const byChecksum = new Map(modules.map((module) => [module.binding.checksum.value, module]));
 

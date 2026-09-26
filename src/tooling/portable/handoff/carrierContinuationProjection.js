@@ -5,7 +5,7 @@ export const HANDOFF_CARRIER_CONTINUATION_PROJECTION_SCHEMA_ID = 'tiinex.portabl
 const MAX_SIBLING_INDEX = 9999;
 const POINTER_PATH_RE = /^(\d{3}(?:-\d+)*)-handoff-pointer\.trace\.md$/;
 const ORIENTATION_SCHEMA_ID = 'tiinex.portable.handoff-cold-consumer-orientation.v1';
-const INSPECTION_SCHEMA_ID = 'tiinex.portable.recipient-facing-handoff-v2.inspection.v1';
+const INSPECTION_SCHEMA_ID = 'tiinex.portable.handoff-package-v1.inspection.v1';
 
 export function projectHandoffCarrierContinuation(input = {}) {
   const parent = normalizeQualifiedParentTopology(input);

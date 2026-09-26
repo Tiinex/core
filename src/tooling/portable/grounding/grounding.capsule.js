@@ -5,6 +5,7 @@ import { projectGroundingPlanningContext } from './grounding.planningContext.js'
 import { projectGroundingParticipantContext } from './grounding.participantContext.js';
 import { projectGroundingParticipantArtifactAuthority } from './grounding.participantArtifactAuthority.js';
 import { projectGroundingProcessApplicability } from './grounding.processApplicability.js';
+import { projectGroundingGuidanceAuthority } from './grounding.guidanceAuthority.js';
 import { projectGroundingImplementationSourceAuthority } from './grounding.implementationSourceAuthority.js';
 import { projectGroundingDelegationReadiness } from './grounding.delegationReadiness.js';
 import { projectGroundingDelegationArtifactAuthority } from './grounding.delegationArtifactAuthority.js';
@@ -14,7 +15,7 @@ export const PORTABLE_GROUNDING_CAPSULE_SCHEMA_ID = 'tiinex.portable.grounding-c
 const MAX_CONTEXT = 8;
 const MAX_EXCLUSIONS = 6;
 
-export function projectGroundingCapsule({ authority = null, continuation = null, contextAudit = null, requiredContext = [], records = [], topology = {}, blockers = [] } = {}) {
+export function projectGroundingCapsule({ authority = null, continuation = null, contextAudit = null, requiredContext = [], records = [], topology = {}, blockers = [], currentWorkAuthority = null } = {}) {
   const routeRecords = selectedRouteRecords(authority, records);
   const workProvenance = projectWorkProvenance({ records, topology });
   const participantAuthority = projectParticipantAuthority(authority);
@@ -24,12 +25,13 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
   const delegationArtifactAuthority = projectGroundingDelegationArtifactAuthority({ authority, records, topology, sourceEvidence, requiredContext });
   const effectiveAuthority = mergeArtifactDelegationAuthority(authority, delegationArtifactAuthority);
   const processApplicability = projectGroundingProcessApplicability(effectiveAuthority);
+  const guidanceAuthority = projectGroundingGuidanceAuthority({ authority: effectiveAuthority, requiredContext, records, topology });
   const implementationSourceAuthority = projectGroundingImplementationSourceAuthority({ authority: effectiveAuthority, records, contextAudit, requiredContext });
   const delegationReadiness = projectGroundingDelegationReadiness({ authority: effectiveAuthority, processApplicability, implementationSourceAuthority });
   return Object.freeze({
     schema: PORTABLE_GROUNDING_CAPSULE_SCHEMA_ID,
     semanticReductions: Object.freeze(requiredContext.slice(0, MAX_CONTEXT).map(reduceRequiredContext)),
-    frontier: projectFrontier(topology, blockers),
+    frontier: projectFrontier(topology, blockers, currentWorkAuthority),
     exclusions: Object.freeze(routeRecords.flatMap((record) => parseExclusions(record.markdown || '')).slice(0, MAX_EXCLUSIONS)),
     sourceEvidence,
     planningContext: projectGroundingPlanningContext(requiredContext),
@@ -50,6 +52,7 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
     participantArtifactAuthority,
     participantContext,
     processApplicability,
+    guidanceAuthority,
     implementationSourceAuthority,
     delegationArtifactAuthority,
     delegationReadiness,
@@ -58,6 +61,7 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
       ...workProvenance.unresolved,
       ...participantArtifactAuthority.unresolved,
       ...participantContext.unresolved,
+      ...guidanceAuthority.unresolved,
       ...processApplicability.unresolved,
       ...implementationSourceAuthority.unresolved,
       ...delegationReadiness.blockers.map((item) => ({ code: item.code, detail: item.request })),
@@ -126,16 +130,41 @@ function semanticSignals(markdown = '') {
   return out;
 }
 
-function projectFrontier(topology = {}, blockers = []) {
-  const frontier = (topology.currentFrontier || []).slice(0, 4).map((item) => Object.freeze({
+function projectFrontier(topology = {}, blockers = [], currentWorkAuthority = null) {
+  const selection = currentWorkAuthority && typeof currentWorkAuthority === 'object' ? currentWorkAuthority : null;
+  const frontier = (selection?.frontier || topology.currentFrontier || []).slice(0, 4).map((item) => Object.freeze({
     path: String(item.path || ''),
     status: String(item.declaredStatus || ''),
     objective: compact(item.objective || '', 180)
   }));
+  const contextOnly = (selection?.contextCandidates || []).slice(0, 4).map((item) => Object.freeze({
+    path: String(item.path || ''),
+    status: String(item.declaredStatus || ''),
+    objective: compact(item.objective || '', 180)
+  }));
+  let state = frontier.length ? 'resolved' : 'unresolved';
+  let rationale = frontier.length ? 'nearest nonterminal Task ancestor(s) to the exact selected Handoff route by declared Parent distance' : 'no exact-qualified nonterminal Task ancestor resolved on the selected route Parent lineage';
+  if (selection?.state === 'selected-handoff-task-frontier-resolved') {
+    state = 'resolved';
+    rationale = 'exact selected Handoff Controlling Artifact declaration(s) resolve to exact-qualified nonterminal Task current work; nearest Task ancestry is context-only when different';
+  } else if (selection?.state === 'selected-handoff-bounded-work') {
+    state = 'selected-handoff-bounded-work';
+    rationale = 'exact selected Handoff explicitly controls current bounded work through qualified non-Task artifacts; no Task is promoted merely from nearest ancestry';
+  } else if (selection?.state === 'selected-handoff-current-work-unresolved') {
+    state = 'unresolved';
+    rationale = 'selected Handoff declares explicit Controlling Artifact current-work authority, but one or more control targets are unresolved/ambiguous/unqualified; nearest Task ancestry cannot substitute';
+  } else if (selection?.state === 'nearest-task-frontier-resolved') {
+    state = 'resolved-fallback';
+    rationale = 'nearest nonterminal Task ancestor fallback is used only because the selected Handoff declares no explicit Controlling Artifact target';
+  }
   return Object.freeze({
-    state: frontier.length ? 'resolved' : 'unresolved',
-    rationale: frontier.length ? 'nearest nonterminal Task ancestor(s) to the exact selected Handoff route by declared Parent distance' : 'no exact-qualified nonterminal Task ancestor resolved on the selected route Parent lineage',
+    state,
+    authorityMode: String(selection?.mode || 'nearest-task-ancestor-fallback'),
+    rationale,
+    selectedHandoff: String(selection?.selectedHandoff || ''),
     items: Object.freeze(frontier),
+    contextOnlyCandidates: Object.freeze(contextOnly),
+    controls: Object.freeze((selection?.controls || []).slice(0, 6).map((item) => Object.freeze({ ...item }))),
     blockers: Object.freeze((blockers || []).slice(0, 4).map((item) => Object.freeze({ code: String(item.code || item.id || ''), detail: compact(item.detail || item.message || item.label || '', 180) })))
   });
 }

@@ -36,21 +36,31 @@ test('Handoff creation exposes canonical endpoint References as optional Core-ow
   const to = canonicalHandoffEndpointReference({ qualification: 'qualified-exact', kind: 'role', label: 'Anchor Role', workspaceId: 'business', artifactPath: '.topics/roles/anchor.trace.md', target: 'business::.topics/roles/anchor.trace.md' });
   assert.equal(from.state, 'qualified');
   assert.equal(to.state, 'qualified');
-  assert.equal(from.reference, '[Loom Role](business::.topics/roles/loom.trace.md)');
-  assert.equal(to.reference, '[Anchor Role](business::.topics/roles/anchor.trace.md)');
+  assert.equal(from.target, 'business::.topics/roles/loom.trace.md');
+  assert.equal(to.target, 'business::.topics/roles/anchor.trace.md');
+  assert.equal(from.reference, '');
+  assert.equal(to.reference, '');
+  assert.equal(from.referenceTarget, '');
+  assert.equal(to.referenceTarget, '');
 
-  const { contract, markdown } = render(handoffValues({ 'From Reference': from.reference, 'To Reference': to.reference }));
+  const { contract, markdown } = render(handoffValues());
   assert.deepEqual(contract.creation.optionalInputs.filter((item) => item.endsWith('Reference')), ['From Reference', 'To Reference']);
-  assert.match(markdown, /^- From Reference: \[Loom Role\]\(business::\.topics\/roles\/loom\.trace\.md\)$/m);
-  assert.match(markdown, /^- To Reference: \[Anchor Role\]\(business::\.topics\/roles\/anchor\.trace\.md\)$/m);
+  assert.doesNotMatch(markdown, /^- From Reference:/m);
+  assert.doesNotMatch(markdown, /^- To Reference:/m);
   const parsed = parseArtifactMarkdown(markdown);
   assert.equal(parsed.envelope.current.schema.id, 'tiinex.handoff.v1');
   assert.equal(parsed.hasIntegrity, true);
-  const reopened = projectHandoffMaterialRequirements({ path: '.topics/handoffs/reopened.trace.md', markdown });
-  assert.deepEqual(reopened.endpointRoles.map((item) => ({ party: item.party, target: item.reference.target, strength: item.closureStrength })), [
-    { party: 'from', target: 'business::.topics/roles/loom.trace.md', strength: 'required' },
-    { party: 'to', target: 'business::.topics/roles/anchor.trace.md', strength: 'required' }
-  ]);
+});
+
+test('canonical endpoint authoring keeps exact provider Reference separate from internal Workspace coordinate', () => {
+  const permalink = `https://github.com/Tiinex/business/blob/${"a".repeat(40)}/.topics/roles/anchor.trace.md`;
+  const projected = canonicalHandoffEndpointReference({ qualification: 'qualified-exact', kind: 'role', label: 'Anchor Role', workspaceId: 'business', artifactPath: '.topics/roles/anchor.trace.md', target: 'business::.topics/roles/anchor.trace.md', referenceTarget: permalink, referenceQualification: 'qualified-exact' });
+  assert.equal(projected.state, 'qualified');
+  assert.equal(projected.target, 'business::.topics/roles/anchor.trace.md');
+  assert.equal(projected.referenceTarget, permalink);
+  assert.equal(projected.reference, `[Anchor Role](${permalink})`);
+  const unqualifiedProvider = canonicalHandoffEndpointReference({ qualification: 'qualified-exact', kind: 'role', label: 'Anchor Role', workspaceId: 'business', artifactPath: '.topics/roles/anchor.trace.md', target: 'business::.topics/roles/anchor.trace.md', referenceTarget: permalink });
+  assert.equal(unqualifiedProvider.state, 'blocked');
 });
 
 test('manual identity-less Handoff authoring remains valid when optional endpoint References are omitted', () => {

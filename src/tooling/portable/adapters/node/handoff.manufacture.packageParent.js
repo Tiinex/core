@@ -1,6 +1,5 @@
 import { packageFileBytes, sha256Hex } from '../../../../export/package.bytes.js';
-import { inspectRecipientFacingV2Topology } from '../../handoff/recipientV2.inspect.js';
-import { parseHandoffPackageV1, RECIPIENT_V2_PACKAGE_V1_ROOT_PATH } from '../../handoff/recipientV2.packageV1.js';
+import { inspectHandoffPackageV1 } from '../../handoff/handoffPackageV1.inspect.js';
 import { projectHandoffMaterialRequirements } from '../../handoff/materialClosure.requirements.js';
 import { parseWorkspaceQualifiedReference } from '../../handoff/workspaceQualifiedReference.js';
 import { inspectStoredWorkspaceArchive } from '../../handoff/workspaceByteProvider.js';
@@ -12,7 +11,7 @@ export function preparePackageParentWorkspaceReuse(input = {}) {
   for (const alias of workspaceAliases.values()) if (!currentIds.has(alias)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-alias.target-unresolved:${alias}`);
   const selection = normalizePackageParentWorkspaceSelection(input.workspaceIds || input.packageParentWorkspaceIds || input.reuseWorkspaceIds || []);
   if (!bundle?.files?.length) return emptyReuse('unavailable', { selection, workspaceAliases });
-  const inspection = inspectRecipientFacingV2Topology(bundle);
+  const inspection = inspectHandoffPackageV1(bundle);
   const declared = declaredPackageWorkspaceBindings(bundle, inspection);
   if (!declared.length) {
     if (selection.mode !== 'none') throw new Error('portable.handoff-manufacture.package-parent.workspace-selection.parent-surface-unresolved');
@@ -34,7 +33,7 @@ export function preparePackageParentWorkspaceReuse(input = {}) {
     if (packageParentWorkspaceSupersededByCurrent(id, currentIds, workspaceAliases)) continue;
     const provider = providerById.get(id);
     const inspected = inspectedById.get(id);
-    if (!provider || provider.state !== 'qualified' || provider.mode !== 'archive' || provider.materialization?.materialization !== 'complete' || inspected?.coverage !== 'complete') {
+    if (!provider || provider.state !== 'qualified' || provider.mode !== 'archive' || inspected?.archive?.state !== 'qualified') {
       if (selection.mode === 'all' || selection.ids.includes(id)) throw new Error(`portable.handoff-manufacture.package-parent.workspace-provider.unqualified:${id}`);
       continue;
     }
@@ -84,43 +83,46 @@ export function preparePackageParentExactMaterialProvider(input = {}) {
   const bundle = input.bundle || null;
   const currentIds = new Set([...(input.currentWorkspaceIds || [])].map(normalizeId).filter(Boolean));
   if (!bundle?.files?.length) return emptyExactMaterialProvider('unavailable');
-  const inspection = inspectRecipientFacingV2Topology(bundle);
+  const inspection = inspectHandoffPackageV1(bundle);
   const claims = [];
-  for (const cache of inspection.caches || []) {
-    const archivePath = String(cache.archivePath || '').trim();
-    const matches = (bundle.files || []).filter((file) => String(file.path || '') === archivePath);
-    let archive = null;
-    if (matches.length === 1) {
-      try { archive = inspectStoredWorkspaceArchive(packageFileBytes(matches[0]), { ownedBytes: true }); } catch { archive = null; }
-    }
-    const byPath = new Map((archive?.entries || []).map((entry) => [String(entry.path || ''), entry]));
-    for (const material of cache.materials || []) {
-      const referenceTarget = String(material.referenceTarget || '').trim();
-      if (!referenceTarget) continue;
-      const parsed = parseWorkspaceQualifiedReference(referenceTarget);
-      if (parsed && currentIds.has(normalizeId(parsed.workspaceId))) continue;
-      const entry = byPath.get(String(material.archiveEntry || '')) || null;
-      const declaredSha = String(material.sha256 || '').trim();
-      const declaredBytes = Number(material.bytes || 0);
-      const entrySha = entry ? String(entry.sha256 || sha256Hex(entry.data || new Uint8Array())) : '';
-      const entryBytes = entry ? Number(entry.bytes || packageFileBytes({ data: entry.data }).byteLength) : 0;
-      const qualified = inspection.status === 'valid' && archive?.state === 'qualified' && Boolean(entry)
-        && (!declaredSha || declaredSha === entrySha) && (!declaredBytes || declaredBytes === entryBytes);
-      claims.push(Object.freeze({
-        referenceTarget,
-        state: qualified ? 'available-qualified' : 'present-unqualified',
-        reason: qualified ? '' : inspection.status !== 'valid' ? 'parent-carrier-inspection-invalid' : archive?.state !== 'qualified' ? 'cache-archive-unqualified' : !entry ? 'cache-entry-unresolved' : 'cache-entry-identity-mismatch',
-        classification: String(material.classification || ''),
-        sourceRequirementId: String(material.requirementId || material.sourceRequirementId || ''),
-        workspaceId: String(cache.workspaceId || ''),
-        cacheArtifactPath: String(cache.artifactPath || ''),
-        cacheArchivePath: archivePath,
-        archiveEntry: String(material.archiveEntry || ''),
-        targetWorkspaceId: String(material.targetWorkspaceId || parsed?.workspaceId || ''),
-        targetPath: String(material.targetPath || material.originalPath || parsed?.path || ''),
-        bytes: entryBytes, sha256: entrySha, data: entry?.data || null
-      }));
-    }
+  const pointerClaims = [
+    ...(inspection.groundingPointers || []).map((item) => ({ ...item, classification: item.pointerKind || 'required' })),
+    ...(inspection.endpointRoles || []).map((item) => ({ ...item, classification: 'endpoint-role' })),
+    ...(inspection.participantRoles || []).map((item) => ({ ...item, classification: 'participant-role' }))
+  ].filter((item) => String(item.targetCarrierKind || '') === 'bounded-cache-entry');
+  const cacheByArchivePath = new Map((inspection.caches || []).map((cache) => [String(cache.archivePath || ''), cache]));
+  for (const pointer of pointerClaims) {
+    const referenceTarget = String(pointer.referenceTarget || '').trim();
+    if (!referenceTarget) continue;
+    const parsed = parseWorkspaceQualifiedReference(referenceTarget);
+    if (parsed && currentIds.has(normalizeId(parsed.workspaceId))) continue;
+    const cache = cacheByArchivePath.get(String(pointer.archivePath || '')) || null;
+    const entries = cache?.archive?.entries || [];
+    const matches = entries.filter((entry) => normalizeWorkspacePath(entry.path) === normalizeWorkspacePath(pointer.targetArchiveEntry || ''));
+    const entry = matches.length === 1 ? matches[0] : null;
+    const entryData = entry?.data || null;
+    const entrySha = entryData ? String(entry.sha256 || sha256Hex(entryData)) : '';
+    const entryBytes = entryData ? Number(entry.bytes || packageFileBytes({ data: entryData }).byteLength) : 0;
+    const expectedSha = String(pointer.targetSha256 || '').trim().toLowerCase();
+    const expectedBytes = Number(pointer.targetBytes || 0);
+    const qualified = inspection.status === 'valid' && cache?.archive?.state === 'qualified' && Boolean(entry)
+      && (!expectedSha || expectedSha === entrySha) && (!expectedBytes || expectedBytes === entryBytes);
+    claims.push(Object.freeze({
+      referenceTarget,
+      state: qualified ? 'available-qualified' : 'present-unqualified',
+      reason: qualified ? '' : inspection.status !== 'valid' ? 'parent-carrier-inspection-invalid' : cache?.archive?.state !== 'qualified' ? 'cache-archive-unqualified' : !entry ? 'cache-entry-unresolved' : 'cache-entry-identity-mismatch',
+      classification: String(pointer.classification || ''),
+      sourceRequirementId: String(pointer.requirementId || ''),
+      workspaceId: '',
+      cacheArtifactPath: String(cache?.artifactPath || ''),
+      cacheArchivePath: String(pointer.archivePath || ''),
+      archiveEntry: String(pointer.targetArchiveEntry || ''),
+      targetWorkspaceId: String(parsed?.workspaceId || ''),
+      targetPath: String(parsed?.path || pointer.targetArchiveEntry || ''),
+      bytes: entryBytes,
+      sha256: entrySha,
+      data: entryData
+    }));
   }
   const byTarget = new Map();
   for (const claim of claims) {
@@ -154,7 +156,7 @@ export function preparePackageParentExactMaterialProvider(input = {}) {
   return Object.freeze({
     state: inspection.status === 'valid' ? 'qualified' : 'present-unqualified', inspectionStatus: String(inspection.status || ''),
     entries: Object.freeze(entries), claims: Object.freeze(claims), endpointContext,
-    boundary: 'Exact material already present in a received qualified package cache may satisfy a newly authored return requirement only after exact declared-target and byte-identity qualification. Exact selected-parent endpoint bindings may rebind otherwise-unreferenced Role endpoints only through qualified reverse-return symmetry. Reuse is mechanical byte closure only: it does not select Workspace source, create semantic authority, infer delegation, or authorize repository discovery.'
+    boundary: 'Exact material already present in a received qualified Package V1 bounded cache may satisfy a newly authored return requirement only after exact declared-target and byte-identity qualification. Exact selected-parent endpoint bindings may rebind otherwise-unreferenced Role endpoints only through qualified reverse-return symmetry. Reuse is mechanical byte closure only: it does not select Workspace source, create semantic authority, infer delegation, or authorize repository discovery.'
   });
 }
 
@@ -248,7 +250,8 @@ function projectSelectedPackageParentEndpointContext(inspection = {}, selectors 
   const matches = (inspection.routes || []).filter((route) => (pointer && String(route.pointerPath || '') === pointer) || (routeId && String(route.routeId || '') === routeId));
   const exact = matches.length === 1 ? matches[0] : null;
   if (!exact) return emptyEndpointContext(matches.length > 1 ? 'selected-parent-route-ambiguous' : 'selected-parent-route-unresolved');
-  const endpoints = (inspection.endpointRoles || []).filter((item) => String(item.routeId || '') === String(exact.routeId || ''));
+  const endpointPointerSet = new Set(exact.endpointRolePointers || []);
+  const endpoints = (inspection.endpointRoles || []).filter((item) => endpointPointerSet.has(String(item.pointerPath || '')));
   const side = (party) => {
     const candidates = endpoints.filter((item) => String(item.endpointParty || '') === party);
     if (candidates.length !== 1) return null;
@@ -333,22 +336,13 @@ export function selectDeclaredPackageParentWorkspaceBindings(declared = [], sele
   return Object.freeze((selection.ids || []).map((id) => byId.get(id)));
 }
 
-function declaredPackageWorkspaceBindings(bundle = {}, inspection = null) {
-  const roots = (bundle.files || []).filter((file) => String(file.path || '') === RECIPIENT_V2_PACKAGE_V1_ROOT_PATH);
-  if (roots.length === 1) {
-    try {
-      const markdown = new TextDecoder('utf-8', { fatal: true }).decode(packageFileBytes(roots[0]));
-      const declared = [...(parseHandoffPackageV1(markdown).workspaces || [])];
-      if (declared.length) return declared;
-    } catch { /* fall through to independently qualified recipient-v2 inspection */ }
-  }
+function declaredPackageWorkspaceBindings(_bundle = {}, inspection = null) {
   if (!inspection || inspection.detected !== true || inspection.status !== 'valid') return [];
   return (inspection.workspaces || [])
-    .filter((workspace) => String(workspace.coverage || '') === 'complete')
     .map((workspace) => Object.freeze({
       workspaceId: String(workspace.workspaceId || ''),
-      workspaceArtifactInnerPath: String(workspace.sourceWorkspaceTargetInnerPath || ''),
-      snapshotPath: String(workspace.workspaceArchivePath || '')
+      workspaceArtifactInnerPath: String(workspace.sourceWorkspaceTargetInnerPath || workspace.innerPath || ''),
+      snapshotPath: String(workspace.workspaceArchivePath || workspace.archivePath || '')
     }))
     .filter((workspace) => workspace.workspaceId && workspace.workspaceArtifactInnerPath && workspace.snapshotPath);
 }

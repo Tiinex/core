@@ -35,8 +35,9 @@ export function projectParticipantRoleRequirements(participantRoles = [], scope 
     const targetPath = String(role.path || role.targetPath || '').trim();
     const rawReference = String(role.reference || role.referenceTarget || targetPath || '').trim();
     const reference = parseMaterialReference(rawReference);
+    const identityToken = participantIdentityToken({ targetWorkspaceId, targetPath, rawReference, roleLabel: role.label || role.roleLabel || '' }, index);
     return Object.freeze({
-      id: `participant-role:${routeToken}:${index + 1}`,
+      id: `participant-role:${routeToken}:${identityToken}`,
       name: String(role.label || role.roleLabel || `participant-role-${index + 1}`),
       classification: 'participant-role',
       roleLabel: String(role.label || role.roleLabel || ''),
@@ -53,6 +54,16 @@ export function projectParticipantRoleRequirements(participantRoles = [], scope 
       fields: Object.freeze({ RouteWorkspace: routeWorkspaceId, RoutePath: routePath, TargetWorkspace: targetWorkspaceId, TargetPath: targetPath, Reference: rawReference })
     });
   }));
+}
+
+function participantIdentityToken({ targetWorkspaceId = '', targetPath = '', rawReference = '', roleLabel = '' } = {}, index = 0) {
+  const workspace = safeToken(targetWorkspaceId);
+  const path = safeToken(targetPath);
+  if (targetWorkspaceId && targetPath) return `${workspace}:${path}`;
+  const reference = safeToken(rawReference);
+  if (rawReference) return `reference:${reference}`;
+  const label = safeToken(roleLabel);
+  return label ? `label:${label}` : `ordinal:${index + 1}`;
 }
 
 function projectSection(markdown, heading, classification, findings) {

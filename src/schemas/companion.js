@@ -221,7 +221,7 @@ function stripEnvelopeSectionText(text = '') {
     kept.push(`## ${label}\n\n${value}`);
   }
   if (kept.length) return kept.join('\n\n');
-  return String(text || '').replace(/^#\s+Continuity Context[\s\S]*?(?=^#\s+|\Z)/m, '').replace(/^#\s+Continuity Integrity[\s\S]*?(?=^#\s+|\Z)/m, '').trim();
+  return String(text || '').replace(/^#\s+Continuity Context[\s\S]*?(?=^#\s+|(?![\s\S]))/m, '').replace(/^#\s+Continuity Integrity[\s\S]*?(?=^#\s+|(?![\s\S]))/m, '').trim();
 }
 
 function trimReadValue(value = '', options = {}) {

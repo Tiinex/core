@@ -47,12 +47,13 @@ export * from './conformance/checkpoint.qualification.js';
 export * from './transfer/transfer.plan.js';
 
 export * from './handoff/manufacture.js';
+export * from './handoff/handoffPackageV1.inspect.js';
+export * from './handoff/handoffPackageV1.zip.js';
 export * from './handoff/carrierProfile.js';
 export * from './handoff/carrierContinuationProjection.js';
 export * from './handoff/toolingBootstrap.js';
 export * from './handoff/coldStartQualification.js';
 export * from './handoff/transportEnvelopeV1.js';
-export * from './handoff/recipientV2.packageV1.js';
 
 export * from './comparison/sourceFrontierComparison.js';
 export * from './comparison/sourceFrontierReconciliationProof.js';

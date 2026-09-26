@@ -13,6 +13,7 @@ import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../../.
 import { classifyParentRecoveryReference } from '../../../../lineage/parentRecoveryReference.js';
 import { creationSchemaReferenceValidationContext } from '../../draft/draft.validation-context.js';
 import { isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority, qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority } from '../../../../schemas/schema.reference.js';
+import { validatePreparedReturnBodyAuthority } from './cli.prepare-return.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 
@@ -29,6 +30,8 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   if (!bodyPath) throw new Error('portable.cli.author.body.required');
   const bodyMarkdown = (await readFile(path.resolve(bodyPath), 'utf8')).trim();
   if (!bodyMarkdown) throw new Error('portable.cli.author.body.empty');
+  if (schemaId === 'tiinex.handoff.v1' && /(?:<<TIINEX_REQUIRED:[A-Z0-9_]+>>|TIINEX_REQUIRED_[A-Z0-9_]+)/.test(bodyMarkdown)) throw new Error('portable.cli.author.return-scaffold.incomplete: replace every <<TIINEX_REQUIRED:...>> marker with exact supported return semantics before authoring.');
+  if (schemaId === 'tiinex.handoff.v1') await validatePreparedReturnBodyAuthority({ workspaceRoot, state, bodyPath: path.resolve(bodyPath), bodyMarkdown });
   const title = String(flags.title || firstHeading(bodyMarkdown) || state?.roleLabel || schemaId).trim();
 
   const parentReference = resolveParentReference(flags, state);
@@ -46,6 +49,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   const authors = String(flags.authors || state?.roleLabel || '').trim();
   const why = Object.prototype.hasOwnProperty.call(flags, 'why') ? String(flags.why || '').trim() : '';
   const status = String(flags.status || 'ready/local').trim();
+  const preflightOnly = flags.preflight === true || flags['validate-only'] === true;
 
   const markdown = renderArtifactCreationDraftMarkdown(contract, {
     currentSchemaId: schemaId,
@@ -101,6 +105,20 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
         actionableFindings,
         nextAction: actionableFindings[0]?.nextAction || 'Resolve the reported schema/continuity finding, then rerun the same author command. No invalid durable artifact was retained.',
         boundary: 'Common-path authoring composes the shared renderer, c14n-v2 sealing, runtime audit, and staging qualification. It may write only the requested local Workspace artifact and runtime-only .tiinex continuation state; it performs no remote mutation.'
+      });
+    }
+    if (preflightOnly) {
+      await rm(artifactPath, { force: true });
+      wrote = false;
+      return Object.freeze({
+        schema: 'tiinex.portable.common-author.result.v1',
+        operation: 'author',
+        status: 'qualified-preflight',
+        artifact: Object.freeze({ path: artifactRelativePath, schemaId, written: false, parentPath: parentReference, parentSource: parentSource || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord), selfIntegrity: selfIntegrity.state, preflight: true }),
+        qualification: Object.freeze({ audit: audit.status, stage: stage.status, exportReady: Boolean(stage?.stagedArtifact?.qualification?.exportReady) }),
+        findingSummary: mergeFindingSummaries(audit?.findingSummary, stage?.findingSummary),
+        nextAction: 'Run the same author command without --preflight to retain the qualified artifact; no candidate artifact or continuation-state mutation was retained by this preflight.',
+        boundary: 'Pre-author qualification uses the exact normal renderer, c14n-v2 sealing, audit, and staging path, then removes the candidate and leaves continuation state unchanged. It performs no remote mutation.'
       });
     }
     const updatedState = await updateContinuationState(workspaceRoot, state, {

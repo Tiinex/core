@@ -151,39 +151,40 @@ function projectExactRecovery(issue = {}, authority = {}, nodeById = new Map()) 
 
   const sourceNode = nodeById.get(String(issue?.nodeId || '')) || null;
   const github = parseGithubBlob(exactTarget) || acceptedPinnedRelativeRepositoryTarget(exactTarget, sourceNode);
-  const repositoryBinding = authority?.capabilities?.discovery?.profile?.toolBindings?.repositoryRead?.selected || null;
-  if (github && repositoryBinding) {
-    return Object.freeze({
-      state: 'host-action-available',
-      target: exactTarget,
-      whyRequired: 'This exact declared Parent is required to prove cold-start continuity to a qualified root.',
-      allowedScope: 'Read only the exact declared or deterministically resolved repository path/ref. Do not broaden search or substitute similar material.',
-      ...(github.basis ? { resolutionBasis: github.basis } : {}),
-      hostAction: Object.freeze({
-        operation: 'plan-host-action',
-        action: 'repository-read',
-        request: Object.freeze({
-          repository: github.repository,
-          ref: github.ref,
-          path: github.path,
-          purpose: 'recover exact declared Parent for cold-start continuity proof',
-          nextOperation: 'ground'
-        }),
-        selectedTool: Object.freeze({
-          id: String(repositoryBinding.tool?.id || ''),
-          name: String(repositoryBinding.tool?.name || '')
-        })
-      }),
-      resume: resumeGround(authority)
-    });
-  }
+  return projectExactReferenceRecovery(exactTarget, authority, {
+    github,
+    materialLabel: 'Parent material',
+    whyRequired: 'This exact declared Parent is required to prove cold-start continuity to a qualified root.',
+    purpose: 'recover exact declared Parent for cold-start continuity proof'
+  });
+}
 
+export function projectExactReferenceRecovery(target = '', authority = {}, options = {}) {
+  const exactTarget = String(target || '').trim();
+  const materialLabel = String(options.materialLabel || 'required material');
+  const whyRequired = String(options.whyRequired || `This exact declared ${materialLabel} is required for grounded continuation.`);
+  const purpose = String(options.purpose || `recover exact declared ${materialLabel}`);
+  const github = options.github || parseGithubBlob(exactTarget);
+  const repositoryBinding = authority?.capabilities?.discovery?.profile?.toolBindings?.repositoryRead?.selected || null;
+  if (github && repositoryBinding) return Object.freeze({
+    state: 'host-action-available', target: exactTarget, whyRequired,
+    allowedScope: 'Read only the exact declared repository path/ref. Do not broaden search, mutate the repository, or substitute similar material.',
+    ...(github.basis ? { resolutionBasis: github.basis } : {}),
+    hostAction: Object.freeze({
+      operation: 'plan-host-action', action: 'repository-read',
+      request: Object.freeze({ repository: github.repository, ref: github.ref, path: github.path, purpose, nextOperation: 'ground' }),
+      selectedTool: Object.freeze({ id: String(repositoryBinding.tool?.id || ''), name: String(repositoryBinding.tool?.name || '') })
+    }),
+    resume: resumeGround(authority)
+  });
   return Object.freeze({
-    state: 'operator-required',
-    target: exactTarget,
-    whyRequired: 'This exact declared Parent is required to prove cold-start continuity to a qualified root, and no currently bound exact repository-read capability can supply it.',
-    allowedScope: 'Provide the exact declared target bytes or an accepted exact-read receipt. Do not substitute semantically similar material or widen origin scope.',
-    operatorRequest: operatorRequest(exactTarget, authority),
+    state: 'operator-required', target: exactTarget, whyRequired: repositoryBinding ? whyRequired : `${whyRequired} No currently bound exact repository-read capability can supply it.`,
+    allowedScope: 'Provide the exact declared target bytes or an accepted exact-read receipt. Do not substitute semantically similar material or widen source scope.',
+    operatorRequest: Object.freeze({
+      role: 'Transport Operator', target: exactTarget,
+      request: exactTarget ? `Provide exactly the declared ${materialLabel} bytes (or an accepted host exact-read receipt for them) so Tooling can resume the same ground operation.` : `Provide the exact missing ${materialLabel} identified by Tooling so the same ground operation can resume.`,
+      semanticJudgmentRequired: false, resume: resumeGround(authority)
+    }),
     resume: resumeGround(authority)
   });
 }

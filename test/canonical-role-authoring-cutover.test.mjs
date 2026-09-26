@@ -95,6 +95,16 @@ test('Role Assignment Modes validator accepts only exact canonical serialization
   }
 });
 
+
+
+test('Role section parsing treats end-of-input structurally and does not truncate on the letter z inside Holder Relationship prose', () => {
+  const contract = buildArtifactCreationContract({ schemaId: 'tiinex.party.role.v1', transitionType: 'create-artifact' });
+  const markdown = renderArtifactCreationDraftMarkdown(contract, { values: { ...VALUES, 'Holder State': 'frozen locally; assignable only through bounded evidence' }, title: 'Loom Role', summary: 'Loom Role', createdAt: '2026-09-15T20:00:00Z' });
+  const result = validateArtifact({ markdown });
+  assert.equal(result.findings.some((finding) => finding.code === 'party.role.assignmentModes.missing'), false, JSON.stringify(result.findings, null, 2));
+  assert.equal(result.findings.some((finding) => finding.severity === 'error'), false, JSON.stringify(result.findings, null, 2));
+});
+
 test('common author preserves exact historical Role Parent schema locator while validating continuation against current Role schema', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'tiinex-role-cutover-'));
   try {

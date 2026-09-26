@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { auditPortableRecord } from '../audit/audit.capability.js';
 import { isDiscoveryWorkLeafEligible } from '../../../workspaces/workspace.materialRole.js';
+import { schemaIdIsOrDescendsFrom } from '../../../schemas/resolver.js';
 
 export const PORTABLE_REDUCTION_PREFLIGHT_SCHEMA_ID = 'tiinex.portable.reduction-preflight.v1';
 export const PORTABLE_REDUCTION_COMPOSITION_SCHEMA_ID = 'tiinex.portable.reduction-composition.v1';
@@ -24,6 +25,21 @@ function sortJson(value) {
 }
 
 export function normalizePath(value = '') { return String(value || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, '').trim(); }
+
+export function resolveRecordReferencePath(recordPath = '', reference = '') {
+  const raw = String(reference || '').trim();
+  if (!raw) return '';
+  const github = raw.match(GITHUB_IMMUTABLE_BLOB_RE);
+  if (github) return normalizePath(github[4]);
+  const workspaceQualified = raw.match(/^[a-z0-9._-]+::(.+)$/i);
+  if (workspaceQualified) return normalizePath(workspaceQualified[1]);
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) return linkPath(raw);
+  const withoutFragment = raw.split('#')[0].split('?')[0].replace(/\\/g, '/');
+  if (withoutFragment.startsWith('.topics/')) return normalizePath(withoutFragment);
+  const baseDirectory = path.posix.dirname(normalizePath(recordPath));
+  return normalizePath(path.posix.normalize(path.posix.join(baseDirectory, withoutFragment)));
+}
+
 export function safeCode(value = '') { return String(value || 'unresolved').toLowerCase().replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, ''); }
 export function escapeRegExp(value = '') { return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 export function linkPath(value = '') {
@@ -63,12 +79,26 @@ export function qualifyRecord(record = {}) {
   return Object.freeze({ state: reasons.length ? 'unresolved' : 'qualified', qualified: reasons.length === 0, reasons: Object.freeze(reasons), audit });
 }
 
+export function isReductionFamilySchemaId(schemaId = '') {
+  return schemaIdIsOrDescendsFrom(String(schemaId || '').trim(), 'tiinex.reduction.v1');
+}
+
+export function qualifyReductionFamilyRecord(record = {}, records = []) {
+  return qualifyReductionLikeRecord(record, records, { family: true });
+}
+
 export function qualifyReductionRecord(record = {}, records = []) {
+  return qualifyReductionLikeRecord(record, records, { family: false });
+}
+
+function qualifyReductionLikeRecord(record = {}, records = [], options = {}) {
   if (!record) return Object.freeze({ qualified: false, state: 'missing', digest: '', parentPath: '', parent: null, reasons: Object.freeze(['reduction-artifact-missing']), audit: null });
   const base = qualifyRecord(record);
   const reasons = [...base.reasons];
-  if (String(record.schemaId || '') !== 'tiinex.reduction.v1') reasons.push(`schema:${record.schemaId || 'missing'}`);
-  const parentPath = normalizePath(record.trace || '');
+  const schemaId = String(record.schemaId || '');
+  const schemaQualified = options.family ? isReductionFamilySchemaId(schemaId) : schemaId === 'tiinex.reduction.v1';
+  if (!schemaQualified) reasons.push(`schema:${schemaId || 'missing'}`);
+  const parentPath = resolveRecordReferencePath(record.path || '', record.trace || '');
   const parentResolution = parentPath ? resolveUniqueRecord(records, parentPath) : { state: 'missing', record: null };
   if (!parentPath) reasons.push('reduction-parent-required');
   else if (parentResolution.state === 'ambiguous') reasons.push('reduction-parent-ambiguous');
@@ -137,7 +167,7 @@ export function locatorFromValue(value = {}) {
   if (typeof value === 'string') {
     const github = value.match(GITHUB_IMMUTABLE_BLOB_RE);
     if (!github) return unqualifiedLocator('immutable-locator-unqualified');
-    return Object.freeze({ qualified: true, state: 'immutable-git', provider: 'github', repository: `${github[1]}/${github[2]}`, commit: github[3].toLowerCase(), workspace: '', path: normalizePath(github[4]), permalink: value, digest: '', basis: 'explicit-commit-pinned-permalink' });
+    return Object.freeze({ qualified: true, contentQualified: false, state: 'immutable-git', provider: 'github', repository: `${github[1]}/${github[2]}`, commit: github[3].toLowerCase(), workspace: '', path: normalizePath(github[4]), permalink: value, digest: '', basis: 'explicit-commit-pinned-permalink', evidenceQualification: 'unresolved', blocker: 'immutable-content-binding-unresolved' });
   }
   const repository = String(value.repository || value.repo || '').trim();
   const commit = String(value.commit || value.sha || value.ref || '').trim().toLowerCase();
@@ -146,8 +176,23 @@ export function locatorFromValue(value = {}) {
   const permalink = String(value.permalink || value.url || '').trim();
   const digest = String(value.digest || value.sha256 || '').replace(/^sha256:/, '').trim().toLowerCase();
   const immutable = value.immutable === true || /^[0-9a-f]{40}$/i.test(commit);
-  const qualified = Boolean(immutable && /^[0-9a-f]{40}$/i.test(commit) && repository && sourcePath);
-  return Object.freeze({ qualified, state: qualified ? 'immutable-git' : 'unqualified', provider: String(value.provider || 'explicit'), repository, commit, workspace, path: sourcePath, permalink, digest, basis: value.basis || '', blocker: qualified ? '' : 'immutable-locator-unqualified' });
+  const addressQualified = Boolean(immutable && /^[0-9a-f]{40}$/i.test(commit) && repository && sourcePath);
+  const evidenceQualification = String(value.qualification || value.semanticState || '').trim();
+  const basis = value.basis || '';
+  const contentQualified = Boolean(addressQualified && /^[0-9a-f]{64}$/i.test(digest) && evidenceQualification === 'qualified' && nonEmptyBasis(basis));
+  return Object.freeze({ qualified: addressQualified, contentQualified, state: addressQualified ? 'immutable-git' : 'unqualified', provider: String(value.provider || 'explicit'), repository, commit, workspace, path: sourcePath, permalink, digest, basis, evidenceQualification, blocker: !addressQualified ? 'immutable-locator-unqualified' : contentQualified ? '' : 'immutable-content-binding-unresolved' });
+}
+
+export function locatorVerifiesRecord(locator = {}, record = {}) {
+  if (!locator?.qualified || locator?.contentQualified !== true || !record?.markdown) return false;
+  return String(locator.digest || '').toLowerCase() === sha256Text(record.markdown || '').toLowerCase();
+}
+
+export function sameImmutableLocatorIdentity(left = {}, right = {}) {
+  return Boolean(left?.qualified && right?.qualified
+    && String(left.repository || '') === String(right.repository || '')
+    && String(left.commit || '').toLowerCase() === String(right.commit || '').toLowerCase()
+    && samePath(left.path || '', right.path || ''));
 }
 
 export function locatorForRecord(record = {}, supplied = []) {
@@ -155,7 +200,20 @@ export function locatorForRecord(record = {}, supplied = []) {
   const explicit = supplied.find((item) => wanted.has(normalizePath(item.path || item.candidatePath || item.target || '')) || wanted.has(path.basename(normalizePath(item.path || item.candidatePath || item.target || ''))));
   if (explicit) return locatorFromValue(explicit);
   const source = record.source || {};
-  if (source.repository && /^[0-9a-f]{40}$/i.test(String(source.commit || source.ref || '')) && source.path) return locatorFromValue({ repository: source.repository, commit: source.commit || source.ref, workspace: source.workspace || '', path: source.path, immutable: true, permalink: source.permalink || '', basis: source.boundary || 'explicit-record-source' });
+  if (source.repository && /^[0-9a-f]{40}$/i.test(String(source.commit || source.ref || '')) && source.path) {
+    const acceptedPinnedHostReceipt = source.receiptQualification === 'accepted-host-repository-read' && source.provenanceQualification === 'accepted-host-repository-pinned';
+    return locatorFromValue({
+      repository: source.repository,
+      commit: source.commit || source.ref,
+      workspace: source.workspace || '',
+      path: source.path,
+      immutable: true,
+      permalink: source.permalink || '',
+      digest: acceptedPinnedHostReceipt ? sha256Text(record.markdown || '') : (source.sha256 || source.digest || ''),
+      qualification: acceptedPinnedHostReceipt ? 'qualified' : (source.qualification || source.semanticState || source.provenanceQualification || ''),
+      basis: acceptedPinnedHostReceipt ? 'accepted pinned host repository-read receipt bound to supplied record bytes' : (source.boundary || source.basis || 'explicit-record-source')
+    });
+  }
   return unqualifiedLocator('immutable-locator-missing');
 }
 
@@ -170,4 +228,5 @@ export function samePath(a = '', b = '') {
   return Boolean(left && right && (left === right || left.endsWith(`/${right}`) || right.endsWith(`/${left}`)));
 }
 
-function unqualifiedLocator(blocker) { return Object.freeze({ qualified: false, state: 'missing', provider: '', repository: '', commit: '', workspace: '', path: '', permalink: '', digest: '', basis: '', blocker }); }
+function unqualifiedLocator(blocker) { return Object.freeze({ qualified: false, contentQualified: false, state: 'missing', provider: '', repository: '', commit: '', workspace: '', path: '', permalink: '', digest: '', basis: '', evidenceQualification: 'unresolved', blocker }); }
+function nonEmptyBasis(value) { return Array.isArray(value) ? value.length > 0 : typeof value === 'string' ? Boolean(value.trim()) : Boolean(value && typeof value === 'object' && Object.keys(value).length); }

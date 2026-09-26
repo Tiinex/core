@@ -2,6 +2,7 @@ import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { auditPortableRecord } from '../audit/audit.capability.js';
 import { portableRuntimeValidationAuthorityForRecord } from '../schema/qualifiedLocalRoot.runtime.js';
 import { projectQualifiedWorkspacePackageSources } from './workspacePackageSources.js';
+import { sectionField, sectionText } from './coldStartQualification.shared.js';
 
 export const PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID = 'tiinex.portable.handoff-endpoint-projection.v1';
 
@@ -9,16 +10,24 @@ export function canonicalHandoffEndpointReference(candidate = {}) {
   const qualification = String(candidate?.qualification || '').trim();
   const workspaceId = token(candidate?.workspaceId || '');
   const artifactPath = norm(candidate?.artifactPath || candidate?.path || '');
-  const target = String(candidate?.target || candidate?.reference || '').trim();
+  const target = String(candidate?.target || '').trim();
   const expectedTarget = workspaceId && artifactPath ? `${workspaceId}::${artifactPath}` : '';
   const kind = String(candidate?.kind || '').trim().toLowerCase();
-  if (qualification !== 'qualified-exact' || !workspaceId || !artifactPath || !target || target !== expectedTarget || !['role', 'party'].includes(kind)) {
-    return freeze({ state: 'blocked', reference: '', reason: 'endpoint-candidate-not-exact-qualified' });
+  const providerReference = String(candidate?.referenceTarget || candidate?.externalReference || candidate?.providerReference || '').trim();
+  const providerQualified = !providerReference || String(candidate?.referenceQualification || candidate?.providerReferenceQualification || '') === 'qualified-exact';
+  if (qualification !== 'qualified-exact' || !workspaceId || !artifactPath || !target || target !== expectedTarget || !providerQualified || !['role', 'party'].includes(kind)) {
+    return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-candidate-not-exact-qualified' });
   }
-  if (/\s|\)/u.test(target)) return freeze({ state: 'blocked', reference: '', reason: 'endpoint-target-not-markdown-link-safe' });
+  if (providerReference && /\s|\)/u.test(providerReference)) return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-reference-not-markdown-link-safe' });
   const rawLabel = String(candidate?.label || '').replaceAll(']', ' ').replace(/[\r\n]+/gu, ' ').replace(/\s+/gu, ' ').trim();
   const label = rawLabel || (kind === 'role' ? 'Role' : 'Party');
-  return freeze({ state: 'qualified', reference: `[${label}](${target})`, target, label, kind, workspaceId, artifactPath, basis: 'exact-qualified-endpoint-candidate' });
+  return freeze({
+    state: 'qualified',
+    reference: providerReference ? `[${label}](${providerReference})` : '',
+    referenceTarget: providerReference,
+    target, label, kind, workspaceId, artifactPath,
+    basis: providerReference ? 'exact-qualified-provider-reference-plus-workspace-coordinate' : 'exact-qualified-workspace-coordinate-without-public-source-reference'
+  });
 }
 
 export function projectQualifiedHandoffEndpoints(input = {}) {
@@ -61,15 +70,22 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     if (!kind) continue;
     const target = `${workspaceId}::${path}`;
     const label = String(parsed.title || record.title || path);
-    const canonicalReference = canonicalHandoffEndpointReference({ target, label, kind, workspaceId, artifactPath: path, qualification: 'qualified-exact' });
+    const authoringLabel = kind === 'role'
+      ? sectionField(sectionText(parsed.body?.text || '', 'Role Identity'), 'Role Label')
+      : '';
+    const providerReference = exactQualifiedProviderReference(record);
+    const canonicalReference = canonicalHandoffEndpointReference({ target, label, kind, workspaceId, artifactPath: path, qualification: 'qualified-exact', ...(providerReference ? { referenceTarget: providerReference.target, referenceQualification: providerReference.qualification } : {}) });
     if (canonicalReference.state !== 'qualified') continue;
     candidates.push(freeze({
       id: target,
       target,
-      reference: target,
+      workspaceCoordinate: target,
+      reference: canonicalReference.referenceTarget,
+      referenceQualification: providerReference?.qualification || 'none',
       canonicalReference: canonicalReference.reference,
       kind,
       label,
+      ...(authoringLabel ? { authoringLabel } : {}),
       workspaceId,
       artifactPath: path,
       schemaId,
@@ -85,8 +101,18 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     candidates,
     findings,
     operationBoundary: { sourceMutation: false, remoteWrite: false, identityInference: false },
-    boundary: 'Projects only exactly qualified Role/Party artifacts from the bounded .topics material surface owned by one exact qualified requested Workspace artifact. target/reference preserves explicit Workspace artifact identity as workspaceId::artifact-path; nested fixture Workspaces, repository-wide scans, caches, chronology, filenames, holder labels, and repository basenames never infer endpoint identity.'
+    boundary: 'Projects only exactly qualified Role/Party artifacts from the bounded .topics material surface owned by one exact qualified requested Workspace artifact. target/workspaceCoordinate preserves explicit Workspace artifact identity; reference preserves an exact-qualified provider reference when supplied and otherwise remains absent; workspaceCoordinate alone carries the internal package-local Workspace/path identity; Role authoringLabel is the exact qualified Role Identity / Role Label semantic value while label remains presentation-only; nested fixture Workspaces, repository-wide scans, caches, chronology, filenames, holder labels, and repository basenames never infer endpoint identity.'
   });
+}
+
+
+function exactQualifiedProviderReference(record = {}) {
+  const direct = String(record.referenceTarget || record.providerReference || record.sourceReference?.target || '').trim();
+  const qualification = String(record.referenceQualification || record.providerReferenceQualification || record.sourceReference?.qualification || '').trim();
+  if (direct && qualification === 'qualified-exact') return freeze({ target: direct, qualification });
+  const permalink = String(record.source?.permalink || record.source?.config?.permalink || '').trim();
+  const permalinkQualification = String(record.source?.permalinkQualification || record.source?.config?.permalinkQualification || '').trim();
+  return permalink && permalinkQualification === 'qualified-exact' ? freeze({ target: permalink, qualification: permalinkQualification }) : null;
 }
 
 function qualifyEndpointSourceAuthority(records = [], workspaceId = '') {

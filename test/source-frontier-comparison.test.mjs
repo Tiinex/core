@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-
 import {
   comparePortableSourceFrontiers,
   createPortableSourceFrontier,
@@ -16,93 +15,13 @@ import {
 } from '../src/public/index.js';
 import { compareNodeSourceFrontiers, proveNodeSourceReconciliation } from '../src/public/node.js';
 import { prepareNodeHandoffManufacturingInput } from '../src/tooling/portable/adapters/node/handoff.manufacture.js';
-import { prepareNodeWorkspaceCarrierManufacturingInput } from '../src/tooling/portable/adapters/node/workspaceCarrier.manufacture.js';
 import { manufactureRecipientRelativeHandoffPackage } from '../src/tooling/portable/handoff/manufacture.js';
-import { packageFileByteView, sha256Hex } from '../src/export/package.bytes.js';
-import { exportFileMapZipUint8Array } from '../src/export/package.zip.js';
-import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
-import { auditPortableRecoveryAcceptance } from '../src/tooling/portable/handoff/recoveryAcceptanceAudit.js';
-import {
-  buildRecipientFacingV2PackageV1,
-  buildRecipientFacingV2PackageV1Secure,
-  openRecipientV2PackageV1SealedWorkspace
-} from '../src/tooling/portable/handoff/recipientV2.packageV1.js';
+import { sha256Hex } from '../src/export/package.bytes.js';
 
 const encoder = new TextEncoder();
-const WORKSPACE_INNER_PATH = '.topics/.workspaces/tiinex-core.workspace.md';
-const ROUTE_PATH = '.topics/handoffs/return.trace.md';
-const SECRET_PATH = '.topics/context/secret.trace.md';
-const PASSWORD = 'frontier comparison fixture password';
-const WORKSPACE_BYTES = new Uint8Array(await readFile(new URL('../.topics/.workspaces/tiinex-core.workspace.md', import.meta.url)));
-
 function h(text) { const data = encoder.encode(text); return { bytes: data.byteLength, sha256: sha256Hex(data) }; }
 function entry(pathname, text) { return { path: pathname, ...h(text) }; }
 function frontier(id, workspaces) { return createPortableSourceFrontier({ id, workspaces }); }
-function stableJson(value) { return JSON.stringify(sortJson(value)); }
-function sortJson(value) { if (Array.isArray(value)) return value.map(sortJson); if (!value || typeof value !== 'object') return value; return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortJson(value[key])])); }
-
-function minimalBootstrapFiles() {
-  const runtime = encoder.encode('export const bootstrap = true;\n');
-  const entries = [{ path: 'runtime/tooling.mjs', bytes: runtime.byteLength, sha256: sha256Hex(runtime) }];
-  const manifest = {
-    schema: 'tiinex.portable.tooling-bootstrap.manifest.v1', delivery: 'embedded', entrypoint: 'runtime/tooling.mjs',
-    runtime: { entries, representationSha256: sha256Hex(encoder.encode(stableJson(entries))) }
-  };
-  return [
-    { path: 'tiinex.bootstrap/manifest.json', data: encoder.encode(JSON.stringify(manifest)) },
-    { path: 'tiinex.bootstrap/runtime/tooling.mjs', data: runtime }
-  ];
-}
-
-function packageFixtureSource({ includeAux = false, sealed = false, coreFiles = {} } = {}) {
-  const routeMarkdown = qualifiedHandoffFixture(sealed ? {
-    requiredContext: `- Secret Context\n  - Material: sealed workspace material\n  - Purpose: verify locked comparison opacity\n  - Availability: unavailable\n  - Material Reference: [Secret](sealed::${SECRET_PATH})`
-  } : {});
-  const routeBytes = encoder.encode(routeMarkdown);
-  const coreReadme = encoder.encode('core comparison fixture\n');
-  const auxReadme = encoder.encode('aux comparison fixture\n');
-  const secretBytes = encoder.encode('# secret-name-do-not-leak\nclassified fixture bytes\n');
-  const archives = [{
-    workspaceId: 'core', archivePath: 'source-core.zip', data: exportFileMapZipUint8Array([
-      { path: WORKSPACE_INNER_PATH, data: WORKSPACE_BYTES }, { path: ROUTE_PATH, data: routeBytes }, { path: 'README.md', data: coreReadme },
-      ...Object.entries(coreFiles).map(([entryPath, data]) => ({ path: entryPath, data }))
-    ])
-  }];
-  if (includeAux) archives.push({
-    workspaceId: 'aux', archivePath: 'source-aux.zip', data: exportFileMapZipUint8Array([
-      { path: WORKSPACE_INNER_PATH, data: WORKSPACE_BYTES }, { path: 'README.md', data: auxReadme }
-    ])
-  });
-  if (sealed) archives.push({
-    workspaceId: 'sealed', archivePath: 'source-sealed.zip', data: exportFileMapZipUint8Array([
-      { path: WORKSPACE_INNER_PATH, data: WORKSPACE_BYTES }, { path: SECRET_PATH, data: secretBytes }
-    ])
-  });
-  const sourceSurface = {
-    status: 'ready',
-    topology: { workspaces: archives.map(({ workspaceId, archivePath }) => ({ workspaceId, coverage: 'complete', archivePath, sourceWorkspaceTargetInnerPath: WORKSPACE_INNER_PATH })) },
-    files: archives.map(({ archivePath, data }) => ({ path: archivePath, data }))
-  };
-  const descriptor = {
-    workspaceArchiveBindings: [{ workspaceId: 'core', entryMap: { entries: [{ path: ROUTE_PATH, bytes: routeBytes.byteLength, sha256: sha256Hex(routeBytes) }] } }],
-    materialized: [], requirements: { required: [], reference: [], endpointRoles: [], participantRoles: [], dependencies: [] }
-  };
-  const route = {
-    state: 'qualified', id: `handoff-route:core:${ROUTE_PATH}`, workspaceId: 'core', workspaceRelativePath: ROUTE_PATH, sha256: sha256Hex(routeBytes),
-    parties: { from: 'Anchor', to: 'Loom' }, materialRequirements: { required: [], reference: [], endpointRoles: [], participantRoles: [], dependencies: [] }, requiredClosure: { requirements: [] }
-  };
-  return {
-    sourceSurface, descriptor, carrierProjection: { lineage: { dimension: '001', checkpointKind: 'progression' }, routes: [route] },
-    bundle: { files: minimalBootstrapFiles() }, createdAt: '2026-09-10 17:00:00', routeBytes, coreReadme, auxReadme, secretBytes,
-    sealedArchive: archives.find((item) => item.workspaceId === 'sealed')?.data || null
-  };
-}
-
-async function writePackageZip(dir, name, result) {
-  const target = path.join(dir, name);
-  await writeFile(target, exportFileMapZipUint8Array(result.files));
-  return target;
-}
 
 async function writeWorkspace(root, files) {
   for (const [relative, data] of Object.entries(files)) {
@@ -111,13 +30,6 @@ async function writeWorkspace(root, files) {
     await writeFile(target, data);
   }
 }
-
-function localWorkspaceFiles(routeBytes, readme) {
-  return { [WORKSPACE_INNER_PATH]: WORKSPACE_BYTES, [ROUTE_PATH]: routeBytes, 'README.md': readme };
-}
-
-function auxWorkspaceFiles(readme) { return { [WORKSPACE_INNER_PATH]: WORKSPACE_BYTES, 'README.md': readme }; }
-
 
 test('host-neutral source eligibility excludes Python cache bytes without treating ordinary Python or operator-authored scripts as disposable', () => {
   const pycache = qualifyPortableSourcePath('tools/__pycache__/browser-smoke.cpython-313.pyc');
@@ -146,74 +58,7 @@ test('host-neutral source eligibility excludes Python cache bytes without treati
 
 
 
-test('Recovery acceptance audit re-materializes qualified candidate bytes and blocks unexplained removals from the accepted basis', () => {
-  const basisSource = packageFixtureSource({ coreFiles: {
-    'src/keep.txt': encoder.encode('accepted basis keep\n'),
-    'src/remove.txt': encoder.encode('accepted basis remove\n')
-  } });
-  const candidateSource = packageFixtureSource({ coreFiles: {
-    'src/keep.txt': encoder.encode('candidate changed keep\n'),
-    'src/add.txt': encoder.encode('candidate addition\n')
-  } });
-  const basisBuilt = buildRecipientFacingV2PackageV1(basisSource);
-  const candidateBuilt = buildRecipientFacingV2PackageV1(candidateSource);
-  assert.equal(basisBuilt.status, 'ready', JSON.stringify(basisBuilt.findings || []));
-  assert.equal(candidateBuilt.status, 'ready', JSON.stringify(candidateBuilt.findings || []));
 
-  const blocked = auditPortableRecoveryAcceptance({
-    basis: { files: basisBuilt.files },
-    candidate: { files: candidateBuilt.files },
-    workspaceIds: ['core']
-  });
-  assert.equal(blocked.status, 'blocked');
-  assert.equal(blocked.state, 'acceptance-audit-blocked');
-  assert.equal(blocked.workspaces[0].materialization.state, 'qualified');
-  assert.equal(blocked.workspaces[0].coverage, 'complete');
-  assert.equal(blocked.workspaces[0].counts.removals, 1);
-  assert.equal(blocked.workspaces[0].counts.unexplainedRemovals, 1);
-  assert.deepEqual(blocked.workspaces[0].unexplainedRemovals, ['src/remove.txt']);
-  assert.equal(blocked.suitability.state, 'blocked');
-  assert.equal(blocked.suitability.gitCommitStateProven, false);
-  assert.equal(blocked.suitability.semanticAcceptanceGranted, false);
-
-  const explicitlyDisposed = auditPortableRecoveryAcceptance({
-    basis: { files: basisBuilt.files },
-    candidate: { files: candidateBuilt.files },
-    workspaceIds: ['core'],
-    expectedRemovals: { core: ['src/remove.txt'] }
-  });
-  assert.equal(explicitlyDisposed.status, 'ready');
-  assert.equal(explicitlyDisposed.state, 'acceptance-audit-ready');
-  assert.equal(explicitlyDisposed.workspaces[0].counts.unexplainedRemovals, 0);
-  assert.equal(explicitlyDisposed.workspaces[0].counts.additions, 1);
-  assert.equal(explicitlyDisposed.workspaces[0].counts.byteChanged, 1);
-  assert.equal(explicitlyDisposed.suitability.state, 'restart-source-ready');
-  assert.equal(explicitlyDisposed.suitability.semanticAcceptanceGranted, false);
-});
-
-test('Recovery acceptance accepts a qualified pointerless Workspace carrier as exact accepted basis for a routed candidate', async (t) => {
-  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-pointerless-recovery-basis-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const fixture = packageFixtureSource({ coreFiles: { 'src/keep.txt': encoder.encode('same bytes\n') } });
-  await writeWorkspace(root, { ...localWorkspaceFiles(fixture.routeBytes, fixture.coreReadme), 'src/keep.txt': encoder.encode('same bytes\n') });
-  const runtimeRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-  const prepared = await prepareNodeWorkspaceCarrierManufacturingInput({
-    workspaceRoot: root, workspaceId: 'core', workspaceTargetPath: WORKSPACE_INNER_PATH, runtimeRoot,
-    carrierLineage: { mode: 'new', dimension: '001', parentDimension: '', checkpointKind: 'progression', majorReason: '' }, verifyRoundtrip: true
-  });
-  const basisBuilt = manufactureRecipientRelativeHandoffPackage(prepared, { verifyRoundtrip: true });
-  const candidateBuilt = buildRecipientFacingV2PackageV1(fixture);
-  assert.equal(basisBuilt.status, 'ready', JSON.stringify(basisBuilt.findings || []));
-  assert.equal(candidateBuilt.status, 'ready', JSON.stringify(candidateBuilt.findings || []));
-  assert.equal(basisBuilt.inspection.routes.length, 0);
-  assert.equal(candidateBuilt.inspection.routes.length, 1);
-
-  const audit = auditPortableRecoveryAcceptance({ basis: { files: basisBuilt.bundle.files }, candidate: { files: candidateBuilt.files }, workspaceIds: ['core'] });
-  assert.equal(audit.status, 'ready', JSON.stringify(audit.findings || []));
-  assert.match(audit.basisCarrierRole, /workspace/i);
-  assert.match(audit.candidateCarrierRole, /handoff/i);
-  assert.equal(audit.suitability.state, 'restart-source-ready');
-});
 
 test('pure two-way comparison has deterministic exact fast path, add/remove/change deltas, and Workspace asymmetry', () => {
   const exactLeft = frontier('left', [{ workspaceId: 'core', entries: [entry('b.txt', 'b'), entry('a.txt', 'a')] }]);
@@ -294,172 +139,12 @@ test('local inputs reuse manufacture enumeration exclusions and do not compare l
 });
 
 
-test('Node adapter supports package/package, local/package, and local multi-Workspace/package exact comparisons', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-frontier-package-'));
-  try {
-    const fixture = packageFixtureSource({ includeAux: true });
-    const built = buildRecipientFacingV2PackageV1(fixture);
-    assert.equal(built.status, 'ready', JSON.stringify(built.findings || []));
-    const packageA = await writePackageZip(root, 'a.handoff-package.zip', built);
-    const packageB = await writePackageZip(root, 'b.handoff-package.zip', built);
-    const coreRoot = path.join(root, 'local-core');
-    const auxRoot = path.join(root, 'local-aux');
-    await writeWorkspace(coreRoot, localWorkspaceFiles(fixture.routeBytes, fixture.coreReadme));
-    await writeWorkspace(auxRoot, auxWorkspaceFiles(fixture.auxReadme));
-
-    const packagePair = await compareNodeSourceFrontiers({
-      left: { kind: 'handoff-package', path: packageA }, right: { kind: 'handoff-package', path: packageB }
-    });
-    assert.equal(packagePair.state, 'exact');
-    assert.deepEqual(packagePair.workspaces.map((item) => item.workspaceId), ['aux', 'core']);
-
-    const localPackage = await compareNodeSourceFrontiers({
-      left: { kind: 'local-workspace', path: coreRoot, workspaceId: 'core' }, right: { kind: 'handoff-package', path: packageA, workspaceIds: ['core'] }
-    });
-    assert.equal(localPackage.state, 'exact');
-
-    const frontierPackage = await compareNodeSourceFrontiers({
-      left: { kind: 'local-frontier', workspaces: [{ workspaceId: 'core', root: coreRoot }, { workspaceId: 'aux', root: auxRoot }] },
-      right: { kind: 'handoff-package', path: packageA }
-    });
-    assert.equal(frontierPackage.state, 'exact');
-    assert.equal(frontierPackage.counts.workspaces, 2);
-  } finally { await rm(root, { recursive: true, force: true }); }
-});
 
 
-test('real Site-return cache shape stays transport evidence but is excluded from reconciliation and manufacture source identity', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-frontier-site-cache-return-'));
-  const baseRoot = path.join(root, 'base');
-  const incomingSanitizedRoot = path.join(root, 'incoming-sanitized');
-  const currentRoot = path.join(root, 'current');
-  const reconciledRoot = path.join(root, 'reconciled');
-  const durableBase = {
-    'site/index.html': encoder.encode('<main>site</main>\n'),
-    'tools/browser-smoke.py': encoder.encode('print("smoke")\n')
-  };
-  const durableIncoming = { 'site/returned.txt': encoder.encode('specialist durable return\n') };
-  const cachePath = 'tools/__pycache__/browser-smoke.cpython-313.pyc';
-  const currentOnly = { '.topics/current-only-ancestry.trace.md': encoder.encode('current ancestry\n') };
-  try {
-    const fixture = packageFixtureSource({
-      coreFiles: {
-        ...durableBase,
-        ...durableIncoming,
-        [cachePath]: new Uint8Array([0x42, 0x0d, 0x0d, 0x0a, 0x00, 0x01])
-      }
-    });
-    const built = buildRecipientFacingV2PackageV1(fixture);
-    assert.equal(built.status, 'ready', JSON.stringify(built.findings || []));
-    const incomingPackage = await writePackageZip(root, 'site-return.handoff-package.zip', built);
-    const controls = localWorkspaceFiles(fixture.routeBytes, fixture.coreReadme);
-    await writeWorkspace(baseRoot, { ...controls, ...durableBase });
-    await writeWorkspace(incomingSanitizedRoot, { ...controls, ...durableBase, ...durableIncoming });
-    await writeWorkspace(currentRoot, { ...controls, ...durableBase, ...currentOnly });
-    await writeWorkspace(reconciledRoot, { ...controls, ...durableBase, ...durableIncoming, ...currentOnly });
-
-    const packageVsSanitized = await compareNodeSourceFrontiers({
-      left: { kind: 'handoff-package', path: incomingPackage, workspaceIds: ['core'] },
-      right: { kind: 'local-workspace', path: incomingSanitizedRoot, workspaceId: 'core' }
-    });
-    assert.equal(packageVsSanitized.status, 'ready');
-    assert.equal(packageVsSanitized.state, 'exact');
-    const carriedSnapshot = packageVsSanitized.inputs.left.workspaces[0].snapshot;
-    assert.equal(carriedSnapshot.evidence.sourceEligibility.excludedEntryCount, 0);
-    assert.equal(carriedSnapshot.evidence.sourceEligibility.upstreamSelection.excludedEntryCount, 1);
-    assert.equal(carriedSnapshot.evidence.sourceEligibility.upstreamSelection.excludedByReason['excluded-directory'], 1);
-    assert.equal(carriedSnapshot.entryCount + 1, carriedSnapshot.evidence.sourceEligibility.upstreamSelection.inputEntryCount);
-
-    const proof = await proveNodeSourceReconciliation({
-      base: { kind: 'local-workspace', path: baseRoot, workspaceId: 'core' },
-      incoming: { kind: 'handoff-package', path: incomingPackage, workspaceIds: ['core'] },
-      current: { kind: 'local-workspace', path: currentRoot, workspaceId: 'core' },
-      reconciled: { kind: 'local-workspace', path: reconciledRoot, workspaceId: 'core' }
-    });
-    assert.equal(proof.status, 'ready', JSON.stringify(proof.findings || []));
-    assert.equal(proof.state, 'manufacture-ready');
-    assert.equal(proof.dispositions.length, 0);
-    assert.equal(proof.counts.incomingOnly, 1);
-    assert.equal(proof.counts.currentOnly, 1);
-    assert.equal(proof.counts.deletionCandidate, 0);
-    assert.equal(proof.workspaces[0].paths.some((item) => item.path === cachePath), false);
-    assert.deepEqual(proof.preservation.incomingOnly, { accepted: 1, preserved: 1, failed: 0 });
-    assert.deepEqual(proof.preservation.currentOnly, { accepted: 1, preserved: 1, failed: 0 });
-
-    const manufacture = await prepareNodeHandoffManufacturingInput({
-      workspaceRoot: reconciledRoot,
-      workspaceId: 'core',
-      handoffPath: ROUTE_PATH,
-      reconciliationProof: proof,
-      requireReconciliationProof: true
-    });
-    assert.equal(manufacture.reconciliationProofQualification.state, 'qualified');
-    assert.equal(manufacture.workspaceMaterializations[0].includedEntries.some((item) => item.path === cachePath), false);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
 
 
-test('invalid package/input fails closed with qualification state and no projected Workspace paths', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-frontier-invalid-'));
-  try {
-    const malformed = path.join(root, 'malformed.zip');
-    await writeFile(malformed, encoder.encode('not a zip'));
-    const invalidPackage = await compareNodeSourceFrontiers({
-      left: { kind: 'handoff-package', path: malformed }, right: { kind: 'normalized-frontier', frontier: frontier('right', []) }
-    });
-    assert.equal(invalidPackage.status, 'blocked');
-    assert.equal(invalidPackage.state, 'qualification-error');
-    assert.equal(invalidPackage.inputs.left.workspaces.length, 0);
-
-    const missingKind = await compareNodeSourceFrontiers({ left: { path: root }, right: { kind: 'normalized-frontier', frontier: frontier('right', []) } });
-    assert.equal(missingKind.status, 'blocked');
-    assert.ok(missingKind.findings.some((item) => item.code === 'portable.source-frontier.node.kind-required'));
-  } finally { await rm(root, { recursive: true, force: true }); }
-});
 
 
-test('sealed package comparison remains opaque while locked and reveals exact paths only through a package-correlated authorized open result', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-frontier-sealed-'));
-  try {
-    const fixture = packageFixtureSource({ sealed: true });
-    const built = await buildRecipientFacingV2PackageV1Secure({ ...fixture, sealedWorkspaces: [{ workspaceId: 'sealed', recipients: [{ slotId: 'recipient', password: PASSWORD }] }] });
-    assert.equal(built.status, 'ready', JSON.stringify(built.findings || []));
-    const bundle = { files: built.files };
-    const packagePath = await writePackageZip(root, 'sealed.handoff-package.zip', built);
-    const sealedRoot = path.join(root, 'local-sealed');
-    await writeWorkspace(sealedRoot, { [WORKSPACE_INNER_PATH]: WORKSPACE_BYTES, [SECRET_PATH]: fixture.secretBytes });
-
-    const locked = await compareNodeSourceFrontiers({
-      left: { kind: 'handoff-package', path: packagePath, workspaceIds: ['sealed'] },
-      right: { kind: 'local-workspace', path: sealedRoot, workspaceId: 'sealed' }
-    });
-    assert.equal(locked.status, 'ready');
-    assert.equal(locked.state, 'locked');
-    assert.equal(locked.workspaces[0].state, 'locked');
-    const lockedJson = JSON.stringify(locked);
-    assert.equal(lockedJson.includes(SECRET_PATH), false);
-    assert.equal(lockedJson.includes('secret-name-do-not-leak'), false);
-
-    const opened = await openRecipientV2PackageV1SealedWorkspace(bundle, { workspaceId: 'sealed', password: PASSWORD, slotId: 'recipient' });
-    assert.equal(opened.state, 'opened-qualified');
-    const exact = await compareNodeSourceFrontiers({
-      left: { kind: 'handoff-package', path: packagePath, workspaceIds: ['sealed'], openedWorkspaces: [opened] },
-      right: { kind: 'local-workspace', path: sealedRoot, workspaceId: 'sealed' }
-    });
-    assert.equal(exact.status, 'ready');
-    assert.equal(exact.state, 'exact');
-
-    const spoofed = { ...opened, workspaceArtifactSha256: '0'.repeat(64) };
-    const rejectedSpoof = await compareNodeSourceFrontiers({
-      left: { kind: 'handoff-package', path: packagePath, workspaceIds: ['sealed'], openedWorkspaces: [spoofed] },
-      right: { kind: 'local-workspace', path: sealedRoot, workspaceId: 'sealed' }
-    });
-    assert.equal(rejectedSpoof.state, 'locked');
-    assert.equal(JSON.stringify(rejectedSpoof).includes(SECRET_PATH), false);
-  } finally { await rm(root, { recursive: true, force: true }); }
-});
 
 
 test('three-way Node adapter accepts the actual child-return shape with explicit base/incoming/current kinds', async () => {

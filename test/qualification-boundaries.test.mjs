@@ -7,18 +7,17 @@ import { projectApplicationData, toPlaythingsStoryRecords, projectSchemaAncestry
 import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../src/transitions/record.transitions.js';
 import { normalizeParentReference, runCommonAuthorCli } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
 import {
- normalizePackageParentWorkspaceAliases,
- normalizePackageParentWorkspaceSelection,
- packageParentWorkspaceSupersededByCurrent,
- preparePackageParentWorkspaceReuse,
- projectRequiredContextWorkspaceSelectionPreflight,
- selectDeclaredPackageParentWorkspaceBindings
+  normalizePackageParentWorkspaceAliases,
+  normalizePackageParentWorkspaceSelection,
+  packageParentWorkspaceSupersededByCurrent,
+  preparePackageParentWorkspaceReuse,
+  projectRequiredContextWorkspaceSelectionPreflight,
+  selectDeclaredPackageParentWorkspaceBindings
 } from '../src/tooling/portable/adapters/node/handoff.manufacture.packageParent.js';
 import { resolveWorkspaceRequirementMaterials } from '../src/tooling/portable/adapters/node/handoff.manufacture.requirements.js';
 import { expandRouteParentBoundaryClosure } from '../src/tooling/portable/adapters/node/handoff.manufacture.scope.js';
-import { renderRecipientV2ExternalPayload } from '../src/tooling/portable/handoff/recipientV2.artifacts.js';
-import { deriveVisibleFacts } from '../src/tooling/portable/handoff/recipientV2.packageV1.inspect.helpers.js';
 import { validatePortableFieldDomains } from '../src/tooling/portable/schema/contract.field-domain.js';
+
 const root = '# Continuity Context\n\n- Current\n  - Current Schema: tiinex.task.v1\n  - Created At: 2026-09-08 10:00:00\n\n---\n\n# Root\n';
 test('missing material is not promoted to a semantic root', () => {
  const data=projectApplicationData({workspaces:[{id:'w',records:[{path:'x.md',createdAt:'2026-09-08 10:00:00'}]}]});
@@ -198,10 +197,3 @@ test('selected route Parent continuity crosses into provider-only Workspaces as 
  assert.equal(result.materials[0].provenance.parentPackageSha256,'parent-sha');
 });
 
-test('package-v1 cache serialization preserves exact Parent-boundary Workspace coordinates and byte identity',()=>{
- const material={requirementId:'parent-boundary:core:business-parent',classification:'parent-boundary',referenceTarget:'business::.topics/initiatives/parent.trace.md',routeWorkspaceId:'core',routePath:'.topics/handoffs/return.trace.md',sourceWorkspaceId:'core',sourcePath:'.topics/001-extraction-task.trace.md',targetWorkspaceId:'business',targetPath:'.topics/initiatives/parent.trace.md',originalPath:'.topics/initiatives/parent.trace.md',archiveEntry:'material/1-parent-boundary.bin',bytes:123,sha256:'a'.repeat(64)};
- const markdown=renderRecipientV2ExternalPayload({createdAt:'2026-09-09 11:00:00',title:'Workspace Dependency Cache — core',summary:'Exact route-bounded dependency bytes.',label:'core Handoff dependency cache',role:'workspace-scoped Handoff dependency cache',location:'001-3-1-cache.zip',bytes:456,sha256:'b'.repeat(64),materials:[material]});
- const facts=deriveVisibleFacts({markdown,schemaId:'tiinex.external.payload.v1',packageContract:{workspaces:[]},index:new Map()});
- assert.equal(facts.materials.length,1);
- assert.deepEqual(facts.materials[0],material);
-});
