@@ -1,3 +1,4 @@
+import { generatedNativeSchemaModules, nativeSchemaCatalog } from './generated.registry.js';
 import { rootSchemaModule } from './tiinex.root.v1.schema.js';
 import { topicSchemaModule } from './core/topic/tiinex.topic.v1.schema.js';
 import { preservationSchemaModule } from './core/preservation/tiinex.preservation.v1.schema.js';
@@ -24,11 +25,13 @@ import { validationFindingSchemaModule } from './validation/finding/tiinex.valid
 import { validationMethodSchemaModule } from './validation/method/tiinex.validation.method.v1.schema.js';
 import { validationReportSchemaModule } from './validation/report/tiinex.validation.report.v1.schema.js';
 
-const modules = [rootSchemaModule, workspaceSchemaModule, topicSchemaModule, taskSchemaModule, interpretationSchemaModule, relationSchemaModule, workspaceRepresentationSchemaModule, preservationSchemaModule, evidenceSchemaModule, signalSchemaModule, feedbackSchemaModule, decisionSchemaModule, discoverySchemaModule, discoveryFindingSchemaModule, validationFindingSchemaModule, validationMethodSchemaModule, validationReportSchemaModule, handoffSchemaModule, partyRoleSchemaModule, partyOrganizationSchemaModule, projectSchemaModule, reductionSchemaModule, redactionSchemaModule, moduleSchemaModule, surfaceSchemaModule];
+const specializedModules = [rootSchemaModule, workspaceSchemaModule, topicSchemaModule, taskSchemaModule, interpretationSchemaModule, relationSchemaModule, workspaceRepresentationSchemaModule, preservationSchemaModule, evidenceSchemaModule, signalSchemaModule, feedbackSchemaModule, decisionSchemaModule, discoverySchemaModule, discoveryFindingSchemaModule, validationFindingSchemaModule, validationMethodSchemaModule, validationReportSchemaModule, handoffSchemaModule, partyRoleSchemaModule, partyOrganizationSchemaModule, projectSchemaModule, reductionSchemaModule, redactionSchemaModule, moduleSchemaModule, surfaceSchemaModule];
+const specializedIds = new Set(specializedModules.map((module) => module.id));
+const modules = [...specializedModules, ...generatedNativeSchemaModules.filter((module) => !specializedIds.has(module.id))];
 const byId = new Map(modules.map((module) => [module.id, module]));
 const byChecksum = new Map(modules.map((module) => [module.binding.checksum.value, module]));
 
-export const schemaRegistry = Object.freeze({ modules, byId, byChecksum, fallback: rootSchemaModule });
+export const schemaRegistry = Object.freeze({ modules, byId, byChecksum, fallback: rootSchemaModule, nativeCatalog: nativeSchemaCatalog });
 
 export function resolveSchemaModule({ schemaId, checksum } = {}) {
   if (checksum && byChecksum.has(checksum)) return byChecksum.get(checksum);

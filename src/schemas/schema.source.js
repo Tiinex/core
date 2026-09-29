@@ -22,20 +22,26 @@ export function defineBundledSchemaSource(binding = {}, projection = {}, options
     provider: providerQualification.state === 'qualified' ? providerQualification.provider : '',
     providerQualification
   });
-  const runtimeProjection = normalizeRuntimeProjection(projection);
+  const projectionFactory = typeof projection === 'function' ? projection : null;
+  let resolvedRuntimeProjection = projectionFactory ? null : normalizeRuntimeProjection(projection);
+  const runtimeProjection = () => {
+    if (!resolvedRuntimeProjection) resolvedRuntimeProjection = normalizeRuntimeProjection(projectionFactory?.() || {});
+    return resolvedRuntimeProjection;
+  };
   let cached = null;
   function qualify() {
     if (cached) return cached;
+    const runtime = runtimeProjection();
     const projectionExact = Boolean(
-      runtimeProjection.schema === SCHEMA_RUNTIME_PROJECTION_SCHEMA_ID
+      runtime.schema === SCHEMA_RUNTIME_PROJECTION_SCHEMA_ID
       && schemaId
       && expectedChecksum
-      && runtimeProjection.schemaId === schemaId
-      && runtimeProjection.sourceChecksum === expectedChecksum
-      && runtimeProjection.bindingChecksum === expectedChecksum
+      && runtime.schemaId === schemaId
+      && runtime.sourceChecksum === expectedChecksum
+      && runtime.bindingChecksum === expectedChecksum
     );
     const bindingBlobSha = String(binding?.sourceBlobSha || '').trim().toLowerCase();
-    const loadedBlobSha = String(runtimeProjection.sourceBlobSha || '').trim().toLowerCase();
+    const loadedBlobSha = String(runtime.sourceBlobSha || '').trim().toLowerCase();
     const snapshotCompleteness = String(binding?.snapshotCompleteness || '').trim();
     const bindingMaterialCoherence = Object.freeze({
       state: projectionExact && snapshotCompleteness === 'exact-canonical-docs-snapshot' && bindingBlobSha && bindingBlobSha === loadedBlobSha ? 'qualified' : 'unavailable',
@@ -49,31 +55,31 @@ export function defineBundledSchemaSource(binding = {}, projection = {}, options
         ...(!loadedBlobSha ? ['Loaded schema Git-blob identity is unavailable from the runtime projection.'] : [])
       ])
     });
-    const validationLineageAuthority = qualifyCompiledSchemaLineageSourceAuthority(runtimeProjection.validationContract || {});
-    const validationContract = projectionExact && runtimeProjection.validationContract?.schemaId === schemaId && runtimeProjection.validationContract?.lineageQualification?.state === 'valid'
-      ? runtimeProjection.validationContract
+    const validationLineageAuthority = qualifyCompiledSchemaLineageSourceAuthority(runtime.validationContract || {});
+    const validationContract = projectionExact && runtime.validationContract?.schemaId === schemaId && runtime.validationContract?.lineageQualification?.state === 'valid'
+      ? runtime.validationContract
       : null;
     const compiledContract = projectionExact ? Object.freeze({
       schemaId,
       validationContract,
       creation: Object.freeze({
-        groups: Object.freeze((runtimeProjection.creation.groupNames || []).map((name) => Object.freeze({ name }))),
-        requiredInputs: runtimeProjection.creation.requiredInputs,
-        optionalInputs: runtimeProjection.creation.optionalInputs,
-        requiredSections: runtimeProjection.creation.requiredSections,
-        toolingConfigurationFields: runtimeProjection.creation.toolingConfigurationFields,
-        inputBindings: runtimeProjection.creation.inputBindings,
-        supplementalRequiredFields: runtimeProjection.creation.supplementalRequiredFields,
-        representationSections: deriveCreationRepresentationSections(runtimeProjection.creation.inputBindings, validationContract),
-        requiredShape: runtimeProjection.creation.requiredShape
+        groups: Object.freeze((runtime.creation.groupNames || []).map((name) => Object.freeze({ name }))),
+        requiredInputs: runtime.creation.requiredInputs,
+        optionalInputs: runtime.creation.optionalInputs,
+        requiredSections: runtime.creation.requiredSections,
+        toolingConfigurationFields: runtime.creation.toolingConfigurationFields,
+        inputBindings: runtime.creation.inputBindings,
+        supplementalRequiredFields: runtime.creation.supplementalRequiredFields,
+        representationSections: deriveCreationRepresentationSections(runtime.creation.inputBindings, validationContract),
+        requiredShape: runtime.creation.requiredShape
       })
     }) : null;
     const materialIdentity = Object.freeze({
       schema: SCHEMA_MATERIAL_IDENTITY_SCHEMA_ID,
       state: projectionExact ? 'qualified' : 'unavailable',
       schemaId,
-      sha256: String(runtimeProjection.sourceChecksum || ''),
-      bytes: Number(runtimeProjection.sourceBytes || 0),
+      sha256: String(runtime.sourceChecksum || ''),
+      bytes: Number(runtime.sourceBytes || 0),
       sourceRepository: String(authority.repository || ''),
       sourceCommit: String(authority.commit || ''),
       sourcePath: String(authority.path || ''),
@@ -82,21 +88,21 @@ export function defineBundledSchemaSource(binding = {}, projection = {}, options
     cached = Object.freeze({
       state: projectionExact ? 'qualified' : 'unavailable',
       schemaId,
-      checksum: runtimeProjection.sourceChecksum || '',
+      checksum: runtime.sourceChecksum || '',
       expectedChecksum,
       authority,
       bindingMaterialCoherence,
       materialIdentity,
       validationLineageAuthority,
       compiledContract,
-      projection: runtimeProjection,
+      projection: runtime,
       findings: Object.freeze([
-        ...(runtimeProjection.schema !== SCHEMA_RUNTIME_PROJECTION_SCHEMA_ID ? ['Schema runtime projection type is invalid.'] : []),
-        ...(runtimeProjection.schemaId !== schemaId ? ['Schema runtime projection identity does not match binding.'] : []),
-        ...(runtimeProjection.sourceChecksum !== expectedChecksum ? ['Schema runtime projection source checksum does not match binding.'] : []),
-        ...(runtimeProjection.bindingChecksum !== expectedChecksum ? ['Schema runtime projection binding checksum does not match binding.'] : []),
-        ...(runtimeProjection.validationContract && runtimeProjection.validationContract?.schemaId !== schemaId ? ['Schema runtime validation projection identity does not match binding.'] : []),
-        ...(runtimeProjection.validationContract && runtimeProjection.validationContract?.lineageQualification?.state !== 'valid' ? ['Schema runtime validation projection lineage is not exact/valid.'] : []),
+        ...(runtime.schema !== SCHEMA_RUNTIME_PROJECTION_SCHEMA_ID ? ['Schema runtime projection type is invalid.'] : []),
+        ...(runtime.schemaId !== schemaId ? ['Schema runtime projection identity does not match binding.'] : []),
+        ...(runtime.sourceChecksum !== expectedChecksum ? ['Schema runtime projection source checksum does not match binding.'] : []),
+        ...(runtime.bindingChecksum !== expectedChecksum ? ['Schema runtime projection binding checksum does not match binding.'] : []),
+        ...(runtime.validationContract && runtime.validationContract?.schemaId !== schemaId ? ['Schema runtime validation projection identity does not match binding.'] : []),
+        ...(runtime.validationContract && runtime.validationContract?.lineageQualification?.state !== 'valid' ? ['Schema runtime validation projection lineage is not exact/valid.'] : []),
         ...(validationLineageAuthority.state !== 'qualified' ? validationLineageAuthority.findings : [])
       ])
     });
@@ -104,7 +110,7 @@ export function defineBundledSchemaSource(binding = {}, projection = {}, options
   }
   return Object.freeze({
     schema: BUNDLED_SCHEMA_SOURCE_SCHEMA_ID,
-    status: schemaId && expectedChecksum && runtimeProjection.schemaId ? 'bundled' : 'unavailable',
+    status: schemaId && expectedChecksum && (projectionFactory || resolvedRuntimeProjection?.schemaId) ? 'bundled' : 'unavailable',
     readable: Boolean(schemaId && options.assetUrl),
     schemaId,
     markdown: '',
@@ -113,7 +119,7 @@ export function defineBundledSchemaSource(binding = {}, projection = {}, options
     assetUrl: String(options.assetUrl || '').trim(),
     expectedChecksum,
     authority,
-    runtimeProjection,
+    get runtimeProjection() { return runtimeProjection(); },
     qualify
   });
 }

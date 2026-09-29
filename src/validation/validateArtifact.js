@@ -7,6 +7,7 @@ import { validateIntegrity } from '../integrity/integrity.validate.js';
 import { validatePortableContractInstance } from '../tooling/portable/schema/contract.validate.js';
 import { qualifySchemaReferenceValue, qualifiedExactSchemaReferenceTarget, schemaReferenceAuthorityFromBinding } from '../schemas/schema.reference.js';
 import { normalizeFindings, normalizeFinding } from './findings.js';
+import { parseExactGithubSchemaSourceTarget } from '../schemas/schema.githubSourceTarget.js';
 
 export const ARTIFACT_VALIDATION_PIPELINE_ID = 'tiinex.artifact.validation.pipeline.v1';
 
@@ -118,13 +119,20 @@ function validateDeclaredSchemaReferences(parsed = {}, contextualAuthorities = n
 function qualifiedRegisteredSchemaIdentitiesForTarget(target = '') {
   const observedTarget = String(target || '').trim();
   if (!observedTarget) return Object.freeze([]);
+  const coordinate = parseExactGithubSchemaSourceTarget(observedTarget);
   const schemaIds = [];
   for (const module of schemaRegistry.modules || []) {
     const schemaId = String(module?.id || '').trim();
     if (!schemaId) continue;
     const sourceQualification = typeof module?.schemaSource?.qualify === 'function' ? module.schemaSource.qualify() : null;
     const authority = schemaReferenceAuthorityFromBinding(schemaId, module?.binding || {}, sourceQualification?.authority || null, sourceQualification);
-    if (qualifiedExactSchemaReferenceTarget(authority) === observedTarget) schemaIds.push(schemaId);
+    const exactCurrentTarget = qualifiedExactSchemaReferenceTarget(authority);
+    const bindingRepository = String(module?.binding?.sourceRepository || '').trim();
+    const bindingPath = String(module?.binding?.sourcePath || '').trim();
+    const sameCanonicalSourceCoordinate = coordinate.state === 'qualified'
+      && bindingRepository === coordinate.repository
+      && bindingPath === coordinate.path;
+    if (exactCurrentTarget === observedTarget || sameCanonicalSourceCoordinate) schemaIds.push(schemaId);
   }
   return Object.freeze([...new Set(schemaIds)]);
 }

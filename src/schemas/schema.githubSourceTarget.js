@@ -30,6 +30,26 @@ export function canonicalGithubSchemaSourceTargets(sourceAuthority = null) {
   });
 }
 
+
+export function parseExactGithubSchemaSourceTarget(candidate = '') {
+  const target = String(candidate ?? '').trim();
+  if (!target) return Object.freeze({ state: 'unavailable', target: '', repository: '', commit: '', path: '', surface: '' });
+  let match = target.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([0-9a-f]{40})\/(.+)$/i);
+  let surface = 'github-blob';
+  if (!match) {
+    match = target.match(/^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([0-9a-f]{40})\/(.+)$/i);
+    surface = 'github-raw';
+  }
+  if (!match) return Object.freeze({ state: 'unavailable', target, repository: '', commit: '', path: '', surface: '' });
+  try {
+    const path = match[4].split('/').map((segment) => decodeURIComponent(segment)).join('/');
+    if (!path || path.startsWith('/') || path.endsWith('/') || path.includes('\\') || /[\0\r\n?#]/.test(path)) return Object.freeze({ state: 'unavailable', target, repository: '', commit: '', path: '', surface: '' });
+    return Object.freeze({ state: 'qualified', target, repository: `${match[1]}/${match[2]}`, commit: match[3].toLowerCase(), path, surface });
+  } catch {
+    return Object.freeze({ state: 'unavailable', target, repository: '', commit: '', path: '', surface: '' });
+  }
+}
+
 export function qualifyExactGithubSchemaSourceTarget(candidate = '', sourceAuthority = null) {
   const canonical = canonicalGithubSchemaSourceTargets(sourceAuthority);
   const raw = String(candidate ?? '');

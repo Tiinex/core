@@ -13,6 +13,9 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
     `${command} qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>`,
     `${command} prepare-return <continued-workspace-dir>`,
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
+    `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas sync <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas check <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     `${command} handoff <workspace-dir>`,
     `${command} compare --left-kind <kind> --left <path> --right-kind <kind> --right <path> [side selectors]`,
     `${command} reconcile --base-kind <kind> --base <path> --incoming-kind <kind> --incoming <path> --current-kind <kind> --current <path> --reconciled-kind <kind> --reconciled <path> [--dispositions <json-file>]`,
@@ -32,6 +35,19 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
 }
 
 function commonCommandHelp(command, surfaceCommand) {
+  if (surfaceCommand === 'schemas') return [
+    'Tiinex portable tooling — native schema source lifecycle',
+    '',
+    `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas sync <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas check <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    '',
+    'Uses only local Workspace bytes. Sync deterministically projects canonical Docs schemas into the Core Schema Pack, generated catalog, exact source bindings, and specialized runtime projections. Check is read-only and fails on generated drift or stale local schema Markdown copies.',
+    'Without `--published`, source content remains local-qualified and no immutable remote publication authority is claimed. `--published` requires one exact `--docs-commit`; Tooling does not fetch or verify that remote commit and therefore expects the caller to supply already-qualified publication metadata.',
+    'Generated material never overwrites handwritten companion implementations. Schemas without specialized companions remain registry-known through the generic Schema Pack runtime and creation stays fail-closed when generic representation is insufficient.',
+    '',
+    `Advanced/internal catalog: ${command} operations`
+  ];
   if (surfaceCommand === 'reconcile' || surfaceCommand === 'prove-source-reconciliation') return [
     'Tiinex portable tooling — prove source reconciliation for manufacture',
     '',
@@ -96,6 +112,9 @@ function commonCommandHelp(command, surfaceCommand) {
     'Tiinex portable tooling — author',
     '',
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
+    `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas sync <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas check <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     '',
     'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted. Supply `--path` for an exact requested coordinate or `--directory` to let Tooling allocate inside that directory-local filename namespace. For a Workspace-qualified Parent such as `business::.topics/...`, also supply `--parent-source` so Tooling reads and seals against the exact Parent bytes without treating the foreign address as a local path. Authoring seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. `--preflight` uses that exact qualification path but removes the candidate and leaves continuation state unchanged; use it before the durable author step when validating a filled runtime scaffold. Invalid output is not retained.',
     '',

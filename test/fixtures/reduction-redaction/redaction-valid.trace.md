@@ -1,14 +1,14 @@
 # Continuity Context
 
-- Envelope Schema: [tiinex.root.v1](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md)
+- Envelope Schema: [tiinex.root.v1](https://github.com/Tiinex/docs/blob/668753e47a281db060cb74ef957683f4f773b3a4/.topics/.schemas/tiinex.root.v1.schema.md)
 - Parent
-  - Parent Schema: [tiinex.reduction.v1](https://github.com/Tiinex/docs/blob/8435cd46a3773a38301659da716785dc6465072c/.topics/.schemas/reduction/tiinex.reduction.v1.schema.md)
+  - Parent Schema: [tiinex.reduction.v1](https://github.com/Tiinex/docs/blob/668753e47a281db060cb74ef957683f4f773b3a4/.topics/.schemas/reduction/tiinex.reduction.v1.schema.md)
   - Created At: 2026-09-25 16:47:43
   - Trace: [003-real-two-leaf-reduction.trace.md](003-real-two-leaf-reduction.trace.md)
   - Origin:
     - [relative](003-real-two-leaf-reduction.trace.md)
 - Current
-  - Current Schema: [tiinex.redaction.v1](https://github.com/Tiinex/docs/blob/8435cd46a3773a38301659da716785dc6465072c/.topics/.schemas/reduction/redaction/tiinex.redaction.v1.schema.md)
+  - Current Schema: [tiinex.redaction.v1](https://github.com/Tiinex/docs/blob/668753e47a281db060cb74ef957683f4f773b3a4/.topics/.schemas/reduction/redaction/tiinex.redaction.v1.schema.md)
   - Created At: 2026-09-25 17:59:40
   - Authors: Anchor
   - Why: Qualify exact Redaction authoring and Reduction-family composition without destructive authority.
@@ -63,4 +63,4 @@
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: mfkAiTq1j8NTf9bYC_2m_p47G56iDI01hFoN2AYJflI
+  - Value: 5WPLw1Es6hZVZM_upPT5-Xe49XzHgnDW3dFE4SBLmPY

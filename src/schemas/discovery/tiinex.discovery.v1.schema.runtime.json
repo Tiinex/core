@@ -1,13 +1,13 @@
 {
   "schema": "tiinex.site.schema-runtime-projection.v1",
-  "generator": "schema-runtime-projection-v1",
+  "generator": "schema-runtime-projection-v2-schema-pack",
   "schemaId": "tiinex.discovery.v1",
   "sourceChecksum": "3f5746d8982594ceaf542b6e4e4095f1687ba4b05256eebe77c06831ffb4a4f2",
   "sourceBlobSha": "1e18d78521c6298d243f1c87a84155be040f032c",
   "sourceBytes": 11206,
   "bindingChecksum": "3f5746d8982594ceaf542b6e4e4095f1687ba4b05256eebe77c06831ffb4a4f2",
   "validationContract": {
-    "schema": "tiinex.site.compact-portable-validation-contract.v1",
+    "schema": "tiinex.portable.compiled-schema-contract-chain.v1",
     "schemaId": "tiinex.discovery.v1",
     "lineage": [
       "tiinex.root.v1",
@@ -31,23 +31,6 @@
       "findings": []
     },
     "validation": {
-      "groups": [
-        {
-          "name": "Runtime Required Fields",
-          "requiredWhen": [],
-          "categories": [
-            {
-              "name": "Required Fields",
-              "items": [
-                "Envelope Schema",
-                "Current",
-                "Current Schema",
-                "Created At"
-              ]
-            }
-          ]
-        }
-      ],
       "requiredSections": [
         "Continuity Context",
         "Continuity Integrity",
@@ -90,6 +73,48 @@
           "source": "`## Interpretation Limits` section"
         }
       ],
+      "optionalSections": [
+        "Artifact Creation Contract",
+        "Starting Question",
+        "Prior Context",
+        "Route Or Pass",
+        "Findings",
+        "Absence",
+        "Uncertainty",
+        "Linked Artifacts",
+        "Evidence Candidates",
+        "Signal Candidates",
+        "Feedback Candidates",
+        "Pointer Candidates",
+        "Relation Candidates",
+        "Next Artifacts",
+        "References"
+      ],
+      "requiredFields": [
+        "Envelope Schema",
+        "Current",
+        "Current Schema",
+        "Created At",
+        "Field",
+        "In Scope",
+        "Out Of Scope"
+      ],
+      "optionalFields": [
+        "Parent",
+        "Repairs",
+        "Summary",
+        "Status",
+        "Why",
+        "Source Or Origin",
+        "Target",
+        "Destination",
+        "Terrain",
+        "Time Window",
+        "Access Boundary",
+        "Privacy Boundary",
+        "Consent Or Authority",
+        "Freshness Boundary"
+      ],
       "requiredEntries": [
         {
           "group": "Continuity Integrity Footer",
@@ -98,66 +123,6 @@
           ],
           "targetHeadings": [
             "Continuity Integrity"
-          ]
-        }
-      ],
-      "ordinaryGroups": [
-        {
-          "group": "Discovery Field",
-          "qualification": "valid",
-          "target": {
-            "heading": "## Discovery Field",
-            "title": "Discovery Field",
-            "level": 2,
-            "authority": "root-same-name-default",
-            "requiredness": "required",
-            "qualification": "valid",
-            "findings": []
-          },
-          "requiredFields": [
-            "Field",
-            "In Scope",
-            "Out Of Scope"
-          ],
-          "optionalFields": [
-            "Source Or Origin",
-            "Target",
-            "Destination",
-            "Terrain",
-            "Time Window",
-            "Access Boundary",
-            "Privacy Boundary",
-            "Consent Or Authority",
-            "Freshness Boundary"
-          ],
-          "contributors": [
-            {
-              "sourceSchemaId": "tiinex.discovery.v1",
-              "group": "Discovery Field",
-              "requiredFields": [
-                "Field",
-                "In Scope",
-                "Out Of Scope"
-              ],
-              "optionalFields": [
-                "Source Or Origin",
-                "Target",
-                "Destination",
-                "Terrain",
-                "Time Window",
-                "Access Boundary",
-                "Privacy Boundary",
-                "Consent Or Authority",
-                "Freshness Boundary"
-              ],
-              "target": {
-                "heading": "## Discovery Field",
-                "title": "Discovery Field",
-                "level": 2,
-                "authority": "root-same-name-default",
-                "qualification": "valid"
-              }
-            }
           ]
         }
       ],
@@ -271,6 +236,75 @@
           "ordering": []
         }
       ],
+      "ordinaryFieldAuthority": {
+        "state": "available",
+        "sources": [
+          "tiinex.root.v1"
+        ],
+        "defaultTarget": "exact-second-level-same-name",
+        "overrideCategory": "Instance Target",
+        "overrideShape": "one-literal-markdown-heading-token"
+      },
+      "ordinaryGroups": [
+        {
+          "group": "Discovery Field",
+          "qualification": "valid",
+          "target": {
+            "heading": "## Discovery Field",
+            "title": "Discovery Field",
+            "level": 2,
+            "authority": "root-same-name-default",
+            "requiredness": "required",
+            "qualification": "valid",
+            "findings": []
+          },
+          "requiredFields": [
+            "Field",
+            "In Scope",
+            "Out Of Scope"
+          ],
+          "optionalFields": [
+            "Source Or Origin",
+            "Target",
+            "Destination",
+            "Terrain",
+            "Time Window",
+            "Access Boundary",
+            "Privacy Boundary",
+            "Consent Or Authority",
+            "Freshness Boundary"
+          ],
+          "contributors": [
+            {
+              "sourceSchemaId": "tiinex.discovery.v1",
+              "group": "Discovery Field",
+              "requiredFields": [
+                "Field",
+                "In Scope",
+                "Out Of Scope"
+              ],
+              "optionalFields": [
+                "Source Or Origin",
+                "Target",
+                "Destination",
+                "Terrain",
+                "Time Window",
+                "Access Boundary",
+                "Privacy Boundary",
+                "Consent Or Authority",
+                "Freshness Boundary"
+              ],
+              "target": {
+                "heading": "## Discovery Field",
+                "title": "Discovery Field",
+                "level": 2,
+                "authority": "root-same-name-default",
+                "qualification": "valid"
+              }
+            }
+          ]
+        }
+      ],
       "fieldShapes": [
         {
           "kind": "field-shape",
@@ -296,7 +330,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -416,7 +450,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -425,7 +459,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -475,7 +509,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -595,7 +629,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -604,7 +638,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -654,7 +688,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -774,7 +808,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -783,7 +817,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -833,7 +867,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -953,7 +987,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -962,7 +996,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -1346,7 +1380,7 @@
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 269,
+        "declarationLine": 273,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -1370,7 +1404,7 @@
           "sourceSchemaId": "tiinex.root.v1",
           "sourceGroup": "Machine Shape Authority",
           "declarationSource": {
-            "line": 408
+            "line": 412
           },
           "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
           "grammarProfile": "tiinex.lexical.shape.v1",
@@ -1503,7 +1537,7 @@
             "sourceSchemaId": "tiinex.root.v1",
             "sourceGroup": "Machine Shape Authority",
             "declarationSource": {
-              "line": 408
+              "line": 412
             },
             "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
             "grammarProfile": "tiinex.lexical.shape.v1",
@@ -1623,7 +1657,7 @@
             "sourceSchemaId": "tiinex.root.v1",
             "sourceGroup": "Machine Shape Authority",
             "declarationSource": {
-              "line": 408
+              "line": 412
             }
           },
           "visibleDefinitions": [
@@ -1632,7 +1666,7 @@
               "sourceSchemaId": "tiinex.root.v1",
               "sourceGroup": "Machine Shape Authority",
               "declarationSource": {
-                "line": 408
+                "line": 412
               },
               "grammarProfile": "tiinex.lexical.shape.v1",
               "definitionQualification": "valid",
@@ -1649,10 +1683,10 @@
         "schemaId": "tiinex.root.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "3988951208eb9a8926e84ab42625d4b42fa00c2d",
+          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
           "path": ".topics/.schemas/tiinex.root.v1.schema.md",
-          "publicationState": "accepted-local-unpublished",
-          "snapshotCompleteness": "exact-axiom-canonical-unpublished-bounded-workspace-contract"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "",
         "parentSourceCandidates": []
@@ -1661,9 +1695,9 @@
         "schemaId": "tiinex.discovery.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "e713557f8be630967571d11a73f9ecd05ae329ce",
+          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
           "path": ".topics/.schemas/discovery/tiinex.discovery.v1.schema.md",
-          "publicationState": "",
+          "publicationState": "published-immutable-canonical",
           "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "tiinex.root.v1",
@@ -1671,7 +1705,7 @@
           {
             "provider": "github",
             "repository": "Tiinex/docs",
-            "commit": "df3260c77a7c14b2ece67456d1a9fe4b3e026a7c",
+            "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
             "path": ".topics/.schemas/tiinex.root.v1.schema.md"
           }
         ]
@@ -1716,8 +1750,9 @@
     "inputBindings": [
       {
         "input": "Summary",
-        "kind": "root-current-summary-body-title",
-        "section": ""
+        "kind": "unmapped",
+        "section": "",
+        "reason": "no-qualified-generic-representation"
       },
       {
         "input": "Discovery Intent",
@@ -1748,8 +1783,8 @@
     "supplementalRequiredFields": [],
     "requiredShape": [
       {
-        "id": "tiinex.discovery.v1#artifact-creation/Template Body/required-shape/266",
-        "sourceSchemaId": "tiinex.discovery.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/266",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 266,
@@ -1759,8 +1794,8 @@
         }
       },
       {
-        "id": "tiinex.discovery.v1#artifact-creation/Template Body/required-shape/267",
-        "sourceSchemaId": "tiinex.discovery.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/267",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 267,
@@ -1772,19 +1807,21 @@
         }
       },
       {
-        "id": "tiinex.discovery.v1#artifact-creation/Template Body/required-shape/268",
-        "sourceSchemaId": "tiinex.discovery.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/268",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 268,
         "sourceText": "`## Discovery Field` section",
         "primitive": {
-          "kind": "residual"
+          "kind": "section-body",
+          "section": "Discovery Field",
+          "input": "Discovery Field"
         }
       },
       {
-        "id": "tiinex.discovery.v1#artifact-creation/Template Body/required-shape/269",
-        "sourceSchemaId": "tiinex.discovery.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/269",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 269,
@@ -1796,8 +1833,8 @@
         }
       },
       {
-        "id": "tiinex.discovery.v1#artifact-creation/Template Body/required-shape/270",
-        "sourceSchemaId": "tiinex.discovery.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/270",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 270,
@@ -1809,8 +1846,8 @@
         }
       },
       {
-        "id": "tiinex.discovery.v1#artifact-creation/Template Body/required-shape/271",
-        "sourceSchemaId": "tiinex.discovery.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/271",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 271,
@@ -1822,8 +1859,8 @@
         }
       },
       {
-        "id": "tiinex.discovery.v1#artifact-creation/Template Body/required-shape/272",
-        "sourceSchemaId": "tiinex.discovery.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/272",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 272,

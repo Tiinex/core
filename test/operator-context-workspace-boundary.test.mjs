@@ -4,9 +4,10 @@ import path from 'node:path';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodReference.js';
 import { projectParticipantCandidatesFromEndpoints, projectPortableOperatorContext } from '../src/tooling/portable/handoff/operatorContextProjection.js';
+import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
-const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
-const WORKSPACE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.workspace.v1.schema.md';
+const ROOT_SCHEMA_TARGET = currentSchemaTarget('tiinex.root.v1');
+const WORKSPACE_SCHEMA_TARGET = currentSchemaTarget('tiinex.workspace.v1');
 
 function seal(markdown) {
   const sealed = sealC14nV2Self(markdown);

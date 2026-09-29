@@ -1,13 +1,13 @@
 {
   "schema": "tiinex.site.schema-runtime-projection.v1",
-  "generator": "schema-runtime-projection-v1",
+  "generator": "schema-runtime-projection-v2-schema-pack",
   "schemaId": "tiinex.topic.v1",
   "sourceChecksum": "b6fe9893d9ce66734ab249a22796ca77de75f441a4b6eaa3352ad75a1c2405df",
   "sourceBlobSha": "c36472b0d20ad97d01cc1ca78a50fc69ce35fdae",
   "sourceBytes": 5911,
   "bindingChecksum": "b6fe9893d9ce66734ab249a22796ca77de75f441a4b6eaa3352ad75a1c2405df",
   "validationContract": {
-    "schema": "tiinex.site.compact-portable-validation-contract.v1",
+    "schema": "tiinex.portable.compiled-schema-contract-chain.v1",
     "schemaId": "tiinex.topic.v1",
     "lineage": [
       "tiinex.root.v1",
@@ -31,28 +31,36 @@
       "findings": []
     },
     "validation": {
-      "groups": [
-        {
-          "name": "Runtime Required Fields",
-          "requiredWhen": [],
-          "categories": [
-            {
-              "name": "Required Fields",
-              "items": [
-                "Envelope Schema",
-                "Current",
-                "Current Schema",
-                "Created At"
-              ]
-            }
-          ]
-        }
-      ],
       "requiredSections": [
         "Continuity Context",
         "Continuity Integrity"
       ],
       "requiredHeadings": [],
+      "optionalSections": [
+        "Artifact Creation Contract",
+        "Current Read",
+        "Design Direction",
+        "Risks",
+        "Open Questions",
+        "Next Artifacts",
+        "Next Steps"
+      ],
+      "requiredFields": [
+        "Envelope Schema",
+        "Current",
+        "Current Schema",
+        "Created At"
+      ],
+      "optionalFields": [
+        "Parent",
+        "Repairs",
+        "Summary",
+        "Status",
+        "Why",
+        "Current -> Why",
+        "Current -> Summary",
+        "Current -> Authors"
+      ],
       "requiredEntries": [
         {
           "group": "Continuity Integrity Footer",
@@ -64,7 +72,6 @@
           ]
         }
       ],
-      "ordinaryGroups": [],
       "conditionalRequirements": [
         {
           "name": "Contract Category Extension",
@@ -175,6 +182,16 @@
           "ordering": []
         }
       ],
+      "ordinaryFieldAuthority": {
+        "state": "available",
+        "sources": [
+          "tiinex.root.v1"
+        ],
+        "defaultTarget": "exact-second-level-same-name",
+        "overrideCategory": "Instance Target",
+        "overrideShape": "one-literal-markdown-heading-token"
+      },
+      "ordinaryGroups": [],
       "fieldShapes": [
         {
           "kind": "field-shape",
@@ -200,7 +217,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -320,7 +337,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -329,7 +346,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -379,7 +396,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -499,7 +516,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -508,7 +525,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -558,7 +575,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -678,7 +695,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -687,7 +704,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -737,7 +754,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -857,7 +874,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -866,7 +883,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -1250,7 +1267,7 @@
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 269,
+        "declarationLine": 273,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -1274,7 +1291,7 @@
           "sourceSchemaId": "tiinex.root.v1",
           "sourceGroup": "Machine Shape Authority",
           "declarationSource": {
-            "line": 408
+            "line": 412
           },
           "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
           "grammarProfile": "tiinex.lexical.shape.v1",
@@ -1407,7 +1424,7 @@
             "sourceSchemaId": "tiinex.root.v1",
             "sourceGroup": "Machine Shape Authority",
             "declarationSource": {
-              "line": 408
+              "line": 412
             },
             "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
             "grammarProfile": "tiinex.lexical.shape.v1",
@@ -1527,7 +1544,7 @@
             "sourceSchemaId": "tiinex.root.v1",
             "sourceGroup": "Machine Shape Authority",
             "declarationSource": {
-              "line": 408
+              "line": 412
             }
           },
           "visibleDefinitions": [
@@ -1536,7 +1553,7 @@
               "sourceSchemaId": "tiinex.root.v1",
               "sourceGroup": "Machine Shape Authority",
               "declarationSource": {
-                "line": 408
+                "line": 412
               },
               "grammarProfile": "tiinex.lexical.shape.v1",
               "definitionQualification": "valid",
@@ -1553,10 +1570,10 @@
         "schemaId": "tiinex.root.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "3988951208eb9a8926e84ab42625d4b42fa00c2d",
+          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
           "path": ".topics/.schemas/tiinex.root.v1.schema.md",
-          "publicationState": "accepted-local-unpublished",
-          "snapshotCompleteness": "exact-axiom-canonical-unpublished-bounded-workspace-contract"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "",
         "parentSourceCandidates": []
@@ -1565,9 +1582,9 @@
         "schemaId": "tiinex.topic.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "053d46ce082d4ec261b82abc44ecca403d61e240",
+          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
           "path": ".topics/.schemas/core/topic/tiinex.topic.v1.schema.md",
-          "publicationState": "",
+          "publicationState": "published-immutable-canonical",
           "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "tiinex.root.v1",
@@ -1575,7 +1592,7 @@
           {
             "provider": "github",
             "repository": "Tiinex/docs",
-            "commit": "00adbcc5b0319410cf16752a54dcbf4813173040",
+            "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
             "path": ".topics/.schemas/tiinex.root.v1.schema.md"
           }
         ]
@@ -1633,8 +1650,8 @@
     "supplementalRequiredFields": [],
     "requiredShape": [
       {
-        "id": "tiinex.topic.v1#artifact-creation/Template Body/required-shape/172",
-        "sourceSchemaId": "tiinex.topic.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/172",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 172,
@@ -1645,8 +1662,8 @@
         }
       },
       {
-        "id": "tiinex.topic.v1#artifact-creation/Template Body/required-shape/173",
-        "sourceSchemaId": "tiinex.topic.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/173",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 173,
@@ -1656,8 +1673,8 @@
         }
       },
       {
-        "id": "tiinex.topic.v1#artifact-creation/Template Body/required-shape/174",
-        "sourceSchemaId": "tiinex.topic.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/174",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 174,
@@ -1669,8 +1686,8 @@
         }
       },
       {
-        "id": "tiinex.topic.v1#artifact-creation/Template Body/required-shape/175",
-        "sourceSchemaId": "tiinex.topic.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/175",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 175,
@@ -1682,8 +1699,8 @@
         }
       },
       {
-        "id": "tiinex.topic.v1#artifact-creation/Template Body/required-shape/176",
-        "sourceSchemaId": "tiinex.topic.v1",
+        "id": "unknown#artifact-creation/Template Body/required-shape/176",
+        "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
         "line": 176,

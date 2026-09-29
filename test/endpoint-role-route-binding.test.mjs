@@ -111,10 +111,11 @@ import { prepareNodeHandoffManufacturingInput } from '../src/tooling/portable/ad
 import { manufactureRecipientRelativeHandoffPackage } from '../src/tooling/portable/handoff/manufacture.js';
 import { orientColdConsumerFromHandoffPackage } from '../src/tooling/portable/handoff/coldConsumerEntrypoint.js';
 import { projectPortableGroundingReadiness } from '../src/tooling/portable/grounding/grounding.readiness.js';
+import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
-const rootSchemaTarget = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
-const workspaceSchemaTarget = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.workspace.v1.schema.md';
-const roleSchemaTarget = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/party/role/tiinex.party.role.v1.schema.md';
+const rootSchemaTarget = currentSchemaTarget('tiinex.root.v1');
+const workspaceSchemaTarget = currentSchemaTarget('tiinex.workspace.v1');
+const roleSchemaTarget = currentSchemaTarget('tiinex.party.role.v1');
 
 function seal(markdown) {
   const sealed = sealC14nV2Self(markdown);

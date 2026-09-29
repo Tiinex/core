@@ -14,10 +14,11 @@ import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integri
 import { sha256Hex } from '../src/export/package.bytes.js';
 import { portableCanonicalBootstrapRuntime } from '../src/tooling/portable/schema/bootstrap/canonical.pack.js';
 import { projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
+import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
 const encoder = new TextEncoder();
-const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
-const TASK_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/053d46ce082d4ec261b82abc44ecca403d61e240/.topics/.schemas/core/task/tiinex.task.v1.schema.md';
+const ROOT_SCHEMA_TARGET = currentSchemaTarget('tiinex.root.v1');
+const TASK_SCHEMA_TARGET = currentSchemaTarget('tiinex.task.v1');
 
 function sealedParentMarkdown() {
   const unsigned = `# Continuity Context\n\n- Envelope Schema: tiinex.root.v1\n- Current\n  - Current Schema: tiinex.task.v1\n  - Created At: 2026-09-11 18:00:00\n  - Summary: Parent\n\n---\n\n# Parent\n\nParent body.\n\n---\n\n# Continuity Integrity\n\n- sha256-base64url-c14n-v2\n  - Towards: self\n  - Value: pending`;
@@ -82,11 +83,11 @@ test('common creation rendering uses the qualified immutable Root schema target 
   assert.doesNotMatch(markdown, /- Envelope Schema: tiinex\.root\.v1\s*$/m);
 });
 
-test('local/unpublished Current schema references remain truthful while editor diagnostics only warn when canonical target authority is actually qualified', () => {
+test('current published Evidence uses exact schema authority while historical bare schema references remain warnings', () => {
   const evidenceContract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
   assert.equal(evidenceContract.schemaReferences.envelope.resolutionState, 'qualified');
-  assert.equal(evidenceContract.schemaReferences.current.resolutionState, 'unavailable');
-  assert.equal(evidenceContract.schemaReferences.current.preferredTarget, '');
+  assert.equal(evidenceContract.schemaReferences.current.resolutionState, 'qualified');
+  assert.equal(evidenceContract.schemaReferences.current.preferredTarget, currentSchemaTarget('tiinex.evidence.v1'));
   const localMarkdown = renderArtifactCreationDraftMarkdown(evidenceContract, {
     currentSchemaId: 'tiinex.evidence.v1',
     childPath: '.topics/evidence/001-local-evidence.trace.md',
@@ -96,7 +97,7 @@ test('local/unpublished Current schema references remain truthful while editor d
     createdAt: '2026-09-12 01:00:00'
   });
   assert.match(localMarkdown, new RegExp(`- Envelope Schema: \\[tiinex\\.root\\.v1\\]\\(${ROOT_SCHEMA_TARGET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
-  assert.match(localMarkdown, /^  - Current Schema: tiinex\.evidence\.v1$/m);
+  assert.ok(localMarkdown.includes(`  - Current Schema: [tiinex.evidence.v1](${currentSchemaTarget('tiinex.evidence.v1')})`));
   const localAssistance = projectPortableEditorAssistance({ records: [{ path: '.topics/evidence/001-local-evidence.trace.md', markdown: localMarkdown }] });
   assert.equal(localAssistance.documents[0].diagnostics.some((item) => item.code === 'schema.reference.exact-target-omitted'), false);
 
@@ -113,8 +114,10 @@ test('common author recovers Parent schema authority only from exact qualified r
   assert.equal(authority?.preferredTarget, 'docs::.topics/.schemas/validation/report/tiinex.validation.report.v1.schema.md');
   assert.equal(authority?.resolutionEvidence?.kind, 'runtime-canonical-schema-byte-match');
 
-  const staleSameId = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.party.role.v1', portableCanonicalBootstrapRuntime);
-  assert.equal(staleSameId, null, 'same schema id with non-matching canonical bytes must not become authority');
+  const currentRole = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.party.role.v1', portableCanonicalBootstrapRuntime);
+  assert.equal(currentRole?.resolutionState, 'qualified');
+  assert.equal(currentRole?.targetAuthority, 'qualified-runtime-canonical-schema-material');
+  assert.equal(currentRole?.preferredTarget, 'docs::.topics/.schemas/party/role/tiinex.party.role.v1.schema.md');
 });
 
 test('runtime Parent schema recovery fails closed on ambiguous qualified representations and writes no Workspace schema copy', async () => {

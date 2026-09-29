@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
-export const PORTABLE_CANONICAL_BOOTSTRAP_DOCS_COMMIT = '3988951208eb9a8926e84ab42625d4b42fa00c2d';
-export const PORTABLE_CANONICAL_BOOTSTRAP_ROOT = fileURLToPath(new URL(`./docs-${PORTABLE_CANONICAL_BOOTSTRAP_DOCS_COMMIT}/`, import.meta.url));
+export const PORTABLE_CANONICAL_BOOTSTRAP_DOCS_COMMIT = '668753e47a281db060cb74ef957683f4f773b3a4';
+export const PORTABLE_CANONICAL_BOOTSTRAP_ROOT = fileURLToPath(new URL('./schema-pack/schemas/', import.meta.url));
 
 export const portableCanonicalBootstrapRuntime = Object.freeze({
   defaultSchemaMaterialPaths: Object.freeze([PORTABLE_CANONICAL_BOOTSTRAP_ROOT]),
@@ -14,8 +14,8 @@ export const portableCanonicalBootstrapRuntime = Object.freeze({
   defaultSchemaProviderSource: Object.freeze({
     id: 'tiinex-docs',
     repository: 'Tiinex/docs',
-    ref: 'master',
-    source: 'canonical-bootstrap-runtime-profile'
+    ref: PORTABLE_CANONICAL_BOOTSTRAP_DOCS_COMMIT,
+    source: 'portable-schema-pack-runtime-profile'
   }),
   defaultCarrierProfile: Object.freeze({
     id: 'tiinex-foundation',

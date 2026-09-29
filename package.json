@@ -151,7 +151,10 @@
     "release:preview": "node tools/release.mjs preview",
     "publish:bootstrap": "node tools/release.mjs bootstrap",
     "release:prepare": "node tools/release.mjs prepare",
-    "release:publish": "node tools/release.mjs publish"
+    "release:publish": "node tools/release.mjs publish",
+    "schemas:status": "node tools/tiinex-portable.mjs schemas status .",
+    "schemas:sync": "node tools/tiinex-portable.mjs schemas sync .",
+    "schemas:check": "node tools/tiinex-portable.mjs schemas check ."
   },
   "engines": {
     "node": ">=22.14"

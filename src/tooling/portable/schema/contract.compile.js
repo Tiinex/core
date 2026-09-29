@@ -160,7 +160,7 @@ export function compilePortableSchemaContractChain(inputs = [], options = {}) {
       ordinaryGroups,
       fieldShapes
     }),
-    creation: mergeCreationContracts(composition),
+    creation: leaf.creation,
     declarations,
     machineShapes,
     constraints,
@@ -171,6 +171,7 @@ export function compilePortableSchemaContractChain(inputs = [], options = {}) {
     limitations: Object.freeze([
       'Inheritance is additive except where a Root-qualified inline Inheritance Overrides declaration deactivates one exact parent contribution.',
       'Standalone tiinex.schema.inheritance.v1 records are evidence/audit inputs only and do not silently add schema-local compilation authority.',
+      'Artifact Creation Contract authority is schema-local to the leaf schema; Parent creation contracts are not inherited when the leaf does not declare generation authority.',
       'Callers must inspect lineageQualification before treating a compiled chain as complete lineage truth.'
     ])
   });

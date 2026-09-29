@@ -1,13 +1,13 @@
 {
   "schema": "tiinex.site.schema-runtime-projection.v1",
-  "generator": "schema-runtime-projection-v1",
+  "generator": "schema-runtime-projection-v2-schema-pack",
   "schemaId": "tiinex.preservation.v1",
   "sourceChecksum": "a2f3319c2e7179d2643351901db8aa52ab98e0a0c4db0c3df07a823adaa3f610",
   "sourceBlobSha": "0a2f653a7188defcdf8bd60d9b845c695438f6b4",
   "sourceBytes": 9932,
   "bindingChecksum": "a2f3319c2e7179d2643351901db8aa52ab98e0a0c4db0c3df07a823adaa3f610",
   "validationContract": {
-    "schema": "tiinex.site.compact-portable-validation-contract.v1",
+    "schema": "tiinex.portable.compiled-schema-contract-chain.v1",
     "schemaId": "tiinex.preservation.v1",
     "lineage": [
       "tiinex.root.v1",
@@ -31,23 +31,6 @@
       "findings": []
     },
     "validation": {
-      "groups": [
-        {
-          "name": "Runtime Required Fields",
-          "requiredWhen": [],
-          "categories": [
-            {
-              "name": "Required Fields",
-              "items": [
-                "Envelope Schema",
-                "Current",
-                "Current Schema",
-                "Created At"
-              ]
-            }
-          ]
-        }
-      ],
       "requiredSections": [
         "Continuity Context",
         "Continuity Integrity",
@@ -90,6 +73,59 @@
           "source": "`## Interpretation Limits` section"
         }
       ],
+      "optionalSections": [
+        "Artifact Creation Contract",
+        "Related Artifacts",
+        "References"
+      ],
+      "requiredFields": [
+        "Envelope Schema",
+        "Current",
+        "Current Schema",
+        "Created At",
+        "Material Description",
+        "Material Kind",
+        "Preservation Method",
+        "Preservation Time Or State",
+        "Known Source",
+        "Provenance Limits",
+        "Fidelity Notes",
+        "Known Losses",
+        "Storage Or Custody State",
+        "Reuse Boundary",
+        "Does Not Prove",
+        "Not Yet Used As"
+      ],
+      "optionalFields": [
+        "Parent",
+        "Repairs",
+        "Summary",
+        "Status",
+        "Why",
+        "Material Reference",
+        "External Payload",
+        "Represented Subject",
+        "Source",
+        "Actor",
+        "Tool",
+        "Adapter",
+        "Capture Conditions",
+        "Origin",
+        "Source Artifact",
+        "Access Artifact",
+        "Relation",
+        "Transformation",
+        "Redaction",
+        "Excerpting",
+        "Uncertainty",
+        "Retention",
+        "Privacy Boundary",
+        "Safety Boundary",
+        "Permission Boundary",
+        "Possible Evidence Use",
+        "Possible Review Use",
+        "Open Questions"
+      ],
       "requiredEntries": [
         {
           "group": "Continuity Integrity Footer",
@@ -101,6 +137,125 @@
           ]
         }
       ],
+      "conditionalRequirements": [
+        {
+          "name": "Contract Category Extension",
+          "requiredWhen": [
+            "A descendant schema introduces a contract category label."
+          ],
+          "requiredSections": [],
+          "requiredFields": [],
+          "requiredEntries": [],
+          "allowedLabels": [],
+          "entryShapes": [
+            "Named Declaration"
+          ],
+          "ordering": []
+        },
+        {
+          "name": "Contract Category Override",
+          "requiredWhen": [
+            "A descendant schema replaces the interpretation of an inherited contract category label."
+          ],
+          "requiredSections": [],
+          "requiredFields": [],
+          "requiredEntries": [],
+          "allowedLabels": [],
+          "entryShapes": [
+            "Named Declaration"
+          ],
+          "ordering": []
+        },
+        {
+          "name": "Repairs",
+          "requiredWhen": [
+            "Repairs exists"
+          ],
+          "requiredSections": [],
+          "requiredFields": [],
+          "requiredEntries": [],
+          "allowedLabels": [],
+          "entryShapes": [
+            "First-Level Hyphen List Item"
+          ],
+          "ordering": []
+        },
+        {
+          "name": "Parent",
+          "requiredWhen": [
+            "Parent exists"
+          ],
+          "requiredSections": [],
+          "requiredFields": [
+            "Parent Schema",
+            "Trace",
+            "Origin"
+          ],
+          "requiredEntries": [],
+          "allowedLabels": [],
+          "entryShapes": [],
+          "ordering": []
+        },
+        {
+          "name": "Parent Origin",
+          "requiredWhen": [
+            "Parent exists"
+          ],
+          "requiredSections": [],
+          "requiredFields": [],
+          "requiredEntries": [],
+          "allowedLabels": [
+            "relative",
+            "absolute",
+            "browse + git"
+          ],
+          "entryShapes": [
+            "Markdown Link"
+          ],
+          "ordering": [
+            "relative",
+            "absolute",
+            "browse + git"
+          ]
+        },
+        {
+          "name": "Envelope Extension",
+          "requiredWhen": [
+            "A descendant schema adds envelope fields."
+          ],
+          "requiredSections": [],
+          "requiredFields": [],
+          "requiredEntries": [],
+          "allowedLabels": [],
+          "entryShapes": [
+            "Named Declaration"
+          ],
+          "ordering": []
+        },
+        {
+          "name": "Extension",
+          "requiredWhen": [
+            "A descendant schema introduces an extension."
+          ],
+          "requiredSections": [],
+          "requiredFields": [],
+          "requiredEntries": [],
+          "allowedLabels": [],
+          "entryShapes": [
+            "Named Declaration"
+          ],
+          "ordering": []
+        }
+      ],
+      "ordinaryFieldAuthority": {
+        "state": "available",
+        "sources": [
+          "tiinex.root.v1"
+        ],
+        "defaultTarget": "exact-second-level-same-name",
+        "overrideCategory": "Instance Target",
+        "overrideShape": "one-literal-markdown-heading-token"
+      },
       "ordinaryGroups": [
         {
           "group": "Preserved Material",
@@ -377,116 +532,6 @@
           ]
         }
       ],
-      "conditionalRequirements": [
-        {
-          "name": "Contract Category Extension",
-          "requiredWhen": [
-            "A descendant schema introduces a contract category label."
-          ],
-          "requiredSections": [],
-          "requiredFields": [],
-          "requiredEntries": [],
-          "allowedLabels": [],
-          "entryShapes": [
-            "Named Declaration"
-          ],
-          "ordering": []
-        },
-        {
-          "name": "Contract Category Override",
-          "requiredWhen": [
-            "A descendant schema replaces the interpretation of an inherited contract category label."
-          ],
-          "requiredSections": [],
-          "requiredFields": [],
-          "requiredEntries": [],
-          "allowedLabels": [],
-          "entryShapes": [
-            "Named Declaration"
-          ],
-          "ordering": []
-        },
-        {
-          "name": "Repairs",
-          "requiredWhen": [
-            "Repairs exists"
-          ],
-          "requiredSections": [],
-          "requiredFields": [],
-          "requiredEntries": [],
-          "allowedLabels": [],
-          "entryShapes": [
-            "First-Level Hyphen List Item"
-          ],
-          "ordering": []
-        },
-        {
-          "name": "Parent",
-          "requiredWhen": [
-            "Parent exists"
-          ],
-          "requiredSections": [],
-          "requiredFields": [
-            "Parent Schema",
-            "Trace",
-            "Origin"
-          ],
-          "requiredEntries": [],
-          "allowedLabels": [],
-          "entryShapes": [],
-          "ordering": []
-        },
-        {
-          "name": "Parent Origin",
-          "requiredWhen": [
-            "Parent exists"
-          ],
-          "requiredSections": [],
-          "requiredFields": [],
-          "requiredEntries": [],
-          "allowedLabels": [
-            "relative",
-            "absolute",
-            "browse + git"
-          ],
-          "entryShapes": [
-            "Markdown Link"
-          ],
-          "ordering": [
-            "relative",
-            "absolute",
-            "browse + git"
-          ]
-        },
-        {
-          "name": "Envelope Extension",
-          "requiredWhen": [
-            "A descendant schema adds envelope fields."
-          ],
-          "requiredSections": [],
-          "requiredFields": [],
-          "requiredEntries": [],
-          "allowedLabels": [],
-          "entryShapes": [
-            "Named Declaration"
-          ],
-          "ordering": []
-        },
-        {
-          "name": "Extension",
-          "requiredWhen": [
-            "A descendant schema introduces an extension."
-          ],
-          "requiredSections": [],
-          "requiredFields": [],
-          "requiredEntries": [],
-          "allowedLabels": [],
-          "entryShapes": [
-            "Named Declaration"
-          ],
-          "ordering": []
-        }
-      ],
       "fieldShapes": [
         {
           "kind": "field-shape",
@@ -512,7 +557,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -632,7 +677,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -641,7 +686,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -691,7 +736,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -811,7 +856,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -820,7 +865,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -870,7 +915,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -990,7 +1035,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -999,7 +1044,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -1049,7 +1094,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 },
                 "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
                 "grammarProfile": "tiinex.lexical.shape.v1",
@@ -1169,7 +1214,7 @@
                 "sourceSchemaId": "tiinex.root.v1",
                 "sourceGroup": "Machine Shape Authority",
                 "declarationSource": {
-                  "line": 408
+                  "line": 412
                 }
               },
               "visibleDefinitions": [
@@ -1178,7 +1223,7 @@
                   "sourceSchemaId": "tiinex.root.v1",
                   "sourceGroup": "Machine Shape Authority",
                   "declarationSource": {
-                    "line": 408
+                    "line": 412
                   },
                   "grammarProfile": "tiinex.lexical.shape.v1",
                   "definitionQualification": "valid",
@@ -1562,7 +1607,7 @@
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 269,
+        "declarationLine": 273,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -1586,7 +1631,7 @@
           "sourceSchemaId": "tiinex.root.v1",
           "sourceGroup": "Machine Shape Authority",
           "declarationSource": {
-            "line": 408
+            "line": 412
           },
           "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
           "grammarProfile": "tiinex.lexical.shape.v1",
@@ -1719,7 +1764,7 @@
             "sourceSchemaId": "tiinex.root.v1",
             "sourceGroup": "Machine Shape Authority",
             "declarationSource": {
-              "line": 408
+              "line": 412
             },
             "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
             "grammarProfile": "tiinex.lexical.shape.v1",
@@ -1839,7 +1884,7 @@
             "sourceSchemaId": "tiinex.root.v1",
             "sourceGroup": "Machine Shape Authority",
             "declarationSource": {
-              "line": 408
+              "line": 412
             }
           },
           "visibleDefinitions": [
@@ -1848,7 +1893,7 @@
               "sourceSchemaId": "tiinex.root.v1",
               "sourceGroup": "Machine Shape Authority",
               "declarationSource": {
-                "line": 408
+                "line": 412
               },
               "grammarProfile": "tiinex.lexical.shape.v1",
               "definitionQualification": "valid",
@@ -1865,10 +1910,10 @@
         "schemaId": "tiinex.root.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "3988951208eb9a8926e84ab42625d4b42fa00c2d",
+          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
           "path": ".topics/.schemas/tiinex.root.v1.schema.md",
-          "publicationState": "accepted-local-unpublished",
-          "snapshotCompleteness": "exact-axiom-canonical-unpublished-bounded-workspace-contract"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "",
         "parentSourceCandidates": []
@@ -1877,9 +1922,9 @@
         "schemaId": "tiinex.preservation.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "e713557f8be630967571d11a73f9ecd05ae329ce",
+          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
           "path": ".topics/.schemas/core/preservation/tiinex.preservation.v1.schema.md",
-          "publicationState": "",
+          "publicationState": "published-immutable-canonical",
           "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "tiinex.root.v1",
@@ -1887,7 +1932,7 @@
           {
             "provider": "github",
             "repository": "Tiinex/docs",
-            "commit": "00adbcc5b0319410cf16752a54dcbf4813173040",
+            "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
             "path": ".topics/.schemas/tiinex.root.v1.schema.md"
           }
         ]

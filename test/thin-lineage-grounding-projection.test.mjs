@@ -20,6 +20,7 @@ import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifi
 import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integrity/integrity.c14nV2.js';
 import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodReference.js';
 import { sha256Hex } from '../src/export/package.bytes.js';
+import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
 
 function participantTaskRecord(objective, path = 'core/.topics/grounding/participant-task.trace.md') {
@@ -624,9 +625,9 @@ test('common orient projection exposes exact carrier prefix with numeric lineage
 });
 
 
-const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
-const TASK_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/053d46ce082d4ec261b82abc44ecca403d61e240/.topics/.schemas/core/task/tiinex.task.v1.schema.md';
-const ROLE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/party/role/tiinex.party.role.v1.schema.md';
+const ROOT_SCHEMA_TARGET = currentSchemaTarget('tiinex.root.v1');
+const TASK_SCHEMA_TARGET = currentSchemaTarget('tiinex.task.v1');
+const ROLE_SCHEMA_TARGET = currentSchemaTarget('tiinex.party.role.v1');
 
 function boundedActionReadinessFixture({ workspaceQualification = 'qualified', requiredState = 'qualified', holderState = 'qualified', holderAuthorization = 'qualified' } = {}) {
   const seal = (markdown) => {

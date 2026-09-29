@@ -11,9 +11,11 @@ import { projectPortableEditorAssistance } from '../src/tooling/portable/editor/
 import { qualifyPortableManufactureSchemaReferenceCandidate } from '../src/tooling/portable/handoff/schemaReferencePreflight.js';
 import { qualifyTiinexRouteArtifact } from '../src/tooling/portable/handoff/routeArtifactConformance.js';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
+import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
-const ROOT_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
-const TASK_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/053d46ce082d4ec261b82abc44ecca403d61e240/.topics/.schemas/core/task/tiinex.task.v1.schema.md';
+const ROOT_SCHEMA_TARGET = currentSchemaTarget('tiinex.root.v1');
+const TASK_SCHEMA_TARGET = currentSchemaTarget('tiinex.task.v1');
+const EVIDENCE_CURRENT_TARGET = currentSchemaTarget('tiinex.evidence.v1');
 const EVIDENCE_EXACT_TARGET = 'docs::.topics/.schemas/core/evidence/tiinex.evidence.v1.schema.md';
 
 function render(schemaId, contract = buildArtifactCreationContract({ schemaId, transitionType: 'create-artifact' }), bodyMarkdown = '# Body\n\nBody.') {
@@ -77,11 +79,12 @@ test('prospective creation and draft staging require exact Root target when exac
   assert.ok(staged.findings.some((item) => item.code === 'schema.reference.exact-target-omitted' && item.severity === 'error'));
 });
 
-test('plain Current Evidence is truthful when no qualified exact current target exists', () => {
+test('current Evidence renders its qualified immutable Docs permalink by default', () => {
   const contract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
-  assert.equal(contract.schemaReferences.current.resolutionState, 'unavailable');
+  assert.equal(contract.schemaReferences.current.resolutionState, 'qualified');
+  assert.equal(contract.schemaReferences.current.preferredTarget, EVIDENCE_CURRENT_TARGET);
   const markdown = render('tiinex.evidence.v1', contract);
-  assert.match(markdown, /^  - Current Schema: tiinex\.evidence\.v1$/m);
+  assert.ok(markdown.includes(`  - Current Schema: [tiinex.evidence.v1](${EVIDENCE_CURRENT_TARGET})`));
   const audit = auditPortableRecord({ path: '.topics/testing/evidence.trace.md', markdown, schemaId: 'tiinex.evidence.v1' });
   assert.equal(audit.findings.some((item) => item.code === 'schema.reference.exact-target-omitted' && item.params?.field === 'Current Schema'), false);
   const editor = projectPortableEditorAssistance({ records: [{ path: '.topics/testing/evidence.trace.md', markdown, schemaId: 'tiinex.evidence.v1' }] });

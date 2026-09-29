@@ -3,7 +3,5 @@ import projection from './tiinex.validation.finding.v1.schema.runtime.json' with
 import { defineBundledSchemaSource } from '../../schema.source.js';
 
 export const schemaSource = defineBundledSchemaSource(binding, projection, Object.freeze({
-  bundledPath: 'src/schemas/validation/finding/tiinex.validation.finding.v1.schema.md',
-  sourceLabel: 'Viewer schema registry',
-  assetUrl: new URL('./tiinex.validation.finding.v1.schema.md', import.meta.url).href
+  sourceLabel: 'Tiinex portable Schema Pack'
 }));

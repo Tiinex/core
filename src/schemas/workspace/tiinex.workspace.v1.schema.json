@@ -3,21 +3,23 @@
   "kind": "concrete",
   "role": "viewer-workspace-entrypoint",
   "module": "./tiinex.workspace.v1.schema.js",
-  "snapshot": "./tiinex.workspace.v1.schema.md",
+  "snapshot": "schema-pack:tiinex.workspace.v1",
   "canonicalUri": "tiinex://schemas/workspace/tiinex.workspace.v1",
-  "permalink": "site-local:.topics/.schemas/tiinex.workspace.v1.schema.md",
-  "rawUrl": "site-local:.topics/.schemas/tiinex.workspace.v1.schema.md",
+  "permalink": "https://github.com/Tiinex/docs/blob/668753e47a281db060cb74ef957683f4f773b3a4/.topics/.schemas/tiinex.workspace.v1.schema.md",
+  "rawUrl": "https://raw.githubusercontent.com/Tiinex/docs/668753e47a281db060cb74ef957683f4f773b3a4/.topics/.schemas/tiinex.workspace.v1.schema.md",
   "sourcePath": ".topics/.schemas/tiinex.workspace.v1.schema.md",
-  "sourceRepository": "Tiinex/site",
-  "sourceCommit": "viewer-local-v119",
-  "sourceBlobSha": "site-local-workspace-schema",
-  "originId": "viewer-local",
+  "sourceRepository": "Tiinex/docs",
+  "sourceCommit": "668753e47a281db060cb74ef957683f4f773b3a4",
+  "sourceBlobSha": "62f712beac5693f8400fdbe6a28d89346656a2c1",
+  "originId": "tiinex-docs-668753e4",
   "originTrustRole": "viewer-extension",
   "checksum": {
     "algorithm": "sha256",
-    "value": "425aa24f8c1fc1115eec8cb934c410f1b01b5d38e91c73e71a2de886473ebf05"
+    "value": "7f086bbb7f0230fa874ceb8a528f9d23d3c8cdbf4a3d9519b5f46d650df3f2b2"
   },
   "capabilityContract": "tiinex.schema.module.v1",
-  "snapshotCompleteness": "viewer-local-workspace-schema-snapshot",
+  "snapshotCompleteness": "exact-canonical-docs-snapshot",
+  "publicationState": "published-immutable-canonical",
+  "schemaReferencePublicationState": "published-immutable-canonical",
   "bindingVersion": "tiinex.web.schema-binding.v1"
 }

@@ -16,6 +16,7 @@ const ROLE_SCHEMA_SHA = '2887aef16cf827b78fe38c1a2ba97cb5820d79049729d2cf8696ecf
 const EXACT_PRE_MIGRATION_AXIOM_SHA = 'f17e74db07c6a2d1288119c330a20b3b19cd0eb01f6a2c9f207d21102d9488d5';
 const EXACT_PRE_MIGRATION_AXIOM_PARENT = new URL('./fixtures/roles/001-2-axiom-role.pre-migration.trace.md', import.meta.url);
 const HISTORICAL_SCHEMA_TARGET = 'https://example.invalid/historical/tiinex.party.role.v1.schema.md';
+const CURRENT_ROLE_SCHEMA_TARGET = binding.permalink;
 const VALUES = Object.freeze({
   'Role Label': 'Historical Loom',
   'Role Kind': 'bounded role',
@@ -37,7 +38,7 @@ function historicalParentMarkdown() {
   const contract = buildArtifactCreationContract({ schemaId: 'tiinex.party.role.v1', transitionType: 'create-artifact' });
   assert.equal(contract.status, 'ready');
   const current = renderArtifactCreationDraftMarkdown(contract, { values: VALUES, title: 'Historical Loom', summary: 'Historical Loom', createdAt: '2026-09-01T10:00:00Z' });
-  const changed = current.replace('- Current Schema: tiinex.party.role.v1', `- Current Schema: [tiinex.party.role.v1](${HISTORICAL_SCHEMA_TARGET})`);
+  const changed = current.replace(/^  - Current Schema: .*$/m, `  - Current Schema: [tiinex.party.role.v1](${HISTORICAL_SCHEMA_TARGET})`);
   const resealed = sealC14nV2Self(changed);
   assert.equal(resealed.state, 'sealed');
   return `${resealed.markdown}\n`;
@@ -80,7 +81,7 @@ test('bundled Role schema material is the Axiom-amended Assignment Modes revisio
   assert.ok(runtimeProjection.creation.requiredInputs.includes('Assignment Modes'));
   const holder = runtimeProjection.validationContract.validation.ordinaryGroups.find((group) => group.group === 'Holder Relationship');
   assert.deepEqual(holder.requiredFields, ['Holder State', 'Assignment Modes']);
-  const snapshot = await readFile(new URL('../src/schemas/party/role/tiinex.party.role.v1.schema.md', import.meta.url), 'utf8');
+  const snapshot = await readFile(new URL('../src/tooling/portable/schema/bootstrap/schema-pack/schemas/party/role/tiinex.party.role.v1.schema.md', import.meta.url), 'utf8');
   assert.match(snapshot, /- Assignment Modes$/m);
 });
 
@@ -117,7 +118,7 @@ test('common author preserves exact historical Role Parent schema locator while 
     assert.equal(result.status, 'qualified', JSON.stringify(result.actionableFindings || result.findingSummary));
     const candidate = await readFile(path.join(dir, '.topics', 'roles', '001-1-current-role.trace.md'), 'utf8');
     assert.match(candidate, new RegExp(`Parent Schema: \\[tiinex\\.party\\.role\\.v1\\]\\(${HISTORICAL_SCHEMA_TARGET.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
-    assert.match(candidate, /Current Schema: tiinex\.party\.role\.v1/);
+    assert.ok(candidate.includes(`Current Schema: [tiinex.party.role.v1](${CURRENT_ROLE_SCHEMA_TARGET})`));
     assert.match(candidate, /- Assignment Modes: explicit-session, explicit-role-invocation, handoff/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

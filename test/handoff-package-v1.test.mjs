@@ -24,12 +24,13 @@ import { loadNodePortableInput } from '../src/tooling/portable/input/node.input.
 import { groundContinuationOperationInput, materializeGroundWorkspaceCliOutput } from '../src/tooling/portable/adapters/cli/cli.ground-materialize.js';
 import { projectHandoffPackageV1CacheIdentity } from '../src/tooling/portable/handoff/handoffPackageV1.reference.js';
 import { prepareHandoffManufactureCliCommand, qualifyLegacyCarrierContinuationParent } from '../src/tooling/portable/adapters/cli/cli.handoff-manufacture.js';
+import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
-const ROOT='https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/tiinex.root.v1.schema.md';
-const WS='https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/core/workspace/tiinex.workspace.v1.schema.md';
-const TASK='https://github.com/Tiinex/docs/blob/053d46ce082d4ec261b82abc44ecca403d61e240/.topics/.schemas/core/task/tiinex.task.v1.schema.md';
-const HANDOFF='https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/coordination/handoff/tiinex.handoff.v1.schema.md';
-const ROLE='https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/party/role/tiinex.party.role.v1.schema.md';
+const ROOT=currentSchemaTarget('tiinex.root.v1');
+const WS=currentSchemaTarget('tiinex.workspace.v1');
+const TASK=currentSchemaTarget('tiinex.task.v1');
+const HANDOFF=currentSchemaTarget('tiinex.handoff.v1');
+const ROLE=currentSchemaTarget('tiinex.party.role.v1');
 const COMMIT='a66906eef7f0033eb12893f92910336f82d01afa';
 
 

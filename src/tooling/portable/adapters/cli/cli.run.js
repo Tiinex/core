@@ -13,6 +13,7 @@ import { runPrepareReturnCli } from './cli.prepare-return.js';
 import { runQualifyReturnCli } from './cli.qualify-return.js';
 import { runCommonWorkspaceInitCli } from './cli.workspace-init.js';
 import { projectCommonCliDefaultOutput } from './cli.common-output.js';
+import { runSchemasCli } from './cli.schemas.js';
 
 export async function runPortableCli(argv = process.argv.slice(2), io = console, runtime = {}) {
   const parsed = parseArgs(argv);
@@ -25,6 +26,11 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
     return 0;
   }
   try {
+    if (['schemas-status', 'schemas-sync', 'schemas-check'].includes(parsed.command)) {
+      const result = await runSchemasCli(parsed);
+      writeJson(io, result, parsed.flags.compact !== true);
+      return result?.findingSummary?.counts?.error ? 2 : 0;
+    }
     if (parsed.command === 'author') {
       const result = await runCommonAuthorCli(parsed, runtime);
       writeJson(io, result, parsed.flags.compact !== true);
@@ -447,10 +453,16 @@ function withCliPhaseTiming(result = {}, timing = {}) {
 function parseArgs(argv=[]) {
   const args=[...argv],first=args.shift()||'';
   if(first==='--help'||first==='-h') return {command:'help',flags:{help:true},positionals:[]};
-  const command=({orient:'orient-handoff-package',ground:'project-grounding-readiness',receive:'qualify-cold-start',validate:'audit-handoff-package-context',handoff:'manufacture-handoff-package',author:'author',compare:'compare-source-frontiers',reconcile:'prove-source-reconciliation','audit-recovery':'audit-recovery-acceptance'})[first]||first;
+  let surfaceCommand=first;
+  let command='';
+  if(first==='schemas') {
+    const subcommand=String(args.shift()||'status').trim().toLowerCase();
+    command=({status:'schemas-status',sync:'schemas-sync',check:'schemas-check'})[subcommand]||`schemas-${subcommand}`;
+    surfaceCommand='schemas';
+  } else command=({orient:'orient-handoff-package',ground:'project-grounding-readiness',receive:'qualify-cold-start',validate:'audit-handoff-package-context',handoff:'manufacture-handoff-package',author:'author',compare:'compare-source-frontiers',reconcile:'prove-source-reconciliation','audit-recovery':'audit-recovery-acceptance'})[first]||first;
   const flags={},positionals=[];
   while(args.length){const token=args.shift();if(!token.startsWith('--')){positionals.push(token);continue;}const key=token.slice(2);flags[key]=!args.length||args[0].startsWith('--')?true:args.shift();}
-  return {command,flags,positionals,surfaceCommand:first};
+  return {command,flags,positionals,surfaceCommand};
 }
 
 function writeJson(io, value, pretty = true) { io.log(JSON.stringify(value, null, pretty ? 2 : 0)); }
