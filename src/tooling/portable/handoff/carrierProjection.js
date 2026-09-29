@@ -93,7 +93,27 @@ export function projectHandoffHumanOutput(input = {}) {
         transportText: routedTransportText(startPath, String(route.pointerPath || ''))
       });
     })),
-    presentation: Object.freeze({ kind: 'handoff-package-v1', label: 'Tiinex Handoff Package', recipientLabel: String(selected?.to || selected?.parties?.to || ''), recipientProjectionAuthority: selected ? 'qualified-handoff-to-endpoint-only' : 'none' }),
+    presentation: Object.freeze({
+      kind: 'handoff-package-v1',
+      label: 'Tiinex Handoff Package',
+      recipientLabel: String(selected?.to || selected?.parties?.to || ''),
+      recipientProjectionAuthority: selected ? 'qualified-handoff-to-endpoint-only' : 'none',
+      copyableSurfaceRequired: true,
+      exactContentRequired: true,
+      fencedCodeBlockWhenSupported: 'required-for-routing-text',
+      markdownCapableHostRendering: 'one package attachment plus exact adjacent Tooling-projected routing text',
+      wrapperAuthority: 'none'
+    }),
+    normalEmissionBoundary: Object.freeze({
+      allowed: Object.freeze(['package-file', 'exact-adjacent-routing-text']),
+      forbidden: Object.freeze(['loose-result-file', 'loose-evidence-file', 'loose-handoff-markdown', 'workspace-archive', 'manually-constructed-package', 'manually-reconstructed-routing', 'semantic-work-summary-prose']),
+      canonicalFilePayloadCount: 1,
+      workspaceArtifactsAsLooseTransportFiles: false,
+      semanticWorkSummaryProse: false,
+      helperArtifacts: false,
+      manuallyReconstructedRouting: false,
+      duplicateNormalFileChoices: false
+    }),
     normalInlineRouting: selected ? Object.freeze({ kind: 'transport-text', routeId: String(selected.id || selected.routeId || ''), continueFrom, content: transportText, normalEmission: true, requiredForHumanCompletion: true, placement: 'adjacent-to-primary', authority: 'qualified-selected-handoff-route' }) : null,
     sharedRouting: readyRoutes.length > 1 ? Object.freeze({ selectionRequired: !selected, routes: Object.freeze(readyRoutes.map((route) => Object.freeze({ routeId: String(route.id || route.routeId || ''), continueFrom: String(route.pointerPath || ''), transportText: routedTransportText(startPath, String(route.pointerPath || '')) }))) }) : null,
     fallbackTransportText: status === 'ready' ? Object.freeze({ supported: true, filename: filename.replace(/\.handoff-package\.zip$/i, '.transport.txt'), content: transportText, normalEmission: false, requiredForHumanCompletion: false, authority: 'qualified-selected-handoff-route' }) : null,

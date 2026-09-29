@@ -380,6 +380,16 @@ test('embedded LLM bootstrap teaches one-pass recipient grounding without changi
   assert.match(text,/do not reimplement integrity or inspect Handoff schema source manually/);
   assert.match(text,/exactly one `\.handoff-package\.zip` plus Tooling's exact adjacent routing text/);
   assert.match(text,/must not be emitted as extra loose transport payloads/);
+  assert.match(text,/re-evaluate that exact selected authority after every new human turn/);
+  assert.match(text,/prior host-tool choice is never authority for the next turn/);
+  assert.match(text,/do not call the candidate-producing tool again/);
+  assert.match(text,/qualified-awaiting-host-surface/);
+  assert.match(text,/runtime-local filesystem path.*never evidence that the human can access the file/);
+  assert.match(text,/host's native human-visible file, attachment, or link mechanism/);
+  assert.match(text,/Manual ZIP construction.*never qualify either host surfacing or delivery/);
+  assert.doesNotMatch(text,/canonical Handoff semantic authoring\/validation or a locked canonical package schema/);
+  assert.doesNotMatch(text,/a locked package format/);
+  assert.match(text,/canonical Handoff authoring through `author`/);
 });
 
 test('direct Package V1 orientation preserves qualified carrier prefix and numeric lineage for recipient continuation',async()=>{
@@ -405,6 +415,10 @@ test('carrier filename manufacture projection fails closed when prefix or exact 
   assert.equal(projectHandoffHumanOutput({projection:base}).status,'prefix-required');
   assert.equal(projectHandoffHumanOutput({projection:{...base,lineage:{prefix:'business',dimension:'001'},routes:[{...base.routes[0],from:'',to:''}]}}).status,'route-parties-required');
   assert.equal(projectHandoffHumanOutput({projection:{...base,lineage:{prefix:'business',dimension:'001'}},carrierPrefix:'other'}).status,'prefix-conflict');
+  const qualified=projectHandoffHumanOutput({projection:{...base,lineage:{prefix:'business',dimension:'001'}}});
+  assert.deepEqual(qualified.normalEmissionBoundary.allowed,['package-file','exact-adjacent-routing-text']);
+  assert.equal(qualified.normalEmissionBoundary.canonicalFilePayloadCount,1);
+  assert.ok(qualified.normalEmissionBoundary.forbidden.includes('manually-constructed-package'));
 });
 
 test('direct Package V1 keeps already-carried endpoint Role material in Workspace and creates no redundant cache',async()=>{
@@ -897,7 +911,7 @@ test('physical Package V1 ZIP alone can be loaded, oriented, grounded and contin
   const grounded=groundPortableColdConsumer({bundle,route,interactionMode:'execution'}); assert.equal(grounded.status,'ready');
   const readiness=projectPortableGroundingReadiness({bundle,route,interactionMode:'execution',includeCurrentWork:true}); assert.equal(readiness.readiness.state,'grounded-to-act'); assert.equal(readiness.continuity.state,'qualified');
   const continued=await materializeGroundWorkspaceCliOutput(readiness,{bundle,packageSourcePath:zipPath,route},{continue:output}); assert.equal(continued.continuationMaterialization.state,'materialized'); assert.equal(continued.continuationMaterialization.workspaceId,'work');
-  const continuation=JSON.parse(await readFile(path.join(output,'.tiinex','continuation.json'),'utf8')); assert.equal(continuation.selectedHandoffPath,'.topics/handoffs/001-handoff.trace.md'); assert.equal(continuation.workspaceId,'work'); assert.match(continuation.packageParentSha256,/^[0-9a-f]{64}$/);
+  const continuation=JSON.parse(await readFile(path.join(output,'.tiinex','continuation.json'),'utf8')); assert.equal(continuation.selectedHandoffPath,'.topics/handoffs/001-handoff.trace.md'); assert.equal(continuation.workspaceId,'work'); assert.match(continuation.packageParentSha256,/^[0-9a-f]{64}$/); assert.equal(continuation.guidanceOperationSelection.priorHostToolChoiceCarriesAcrossHumanTurn,false); assert.equal(continuation.returnDiscipline.manualPackageConstruction,'forbidden'); assert.equal(continuation.returnDiscipline.deliveryRequiresCanonicalManufactureAndQualification,true); assert.equal(continuation.returnDiscipline.humanDeliveryRequiresHostNativeSurface,true); assert.equal(continuation.returnDiscipline.runtimeLocalPathIsHumanDeliveryEvidence,false); assert.equal(continuation.returnDiscipline.deliveryClaimRequiresHumanVisibleArtifact,true);
   await rm(temp,{recursive:true,force:true});
 });
 

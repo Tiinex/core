@@ -184,7 +184,9 @@ function projectRecipientContract({ result = {}, required = {}, currentWork = {}
   const currentAvailable = Number(currentWork.bodiesAvailable || 0);
   const currentProjected = Number(currentWork.bodiesProjected || 0);
   const bodiesReady = requiredProjected >= requiredAvailable && currentProjected >= currentAvailable;
-  const guidance = projectRecipientGuidanceSummary(result?.capsule?.guidanceAuthority || {});
+  const rawGuidance = result?.capsule?.guidanceAuthority || {};
+  const guidance = projectRecipientGuidanceSummary(rawGuidance);
+  const operationSelection = projectRecipientOperationSelection(rawGuidance);
   const sourceBlockers = result?.capsule?.sourceEvidence?.blockers || [];
   const selectedHandoffBoundedWork = String(currentWork.state || '') === 'selected-handoff-bounded-work';
   const selectedHandoff = String(currentWork?.handoffContract?.selectedHandoff || '');
@@ -222,6 +224,7 @@ function projectRecipientContract({ result = {}, required = {}, currentWork = {}
       boundary: String(currentWork?.handoffContract?.boundary || '')
     }),
     guidance,
+    operationSelection,
     sourceBlockingEvidence: Object.freeze(sourceBlockers.slice(0, 12).map((item) => Object.freeze({ code: String(item?.code || ''), requirementId: String(item?.requirementId || ''), name: String(item?.name || ''), blockingReason: String(item?.blockingReason || ''), request: String(item?.request || '') }))),
     knownMissingNonBlocking: Object.freeze(knownLosses.slice(0, 12).map((item) => Object.freeze({
       kind: String(item?.kind || item?.code || ''),
@@ -272,6 +275,40 @@ function projectRecipientContract({ result = {}, required = {}, currentWork = {}
       ]) : Object.freeze([])
     }),
     boundary: 'Recipient execution/return projection only. It exposes the already-qualified Task/Handoff/Role and carrier-continuation contract plus the explicit non-completion qualification from grounding; it creates no new semantic authority, completion, acceptance, or remote-write permission.'
+  });
+}
+
+function projectRecipientOperationSelection(value = {}) {
+  const items = Array.isArray(value?.items) ? value.items : [];
+  const selectedGuidance = items.length > 0;
+  const activeExecutionStates = [...new Set(items.map((item) => String(item?.dimensions?.activeExecution?.state || '')).filter(Boolean))];
+  const stepSelectionStates = [...new Set(items.map((item) => String(item?.stepSelection?.state || '')).filter(Boolean))];
+  const activeExecutionQualified = activeExecutionStates.some((state) => state.startsWith('qualified'));
+  const interpretationRequired = stepSelectionStates.includes('recipient-interpretation-required');
+  const state = !selectedGuidance
+    ? 'bounded-work-authority-only'
+    : activeExecutionQualified
+      ? 'selected-guidance-active-execution-qualified'
+      : interpretationRequired
+        ? 'selected-guidance-recheck-required-before-host-tool'
+        : 'selected-guidance-active-step-not-established';
+  return Object.freeze({
+    state,
+    selectedGuidance,
+    recheckAfterEachHumanTurn: selectedGuidance,
+    priorHostToolChoiceCarriesAcrossHumanTurn: false,
+    activeExecutionStates: Object.freeze(activeExecutionStates),
+    stepSelectionStates: Object.freeze(stepSelectionStates),
+    allowedNextOperationState: activeExecutionQualified ? 'separately-qualified-active-execution-authority' : selectedGuidance ? 'must-be-resolved-from-exact-selected-guidance-and-current-human-turn' : 'bounded-current-work-only',
+    forbiddenFallbacks: Object.freeze(selectedGuidance ? [
+      'do-not-repeat-the-previous-host-operation-merely-because-it-was-previously-authorized',
+      'do-not-treat-process-applicability-as-proof-that-the-previous-process-step-remains-active',
+      'do-not-manually-construct-or-label-a-tiinex-handoff-package',
+      'if-an-explicit-selected-guidance-transition-revokes-generation-revision-or-retry-authority-do-not-use-those-operations-after-that-trigger'
+    ] : [
+      'do-not-broaden-beyond-the-qualified-selected-handoff-bounded-work-scope'
+    ]),
+    boundary: 'This is a tool-selection discipline projection, not a new Process lifecycle state. Core does not infer active Process state from free text or from applicability. When selected guidance exists, every new human turn must be reconciled against the exact selected guidance/current-work authority before another host tool is chosen; prior tool choice is not authority for the next turn. A host that wants hard prevention must enforce this projected gate when exposing tools.'
   });
 }
 
@@ -428,6 +465,7 @@ function projectHandoffDefault(result = {}, parsed = {}) {
   const startPath = String(carrier.startPath || human.primary?.startPath || `${HANDOFF_PACKAGE_V1_ARTIFACT_ROOT_DIMENSION}-1-READ-BEFORE-PROCEEDING.trace.md`);
   const routingText = routing?.continueFrom && startPath && projectedFilename ? canonicalHandoffRoutingText(startPath, String(routing.continueFrom || '')) : '';
   const actionableFindings = actionable(result);
+  const delivery = projectHandoffDeliveryQualification(result, primary, human);
   return Object.freeze({
     schema: result.schema,
     operation: result.operation || 'manufacture-handoff-package',
@@ -470,7 +508,8 @@ function projectHandoffDefault(result = {}, parsed = {}) {
       routingText,
       sharedRouting: human.sharedRouting ? Object.freeze({ ...human.sharedRouting, routes: Object.freeze((human.sharedRouting.routes || []).map((item) => Object.freeze({ ...item }))) }) : null,
       presentation: compactHandoffPresentation(human.presentation),
-      normalEmission: compactHandoffNormalEmission(human.normalEmissionBoundary)
+      normalEmission: compactHandoffNormalEmission(human.normalEmissionBoundary),
+      delivery
     }),
     roundtripSummary: result.roundtripSummary ? Object.freeze({ ...result.roundtripSummary }) : null,
     toolingBootstrapInspection: result.toolingBootstrapInspection ? Object.freeze({
@@ -488,6 +527,55 @@ function projectHandoffDefault(result = {}, parsed = {}) {
 }
 
 
+function projectHandoffDeliveryQualification(result = {}, primary = null, human = {}) {
+  const verification = result.verification || {};
+  const normalEmission = human.normalEmissionBoundary || {};
+  const packagePath = String(primary?.path || '');
+  const packageWritten = String(primary?.status || '') === 'written' && Boolean(packagePath);
+  const roundtripPassed = String(verification.roundtrip || '') === 'passed';
+  const packageInspectionValid = String(verification.packageInspection || '') === 'valid';
+  const preflightQualified = String(verification.preflight || '') === 'qualified';
+  const canonicalPayloadCount = Number(normalEmission.canonicalFilePayloadCount || 0);
+  const exactNormalEmission = canonicalPayloadCount === 1 && (normalEmission.allowed || []).includes('package-file');
+  const qualified = String(result.status || '') === 'ready'
+    && packageWritten
+    && preflightQualified
+    && packageInspectionValid
+    && roundtripPassed
+    && exactNormalEmission;
+  const state = qualified
+    ? 'qualified-awaiting-host-surface'
+    : packageWritten
+      ? 'blocked-unqualified-for-host-surface'
+      : 'not-materialized';
+  const hostSurface = Object.freeze({
+    state: 'not-proven',
+    requirement: 'host-native-human-visible-artifact',
+    exactQualifiedBytesRequired: true,
+    runtimeLocalPathIsDeliveryEvidence: false,
+    claimDeliveredAllowed: false,
+    nextAction: qualified
+      ? 'Surface the exact qualified package bytes through the host-native human-visible file, attachment, or link mechanism before claiming delivery.'
+      : 'Do not surface or claim delivery until the exact package bytes qualify for host surfacing.'
+  });
+  return Object.freeze({
+    state,
+    qualificationState: qualified ? 'qualified' : packageWritten ? 'blocked' : 'not-materialized',
+    packagePath,
+    runtimeLocalPath: packagePath,
+    runtimeLocalPathIsHumanDeliveryEvidence: false,
+    exactPackageBytesQualified: qualified,
+    preflight: String(verification.preflight || ''),
+    packageInspection: String(verification.packageInspection || ''),
+    physicalRoundtrip: String(verification.roundtrip || ''),
+    canonicalFilePayloadCount: canonicalPayloadCount,
+    allowedHumanEmission: Object.freeze([...(normalEmission.allowed || [])]),
+    forbiddenHumanEmission: Object.freeze([...(normalEmission.forbidden || [])]),
+    hostSurface,
+    boundary: 'Canonical manufacture qualifies exact package bytes for host surfacing; it does not prove human delivery. A runtime-local filesystem path is never delivery evidence. After qualification, the host must expose those exact bytes through its native human-visible file, attachment, or link mechanism before the caller may claim the Handoff Package was delivered. Manual ZIP construction or package-like labeling never qualifies either surfacing or delivery.'
+  });
+}
+
 function compactHandoffPresentation(presentation = {}) {
   if (!presentation || typeof presentation !== 'object') return null;
   return Object.freeze({
@@ -503,6 +591,7 @@ function compactHandoffNormalEmission(boundary = {}) {
   if (!boundary || typeof boundary !== 'object') return null;
   return Object.freeze({
     allowed: Object.freeze([...(boundary.allowed || [])]),
+    forbidden: Object.freeze([...(boundary.forbidden || [])]),
     canonicalFilePayloadCount: Number(boundary.canonicalFilePayloadCount || 0),
     workspaceArtifactsAsLooseTransportFiles: Boolean(boundary.workspaceArtifactsAsLooseTransportFiles),
     semanticWorkSummaryProse: Boolean(boundary.semanticWorkSummaryProse),

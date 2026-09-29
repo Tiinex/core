@@ -24,6 +24,10 @@ When a received carrier exposes the qualified recipient-facing Tiinex package su
 
 After `grounded-to-act`, materialize the selected Workspace through `ground <same-package.zip> --route <same-Continue-from> --holder-role <recipient-role> --continue <empty-workspace-dir>` before ordinary Workspace mutation. The received carried source snapshot remains immutable input; the materialized continuation is the writable local working copy. Complete the bounded work only inside that continued Workspace. When the selected Handoff declares a return, that declaration qualifies the return protocol/destination but not the timing of the transition. Do not invoke `prepare-return` merely because it is available or because a return endpoint exists. First produce the bounded result under the exact selected-Handoff/current-work authority. Then establish a result-specific transition with `qualify-return <continued-workspace-dir> --result <workspace-relative-result> --expected <workspace-relative-expected-file>`. This command exact-byte compares the result to the explicit expected local file and writes only runtime-only `.tiinex/return-transition.json`; it does not establish Task completion, Task closure, acceptance, or remote-write authority. `prepare-return` fails closed until that receipt exists and remains byte-current. After `qualify-return` reports qualified, normal return is not loose-file delivery: run `prepare-return <continued-workspace-dir>` first. It writes only runtime-only `.tiinex/return-handoff.body.md` with exact qualified From/To endpoint defaults and structural sections. Replace every `<<TIINEX_REQUIRED:...>>` marker with exact supported return semantics, then run the exact emitted `author` command; Tooling owns canonical envelope continuity, sha256-base64url-c14n-v2 sealing, audit, staging, and fail-closed qualification, so do not reimplement integrity or inspect Handoff schema source manually. After qualified authoring run the exact emitted `handoff` command. The canonical external return is exactly one `.handoff-package.zip` plus Tooling's exact adjacent routing text. Local result, Evidence, Handoff, and other Workspace artifacts remain inside the carried Workspace and must not be emitted as extra loose transport payloads. This return discipline is transport/continuity behavior only; it does not fabricate semantic completion, human acceptance, remote-write authority, or carrier ancestry.
 
+When selected Required Context or current work carries Process/policy/guidance whose exact text defines human-triggered execution transitions, re-evaluate that exact selected authority after every new human turn **before choosing another host tool**. A prior host-tool choice is never authority for the next turn. Process applicability does not prove that the prior step remains active. If the exact selected guidance says that an approval/selection freezes the current candidate, revokes generation/revision/retry, and makes `qualify-return` the next operation, do not call the candidate-producing tool again and do not improvise another path; call `qualify-return` first. If that gate blocks, preserve the selected result, report the exact blocker, and stop rather than regenerating or manually constructing a package. Core may project this discipline and selected authority, but it does not infer active Process state from free text; hard prevention of forbidden host tools requires the host/orchestrator to enforce the projected operation-selection gate.
+
+A `.zip` file becomes qualified for **host surfacing as a Tiinex Handoff Package** only through canonical `handoff` manufacture with qualified preflight, valid direct Package V1 inspection, passed physical ZIP roundtrip, and `transport.delivery.state == qualified-awaiting-host-surface` for those exact materialized bytes. This state is not proof of human delivery. A runtime-local filesystem path such as `/mnt/data/...`, a temporary path, container path, or Workspace-local path is never evidence that the human can access the file and must not be presented as if it were a delivered download. After qualification, expose the exact qualified bytes through the host's native human-visible file, attachment, or link mechanism; only then may the caller say the Handoff Package was delivered. If the host cannot surface the exact bytes through such a mechanism, report that delivery is blocked rather than pasting the local path as the delivery. Manual ZIP construction, renaming, convenience manifests, package-like labels, or routing reconstructed outside Tooling never qualify either host surfacing or delivery.
+
 ### Bootstrap travels inside an archive
 
 When `tiinex.llm.bootstrap.md` or `tiinex.llm.bootstrap.pointer.json` is present inside a received archive without a qualified routed Handoff START surface, read the pointer/bootstrap first. Treat all other archive entries as supplied material and do not execute package code.
@@ -790,17 +794,15 @@ When JavaScript cannot run:
 
 ## Current Limits
 
-The portable surface does not yet provide:
+The portable surface intentionally does not provide:
 
-- automatic file writes or publication of created/staged local drafts; only explicit Node package-output operations write locally
-- canonical Handoff semantic authoring/validation or a locked canonical package schema; recipient-relative operational Handoff package manufacturing is available without claiming either
-- source mutation or publication
-- automatic artifact-parent/origin discovery; schema discovery is explicit and host-mediated
-- semantic-parent capability execution
-- a production MCP server
-- an LSP server
-- a VS Code extension
-- a locked package format
-- automatic integrity or checksum repair
+- remote source mutation, publication, deployment, purchase, or other consequential external action authority merely from Tooling availability;
+- host-level interception of arbitrary host tools. Tooling can project qualified operation-selection constraints and fail closed when its own commands are invoked, but a host/orchestrator must enforce those constraints if forbidden tools are to become unavailable;
+- inference of active Process state, human approval, selection, or allowed-next-operation from free-text Process/policy prose, package carriage, prior tool use, or chat position. Those states require exact selected authority plus recipient interpretation or separately qualified state evidence;
+- permission to construct or label Handoff packages outside the canonical `author` -> `handoff` path. Package V1 manufacture, direct inspection, physical roundtrip verification, exact routing projection, and local filesystem output are available today;
+- repository-wide semantic-parent/origin inference or silent schema invention when exact authority is absent;
+- a production MCP server or LSP server as part of this portable runtime.
+
+The common portable path **does** provide local Workspace materialization, canonical Handoff authoring through `author`, fail-closed return-transition preparation, direct Handoff Package V1 manufacture through `handoff`, package inspection/orientation, physical roundtrip verification, and local package writes. Keep these implemented surfaces distinct from the host-level and semantic limits above.
 
 All future surfaces should reuse the same operation catalog and shared site engine rather than duplicate Tiinex semantics.

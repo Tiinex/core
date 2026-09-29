@@ -567,6 +567,12 @@ test('common ground projection separates epistemic basis, semantic participants,
   assert.deepEqual(output.recipientContract.guidance.activeExecutionStates,['unresolved-not-declared']);
   assert.deepEqual(output.recipientContract.guidance.stepSelectionStates,['recipient-interpretation-required']);
   assert.equal(output.recipientContract.guidance.currentStep,'not-established-by-applicability-alone');
+  assert.equal(output.recipientContract.operationSelection.state,'selected-guidance-recheck-required-before-host-tool');
+  assert.equal(output.recipientContract.operationSelection.recheckAfterEachHumanTurn,true);
+  assert.equal(output.recipientContract.operationSelection.priorHostToolChoiceCarriesAcrossHumanTurn,false);
+  assert.equal(output.recipientContract.operationSelection.allowedNextOperationState,'must-be-resolved-from-exact-selected-guidance-and-current-human-turn');
+  assert.ok(output.recipientContract.operationSelection.forbiddenFallbacks.includes('do-not-manually-construct-or-label-a-tiinex-handoff-package'));
+  assert.match(output.recipientContract.operationSelection.boundary,/A host that wants hard prevention must enforce/i);
   assert.match(output.recipientContract.nextAction.beforeWorkspaceMutation.cli, /ground carrier\.zip .*--recipient --continue <empty-workspace-dir>/);
   assert.equal(output.recipientContract.completion.returnTo, 'Sigma');
   assert.equal(output.recipientContract.completion.canonicalTransport, 'one-handoff-package-plus-exact-routing-text');
@@ -1252,7 +1258,7 @@ test('common handoff projection emits exact adjacent routing text for the canoni
     planSummary: { status: 'ready', requiredClosureReady: true, semanticHandoffStatus: 'unknown', required: [], reference: [], workspaces: [] },
     carrierProjection: { status: 'ready', mode: 'handoff', lineage: { prefix: 'minimal-coldstart', dimension: '002-1' }, routes: [{ id: 'r', state: 'qualified', workspaceId: 'minimal-coldstart', workspaceRelativePath: '.topics/handoffs/return.trace.md', from: 'Anchor', to: 'Sigma' }] },
     primaryOutput: { status: 'written', path: '/tmp/minimal-coldstart-002-1-anchor-to-sigma.handoff-package.zip', projectedFilename: 'minimal-coldstart-002-1-anchor-to-sigma.handoff-package.zip' },
-    humanOutput: { normalInlineRouting: { routeId: 'r', continueFrom: '002-1-3-1-1-1-1-1-handoff-pointer.trace.md' }, presentation: { kind: 'handoff-package-v1' }, normalEmissionBoundary: { allowed: ['package-file','route-specific-continue-from'] } },
+    humanOutput: { normalInlineRouting: { routeId: 'r', continueFrom: '002-1-3-1-1-1-1-1-handoff-pointer.trace.md' }, presentation: { kind: 'handoff-package-v1' }, normalEmissionBoundary: { allowed: ['package-file','exact-adjacent-routing-text'], forbidden: ['manually-constructed-package'], canonicalFilePayloadCount: 1, workspaceArtifactsAsLooseTransportFiles: false, semanticWorkSummaryProse: false, helperArtifacts: false, manuallyReconstructedRouting: false, duplicateNormalFileChoices: false } },
     findings: [], findingSummary: { counts: { error: 0, warning: 0 } }
   }, { command: 'manufacture-handoff-package', surfaceCommand: 'handoff', flags: {}, positionals: ['/tmp/workspace'] });
   assert.equal(output.transport.routing.continueFrom, '002-1-3-1-1-1-1-1-handoff-pointer.trace.md');
@@ -1260,8 +1266,41 @@ test('common handoff projection emits exact adjacent routing text for the canoni
   assert.match(output.transport.routingText, /Start:\n001-1-READ-BEFORE-PROCEEDING\.trace\.md/);
   assert.match(output.transport.routingText, /Continue from \(do not read native; pass to Tiinex after bootstrap\):\n002-1-3-1-1-1-1-1-handoff-pointer\.trace\.md/);
   assert.doesNotMatch(output.transport.routingText, /\/tmp\//);
+  assert.equal(output.transport.delivery.state,'qualified-awaiting-host-surface');
+  assert.equal(output.transport.delivery.qualificationState,'qualified');
+  assert.equal(output.transport.delivery.exactPackageBytesQualified,true);
+  assert.equal(output.transport.delivery.runtimeLocalPathIsHumanDeliveryEvidence,false);
+  assert.equal(output.transport.delivery.hostSurface.state,'not-proven');
+  assert.equal(output.transport.delivery.hostSurface.requirement,'host-native-human-visible-artifact');
+  assert.equal(output.transport.delivery.hostSurface.claimDeliveredAllowed,false);
+  assert.match(output.transport.delivery.hostSurface.nextAction,/host-native human-visible file, attachment, or link mechanism/);
+  assert.equal(output.transport.delivery.canonicalFilePayloadCount,1);
+  assert.deepEqual(output.transport.delivery.allowedHumanEmission,['package-file','exact-adjacent-routing-text']);
+  assert.ok(output.transport.delivery.forbiddenHumanEmission.includes('manually-constructed-package'));
 });
 
+
+
+test('common handoff projection blocks human delivery when physical roundtrip is not qualified', () => {
+  const output = projectCommonCliDefaultOutput({
+    schema: 'tiinex.portable.operation.result.v1', operation: 'manufacture-handoff-package', resultSchema: 'tiinex.portable.handoff-manufacturing.v1', status: 'ready',
+    verification: { preflight: 'qualified', packageInspection: 'valid', roundtrip: 'not-run' },
+    planSummary: { status: 'ready', requiredClosureReady: true, semanticHandoffStatus: 'unknown', required: [], reference: [], workspaces: [] },
+    carrierProjection: { status: 'ready', mode: 'handoff', lineage: { prefix: 'minimal-coldstart', dimension: '002-1' }, routes: [{ id: 'r', state: 'qualified', workspaceId: 'minimal-coldstart', workspaceRelativePath: '.topics/handoffs/return.trace.md', from: 'Anchor', to: 'Sigma' }] },
+    primaryOutput: { status: 'written', path: '/tmp/minimal-coldstart-002-1-anchor-to-sigma.handoff-package.zip', projectedFilename: 'minimal-coldstart-002-1-anchor-to-sigma.handoff-package.zip' },
+    humanOutput: { normalInlineRouting: { routeId: 'r', continueFrom: '002-1-3-1-1-1-1-1-handoff-pointer.trace.md' }, presentation: { kind: 'handoff-package-v1' }, normalEmissionBoundary: { allowed: ['package-file','exact-adjacent-routing-text'], forbidden: ['manually-constructed-package'], canonicalFilePayloadCount: 1, workspaceArtifactsAsLooseTransportFiles: false, semanticWorkSummaryProse: false, helperArtifacts: false, manuallyReconstructedRouting: false, duplicateNormalFileChoices: false } },
+    findings: [], findingSummary: { counts: { error: 0, warning: 0 } }
+  }, { command: 'manufacture-handoff-package', surfaceCommand: 'handoff', flags: {}, positionals: ['/tmp/workspace'] });
+  assert.equal(output.transport.delivery.state,'blocked-unqualified-for-host-surface');
+  assert.equal(output.transport.delivery.qualificationState,'blocked');
+  assert.equal(output.transport.delivery.exactPackageBytesQualified,false);
+  assert.equal(output.transport.delivery.runtimeLocalPathIsHumanDeliveryEvidence,false);
+  assert.equal(output.transport.delivery.hostSurface.state,'not-proven');
+  assert.equal(output.transport.delivery.hostSurface.claimDeliveredAllowed,false);
+  assert.equal(output.transport.delivery.physicalRoundtrip,'not-run');
+  assert.match(output.transport.delivery.boundary,/runtime-local filesystem path is never delivery evidence/);
+  assert.match(output.transport.delivery.boundary,/Manual ZIP construction or package-like labeling never qualifies either surfacing or delivery/);
+});
 
 test('ground CLI preserves an explicit canonical holder assignment mode without recipient-class inference', async () => {
   const { input } = await commandInput({

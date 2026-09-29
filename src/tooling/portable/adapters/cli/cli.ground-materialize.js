@@ -55,6 +55,19 @@ export async function materializeGroundWorkspaceCliOutput(result = {}, input = {
     workspaceTarget: String(workspaceInspection.sourceWorkspaceTargetInnerPath || ''),
     roleLabel: String(result?.authority?.role?.label || ''),
     completionQualification: projectContinuationCompletionQualification(result?.completionQualification),
+    guidanceOperationSelection: projectContinuationGuidanceOperationSelection(result?.capsule?.guidanceAuthority),
+    returnDiscipline: Object.freeze({
+      state: 'qualified-return-path-required-when-return-transition-is-due',
+      qualifyReturnCommand: 'qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>',
+      prepareReturnCommand: 'prepare-return <continued-workspace-dir>',
+      manualPackageConstruction: 'forbidden',
+      looseExternalReturnPayloads: 'forbidden',
+      deliveryRequiresCanonicalManufactureAndQualification: true,
+      humanDeliveryRequiresHostNativeSurface: true,
+      runtimeLocalPathIsHumanDeliveryEvidence: false,
+      deliveryClaimRequiresHumanVisibleArtifact: true,
+      boundary: 'Runtime-only reminder of the already-qualified recipient return contract. Canonical manufacture qualifies package bytes for host surfacing, not human delivery; a runtime-local path never proves delivery. It creates no Process state, approval, completion, package authority, or host-delivery receipt.'
+    }),
     returnOutputDir: path.dirname(path.resolve(String(input.packageSourcePath || outputDir))),
     returnPackageCarrierKind: String((inspection.routes || []).find((item) => String(item.pointerPath || '') === String(result?.authority?.route?.pointerPath || input.route || ''))?.returnCarrierReservation?.carrierKind || ''),
     returnPackageSiblingIndex: String((inspection.routes || []).find((item) => String(item.pointerPath || '') === String(result?.authority?.route?.pointerPath || input.route || ''))?.returnCarrierReservation?.siblingIndex || ''),
@@ -103,6 +116,22 @@ function byteView(value) {
   if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
   throw new Error('portable.cli.ground.workspace-entry.bytes-unavailable');
+}
+
+function projectContinuationGuidanceOperationSelection(value = {}) {
+  const items = Array.isArray(value?.items) ? value.items : [];
+  const selectedGuidance = items.length > 0;
+  const activeExecutionStates = [...new Set(items.map((item) => String(item?.dimensions?.activeExecution?.state || '')).filter(Boolean))];
+  const stepSelectionStates = [...new Set(items.map((item) => String(item?.stepSelection?.state || '')).filter(Boolean))];
+  return Object.freeze({
+    state: selectedGuidance ? 'selected-guidance-recheck-required-on-human-turn' : 'no-selected-guidance-operation-gate',
+    selectedGuidance,
+    recheckAfterEachHumanTurn: selectedGuidance,
+    priorHostToolChoiceCarriesAcrossHumanTurn: false,
+    activeExecutionStates: Object.freeze(activeExecutionStates),
+    stepSelectionStates: Object.freeze(stepSelectionStates),
+    boundary: 'Runtime-only projection of recipient tool-selection discipline. Core does not infer active Process state or allowed operations from free text; the exact selected guidance/current-work authority must be re-interpreted after each human turn, and hard host-tool prevention requires host/orchestrator enforcement.'
+  });
 }
 
 function projectContinuationCompletionQualification(value = {}) {
