@@ -3,7 +3,7 @@ import { createPortableCheckpoint, restorePortableCheckpoint } from './checkpoin
 import { buildPortableRuntimePackage, inspectPortableRuntimePackage, rehydratePortableRuntimePackage, roundTripPortableRuntimePackage } from './package/runtime.package.js';
 import { acceptPortablePublicationResult, planPortablePublication } from './publication/runtime.publication.js';
 import { manufactureRecipientRelativeHandoffPackage } from './handoff/manufacture.js';
-import { projectHandoffCarrierOutputFromPackage, projectHandoffCarrierOutputCollision } from './handoff/carrierProjection.js';
+import { projectHandoffCarrierOutputFromPackage, projectHandoffCarrierOutputCollision, projectHandoffCarrierTransportName } from './handoff/carrierProjection.js';
 import { orientColdConsumerFromHandoffPackage } from './handoff/coldConsumerEntrypoint.js';
 import { auditHandoffPackageContextCarriage } from './handoff/contextAudit.js';
 import { projectPortableWorkspaceLandingPlan } from './handoff/workspaceLandingPlan.js';
@@ -55,6 +55,13 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     safety: 'planning-only-read-only',
     inputSchema: 'tiinex.portable.handoff-carrier-major-frontier.request.v1',
     handler: (input = {}) => wrapPortableResult('project-handoff-carrier-major-frontier', projectHandoffCarrierMajorFrontier(input))
+  }),
+  'project-handoff-carrier-transport-name': operation({
+    name: 'project-handoff-carrier-transport-name',
+    description: 'Project transport-only continuation or Major filenames from explicit transport filenames without consulting carrier lineage.',
+    safety: 'planning-only-read-only',
+    inputSchema: 'tiinex.portable.handoff-carrier-transport-name.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-handoff-carrier-transport-name', projectHandoffCarrierTransportName(input))
   }),
   'project-handoff-carrier-output-collision': operation({
     name: 'project-handoff-carrier-output-collision',

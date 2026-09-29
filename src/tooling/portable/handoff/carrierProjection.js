@@ -219,6 +219,65 @@ export function projectHandoffCarrierOutputFromPackage(input = {}) {
   return projectHandoffHumanOutput({ ...common, route: input.route || input.pointer || '' });
 }
 
+
+
+export function projectHandoffCarrierTransportName(input = {}) {
+  const mode = String(input.mode || 'continuation').trim().toLowerCase();
+  let parentFilename = '';
+  try { parentFilename = transportFilename(input.parentFilename || input.filename || '', ''); }
+  catch { return transportNameResult('blocked', mode, 'parent-filename-invalid', '', '', 0, ''); }
+  if (!parentFilename) return transportNameResult('blocked', mode, 'parent-filename-required', '', '', 0, '');
+
+  if (mode === 'continuation') {
+    const ordinal = Number(input.ordinal || input.continuationOrdinal || 1);
+    if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > 999999) return transportNameResult('blocked', mode, 'ordinal-invalid', parentFilename, '', 0, '');
+    const stem = parentFilename.slice(0, -'.handoff-package.zip'.length);
+    return transportNameResult('ready', mode, '', parentFilename, `${stem}-${ordinal}.handoff-package.zip`, ordinal, '');
+  }
+
+  if (mode === 'major') {
+    const parsedParent = parseTransportMajor(parentFilename);
+    if (!parsedParent) return transportNameResult('blocked', mode, 'transport-major-unresolved', parentFilename, '', 0, '');
+    const majors = [parsedParent.major];
+    for (const value of Array.isArray(input.existingFilenames) ? input.existingFilenames : []) {
+      let filename = '';
+      try { filename = transportFilename(value, ''); } catch { continue; }
+      const parsed = parseTransportMajor(filename);
+      if (parsed && parsed.prefix === parsedParent.prefix) majors.push(parsed.major);
+    }
+    const nextMajor = Math.max(...majors) + 1;
+    if (nextMajor > 999) return transportNameResult('blocked', mode, 'transport-major-exhausted', parentFilename, '', 0, parsedParent.prefix);
+    const filename = `${parsedParent.prefix ? `${parsedParent.prefix}-` : ''}${String(nextMajor).padStart(3, '0')}.handoff-package.zip`;
+    return transportNameResult('ready', mode, '', parentFilename, filename, nextMajor, parsedParent.prefix);
+  }
+
+  return transportNameResult('blocked', mode, 'mode-invalid', parentFilename, '', 0, '');
+}
+
+function parseTransportMajor(filename = '') {
+  const stem = String(filename || '').replace(/\.handoff-package\.zip$/i, '');
+  const prefixed = stem.match(/^(.*?)-(\d{3})(?=$|-)/);
+  if (prefixed) return Object.freeze({ prefix: prefixed[1].toLocaleLowerCase(), major: Number(prefixed[2]) });
+  const bare = stem.match(/^(\d{3})(?=$|-)/);
+  if (bare) return Object.freeze({ prefix: '', major: Number(bare[1]) });
+  return null;
+}
+
+function transportNameResult(status, mode, reasonCode, parentFilename, filename, ordinalOrMajor, prefix) {
+  return Object.freeze({
+    schema: 'tiinex.portable.handoff-carrier-transport-name.v1',
+    status,
+    state: status,
+    mode,
+    reasonCode,
+    parentFilename,
+    filename,
+    ordinalOrMajor,
+    prefix,
+    boundary: 'Transport filename progression is independent from qualified carrier lineage. This projection consumes only explicit transport filenames and host-observed destination names; it never creates or alters carrier lineage.'
+  });
+}
+
 export function projectHandoffCarrierOutputCollision(input = {}) {
   let filename = '';
   try { filename = transportFilename(input.filename || input.baseFilename || '', ''); }

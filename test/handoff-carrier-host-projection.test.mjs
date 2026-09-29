@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectHandoffCarrierOutputCollision, projectHandoffHumanOutput } from '../src/tooling/portable/handoff/carrierProjection.js';
+import { projectHandoffCarrierOutputCollision, projectHandoffCarrierTransportName, projectHandoffHumanOutput } from '../src/tooling/portable/handoff/carrierProjection.js';
 import { projectHandoffCarrierMajorFrontier } from '../src/tooling/portable/handoff/carrierMajorFrontier.js';
 
 function routedProjection(dimension = '001') {
@@ -49,6 +49,37 @@ test('Core allocates first free collision filename from host-observed names', ()
   const third = projectHandoffCarrierOutputCollision({ filename, existingFilenames: [filename, second.filename] });
   assert.equal(third.collisionInstance, 3);
   assert.equal(third.filename, 'tiinex-core-001-anchor-to-anchor (2).handoff-package.zip');
+});
+
+
+
+test('transport filename continuation never reads or reproduces internal carrier lineage', () => {
+  const result = projectHandoffCarrierTransportName({
+    mode: 'continuation',
+    parentFilename: 'tiinex-core-vscode-003-1.handoff-package.zip',
+    ordinal: 1,
+    carrierLineage: { prefix: 'totally-different', dimension: '001-1-1-1-1-1-1' }
+  });
+  assert.equal(result.status, 'ready');
+  assert.equal(result.filename, 'tiinex-core-vscode-003-1-1.handoff-package.zip');
+  assert.match(result.boundary, /independent from qualified carrier lineage/);
+});
+
+test('transport Major progression uses only transport filenames and host-observed names', () => {
+  const result = projectHandoffCarrierTransportName({
+    mode: 'major',
+    parentFilename: 'tiinex-core-vscode-003-1.handoff-package.zip',
+    existingFilenames: [
+      'tiinex-core-vscode-001.handoff-package.zip',
+      'tiinex-core-vscode-004-anchor-to-anchor.handoff-package.zip',
+      'other-099.handoff-package.zip'
+    ],
+    carrierLineage: { prefix: 'internal-prefix', dimension: '777-9' }
+  });
+  assert.equal(result.status, 'ready');
+  assert.equal(result.prefix, 'tiinex-core-vscode');
+  assert.equal(result.ordinalOrMajor, 5);
+  assert.equal(result.filename, 'tiinex-core-vscode-005.handoff-package.zip');
 });
 
 test('Core selects one same-prefix Major frontier and exposes the next Major dimension', () => {

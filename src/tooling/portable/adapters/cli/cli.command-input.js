@@ -162,6 +162,16 @@ export async function commandInput(parsed, runtime = {}) {
     return { input: { prefix: flags.prefix || value.prefix || '', candidates: value.candidates || (Array.isArray(value) ? value : []) }, options: {} };
   }
 
+  if (parsed.command === 'project-handoff-carrier-transport-name') {
+    const value = await readOptionalJson(flags.existing || flags.names || '');
+    return { input: {
+      mode: flags.mode || 'continuation',
+      parentFilename: flags['parent-filename'] || flags.parentFilename || flags.filename || parsed.positionals[0] || '',
+      ordinal: flags.ordinal || 1,
+      existingFilenames: value.existingFilenames || value.names || (Array.isArray(value) ? value : [])
+    }, options: {} };
+  }
+
   if (parsed.command === 'project-handoff-carrier-output-collision') {
     const value = await readOptionalJson(flags.existing || flags.names || parsed.positionals[0]);
     return { input: { filename: flags.filename || flags.base || value.filename || '', existingFilenames: value.existingFilenames || value.names || (Array.isArray(value) ? value : []) }, options: {} };
