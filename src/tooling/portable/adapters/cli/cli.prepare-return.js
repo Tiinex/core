@@ -2,12 +2,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { resolveSchemaModule } from '../../../../schemas/resolver.js';
 import { readQualifiedReturnTransition, returnTransitionResultReference } from './cli.qualify-return.js';
+import { projectPortableCliOperation } from './cli.invocation.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 const SCAFFOLD_RELATIVE_PATH = '.tiinex/return-handoff.body.md';
 const RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH = '.topics/handoffs';
 
-export async function runPrepareReturnCli(parsed = {}) {
+export async function runPrepareReturnCli(parsed = {}, runtime = {}) {
   const flags = parsed.flags || {};
   const workspaceRoot = path.resolve(String(flags.workspace || parsed.positionals?.[0] || '.'));
   const state = await readContinuationState(workspaceRoot);
@@ -24,9 +25,9 @@ export async function runPrepareReturnCli(parsed = {}) {
     await mkdir(path.dirname(scaffoldPath), { recursive: true });
     await writeFile(scaffoldPath, scaffold, 'utf8');
   }
-  const authorCli = ['author', workspaceRoot, '--schema', 'tiinex.handoff.v1', '--directory', RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH, '--body', scaffoldPath].join(' ');
-  const preflightCli = `${authorCli} --preflight`;
-  const handoffCli = ['handoff', workspaceRoot].join(' ');
+  const authorCommand = projectPortableCliOperation(runtime, 'author', [workspaceRoot, '--schema', 'tiinex.handoff.v1', '--directory', RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH, '--body', scaffoldPath]);
+  const preflightCommand = projectPortableCliOperation(runtime, 'author', [workspaceRoot, '--schema', 'tiinex.handoff.v1', '--directory', RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH, '--body', scaffoldPath, '--preflight']);
+  const handoffCommand = projectPortableCliOperation(runtime, 'handoff', [workspaceRoot]);
   return Object.freeze({
     schema: 'tiinex.portable.prepare-return.result.v1',
     operation: 'prepare-return',
@@ -61,9 +62,9 @@ export async function runPrepareReturnCli(parsed = {}) {
     }),
     nextAction: Object.freeze({
       edit: `Replace every <<TIINEX_REQUIRED:...>> marker in ${scaffoldPath} with exact supported return semantics. The return transition is already separately qualified for the mechanically locked bounded result reference; do not alter that reference. This return may carry a result while Task closure remains not established. Grounding/return qualification and your own Done Criteria reading do not prove Task completion/closure; use project-lifecycle-readiness with explicit qualified facts before making such a claim. For constrained fields, use only the allowed values projected in fieldDomains / scaffold comments. Do not invent completion, acceptance, source facts, or authority.`,
-      preflight: Object.freeze({ command: 'author', cli: preflightCli, durableWrite: false, sealIntegrity: true, audit: true, stage: true, boundary: 'Validate the fully filled scaffold through the same renderer/integrity/audit/stage path without retaining the candidate artifact or updating continuation state.' }),
-      author: Object.freeze({ command: 'author', cli: authorCli, sealIntegrity: true, audit: true, stage: true }),
-      manufacture: Object.freeze({ command: 'handoff', cli: handoffCli, canonicalTransport: 'one-handoff-package-plus-exact-routing-text' })
+      preflight: Object.freeze({ ...preflightCommand, durableWrite: false, sealIntegrity: true, audit: true, stage: true, boundary: 'Validate the fully filled scaffold through the same renderer/integrity/audit/stage path without retaining the candidate artifact or updating continuation state.' }),
+      author: Object.freeze({ ...authorCommand, sealIntegrity: true, audit: true, stage: true }),
+      manufacture: Object.freeze({ ...handoffCommand, canonicalTransport: 'one-handoff-package-plus-exact-routing-text' })
     }),
     boundary: 'Prepare-return is available only after a separate Tooling-qualified return transition for one exact verified bounded result. It projects qualified endpoint/return authority, the carried grounding completion qualification, and a runtime-only schema scaffold with the verified result reference mechanically locked. It does not establish Task completion, Task closure, acceptance, or remote mutation authority.'
   });

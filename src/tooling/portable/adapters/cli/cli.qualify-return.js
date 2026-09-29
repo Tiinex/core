@@ -1,11 +1,12 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { projectPortableCliOperation } from './cli.invocation.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 const TRANSITION_RELATIVE_PATH = '.tiinex/return-transition.json';
 
-export async function runQualifyReturnCli(parsed = {}) {
+export async function runQualifyReturnCli(parsed = {}, runtime = {}) {
   const flags = parsed.flags || {};
   const workspaceRoot = path.resolve(String(flags.workspace || parsed.positionals?.[0] || '.'));
   const state = await readJson(path.join(workspaceRoot, STATE_RELATIVE_PATH));
@@ -52,7 +53,7 @@ export async function runQualifyReturnCli(parsed = {}) {
     status: 'qualified',
     transition: receipt,
     runtimeReceipt: Object.freeze({ path: outputPath, workspaceRelativePath: TRANSITION_RELATIVE_PATH, written: true, canonicalArtifact: false }),
-    nextAction: Object.freeze({ command: 'prepare-return', cli: `prepare-return ${workspaceRoot}` }),
+    nextAction: projectPortableCliOperation(runtime, 'prepare-return', [workspaceRoot]),
     boundary: receipt.boundary
   });
 }

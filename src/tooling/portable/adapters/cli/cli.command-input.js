@@ -157,6 +157,16 @@ export async function commandInput(parsed, runtime = {}) {
     return prepareSourceFrontierReconciliationCliInput(flags, dispositions);
   }
 
+  if (parsed.command === 'project-handoff-carrier-major-frontier') {
+    const value = await readOptionalJson(flags.candidates || flags.frontier || parsed.positionals[0]);
+    return { input: { prefix: flags.prefix || value.prefix || '', candidates: value.candidates || (Array.isArray(value) ? value : []) }, options: {} };
+  }
+
+  if (parsed.command === 'project-handoff-carrier-output-collision') {
+    const value = await readOptionalJson(flags.existing || flags.names || parsed.positionals[0]);
+    return { input: { filename: flags.filename || flags.base || value.filename || '', existingFilenames: value.existingFilenames || value.names || (Array.isArray(value) ? value : []) }, options: {} };
+  }
+
   if (parsed.command === 'manufacture-handoff-package' || parsed.command === 'project-handoff-participants') {
     return prepareHandoffManufactureCliCommand(parsed, runtime);
   }

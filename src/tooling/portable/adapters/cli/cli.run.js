@@ -19,7 +19,7 @@ import { runVersionCli, formatVersionHuman } from './cli.version.js';
 export async function runPortableCli(argv = process.argv.slice(2), io = console, runtime = {}) {
   const parsed = parseArgs(argv);
   if (!parsed.command || parsed.command === 'help' || parsed.flags.help) {
-    io.log(portableCliHelpText(runtime.commandPrefix, parsed.flags.help ? parsed.surfaceCommand : ''));
+    io.log(portableCliHelpText(runtime, parsed.flags.help ? parsed.surfaceCommand : ''));
     return 0;
   }
   if (parsed.command === 'operations') {
@@ -112,7 +112,7 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
       measuredElapsedBeforeFinalSerializationMs: elapsedMs(totalStartedAt)
     });
     if (parsed.flags.summary) output = withCliSummaryProjection(output, parsed.command, parsed.flags);
-    output = projectCommonCliDefaultOutput(output, parsed);
+    output = projectCommonCliDefaultOutput(output, parsed, runtime);
     writeJson(io, output, parsed.flags.compact !== true);
     return result?.findingSummary?.counts?.error ? 2 : 0;
   } catch (error) {

@@ -10,6 +10,7 @@ import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 
 const anchorRef='https://github.com/Tiinex/business/blob/a66906eef7f0033eb12893f92910336f82d01afa/.topics/roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md';
 const sigmaRef='https://github.com/Tiinex/business/blob/a66906eef7f0033eb12893f92910336f82d01afa/.topics/roles/001-4-1-sigma-canonical-holder-cutover-role.trace.md';
+const exactRuntime=Object.freeze({commandInvocation:Object.freeze({executable:'/usr/bin/node',entrypoint:'/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs'})});
 
 function incomingHandoff(){
   const unsigned=`# Continuity Context
@@ -105,10 +106,12 @@ test('prepare-return fails closed until a separate exact-result return transitio
   await writeFile(path.join(root,'result.txt'),'bounded-result\n','utf8');
   await writeFile(path.join(root,'expected.txt'),'bounded-result\n','utf8');
   await assert.rejects(runPrepareReturnCli({positionals:[root],flags:{}}),/return-transition\.required/);
-  const qualified=await runQualifyReturnCli({positionals:[root],flags:{result:'result.txt',expected:'expected.txt'}});
+  const qualified=await runQualifyReturnCli({positionals:[root],flags:{result:'result.txt',expected:'expected.txt'}},exactRuntime);
   assert.equal(qualified.status,'qualified');
   assert.equal(qualified.transition.state,'qualified');
   assert.equal(qualified.transition.result.path,'result.txt');
+  assert.equal(qualified.nextAction.cli, '/usr/bin/node /tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs prepare-return '+root);
+  assert.equal(qualified.nextAction.invocation.entrypoint, '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
   const prepared=await runPrepareReturnCli({positionals:[root],flags:{}});
   assert.equal(prepared.returnTransition.state,'qualified');
 });
@@ -131,7 +134,7 @@ test('qualify-return rejects mismatched result bytes and prepare-return rejects 
 
 test('prepare-return derives exact return endpoints and writes only an incomplete runtime scaffold',async()=>{
   const {root}=await fixture();
-  const result=await runPrepareReturnCli({positionals:[root],flags:{}});
+  const result=await runPrepareReturnCli({positionals:[root],flags:{}},exactRuntime);
   assert.equal(result.status,'ready');
   assert.equal(result.workspace.state,'writable-local-continuation');
   assert.equal(result.workspace.writable,true);
@@ -162,7 +165,10 @@ test('prepare-return derives exact return endpoints and writes only an incomplet
   assert.match(body,/Responsible Party Or Role: <<TIINEX_REQUIRED:EXCLUSION_RESPONSIBLE_PARTY>>/);
   assert.match(body,/Return To: Sigma/);
   assert.doesNotMatch(body,/COMPLETION_RETURN_TO/);
+  assert.match(result.nextAction.author.cli,/^\/usr\/bin\/node \/tmp\/tiinex\.bootstrap\/runtime\/tools\/tiinex-portable\.mjs author /);
   assert.match(result.nextAction.author.cli,/author .* --schema tiinex\.handoff\.v1 --directory \.topics\/handoffs --body .*\.tiinex\/return-handoff\.body\.md/);
+  assert.equal(result.nextAction.author.invocation.entrypoint,'/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
+  assert.match(result.nextAction.manufacture.cli,/^\/usr\/bin\/node \/tmp\/tiinex\.bootstrap\/runtime\/tools\/tiinex-portable\.mjs handoff /);
   assert.equal(result.nextAction.preflight.cli, `${result.nextAction.author.cli} --preflight`);
   assert.equal(result.nextAction.preflight.durableWrite,false);
   assert.equal(result.nextAction.author.sealIntegrity,true);

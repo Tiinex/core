@@ -212,7 +212,7 @@ export async function materializeHandoffManufactureCliOutput(result = {}, flags 
   const carrierMode = String(result.carrierProjection?.mode || '');
   const workspaceMode = carrierMode === 'workspace';
   const bootstrapMode = carrierMode === 'bootstrap';
-  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: flags['projected-filename'] || flags.projectedFilename || result?.input?.projectedFilename || '' }) : bootstrapMode ? projectBootstrapCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: flags['projected-filename'] || flags.projectedFilename || '' }) : projectHandoffHumanOutput({
+  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: flags['projected-filename'] || flags.projectedFilename || result?.input?.projectedFilename || '', collisionInstance: flags['collision-instance'] || 1 }) : bootstrapMode ? projectBootstrapCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: flags['projected-filename'] || flags.projectedFilename || '' }) : projectHandoffHumanOutput({
     projection: result.carrierProjection || {},
     route: flags.route || '',
     collisionInstance: flags['collision-instance'] || 1,
@@ -260,7 +260,10 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   const additionalWorkspaces = [...splitFlag(flags['additional-workspaces']), ...descriptorArray(workspaceDescriptorValue, 'workspaces')];
   const verifyRoundtrip = !flags['no-roundtrip'];
   const parentPackagePath = String(flags['package-parent'] || '').trim();
-  let carrierLineage = Object.freeze({ ...initialHandoffCarrierLineage(), checkpointKind: 'progression', majorReason: '' });
+  const explicitNewRoot = flags['new-root'] === true;
+  if (parentPackagePath && explicitNewRoot) throw new Error('portable.cli.workspace-carrier.root-parent.conflict');
+  if (!parentPackagePath && !explicitNewRoot) throw new Error('portable.cli.workspace-carrier.root-intent.required');
+  let carrierLineage = Object.freeze({ ...initialHandoffCarrierLineage(flags['carrier-prefix'] || ''), checkpointKind: 'progression', majorReason: '' });
   let inheritedCarrierProfile = normalizeHandoffCarrierProfile(null);
   if (parentPackagePath) {
     const resolvedParent = path.resolve(parentPackagePath);

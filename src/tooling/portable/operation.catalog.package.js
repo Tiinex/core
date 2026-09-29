@@ -3,7 +3,7 @@ import { createPortableCheckpoint, restorePortableCheckpoint } from './checkpoin
 import { buildPortableRuntimePackage, inspectPortableRuntimePackage, rehydratePortableRuntimePackage, roundTripPortableRuntimePackage } from './package/runtime.package.js';
 import { acceptPortablePublicationResult, planPortablePublication } from './publication/runtime.publication.js';
 import { manufactureRecipientRelativeHandoffPackage } from './handoff/manufacture.js';
-import { projectHandoffCarrierOutputFromPackage } from './handoff/carrierProjection.js';
+import { projectHandoffCarrierOutputFromPackage, projectHandoffCarrierOutputCollision } from './handoff/carrierProjection.js';
 import { orientColdConsumerFromHandoffPackage } from './handoff/coldConsumerEntrypoint.js';
 import { auditHandoffPackageContextCarriage } from './handoff/contextAudit.js';
 import { projectPortableWorkspaceLandingPlan } from './handoff/workspaceLandingPlan.js';
@@ -17,6 +17,7 @@ import { projectQualifiedHandoffEndpoints } from './handoff/handoffEndpointProje
 import { projectPortableHandoffParticipants } from './handoff/handoffParticipantProjection.js';
 import { projectPortableOperatorContext } from './handoff/operatorContextProjection.js';
 import { projectPortableStagedValidation } from './editor/staged.validation.js';
+import { projectHandoffCarrierMajorFrontier } from './handoff/carrierMajorFrontier.js';
 
 export function createPortablePackageOperationEntries({ operation, wrapPortableResult, sessionOperationResult }) {
   return Object.freeze({
@@ -47,6 +48,20 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     safety: 'read-only',
     inputSchema: 'tiinex.portable.handoff-carrier-output.request.v1',
     handler: (input = {}) => wrapPortableResult('project-handoff-carrier-output', projectHandoffCarrierOutputFromPackage(input))
+  }),
+  'project-handoff-carrier-major-frontier': operation({
+    name: 'project-handoff-carrier-major-frontier',
+    description: 'Select one qualified same-prefix carrier frontier for explicit Major advancement from host-observed candidate files and Core-projected lineage.',
+    safety: 'planning-only-read-only',
+    inputSchema: 'tiinex.portable.handoff-carrier-major-frontier.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-handoff-carrier-major-frontier', projectHandoffCarrierMajorFrontier(input))
+  }),
+  'project-handoff-carrier-output-collision': operation({
+    name: 'project-handoff-carrier-output-collision',
+    description: 'Project the first free transport-only carrier filename from a Core-qualified base filename plus host-observed destination names.',
+    safety: 'planning-only-read-only',
+    inputSchema: 'tiinex.portable.handoff-carrier-output-collision.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-handoff-carrier-output-collision', projectHandoffCarrierOutputCollision(input))
   }),
   'orient-handoff-package': operation({
     name: 'orient-handoff-package',

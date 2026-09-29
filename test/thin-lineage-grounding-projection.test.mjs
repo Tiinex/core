@@ -542,7 +542,9 @@ test('common ground projection separates epistemic basis, semantic participants,
     returnPackage: { expected: true, returnTo: 'Sigma', carrierPrefix: 'business', parentDimension: '001', defaultMode: 'continue', defaultNextDimension: '001-1', filenamePattern: 'business-001-1-<from-role>-to-<to-role>.handoff-package.zip', parentPackagePath: 'carrier.zip', manufactureRule: 'Use the received carrier as package parent; Tooling owns the child dimension.' },
     deeper: { requiredContextBodies: { flag: '--include-required-context all' }, currentWorkBody: { flag: '--include-current-work' } },
     findingSummary: { counts: { error: 0, warning: 0 } }, actionableFindings: [], boundary: 'bounded'
-  }, { command: 'project-grounding-readiness', positionals: ['carrier.zip'], flags: { route: '001-handoff-pointer.trace.md', 'holder-role': 'Anchor', recipient: true } });
+  }, { command: 'project-grounding-readiness', positionals: ['carrier.zip'], flags: { route: '001-handoff-pointer.trace.md', 'holder-role': 'Anchor', recipient: true } }, {
+    commandInvocation: { executable: '/usr/bin/node', entrypoint: '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs' }
+  });
   assert.equal(output.readiness.state, 'grounded-to-act');
   assert.equal(output.authority.state, 'qualified');
   assert.equal(output.orchestrationReadiness.participantMap, 'explicit-bounded-map');
@@ -575,15 +577,17 @@ test('common ground projection separates epistemic basis, semantic participants,
   assert.ok(output.recipientContract.operationSelection.forbiddenFallbacks.includes('do-not-manually-construct-or-label-a-tiinex-handoff-package'));
   assert.match(output.recipientContract.operationSelection.boundary,/A host that wants hard prevention must enforce/i);
   assert.match(output.recipientContract.nextAction.beforeWorkspaceMutation.cli, /ground carrier\.zip .*--recipient --continue <empty-workspace-dir>/);
+  assert.equal(output.recipientContract.nextAction.beforeWorkspaceMutation.invocation.entrypoint, '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
+  assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.invocation.entrypoint, '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
   assert.equal(output.recipientContract.completion.returnTo, 'Sigma');
   assert.equal(output.recipientContract.completion.canonicalTransport, 'one-handoff-package-plus-exact-routing-text');
   assert.equal(output.recipientContract.completion.returnPackage.carrierPrefix, 'business');
   assert.equal(output.recipientContract.completion.returnPackage.defaultNextDimension, '001-1');
   assert.match(output.recipientContract.completion.localWorkProductRule, /inside the continued Workspace/);
   assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.command, 'qualify-return');
-  assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.cli, 'qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>');
+  assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.cli, '/usr/bin/node /tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>');
   assert.equal(output.recipientContract.completion.returnAuthoring.prepare.command, 'prepare-return');
-  assert.equal(output.recipientContract.completion.returnAuthoring.prepare.cli, 'prepare-return <continued-workspace-dir>');
+  assert.equal(output.recipientContract.completion.returnAuthoring.prepare.cli, '/usr/bin/node /tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs prepare-return <continued-workspace-dir>');
   assert.match(output.recipientContract.completion.returnAuthoring.semanticResponsibility, /qualify-return/);
   assert.match(output.recipientContract.completion.returnAuthoring.semanticResponsibility, /mechanically locked/);
   assert.match(output.recipientContract.completion.returnAuthoring.integrityAndQualification, /sha256-base64url-c14n-v2/);
@@ -593,10 +597,20 @@ test('common ground projection separates epistemic basis, semantic participants,
   assert.match(output.recipientContract.completion.protocol[3], /author \.\.\. --preflight/);
   assert.match(output.recipientContract.completion.protocol[4], /Tooling owns canonical envelope continuity/);
   assert.match(output.recipientContract.completion.protocol.at(-1), /Do not attach loose result\/Evidence\/Handoff\/Workspace files/);
-  assert.deepEqual(output.groundingBasis.recipientReading.nextAction, {
-    command: 'ground', package: 'carrier.zip', route: '001-handoff-pointer.trace.md', holderRole: 'Anchor', includeRequiredContext: 'all', includeCurrentWork: true,
-    boundary: 'Re-run the same exact package/route grounding and read only the qualified bodies required for recipient interpretation; this does not change semantic authority.'
+  assert.equal(output.groundingBasis.recipientReading.nextAction.command, 'ground');
+  assert.equal(output.groundingBasis.recipientReading.nextAction.cli, '/usr/bin/node /tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs ground carrier.zip --route 001-handoff-pointer.trace.md --holder-role Anchor --include-required-context all --include-current-work');
+  assert.deepEqual(output.groundingBasis.recipientReading.nextAction.invocation, {
+    executable: '/usr/bin/node',
+    args: ['/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs', 'ground', 'carrier.zip', '--route', '001-handoff-pointer.trace.md', '--holder-role', 'Anchor', '--include-required-context', 'all', '--include-current-work'],
+    entrypoint: '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs',
+    state: 'exact-runtime-entrypoint'
   });
+  assert.equal(output.groundingBasis.recipientReading.nextAction.package, 'carrier.zip');
+  assert.equal(output.groundingBasis.recipientReading.nextAction.route, '001-handoff-pointer.trace.md');
+  assert.equal(output.groundingBasis.recipientReading.nextAction.holderRole, 'Anchor');
+  assert.equal(output.groundingBasis.recipientReading.nextAction.includeRequiredContext, 'all');
+  assert.equal(output.groundingBasis.recipientReading.nextAction.includeCurrentWork, true);
+  assert.equal(output.groundingBasis.recipientReading.nextAction.boundary, 'Re-run the same exact package/route grounding through the already-active portable runtime and read only the qualified bodies required for recipient interpretation; this does not change semantic authority.');
   assert.equal(Object.hasOwn(output, 'capsule'), false);
   assert.equal(output.deeper.requiredContextBodies.flag, '--include-required-context all');
 });
@@ -622,6 +636,28 @@ test('common orient projection exposes exact carrier prefix with numeric lineage
   }, { command: 'orient-handoff-package', positionals: ['carrier.zip'], flags: {} });
   assert.equal(output.carrierLineage.prefix, 'my-custom-workspace');
   assert.equal(output.carrierLineage.dimension, '001-1-4-2');
+});
+
+
+test('pointerless Workspace orientation projects executable carrier capabilities without inferring parent from source material', () => {
+  const runtime = { commandInvocation: { executable: '/usr/bin/node', entrypoint: '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs' } };
+  const output = projectCommonCliDefaultOutput({
+    schema: 'result', operation: 'orient-handoff-package', resultSchema: 'orientation', status: 'ready',
+    carrierLineage: { prefix: 'tiinex-full', mode: 'root', dimension: '001', parentDimension: '', checkpointKind: 'progression', authority: 'human-progress-projection-only' },
+    workspaces: [{ id: 'core', qualification: 'qualified' }, { id: 'vscode', qualification: 'qualified' }],
+    routes: [], findings: [], findingSummary: { counts: { error: 0, warning: 0 } }
+  }, { command: 'orient-handoff-package', positionals: ['/incoming/tiinex-full-001.handoff-package.zip'], flags: {} }, runtime);
+  assert.equal(output.status, 'ready');
+  assert.equal(output.nextAction.kind, 'select-workspace-carrier-capability');
+  assert.equal(output.capabilities.materialSourceIndependentFromCarrierParent, true);
+  assert.equal(output.capabilities.carrierContinuityDecision.state, 'explicit-choice-required-for-workspace-manufacture');
+  assert.match(output.capabilities.carrierContinuityDecision.boundary, /intended predecessor/i);
+  assert.match(output.capabilities.carrierContinuityDecision.boundary, /independent from source\/material provenance/i);
+  assert.equal(output.capabilities.carrierContinuityDecision.continueParent.command, 'handoff');
+  assert.equal(output.capabilities.carrierContinuityDecision.continueParent.invocation.entrypoint, '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
+  assert.match(output.capabilities.carrierContinuityDecision.continueParent.cli, /handoff <workspace-dir> --carrier-mode workspace --package-parent <intended-predecessor-carrier\.zip>/);
+  assert.match(output.capabilities.carrierContinuityDecision.newRoot.cli, /handoff <workspace-dir> --carrier-mode workspace --new-root/);
+  assert.doesNotMatch(output.capabilities.carrierContinuityDecision.continueParent.meaning, /source package must be parent/i);
 });
 
 

@@ -1,13 +1,14 @@
 import { projectPortableSourceFrontierComparisonSummary } from '../../comparison/sourceFrontierComparison.js';
 import { projectPortableSourceReconciliationProofSummary } from '../../comparison/sourceFrontierReconciliationProof.js';
 import { HANDOFF_PACKAGE_V1_ARTIFACT_ROOT_DIMENSION } from '../../handoff/handoffPackageV1.constants.js';
+import { projectPortableCliOperation } from './cli.invocation.js';
 
 const COMMON_DEFAULT_PROJECTION = 'common-default';
 
-export function projectCommonCliDefaultOutput(result = {}, parsed = {}) {
+export function projectCommonCliDefaultOutput(result = {}, parsed = {}, runtime = {}) {
   if (parsed?.flags?.full === true) return result;
-  if (parsed?.command === 'orient-handoff-package') return projectOrientDefault(result, parsed);
-  if (parsed?.command === 'project-grounding-readiness') return projectGroundDefault(result, parsed);
+  if (parsed?.command === 'orient-handoff-package') return projectOrientDefault(result, parsed, runtime);
+  if (parsed?.command === 'project-grounding-readiness') return projectGroundDefault(result, parsed, runtime);
   if (parsed?.command === 'manufacture-handoff-package' && parsed?.surfaceCommand === 'handoff') return projectHandoffDefault(result, parsed);
   if (parsed?.command === 'compare-source-frontiers') return projectCompareDefault(result, parsed);
   if (parsed?.command === 'prove-source-reconciliation') return projectReconciliationProofDefault(result, parsed);
@@ -55,7 +56,7 @@ function projectCompareDefault(result = {}, parsed = {}) {
   });
 }
 
-function projectOrientDefault(result = {}, parsed = {}) {
+function projectOrientDefault(result = {}, parsed = {}, runtime = {}) {
   const projection = result?.entrypoint?.projection || {};
   const routes = (result.routes || projection.routes || []).map(projectOrientRoute);
   const workspaces = (result.workspaces || projection.workspaces || []).map((workspace) => Object.freeze({
@@ -65,6 +66,13 @@ function projectOrientDefault(result = {}, parsed = {}) {
   }));
   const actionableFindings = actionable(result);
   const selected = routes.find((route) => route.pointerPath) || routes[0] || {};
+  const packageArg = sourceArgument(parsed);
+  const routedGround = result.status === 'ready' && selected.pointerPath && String(selected.state || '') === 'qualified'
+    ? projectPortableCliOperation(runtime, 'ground', [packageArg, '--route', selected.pointerPath])
+    : null;
+  const pointerlessCapabilities = result.status === 'ready' && routes.length === 0 && workspaces.length > 0
+    ? projectPointerlessWorkspaceCarrierCapabilities({ runtime, packageArg, carrierLineage: result.carrierLineage || projection.carrierLineage || null })
+    : null;
   return Object.freeze({
     schema: result.schema,
     operation: result.operation || 'orient-handoff-package',
@@ -76,10 +84,16 @@ function projectOrientDefault(result = {}, parsed = {}) {
     selection: result.selection || projection.selection || null,
     authority: projection.authority ? Object.freeze({ ...projection.authority }) : null,
     carrierLineage: compactCarrierLineage(result.carrierLineage),
-    nextAction: result.status === 'ready' && selected.pointerPath && String(selected.state || '') === 'qualified' ? Object.freeze({
-      command: 'ground',
-      package: sourceArgument(parsed),
+    capabilities: pointerlessCapabilities,
+    nextAction: routedGround ? Object.freeze({
+      ...routedGround,
+      package: packageArg,
       route: selected.pointerPath
+    }) : pointerlessCapabilities ? Object.freeze({
+      kind: 'select-workspace-carrier-capability',
+      options: Object.freeze(['continue-explicit-carrier-parent', 'start-explicit-new-root', 'project-workspace-landing']),
+      capabilityProjection: 'capabilities',
+      boundary: 'Pointerless Workspace carriage creates no recipient/work authority. Select an operational capability explicitly; do not infer carrier parent from source material or package arrival.'
     }) : null,
     findingSummary: result.findingSummary || null,
     actionableFindings: Object.freeze(actionableFindings.slice(0, 20)),
@@ -89,7 +103,41 @@ function projectOrientDefault(result = {}, parsed = {}) {
   });
 }
 
-function projectGroundDefault(result = {}, parsed = {}) {
+function projectPointerlessWorkspaceCarrierCapabilities({ runtime = {}, packageArg = '', carrierLineage = null } = {}) {
+  const continueCarrier = projectPortableCliOperation(runtime, 'handoff', [
+    '<workspace-dir>', '--carrier-mode', 'workspace', '--package-parent', '<intended-predecessor-carrier.zip>', '--output-dir', '<output-dir>'
+  ]);
+  const newRoot = projectPortableCliOperation(runtime, 'handoff', [
+    '<workspace-dir>', '--carrier-mode', 'workspace', '--new-root', '--output-dir', '<output-dir>'
+  ]);
+  const landing = projectPortableCliOperation(runtime, 'project-workspace-landing', [
+    packageArg || '<handoff-package.zip>', '--repositories', '<repositories.json>'
+  ]);
+  return Object.freeze({
+    state: 'pointerless-workspace-carrier-ready',
+    carrierLineage: compactCarrierLineage(carrierLineage),
+    materialSourceIndependentFromCarrierParent: true,
+    carrierContinuityDecision: Object.freeze({
+      state: 'explicit-choice-required-for-workspace-manufacture',
+      continueParent: Object.freeze({
+        ...continueCarrier,
+        meaning: 'Compose qualified Workspace material into a carrier that intentionally continues the explicitly supplied predecessor carrier. The source material may come from different qualified packages or local Workspace roots.'
+      }),
+      newRoot: Object.freeze({
+        ...newRoot,
+        meaning: 'Start a new independent carrier lineage intentionally. New-root intent is not inferred from missing --package-parent.'
+      }),
+      boundary: 'Carrier parent is the intended predecessor in carrier continuity. It is independent from source/material provenance, Handoff Parent, Continue From, recipient authority, and ownership transfer.'
+    }),
+    workspaceLanding: Object.freeze({
+      ...landing,
+      meaning: 'Plan exact landing/reconciliation against explicit local repository facts without inferring Handoff authority from this route-less carrier.'
+    }),
+    boundary: 'Operational capability projection for a qualified pointerless Workspace carrier. These capabilities expose mechanics only and do not upgrade the carrier into a routed Handoff or select a parent automatically.'
+  });
+}
+
+function projectGroundDefault(result = {}, parsed = {}, runtime = {}) {
   const required = result?.coverage?.requiredContext || {};
   const currentWork = result?.currentWork || {};
   const continuity = result?.continuity || {};
@@ -107,7 +155,7 @@ function projectGroundDefault(result = {}, parsed = {}) {
     readiness: compactReadiness(result.readiness),
     completionQualification: compactCompletionQualification(result.completionQualification),
     authority: compactGroundAuthority(result.authority),
-    recipientContract: projectRecipientContract({ result, required, currentWork, continuity, parsed }),
+    recipientContract: projectRecipientContract({ result, required, currentWork, continuity, parsed, runtime }),
     orchestrationReadiness: compactOrchestrationReadiness(result.orchestrationReadiness),
     delegationReadiness: compactDelegationReadinessSummary(result.delegationReadiness),
     groundingBasis: Object.freeze({
@@ -119,7 +167,7 @@ function projectGroundDefault(result = {}, parsed = {}) {
       participants: compactParticipantContext(capsule.participantContext),
       guidanceAuthority: compactGuidanceAuthority(capsule.guidanceAuthority, { includeSectionText: !parsed?.flags?.recipient }),
       sourceSufficiency: compactSourceSufficiency(capsule.sourceEvidence),
-      recipientReading: projectRecipientReading({ required, currentWork, parsed })
+      recipientReading: projectRecipientReading({ required, currentWork, parsed, runtime })
     }),
     requiredContext: Object.freeze({
       declared: Number(required.declared || 0),
@@ -159,7 +207,7 @@ function projectGroundDefault(result = {}, parsed = {}) {
   });
 }
 
-function projectRecipientContract({ result = {}, required = {}, currentWork = {}, continuity = {}, parsed = {} } = {}) {
+function projectRecipientContract({ result = {}, required = {}, currentWork = {}, continuity = {}, parsed = {}, runtime = {} } = {}) {
   const authority = result.authority || {};
   const handoff = authority.handoff || {};
   const completion = handoff.completionExpectation || {};
@@ -168,16 +216,16 @@ function projectRecipientContract({ result = {}, required = {}, currentWork = {}
   const packageArg = sourceArgument(parsed);
   const route = typeof flags.route === 'string' ? flags.route : '';
   const holderRole = typeof flags['holder-role'] === 'string' ? flags['holder-role'] : '';
-  const materializeCli = [
-    'ground', packageArg,
-    route ? '--route' : '', route,
-    holderRole ? '--holder-role' : '', holderRole,
-    flags.recipient ? '--recipient' : '',
+  const materializeCommand = projectPortableCliOperation(runtime, 'ground', [
+    packageArg,
+    ...(route ? ['--route', route] : []),
+    ...(holderRole ? ['--holder-role', holderRole] : []),
+    ...(flags.recipient ? ['--recipient'] : []),
     '--continue', '<empty-workspace-dir>'
-  ].filter(Boolean).join(' ');
-  const qualifyReturnCli = 'qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>';
-  const prepareReturnCli = 'prepare-return <continued-workspace-dir>';
-  const handoffCli = 'handoff <continued-workspace-dir>';
+  ]);
+  const qualifyReturnCommand = projectPortableCliOperation(runtime, 'qualify-return', ['<continued-workspace-dir>', '--result', '<result-path>', '--expected', '<expected-file-path>']);
+  const prepareReturnCommand = projectPortableCliOperation(runtime, 'prepare-return', ['<continued-workspace-dir>']);
+  const handoffCommand = projectPortableCliOperation(runtime, 'handoff', ['<continued-workspace-dir>']);
   const knownLosses = continuity?.losses?.blocking === false ? (continuity.losses.items || []) : [];
   const requiredAvailable = Number(required.bodiesAvailable || 0);
   const requiredProjected = Number(required.bodiesProjected || 0);
@@ -233,7 +281,7 @@ function projectRecipientContract({ result = {}, required = {}, currentWork = {}
     }))),
     nextAction: Object.freeze({
       beforeWorkspaceMutation: String(result?.readiness?.state || '') === 'grounded-to-act'
-        ? Object.freeze({ command: 'ground', cli: materializeCli, boundary: 'Materialize only the selected qualified Workspace; runtime-only .tiinex continuation state is not semantic authority.' })
+        ? Object.freeze({ ...materializeCommand, boundary: 'Materialize only the selected qualified Workspace through the already-active portable runtime; runtime-only .tiinex continuation state is not semantic authority.' })
         : null,
       boundedWork: result?.readiness?.nextAction ? Object.freeze({ ...result.readiness.nextAction }) : null
     }),
@@ -248,12 +296,12 @@ function projectRecipientContract({ result = {}, required = {}, currentWork = {}
       canonicalTransport: returnPackage.expected ? 'one-handoff-package-plus-exact-routing-text' : 'no-qualified-return-package-expectation',
       localWorkProductRule: 'Keep result/work-product files inside the continued Workspace. They are carried by the canonical return Handoff Package; do not emit them as extra loose transport payloads.',
       returnAuthoring: returnPackage.expected ? Object.freeze({
-        qualifyTransition: Object.freeze({ command: 'qualify-return', cli: qualifyReturnCli, effect: 'verifies one exact local bounded result against one explicit expected local file and writes runtime-only .tiinex/return-transition.json; this qualifies return timing for that result only and does not establish Task completion/closure' }),
-        prepare: Object.freeze({ command: 'prepare-return', cli: prepareReturnCli, effect: 'writes only runtime-only .tiinex/return-handoff.body.md scaffold with exact endpoint defaults and schema-complete nested field shapes' }),
+        qualifyTransition: Object.freeze({ ...qualifyReturnCommand, effect: 'verifies one exact local bounded result against one explicit expected local file and writes runtime-only .tiinex/return-transition.json; this qualifies return timing for that result only and does not establish Task completion/closure' }),
+        prepare: Object.freeze({ ...prepareReturnCommand, effect: 'writes only runtime-only .tiinex/return-handoff.body.md scaffold with exact endpoint defaults and schema-complete nested field shapes' }),
         semanticResponsibility: 'Recipient must first qualify the return transition for the exact bounded result with qualify-return. Prepare-return is fail-closed until that receipt exists and remains byte-current, and the returned Material Reference is mechanically locked to that verified result. This does not establish Task completion/closure; use project-lifecycle-readiness with explicit qualified facts before making such a claim.',
         preflight: 'Run the emitted author --preflight command after filling the scaffold. It uses the exact renderer, c14n-v2 sealing, audit, and staging path without retaining the candidate or mutating continuation state.',
         integrityAndQualification: 'After preflight qualifies, use the emitted author command; Tooling renders canonical envelope continuity, seals sha256-base64url-c14n-v2, audits, stages, and refuses incomplete scaffold markers.',
-        manufacture: Object.freeze({ command: 'handoff', cli: handoffCli, canonicalTransport: 'one-handoff-package-plus-exact-routing-text' })
+        manufacture: Object.freeze({ ...handoffCommand, canonicalTransport: 'one-handoff-package-plus-exact-routing-text' })
       }) : null,
       returnHandoffRequired: Boolean(returnPackage.expected),
       returnPackage: returnPackage.expected ? Object.freeze({
@@ -266,8 +314,8 @@ function projectRecipientContract({ result = {}, required = {}, currentWork = {}
       }) : null,
       protocol: returnPackage.expected ? Object.freeze([
         selectedHandoffBoundedWork ? 'Produce the bounded result defined by the exact selected Handoff contract inside the writable continued Workspace; grounding itself is not completion evidence and does not establish that return is due.' : 'Perform the exact selected-Handoff-controlled Task work needed for the result. Grounding and return-protocol availability do not establish that return is due. Do not convert your own reading of free-text Done Criteria into Task closure; project-lifecycle-readiness is the qualified lifecycle path for any completion/closure claim.',
-        'Run `qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>` only when the exact result and explicit expected local bytes exist. This is the fail-closed transition gate and does not claim Task completion/closure.',
-        'After qualify-return reports qualified, run `prepare-return <continued-workspace-dir>`; edit only the runtime scaffold it names and replace every <<TIINEX_REQUIRED:...>> marker with exact supported return semantics. Do not alter the mechanically locked returned Material Reference.',
+        `Run the exact projected qualifyTransition.cli (${qualifyReturnCommand.cli}) only when the exact result and explicit expected local bytes exist. This is the fail-closed transition gate and does not claim Task completion/closure.`,
+        `After qualify-return reports qualified, run the exact projected prepare.cli (${prepareReturnCommand.cli}); edit only the runtime scaffold it names and replace every <<TIINEX_REQUIRED:...>> marker with exact supported return semantics. Do not alter the mechanically locked returned Material Reference.`,
         'Run the exact emitted `author ... --preflight` command. Tooling validates the filled scaffold through the normal renderer/integrity/audit/stage path without retaining it.',
         'After preflight qualifies, run the exact emitted `author` command. Tooling owns canonical envelope continuity, c14n-v2 sealing, audit, staging, and fail-closed qualification.',
         'Run the exact emitted `handoff` command so continuation state supplies the received parent carrier and Tooling allocates the child carrier dimension.',
@@ -425,7 +473,7 @@ function compactSourceSufficiency(value = {}) {
   });
 }
 
-function projectRecipientReading({ required = {}, currentWork = {}, parsed = {} } = {}) {
+function projectRecipientReading({ required = {}, currentWork = {}, parsed = {}, runtime = {} } = {}) {
   const requiredAvailable = Number(required.bodiesAvailable || 0);
   const requiredProjected = Number(required.bodiesProjected || 0);
   const currentAvailable = Number(currentWork.bodiesAvailable || 0);
@@ -441,13 +489,19 @@ function projectRecipientReading({ required = {}, currentWork = {}, parsed = {} 
     requiredContextBodies: Object.freeze({ available: requiredAvailable, projected: requiredProjected, pending: requiredPending }),
     currentWorkBodies: Object.freeze({ available: currentAvailable, projected: currentProjected, pending: currentPending }),
     nextAction: pending ? Object.freeze({
-      command: 'ground',
+      ...projectPortableCliOperation(runtime, 'ground', [
+        sourceArgument(parsed),
+        ...(typeof flags.route === 'string' && flags.route ? ['--route', flags.route] : []),
+        ...(typeof flags['holder-role'] === 'string' && flags['holder-role'] ? ['--holder-role', flags['holder-role']] : []),
+        ...(requiredPending ? ['--include-required-context', 'all'] : []),
+        ...(currentPending > 0 ? ['--include-current-work'] : [])
+      ]),
       package: sourceArgument(parsed),
       route: typeof flags.route === 'string' ? flags.route : '',
       holderRole: typeof flags['holder-role'] === 'string' ? flags['holder-role'] : '',
       includeRequiredContext: requiredPending ? 'all' : '',
       includeCurrentWork: currentPending > 0,
-      boundary: 'Re-run the same exact package/route grounding and read only the qualified bodies required for recipient interpretation; this does not change semantic authority.'
+      boundary: 'Re-run the same exact package/route grounding through the already-active portable runtime and read only the qualified bodies required for recipient interpretation; this does not change semantic authority.'
     }) : null,
     boundary: 'Machine qualification or body projection does not prove cognitive reading or understanding. Recipient mode places the exact qualified Required Context/current-work bodies in the same grounding receipt so the recipient can interpret them without a second Tooling round trip.'
   });

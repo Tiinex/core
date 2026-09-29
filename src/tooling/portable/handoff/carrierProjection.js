@@ -57,8 +57,9 @@ export function projectHandoffHumanOutput(input = {}) {
           : readyRoutes.length && !partiesReady
             ? 'route-parties-required'
             : readyRoutes.length ? 'ready' : 'blocked';
-  const derivedFilename = status === 'ready' ? carrierFilename(carrierPrefix, dimension, selected) : '';
-  const filename = status === 'ready' ? transportFilename(input.filename, derivedFilename) : '';
+  const collisionInstance = normalizeCarrierCollisionInstance(input.collisionInstance || 1);
+  const baseFilename = status === 'ready' ? transportFilename(input.filename, carrierFilename(carrierPrefix, dimension, selected)) : '';
+  const filename = status === 'ready' ? carrierFilenameForInstance(baseFilename, collisionInstance) : '';
   const continueFrom = String(selected?.pointerPath || '');
   const transportText = status === 'ready' ? routedTransportText(startPath, continueFrom) : '';
   return Object.freeze({
@@ -75,7 +76,7 @@ export function projectHandoffHumanOutput(input = {}) {
       workspaceRelativeHandoffPath: String(selected?.workspaceRelativeHandoffPath || selected?.workspaceRelativePath || ''),
       from: String(selected?.from || selected?.parties?.from || ''),
       to: String(selected?.to || selected?.parties?.to || ''),
-      collisionInstance: Number(input.collisionInstance || 1),
+      collisionInstance,
       singleHumanTransportChoice: true
     }) : null,
     routes: Object.freeze(readyRoutes.map((route) => {
@@ -127,13 +128,17 @@ export function projectWorkspaceCarrierHumanOutput(input = {}) {
   const projection = input.projection || input.carrierProjection || {};
   const ready = projection.status === 'ready' && projection.mode === 'workspace' && (projection.routes || []).length === 0;
   const dimension = String(projection.lineage?.dimension || '001');
+  const lineagePrefix = normalizeHandoffCarrierPrefix(projection.lineage?.prefix || '');
   const startPath = String(projection.startPath || `${HANDOFF_PACKAGE_V1_ARTIFACT_ROOT_DIMENSION}-1-READ-BEFORE-PROCEEDING.trace.md`);
-  const filename = transportFilename(input.filename, `tiinex-${dimension}.handoff-package.zip`);
+  const collisionInstance = normalizeCarrierCollisionInstance(input.collisionInstance || 1);
+  const canonicalFilename = `${lineagePrefix || 'tiinex'}-${dimension}.handoff-package.zip`;
+  const baseFilename = transportFilename(input.filename, canonicalFilename);
+  const filename = carrierFilenameForInstance(baseFilename, collisionInstance);
   const content = ready ? routeLessTransportText(startPath, 'workspace') : '';
   return Object.freeze({
     schema: HANDOFF_HUMAN_OUTPUT_SCHEMA_ID,
     status: ready ? 'ready' : 'blocked',
-    primary: ready ? Object.freeze({ kind: 'workspace-package', filename, dimension, startPath, parentDimension: String(projection.lineage?.parentDimension || ''), checkpointKind: String(projection.lineage?.checkpointKind || ''), routeId: '', workspaceId: '', workspaceRelativeHandoffPath: '', collisionInstance: 1, singleHumanTransportChoice: true }) : null,
+    primary: ready ? Object.freeze({ kind: 'workspace-package', filename, carrierPrefix: lineagePrefix, dimension, startPath, parentDimension: String(projection.lineage?.parentDimension || ''), checkpointKind: String(projection.lineage?.checkpointKind || ''), routeId: '', workspaceId: '', workspaceRelativeHandoffPath: '', collisionInstance, singleHumanTransportChoice: true }) : null,
     routes: Object.freeze([]),
     normalInlineRouting: ready ? Object.freeze({ kind: 'transport-text', content, normalEmission: true, requiredForHumanCompletion: true, placement: 'adjacent-to-primary', authority: 'qualified-package-start-only' }) : null,
     sharedRouting: null,
@@ -214,10 +219,68 @@ export function projectHandoffCarrierOutputFromPackage(input = {}) {
   return projectHandoffHumanOutput({ ...common, route: input.route || input.pointer || '' });
 }
 
+export function projectHandoffCarrierOutputCollision(input = {}) {
+  let filename = '';
+  try { filename = transportFilename(input.filename || input.baseFilename || '', ''); }
+  catch {
+    return Object.freeze({
+      schema: 'tiinex.portable.handoff-carrier-output-collision.v1',
+      status: 'blocked',
+      state: 'blocked',
+      reasonCode: 'filename-invalid',
+      filename: '',
+      collisionInstance: 0,
+      boundary: 'Hosts report observed destination filenames. Core owns transport-only collision naming; collision markers never alter carrier lineage.'
+    });
+  }
+  if (!filename) return Object.freeze({
+    schema: 'tiinex.portable.handoff-carrier-output-collision.v1',
+    status: 'blocked',
+    state: 'blocked',
+    reasonCode: 'filename-required',
+    filename: '',
+    collisionInstance: 0,
+    boundary: 'Hosts report observed destination filenames. Core owns transport-only collision naming; collision markers never alter carrier lineage.'
+  });
+  const observed = new Set((Array.isArray(input.existingFilenames) ? input.existingFilenames : [])
+    .map((value) => String(value || '').trim().toLocaleLowerCase())
+    .filter(Boolean));
+  for (let collisionInstance = 1; collisionInstance < 1000; collisionInstance += 1) {
+    const candidate = carrierFilenameForInstance(filename, collisionInstance);
+    if (!observed.has(candidate.toLocaleLowerCase())) return Object.freeze({
+      schema: 'tiinex.portable.handoff-carrier-output-collision.v1',
+      status: 'ready',
+      state: collisionInstance === 1 ? 'canonical-free' : 'collision-suffixed',
+      reasonCode: '',
+      filename: candidate,
+      collisionInstance,
+      boundary: 'Hosts report observed destination filenames. Core owns transport-only collision naming; collision markers never alter carrier lineage.'
+    });
+  }
+  return Object.freeze({
+    schema: 'tiinex.portable.handoff-carrier-output-collision.v1',
+    status: 'blocked',
+    state: 'blocked',
+    reasonCode: 'collision-space-exhausted',
+    filename: '',
+    collisionInstance: 0,
+    boundary: 'Hosts report observed destination filenames. Core owns transport-only collision naming; collision markers never alter carrier lineage.'
+  });
+}
+
 export function carrierFilenameForInstance(filename = '', instance = 1) {
-  const text = String(filename || '');
-  const n = Number(instance || 1);
+  const text = String(filename || '').trim();
+  const n = normalizeCarrierCollisionInstance(instance);
   if (!text || n <= 1) return text;
-  const index = text.toLowerCase().endsWith('.zip') ? text.length - 4 : text.length;
-  return `${text.slice(0, index)}-${n}${text.slice(index)}`;
+  const suffix = '.handoff-package.zip';
+  const duplicateOrdinal = n - 1;
+  return text.toLowerCase().endsWith(suffix)
+    ? `${text.slice(0, -suffix.length)} (${duplicateOrdinal})${suffix}`
+    : `${text} (${duplicateOrdinal})`;
+}
+
+function normalizeCarrierCollisionInstance(value = 1) {
+  const n = Number(value || 1);
+  if (!Number.isInteger(n) || n < 1 || n > 999999) throw new Error('portable.handoff-carrier.collision-instance.invalid');
+  return n;
 }
