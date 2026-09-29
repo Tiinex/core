@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256Hex } from '../../../../export/package.bytes.js';
 
-export const PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID = 'tiinex.portable.tooling-bootstrap.manifest.v1';
+export const PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID = 'tiinex.portable.tooling-bootstrap.manifest.v2';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RUNTIME_ROOT = path.resolve(MODULE_DIR, '../../../../..');
@@ -15,20 +15,24 @@ export async function buildToolingBootstrapTransportFiles(input = {}) {
   const runtimeRoot = path.resolve(String(input.runtimeRoot || DEFAULT_RUNTIME_ROOT));
   const runtime = await enumerateRuntimeDependencyGraph(runtimeRoot, { maxFiles: input.maxFiles });
   const runtimeIdentity = runtimeIdentityFromEnumeration(runtime);
+  const builtAt = normalizeBuildTimestamp(input.builtAt || input.buildCreatedAt || new Date().toISOString());
   const manifest = Object.freeze({
     schema: PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID,
     version: 1,
     delivery,
     entrypoint: 'runtime/tools/tiinex-portable.mjs',
+    build: Object.freeze({ createdAt: builtAt, meaning: 'bootstrap-bundle-manufacture-time', orderingAuthority: 'none' }),
+    core: Object.freeze({ name: runtimeIdentity.packageName, version: runtimeIdentity.packageVersion }),
+    composition: Object.freeze({ sha256: runtime.representationSha256, basis: 'exact-manifest-declared-runtime-representation', timestampIndependent: true, supersessionAuthority: 'none' }),
     qualification: Object.freeze({ authority: 'manifest-declared-exact-runtime-bytes-only', ordinaryWorkspaceBytesAreBootstrapAuthority: false, filenameOrColocationAuthority: false }),
     runtime: Object.freeze({ files: runtime.entries.length, bytes: runtime.totalBytes, representationSha256: runtime.representationSha256, entries: Object.freeze(runtime.entries.map(({ path: entryPath, bytes, sha256 }) => Object.freeze({ path: `runtime/${entryPath}`, bytes, sha256 }))) }),
     canonicalSchemaMaterial: Object.freeze({ boundary: 'Carried as runtime data required by the portable schema provider; canonical schema authority remains the declared external Tiinex/docs binding inside that material, not this bootstrap manifest.' }),
-    boundary: 'Portable Tooling bootstrap transport authority only. Transport orientation bootstrap and canonical schema-material authority remain separate concerns.'
+    boundary: 'Portable Tooling bootstrap transport authority only. Build time, Core version, bootstrap hash, and receipt order are comparison facts, not global semantic supersession authority.'
   });
   const manifestBytes = new TextEncoder().encode(`${JSON.stringify(sortJson(manifest), null, 2)}\n`);
   const manifestSha256 = sha256Hex(manifestBytes);
   const persistentVerification = delivery === 'persistent' ? verifyExpectedPersistentBootstrap(input.expected, manifest, manifestSha256) : Object.freeze({ state: 'not-required' });
-  const summary = Object.freeze({ schema: 'tiinex.portable.tooling-bootstrap.summary.v1', delivery, manifestSha256, representationSha256: runtime.representationSha256, runtimeFiles: runtime.entries.length, runtimeBytes: runtime.totalBytes, status: delivery === 'embedded' ? 'embedded-qualified' : 'persistent-identity-verified', persistentVerification });
+  const summary = Object.freeze({ schema: 'tiinex.portable.tooling-bootstrap.summary.v1', delivery, manifestSha256, representationSha256: runtime.representationSha256, compositionSha256: runtime.representationSha256, runtimeFiles: runtime.entries.length, runtimeBytes: runtime.totalBytes, build: manifest.build, core: manifest.core, status: delivery === 'embedded' ? 'embedded-qualified' : 'persistent-identity-verified', persistentVerification });
   const files = [transportFile('tiinex.bootstrap/manifest.json', manifestBytes, 'tooling-bootstrap-manifest', 'portable-tooling-bootstrap-control')];
   if (delivery === 'embedded') for (const entry of runtime.entries) files.push(transportFile(`tiinex.bootstrap/runtime/${entry.path}`, entry.data, 'tooling-bootstrap-runtime', 'portable-tooling-bootstrap-runtime'));
   return Object.freeze({ manifest, summary, files: Object.freeze(files), runtimeIdentity });
@@ -134,6 +138,13 @@ async function enumerateFilesUnder(root, runtimeRoot) {
 function staticRelativeSpecifiers(text = '') { const out = []; IMPORT_RE.lastIndex = 0; let match; while ((match = IMPORT_RE.exec(text))) if (String(match[1] || '').startsWith('.')) out.push(match[1]); return out; }
 function resolveImportRelative(fromFile, specifier) { const clean = String(specifier || '').split('?')[0].split('#')[0]; if (!clean.startsWith('.')) return ''; let resolved = normalizeRelativePath(path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), clean))); if (!path.posix.extname(resolved)) resolved = `${resolved}.js`; return resolved; }
 function transportFile(filePath, data, kind, logicalKind) { return Object.freeze({ path: filePath, data, kind, logicalKind, mediaType: mediaTypeForPath(filePath), boundary: 'Manifest-declared portable Tooling bootstrap transport byte. Co-location does not grant bootstrap authority; exact manifest membership and digest are required.' }); }
+function normalizeBuildTimestamp(value = '') {
+  const text = String(value || '').trim();
+  const date = new Date(text);
+  if (!text || Number.isNaN(date.getTime())) throw new Error('portable.tooling-bootstrap.build-time.invalid');
+  return date.toISOString();
+}
+
 function normalizeDelivery(value) { const delivery = String(value || 'embedded').trim().toLowerCase(); if (!['embedded', 'persistent'].includes(delivery)) throw new Error(`portable.tooling-bootstrap.delivery.unsupported:${delivery}`); return delivery; }
 function mediaTypeForPath(value = '') { const lower = String(value).toLowerCase(); if (lower.endsWith('.md')) return 'text/markdown'; if (lower.endsWith('.json')) return 'application/json'; if (/\.(?:m?js|cjs)$/.test(lower)) return 'text/javascript'; if (lower.endsWith('.ts')) return 'text/typescript'; if (lower.endsWith('.css')) return 'text/css'; if (lower.endsWith('.html')) return 'text/html'; if (/\.(?:yml|yaml)$/.test(lower)) return 'text/yaml'; if (lower.endsWith('.txt')) return 'text/plain'; return 'application/octet-stream'; }
 function normalizeRelativePath(value = '') { return String(value || '').replace(/\\/g, '/').replace(/^\/+/, '').split('/').filter((part) => part && part !== '.').join('/'); }

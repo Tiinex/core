@@ -199,7 +199,10 @@ function routeLessTransportText(startPath = '', mode = 'workspace') {
   const boundary = mode === 'bootstrap'
     ? 'This is a bootstrap-only carrier. After bootstrap, pass the package to Tiinex orientation. No Workspace material, Handoff Continue From route, recipient, or work authority is declared or implied.'
     : 'This is a pointerless Workspace carrier. After bootstrap, pass the package to Tiinex orientation/material projection. No Handoff Continue From route, recipient, or work transfer is declared or implied.';
-  return `${coldStartInstruction(startPath)}\n\n${boundary}\n`;
+  const reuse = mode === 'bootstrap'
+    ? '\nRuntime reuse check: after extracting the declared bootstrap, run `node <extract-root>/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs version --json` before broad runtime/schema/companion re-reading. If `composition.sha256` equals the already-active Tiinex runtime, the manifest-declared runtime composition is byte-identical and prior interpretation may be reused. Different composition, later Build At, different Core version, different ZIP SHA, or later arrival does not by itself establish semantic supersession.'
+    : '';
+  return `${coldStartInstruction(startPath)}\n\n${boundary}${reuse}\n`;
 }
 
 export function projectHandoffCarrierOutputFromPackage(input = {}) {

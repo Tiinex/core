@@ -16,8 +16,7 @@
     },
     {
       "label": "Tiinex: Build Bootstrap Handoff Package",
-      "type": "npm",
-      "script": "bootstrap:carrier",
+      "type": "shell",
       "group": "none",
       "problemMatcher": [],
       "options": {
@@ -28,7 +27,8 @@
         "panel": "shared",
         "clear": true,
         "showReuseMessage": false
-      }
+      },
+      "command": "npm run --silent bootstrap:carrier"
     }
   ]
 }

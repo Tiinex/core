@@ -65,11 +65,25 @@ export async function buildBootstrapCarrier({ outputDir = process.cwd() } = {}) 
   });
 }
 
+export function formatBootstrapCarrierHuman(result = {}) {
+  const output = String(result?.output || '').trim();
+  const transportText = String(result?.transportText || '').trim();
+  return [
+    'Bootstrap Handoff Package ready',
+    '',
+    `Output: ${output}`,
+    '',
+    'Transport text:',
+    transportText
+  ].join('\n');
+}
+
 function parseArgs(values = []) {
-  const out = { outputDir: process.cwd() };
+  const out = { outputDir: process.cwd(), json: false };
   for (let i = 0; i < values.length; i += 1) {
     const value = String(values[i] || '');
     if (value === '--output-dir') { out.outputDir = String(values[++i] || ''); continue; }
+    if (value === '--json') { out.json = true; continue; }
     throw new Error(`tiinex.bootstrap-carrier.argument.unsupported:${value}`);
   }
   return out;
@@ -91,8 +105,9 @@ function run(command, args, { cwd } = {}) {
 const invoked = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invoked) {
   try {
-    const result = await buildBootstrapCarrier(parseArgs(process.argv.slice(2)));
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    const args = parseArgs(process.argv.slice(2));
+    const result = await buildBootstrapCarrier(args);
+    process.stdout.write(args.json ? `${JSON.stringify(result, null, 2)}\n` : `${formatBootstrapCarrierHuman(result)}\n`);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;

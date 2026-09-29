@@ -140,7 +140,14 @@ export function manufactureHandoffPackageV1Direct(input = {}, options = {}) {
 
   const bootstrapMarkdown = renderExternalPayloadDescriptor({
     createdAt, parent: rootParent, title: 'Portable Tooling Bootstrap', label: 'Package V1 portable Tooling bootstrap', summary: 'Exact embedded Tooling bootstrap payload used before recipient package interpretation.',
-    role: 'portable Tooling bootstrap', archivePath: bootstrapArchivePath, bytes: bootstrapFile.bytes, sha256: bootstrapFile.sha256, materials: []
+    role: 'portable Tooling bootstrap', archivePath: bootstrapArchivePath, bytes: bootstrapFile.bytes, sha256: bootstrapFile.sha256, materials: [],
+    payloadCreatedAt: String(input.toolingBootstrap?.build?.createdAt || ''),
+    producer: [String(input.toolingBootstrap?.core?.name || ''), String(input.toolingBootstrap?.core?.version || '')].filter(Boolean).join(' '),
+    provenance: input.toolingBootstrap ? Object.freeze({
+      compositionSha256: String(input.toolingBootstrap?.compositionSha256 || input.toolingBootstrap?.representationSha256 || ''),
+      comparisonCommand: 'node <extract-root>/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs version --json',
+      orderingBoundary: 'Build timestamp, Core version, bootstrap SHA and receipt order are comparison facts only; none establish global semantic supersession.'
+    }) : null
   });
   const bootstrapArtifactFile = finalizeFile({ path: bootstrapArtifactPath, kind: 'tooling-bootstrap-descriptor', logicalKind: 'package-v1-bootstrap-descriptor', mediaType: 'text/markdown', content: bootstrapMarkdown });
 

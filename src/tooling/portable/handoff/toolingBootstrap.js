@@ -1,7 +1,8 @@
 import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
 
 export const PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_PATH = 'tiinex.bootstrap/manifest.json';
-export const PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID = 'tiinex.portable.tooling-bootstrap.manifest.v1';
+export const PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID = 'tiinex.portable.tooling-bootstrap.manifest.v2';
+export const PORTABLE_TOOLING_BOOTSTRAP_LEGACY_MANIFEST_SCHEMA_ID = 'tiinex.portable.tooling-bootstrap.manifest.v1';
 
 export function inspectPortableToolingBootstrap(bundle = {}) {
   const files = Array.isArray(bundle.files) ? bundle.files : [];
@@ -10,11 +11,20 @@ export function inspectPortableToolingBootstrap(bundle = {}) {
   const manifestFile = byPath.get(PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_PATH);
   const manifest = parseJsonFile(manifestFile);
   if (!manifest) findings.push(finding('error', 'portable.tooling-bootstrap.manifest.missing', 'Portable Tooling bootstrap manifest is missing or unreadable.'));
-  else if (String(manifest.schema || '') !== PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID) findings.push(finding('error', 'portable.tooling-bootstrap.manifest.schema', 'Portable Tooling bootstrap manifest schema is unsupported.', { actual: manifest.schema || '' }));
+  else if (![PORTABLE_TOOLING_BOOTSTRAP_LEGACY_MANIFEST_SCHEMA_ID, PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID].includes(String(manifest.schema || ''))) findings.push(finding('error', 'portable.tooling-bootstrap.manifest.schema', 'Portable Tooling bootstrap manifest schema is unsupported.', { actual: manifest.schema || '' }));
 
+  const manifestSchema = String(manifest?.schema || '');
+  const comparisonIdentityRequired = manifestSchema === PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID;
   const delivery = String(manifest?.delivery || '');
   const entrypoint = String(manifest?.entrypoint || '').trim();
+  const buildCreatedAt = String(manifest?.build?.createdAt || '').trim();
+  const buildOrderingAuthority = String(manifest?.build?.orderingAuthority || '').trim();
+  const compositionSha256 = String(manifest?.composition?.sha256 || '').trim();
+  const coreName = String(manifest?.core?.name || '').trim();
+  const coreVersion = String(manifest?.core?.version || '').trim();
   if (manifest && !['embedded', 'persistent'].includes(delivery)) findings.push(finding('error', 'portable.tooling-bootstrap.delivery.unsupported', 'Portable Tooling bootstrap delivery mode is unsupported.', { delivery }));
+  if (comparisonIdentityRequired && (!buildCreatedAt || Number.isNaN(Date.parse(buildCreatedAt)))) findings.push(finding('error', 'portable.tooling-bootstrap.build-time.invalid', 'Portable Tooling bootstrap manifest must declare one valid bundle manufacture timestamp.', { createdAt: buildCreatedAt }));
+  if (comparisonIdentityRequired && buildOrderingAuthority !== 'none') findings.push(finding('error', 'portable.tooling-bootstrap.build-ordering-authority.invalid', 'Bootstrap build timestamp must not claim semantic ordering authority.', { orderingAuthority: buildOrderingAuthority }));
   if (manifest && !entrypoint) findings.push(finding('error', 'portable.tooling-bootstrap.entrypoint.missing', 'Portable Tooling bootstrap manifest must declare one exact runtime entrypoint.'));
   else if (entrypoint && (!entrypoint.startsWith('runtime/') || entrypoint.includes('..'))) findings.push(finding('error', 'portable.tooling-bootstrap.entrypoint.invalid', 'Portable Tooling bootstrap entrypoint must be one normalized runtime-relative path.', { entrypoint }));
   const declared = new Map();
@@ -48,6 +58,9 @@ export function inspectPortableToolingBootstrap(bundle = {}) {
   const representation = manifest?.runtime?.entries || [];
   const representationSha256 = sha256Text(stableJson(representation));
   if (manifest && String(manifest.runtime?.representationSha256 || '') !== representationSha256) findings.push(finding('error', 'portable.tooling-bootstrap.runtime.representation-mismatch', 'Tooling bootstrap runtime representation digest differs from the declared manifest entries.'));
+  if (comparisonIdentityRequired && compositionSha256 !== representationSha256) findings.push(finding('error', 'portable.tooling-bootstrap.composition.identity-mismatch', 'Bootstrap composition identity must equal the exact manifest-declared runtime representation digest.', { declared: compositionSha256, actual: representationSha256 }));
+  const runtimePackage = parseJsonFile(byPath.get('tiinex.bootstrap/runtime/package.json'));
+  if (comparisonIdentityRequired && (!runtimePackage || coreName !== String(runtimePackage?.name || '').trim() || coreVersion !== String(runtimePackage?.version || '').trim())) findings.push(finding('error', 'portable.tooling-bootstrap.core.identity-mismatch', 'Bootstrap Core identity must match the exact embedded runtime package.json.', { declaredName: coreName, declaredVersion: coreVersion, actualName: runtimePackage?.name || '', actualVersion: runtimePackage?.version || '' }));
   return Object.freeze({
     schema: 'tiinex.portable.tooling-bootstrap.inspection.v1',
     status: findings.some((item) => item.severity === 'error') ? 'invalid' : 'valid',
@@ -55,7 +68,8 @@ export function inspectPortableToolingBootstrap(bundle = {}) {
     manifest,
     entrypoint: entrypoint ? Object.freeze({ path: entrypoint, packagePath: entrypointPackagePath, state: declared.has(entrypointPackagePath) ? 'qualified' : 'unqualified' }) : null,
     counts: Object.freeze({ declaredRuntimeFiles: declared.size, suppliedRuntimeFiles: runtimeFiles.length, findings: findings.length, errors: findings.filter((item) => item.severity === 'error').length }),
-    qualification: Object.freeze({ exactManifestMembershipRequired: true, exactEntrypointManifestMembershipRequired: true, filenameOrColocationAuthority: false, ordinaryWorkspaceBytesAreBootstrapAuthority: false }),
+    identity: Object.freeze({ state: comparisonIdentityRequired ? 'declared-comparison-identity' : 'legacy-derived-composition-only', builtAt: buildCreatedAt, core: Object.freeze({ name: coreName || String(runtimePackage?.name || ''), version: coreVersion || String(runtimePackage?.version || '') }), compositionSha256: representationSha256, orderingAuthority: buildOrderingAuthority || 'none' }),
+    qualification: Object.freeze({ exactManifestMembershipRequired: true, exactEntrypointManifestMembershipRequired: true, filenameOrColocationAuthority: false, ordinaryWorkspaceBytesAreBootstrapAuthority: false, buildTimestampOrderingAuthority: false, compositionIdentityAuthority: 'exact-runtime-representation-only' }),
     findings: Object.freeze(findings)
   });
 }

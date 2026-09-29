@@ -8,6 +8,7 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
     'Tiinex portable tooling',
     '',
     'Common path (same command for humans and LLMs):',
+    `${command} version [--tree|--json]`,
     `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>] [--holder-assignment-mode <mode>] [--recipient]`,
     `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> [--holder-assignment-mode <mode>] --recipient --continue <workspace-dir>`,
     `${command} qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>`,
@@ -35,6 +36,18 @@ export function portableCliHelpText(commandPrefix = '', surfaceCommand = '') {
 }
 
 function commonCommandHelp(command, surfaceCommand) {
+  if (surfaceCommand === 'version') return [
+    'Tiinex portable tooling — bootstrap/runtime version and composition',
+    '',
+    `${command} version`,
+    `${command} version --tree`,
+    `${command} version --json`,
+    '',
+    'Read-only local projection of bootstrap build time, Core package identity, manifest-declared runtime composition identity, Schema Pack source, and schema/companion dependency facts. `--tree` prints the full human-readable schema/companion tree; `--json` emits the full machine-readable receipt.',
+    'Equal composition SHA-256 means the exact manifest-declared runtime representation is byte-identical and broad runtime/schema/companion re-reading is unnecessary unless other qualified context changed. Build timestamp, Core version, ZIP SHA, and arrival order do not by themselves establish semantic supersession.',
+    'No network lookup, publication check, or work/selection authority is performed.',
+    ''
+  ];
   if (surfaceCommand === 'schemas') return [
     'Tiinex portable tooling — native schema source lifecycle',
     '',

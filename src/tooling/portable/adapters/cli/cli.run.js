@@ -14,6 +14,7 @@ import { runQualifyReturnCli } from './cli.qualify-return.js';
 import { runCommonWorkspaceInitCli } from './cli.workspace-init.js';
 import { projectCommonCliDefaultOutput } from './cli.common-output.js';
 import { runSchemasCli } from './cli.schemas.js';
+import { runVersionCli, formatVersionHuman } from './cli.version.js';
 
 export async function runPortableCli(argv = process.argv.slice(2), io = console, runtime = {}) {
   const parsed = parseArgs(argv);
@@ -24,6 +25,17 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
   if (parsed.command === 'operations') {
     writeJson(io, listPortableOperations(), parsed.flags.compact !== true);
     return 0;
+  }
+  if (parsed.command === 'version') {
+    try {
+      const result = await runVersionCli(parsed, runtime);
+      if (parsed.flags.json) writeJson(io, result, parsed.flags.compact !== true);
+      else io.log(formatVersionHuman(result, { tree: parsed.flags.tree === true }));
+      return 0;
+    } catch (error) {
+      io.error(JSON.stringify({ schema: 'tiinex.portable.cli.error.v1', error: String(error?.message || error), command: parsed.command }, null, 2));
+      return 1;
+    }
   }
   try {
     if (['schemas-status', 'schemas-sync', 'schemas-check'].includes(parsed.command)) {
