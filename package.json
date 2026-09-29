@@ -138,6 +138,7 @@
   "files": [
     "src",
     "tools/tiinex-portable.mjs",
+    "tools/build-bootstrap-carrier.mjs",
     "README.md",
     "LICENSE",
     "NOTICE"
@@ -154,7 +155,8 @@
     "release:publish": "node tools/release.mjs publish",
     "schemas:status": "node tools/tiinex-portable.mjs schemas status .",
     "schemas:sync": "node tools/tiinex-portable.mjs schemas sync .",
-    "schemas:check": "node tools/tiinex-portable.mjs schemas check ."
+    "schemas:check": "node tools/tiinex-portable.mjs schemas check .",
+    "bootstrap:carrier": "node tools/build-bootstrap-carrier.mjs"
   },
   "engines": {
     "node": ">=22.14"

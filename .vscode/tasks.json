@@ -13,6 +13,22 @@
         "clear": true,
         "showReuseMessage": false
       }
+    },
+    {
+      "label": "Tiinex: Build Bootstrap Handoff Package",
+      "type": "npm",
+      "script": "bootstrap:carrier",
+      "group": "none",
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true,
+        "showReuseMessage": false
+      }
     }
   ]
 }
