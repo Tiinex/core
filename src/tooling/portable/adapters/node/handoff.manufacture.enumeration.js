@@ -1,7 +1,8 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { lstat, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { sha256Hex } from '../../../../export/package.bytes.js';
 import { safeWorkspaceToken, serializableMetadata } from './handoff.manufacture.multiRoot.js';
+import { selectNodeWorkspaceSourcePaths } from './workspace.sourceSelection.js';
 import {
   DEFAULT_PORTABLE_SOURCE_EXCLUDED_DIRECTORIES,
   DEFAULT_PORTABLE_SOURCE_EXCLUDED_RELATIVE_PATHS,
@@ -21,37 +22,47 @@ export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
     excludeDirectories: options.excludeDirectories == null ? DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_DIRECTORIES : options.excludeDirectories,
     excludeRelativePaths: options.excludeRelativePaths == null ? DEFAULT_HANDOFF_MANUFACTURE_EXCLUDED_RELATIVE_PATHS : options.excludeRelativePaths
   });
-  const queue = [root];
-  const absoluteFiles = [];
-  const skippedSymlinks = [];
-  while (queue.length) {
-    const current = queue.shift();
-    const entries = await readdir(current, { withFileTypes: true });
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
-      const absolute = path.join(current, entry.name);
-      const relative = normalizeRelativePath(path.relative(root, absolute));
-      const eligibility = qualifyPortableSourcePath(relative, {
+  const selection = await selectNodeWorkspaceSourcePaths(root);
+  const fallback = selection.state === 'qualified' ? null : await enumerateFilesystemFallback(root, sourceEligibility, maxFiles);
+  if (selection.state !== 'qualified' && fallback.gitignoreFiles.length) {
+    return blockedIgnoreResult(maxFiles, fallback.paths.length, selection.evidence, fallback.gitignoreFiles, selection.reason || 'git-required-for-gitignore');
+  }
+
+  const selectedPaths = selection.state === 'qualified' ? selection.selectedPaths : fallback.paths;
+  const ignoredEntries = selection.state === 'qualified'
+    ? selection.ignoredPaths.filter((relative) => qualifyPortableSourcePath(relative, {
         excludeDirectories: sourceEligibility.excludedDirectories,
         excludeRelativePaths: sourceEligibility.excludedRelativePaths,
-        entryKind: entry.isDirectory() ? 'directory' : 'file'
+        entryKind: 'file'
+      }).eligible)
+    : [];
+  const absoluteFiles = [];
+  const skippedSymlinks = [];
+  for (const relative of selectedPaths) {
+    const eligibility = qualifyPortableSourcePath(relative, {
+      excludeDirectories: sourceEligibility.excludedDirectories,
+      excludeRelativePaths: sourceEligibility.excludedRelativePaths,
+      entryKind: 'file'
+    });
+    if (!eligibility.eligible) continue;
+    const absolute = path.join(root, ...relative.split('/'));
+    let info;
+    try { info = await lstat(absolute); } catch { continue; }
+    if (info.isSymbolicLink()) { skippedSymlinks.push(relative); continue; }
+    if (!info.isFile()) continue;
+    absoluteFiles.push(absolute);
+    if (absoluteFiles.length > maxFiles) {
+      return Object.freeze({
+        schema: PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID,
+        status: 'file-limit-exceeded',
+        maxFiles,
+        observedFiles: absoluteFiles.length,
+        materialization: null,
+        evidence: Object.freeze({ state: 'blocked', proof: 'deterministic-node-enumeration-v3', maxFiles, observedFiles: absoluteFiles.length, sourceSelection: selection.evidence })
       });
-      if (!eligibility.eligible) continue;
-      if (entry.isSymbolicLink()) { skippedSymlinks.push(relative); continue; }
-      if (entry.isDirectory()) queue.push(absolute);
-      else if (entry.isFile()) absoluteFiles.push(absolute);
-      if (absoluteFiles.length > maxFiles) {
-        return Object.freeze({
-          schema: PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID,
-          status: 'file-limit-exceeded',
-          maxFiles,
-          observedFiles: absoluteFiles.length,
-          materialization: null,
-          evidence: Object.freeze({ state: 'blocked', proof: 'deterministic-node-enumeration-v1', maxFiles, observedFiles: absoluteFiles.length })
-        });
-      }
     }
   }
+
   absoluteFiles.sort((a, b) => normalizeRelativePath(path.relative(root, a)).localeCompare(normalizeRelativePath(path.relative(root, b))));
   const entries = [];
   const includedEntries = [];
@@ -70,15 +81,19 @@ export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
   const evidencePayload = Object.freeze({
     schema: 'tiinex.portable.workspace-completeness-evidence.v1',
     state: 'qualified',
-    proof: 'deterministic-node-enumeration-v1',
-    boundary: 'regular-files-under-workspace-root',
+    proof: 'deterministic-node-enumeration-v3',
+    boundary: selection.state === 'qualified'
+      ? 'regular-files-selected-by-git-cached-plus-untracked-minus-repository-local-gitignore-after-core-source-exclusions'
+      : 'regular-files-under-workspace-root-after-core-source-exclusions-no-gitignore-material-detected',
     workspaceId,
     entryCount: includedEntries.length,
     totalBytes,
+    sourceSelection: selection.evidence,
     exclusions: Object.freeze({
       directories: sourceEligibility.excludedDirectories,
       relativePaths: sourceEligibility.excludedRelativePaths,
       fileSuffixes: sourceEligibility.excludedFileSuffixes,
+      gitignoreEntries: Object.freeze([...new Set(ignoredEntries)].sort()),
       symbolicLinks: 'excluded-and-reported',
       sourceEligibilitySchema: sourceEligibility.schema
     }),
@@ -104,6 +119,54 @@ export async function enumerateNodeWorkspace(rootInput = '.', options = {}) {
       completenessEvidence: evidencePayload,
       entries: Object.freeze(entries),
       includedEntries: Object.freeze(includedEntries)
+    })
+  });
+}
+
+async function enumerateFilesystemFallback(root, sourceEligibility, maxFiles) {
+  const queue = [root];
+  const paths = [];
+  const gitignoreFiles = [];
+  while (queue.length) {
+    const current = queue.shift();
+    const entries = await readdir(current, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      const absolute = path.join(current, entry.name);
+      const relative = normalizeRelativePath(path.relative(root, absolute));
+      const eligibility = qualifyPortableSourcePath(relative, {
+        excludeDirectories: sourceEligibility.excludedDirectories,
+        excludeRelativePaths: sourceEligibility.excludedRelativePaths,
+        entryKind: entry.isDirectory() ? 'directory' : 'file'
+      });
+      if (!eligibility.eligible) continue;
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) queue.push(absolute);
+      else if (entry.isFile()) {
+        paths.push(relative);
+        if (path.basename(relative) === '.gitignore') gitignoreFiles.push(relative);
+      }
+      if (paths.length > maxFiles) break;
+    }
+    if (paths.length > maxFiles) break;
+  }
+  return Object.freeze({ paths: Object.freeze(paths.sort()), gitignoreFiles: Object.freeze(gitignoreFiles.sort()) });
+}
+
+function blockedIgnoreResult(maxFiles, observedFiles, sourceSelection, gitignoreFiles, reason) {
+  return Object.freeze({
+    schema: PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID,
+    status: 'source-selection-unavailable',
+    maxFiles,
+    observedFiles,
+    materialization: null,
+    evidence: Object.freeze({
+      state: 'blocked',
+      proof: 'deterministic-node-enumeration-v3',
+      reason,
+      sourceSelection,
+      gitignoreFiles: Object.freeze([...new Set(gitignoreFiles)].sort()),
+      boundary: 'Workspace enumeration fails closed when eligible .gitignore material exists but shared Git-backed source selection is unavailable.'
     })
   });
 }
