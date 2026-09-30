@@ -202,6 +202,7 @@ export async function commandInput(parsed, runtime = {}) {
       ...material,
       outputSchemaId: flags['output-schema'] || flags.schema || '',
       inputSchemaId: flags['input-schema'] || '',
+      includeNative: !flags['no-native'],
     },
     options: {}
   };

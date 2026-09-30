@@ -114,6 +114,10 @@ async function enumerateRuntimeDependencyGraph(runtimeRoot, options = {}) {
   for (const explicit of ['package.json', 'src/tooling/portable/bootstrap/tiinex.llm.bootstrap.md', 'src/tooling/portable/bootstrap/tiinex.llm.bootstrap.pointer.json']) if (!files.has(explicit)) files.set(explicit, new Uint8Array(await readFile(path.resolve(runtimeRoot, explicit))));
   const canonicalRoot = path.resolve(runtimeRoot, 'src/tooling/portable/schema/bootstrap');
   for (const relative of await enumerateFilesUnder(canonicalRoot, runtimeRoot)) if (!files.has(relative)) files.set(relative, new Uint8Array(await readFile(path.resolve(runtimeRoot, relative))));
+  // Exact authored native Transition assets accompany the generated browser-safe projection.
+  // They remain Core-owned source artifacts and may be audited independently by recipients.
+  const nativeHandoffRoot = path.resolve(runtimeRoot, 'src/schemas/coordination/handoff');
+  for (const relative of await enumerateFilesUnder(nativeHandoffRoot, runtimeRoot)) if (!files.has(relative)) files.set(relative, new Uint8Array(await readFile(path.resolve(runtimeRoot, relative))));
   const entries = [...files.entries()].map(([entryPath, data]) => Object.freeze({ path: entryPath, data, bytes: data.byteLength, sha256: sha256Hex(data) })).sort((a, b) => a.path.localeCompare(b.path));
   const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
   const representationSha256 = sha256Text(stableJson(entries.map(({ path: entryPath, bytes, sha256 }) => ({ path: `runtime/${entryPath}`, bytes, sha256 }))));

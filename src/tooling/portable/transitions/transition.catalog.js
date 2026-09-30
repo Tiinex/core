@@ -1,4 +1,5 @@
 import { nativeSchemaMarkdown, nativeSchemaPackManifest } from '../../../schemas/generated/native.schema.pack.js';
+import { nativeHandoffTransitionMarkdown } from './native.handoff.generated.js';
 import { sha256Hex, utf8Bytes } from '../../../export/package.bytes.js';
 import { portableFinding } from '../findings.js';
 import { portableInputFiles } from '../input/portable.input.js';
@@ -193,7 +194,19 @@ function schemaAuthorityFromDocument(document = {}) {
 }
 
 function transitionMaterialInputs(input = {}) {
-  return portableInputFiles(input)
+  // Native material uses the same qualification/indexing path as external Workspace material.
+  // It is opt-in for the programmatic API, and always supplied by Core's portable CLI.
+  // The canonical Handoff schema is projected from the existing native pack, never copied.
+  const native = input.includeNative === true ? [
+    { path: 'coordination/handoff/tiinex.handoff.v1.schema.md', content: nativeSchemaMarkdown('tiinex.handoff.v1') },
+    ...nativeHandoffTransitionMarkdown.map(([path, content]) => ({ path, content }))
+  ].map((file, index) => Object.freeze({
+    ...file,
+    representationKey: `core-native:handoff:${index}`,
+    sourceMode: 'portable-core-native',
+    source: Object.freeze({ provider: 'core-native', sourceMode: 'portable-core-native' })
+  })) : [];
+  return [...native, ...portableInputFiles(input)]
     .filter((file) => typeof file?.content === 'string' || typeof file?.markdown === 'string' || typeof file?.text === 'string')
     .map((file, index) => ({
       representationKey: String(file.representationKey || file.representationId || file.id || `supplied-transition-material:${index}`),
