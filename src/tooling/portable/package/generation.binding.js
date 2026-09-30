@@ -227,6 +227,7 @@ export function qualifyPortableExplicitGenerationBinding(input = {}) {
     targetOutput: projected.targetOutput,
     generationIdentity: projected.generationIdentity,
     requiredInputs: projected.requiredInputs,
+    defaultedInputs: projected.defaultedInputs,
     generationSteps: projected.generationSteps,
     outputBoundary: projected.outputBoundary,
     interpretationLimits: projected.interpretationLimits,

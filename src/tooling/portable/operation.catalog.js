@@ -12,6 +12,8 @@ import {
   planPortableArtifactCreation,
   planPortableArtifactRepairs,
   preparePortableTaskOperation,
+  projectPortableTransitionNeighborhoodOperation,
+  projectPortableTransitions,
   preparePortableAssetAnalysisOperation,
   readPortableSchemaSection,
   listPortableProviders,
@@ -65,6 +67,20 @@ export const portableOperationCatalog = Object.freeze({
     inputSchema: 'tiinex.portable.task-preparation.request.v1',
     remoteFetch: 'host-mediated-optional',
     handler: preparePortableTaskOperation
+  }),
+  'project-transition-catalog': operation({
+    name: 'project-transition-catalog',
+    description: 'Discover and canonically read-qualify Transition Definition artifacts from explicit supplied material without implying attachment, applicability, execution, recommendation, or generation authority.',
+    safety: 'read-only',
+    inputSchema: 'tiinex.portable.transition-catalog.request.v1',
+    handler: projectPortableTransitions
+  }),
+  'project-transition-neighborhood': operation({
+    name: 'project-transition-neighborhood',
+    description: 'Project explicit Schema Transition Companion attachments from supplied Semantic Package material without implying applicability, execution, recommendation, or ordering.',
+    safety: 'read-only',
+    inputSchema: 'tiinex.portable.transition-neighborhood.request.v1',
+    handler: projectPortableTransitionNeighborhoodOperation
   }),
   'discover-tooling': operation({
     name: 'discover-tooling',

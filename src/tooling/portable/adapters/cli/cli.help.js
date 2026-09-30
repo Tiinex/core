@@ -15,6 +15,8 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>`,
     `${command} prepare-return <continued-workspace-dir>`,
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
+    `${command} project-transition-catalog <workspace-or-material-root> [<additional-root> ...] [--output-schema <schema-id>] [--input-schema <schema-id>]`,
+    `${command} project-transition-neighborhood <workspace-or-material-root> [<additional-root> ...] --output-schema <schema-id> [--input-schema <schema-id>]`,
     `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     `${command} schemas sync <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     `${command} schemas check <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
@@ -49,6 +51,29 @@ function commonCommandHelp(command, surfaceCommand) {
     'Equal composition SHA-256 means the exact manifest-declared runtime representation is byte-identical and broad runtime/schema/companion re-reading is unnecessary unless other qualified context changed. Build timestamp, Core version, ZIP SHA, and arrival order do not by themselves establish semantic supersession.',
     'No network lookup, publication check, or work/selection authority is performed.',
     ''
+  ];
+  if (surfaceCommand === 'project-transition-neighborhood') return [
+    'Tiinex portable tooling — schema-local Transition neighborhood',
+    '',
+    `${command} project-transition-neighborhood <workspace-or-material-root> [<additional-root> ...] --output-schema <schema-id> [--input-schema <schema-id>]`,
+    '',
+    'Projects Transition Definitions only when they are explicitly attached by a Schema Transition Companion reached through supplied Semantic Package material.',
+    'Workspace discovery is explicit-material only. Package/companion attachment is required; attachment still does not prove current applicability, executability, authorization, recommendation, ordering, or successful invocation.',
+    'Independent Transition representations remain independent even when Canonical Identifier + Version text matches.',
+    '',
+    `Advanced/internal catalog: ${command} operations`
+  ];
+  if (surfaceCommand === 'project-transition-catalog') return [
+    'Tiinex portable tooling — Transition Definition discovery',
+    '',
+    `${command} project-transition-catalog <workspace-or-material-root> [<additional-root> ...] [--output-schema <schema-id>] [--input-schema <schema-id>]`,
+    `${command} project-transition-neighborhood <workspace-or-material-root> [<additional-root> ...] --output-schema <schema-id> [--input-schema <schema-id>]`,
+    '',
+    'Discovers canonical tiinex.transition.definition.v1 artifacts from explicitly supplied material regardless of their workspace-local directory, read-qualifies them against the bundled canonical Transition Definition contract, and preserves source representation identity.',
+    'Independent supplied representations stay independent; Canonical Identifier + Version text is not treated as universal representation identity.',
+    'Discovery and target-schema filtering do not imply Semantic Package/Schema Transition Companion attachment, applicability, recommendation, execution, or generation authority.',
+    '',
+    `Advanced/internal catalog: ${command} operations`
   ];
   if (surfaceCommand === 'schemas') return [
     'Tiinex portable tooling — native schema source lifecycle',

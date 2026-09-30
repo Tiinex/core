@@ -197,6 +197,14 @@ export async function commandInput(parsed, runtime = {}) {
   const explicitMaterial = explicitTargets.length ? await loadCliExplicitMaterial(explicitTargets, parsed.command, flags, loadOptions) : emptyMaterial();
   const defaultSchemaMaterial = schemaTargets.length ? decorateDefaultSchemaMaterial(await loadNodePortableInput(schemaTargets, loadOptions), runtime.defaultSchemaSource) : emptyMaterial();
   const material = mergeLoadedMaterial(explicitMaterial, defaultSchemaMaterial);
+  if (parsed.command === 'project-transition-catalog' || parsed.command === 'project-transition-neighborhood') return {
+    input: {
+      ...material,
+      outputSchemaId: flags['output-schema'] || flags.schema || '',
+      inputSchemaId: flags['input-schema'] || '',
+    },
+    options: {}
+  };
   if (parsed.command === 'project-handoff-carrier-output') return {
     input: { ...material, route: flags.route || '', collisionInstance: flags['collision-instance'] || 1, filename: explicitTargets[0] ? path.basename(explicitTargets[0]) : '' },
     options: {}

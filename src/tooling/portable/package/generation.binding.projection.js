@@ -10,6 +10,7 @@ export function projectGenerationAuthority(projection = {}) {
   const limits = ordinaryGroupMap(projection, 'Interpretation Limits');
   const requiredInputs = declarationEntries(projection, 'Required Inputs').map(projectDeclaration);
   const generationSteps = declarationEntries(projection, 'Generation Steps').map(projectDeclaration);
+  const defaultedInputs = requiredInputs.map(projectDefaultedInput).filter(Boolean);
   const missing = [];
   for (const [label, value] of [
     ['Generation Identity', identity],
@@ -30,6 +31,7 @@ export function projectGenerationAuthority(projection = {}) {
     targetOutput,
     generationIdentity: freeze(identity),
     requiredInputs: freeze(requiredInputs),
+    defaultedInputs: freeze(defaultedInputs),
     generationSteps: freeze(generationSteps),
     outputBoundary: freeze(boundary),
     interpretationLimits: freeze(limits)
@@ -98,6 +100,28 @@ export function projectGenerationBindingFindings(findings = []) {
     state: String(item.state || ''),
     message: String(item.message || '')
   })));
+}
+
+
+function projectDefaultedInput(entry = {}) {
+  const policy = token(entry?.fields?.['Input Source Policy']);
+  if (policy !== 'defaulted-input') return null;
+  const raw = String(entry?.fields?.['Defaultable Input'] ?? '').trim();
+  if (!raw) return freeze({ name: String(entry.name || ''), qualification: 'unresolved', encoding: 'none', raw: '', value: undefined });
+  try {
+    const value = deepFreeze(JSON.parse(raw));
+    return freeze({ name: String(entry.name || ''), qualification: 'qualified', encoding: 'json', raw, value });
+  } catch {
+    return freeze({ name: String(entry.name || ''), qualification: 'unresolved', encoding: 'unrecognized', raw, value: undefined });
+  }
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return freeze(value.map((item) => deepFreeze(item)));
+  const out = {};
+  for (const [key, item] of Object.entries(value)) out[key] = deepFreeze(item);
+  return freeze(out);
 }
 
 function ordinaryGroupMap(projection = {}, groupName = '') {

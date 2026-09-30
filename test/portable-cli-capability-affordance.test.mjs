@@ -52,3 +52,16 @@ test('pointerless Workspace manufacture fails closed until carrier continuity in
     /portable\.cli\.workspace-carrier\.root-parent\.conflict/
   );
 });
+
+
+test('Transition discovery help makes workspace-contributed capability discoverable without claiming applicability', () => {
+  const help = portableCliHelpText(runtime, 'project-transition-catalog');
+  assert.match(help, /project-transition-catalog <workspace-or-material-root>/);
+  const neighborhoodHelp = portableCliHelpText(runtime, 'project-transition-neighborhood');
+  assert.match(neighborhoodHelp, /project-transition-neighborhood <workspace-or-material-root>/);
+  assert.match(neighborhoodHelp, /explicitly attached by a Schema Transition Companion/i);
+  assert.match(neighborhoodHelp, /attachment still does not prove .*applicability.*executability/i);
+  assert.match(help, /regardless of their workspace-local directory/i);
+  assert.match(help, /Independent supplied representations stay independent/i);
+  assert.match(help, /do not imply .*applicability.*execution/i);
+});

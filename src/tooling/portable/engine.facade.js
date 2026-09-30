@@ -18,6 +18,7 @@ import { listPortableMaterialProviders, resolvePortableSchemaChainMaterial, reso
 import { inspectPortableAssets, preparePortableAssetAnalysis } from './assets/asset.operations.js';
 import { preparePortableTask } from './orchestration/task.prepare.js';
 import { auditPortableRecords } from './audit/audit.capability.js';
+import { projectPortableTransitionCatalog, projectPortableTransitionNeighborhood } from './transitions/transition.catalog.js';
 export { planPortableLineageIntegrity, projectPortableLineageIntegrityRepair, applyPortableLineageIntegrity, searchPortableLineage } from './lineage/lineage.operations.js';
 
 export const PORTABLE_RESULT_SCHEMA_ID = 'tiinex.portable.operation.result.v1';
@@ -35,6 +36,16 @@ export async function preparePortableTaskOperation(input = {}, options = {}) {
     boundary: result.boundary,
     findings: result.findings
   });
+}
+
+export function projectPortableTransitions(input = {}, options = {}) {
+  const catalog = projectPortableTransitionCatalog(input, options);
+  return operationResult('project-transition-catalog', { ...catalog, findings: catalog.findings });
+}
+
+export function projectPortableTransitionNeighborhoodOperation(input = {}, options = {}) {
+  const neighborhood = projectPortableTransitionNeighborhood(input, options);
+  return operationResult('project-transition-neighborhood', { ...neighborhood, findings: neighborhood.findings });
 }
 
 export function discoverPortableTooling(input = {}, options = {}) {
