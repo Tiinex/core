@@ -1,6 +1,6 @@
 # Continuity Context
 
-- Envelope Schema: tiinex.root.v1
+- Envelope Schema: [tiinex.root.v1](https://github.com/Tiinex/docs/blob/8145c280093dff5d0b67db2aa72d5f5c12b6c7cb/.topics/.schemas/tiinex.root.v1.schema.md)
 - Parent
   - Parent Schema: [tiinex.task.v1](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/core/task/tiinex.task.v1.schema.md)
   - Created At: 2026-09-08 17:38:00
@@ -42,8 +42,8 @@ Shared master-only npm release capability. No new semantic authority, no remote 
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: [001-extraction-task.trace.md](001-extraction-task.trace.md)
-  - Value: GCTQEKkmomJpU8bKRYyAG4eWNZNUPxDuQLpvJTrhHjk
+  - Value: VROXRgOjj-BuuMRL9TrKt6hQJIWRE-vly95PBJwCLGM
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: tYi3w_XuL8oQlWgI9cx3c9lRgT1bGT85FD4us0RRU-k
+  - Value: 6ct7i42TmoYK2r40dYCiD8DmTnbKSaJamtxtGIhlSdQ

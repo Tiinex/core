@@ -1,8 +1,8 @@
 # Continuity Context
 
-- Envelope Schema: tiinex.root.v1
+- Envelope Schema: [tiinex.root.v1](https://github.com/Tiinex/docs/blob/8145c280093dff5d0b67db2aa72d5f5c12b6c7cb/.topics/.schemas/tiinex.root.v1.schema.md)
 - Current
-  - Current Schema: tiinex.entry.session.v1
+  - Current Schema: [tiinex.entry.session.v1](https://github.com/Tiinex/docs/blob/302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6/.topics/.schemas/entry/session/tiinex.entry.session.v1.schema.md)
   - Created At: 2026-10-01 19:51:41
   - Authors: Anchor; Axiom
   - Why: Provide the Core-native Start Session Entry through the ordinary schema authoring path.
@@ -71,4 +71,4 @@
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: 8edxn47CW9erjAuH-_nrLm8-KlqlIIUi6Z12HvUw1YI
+  - Value: BevPWtTG9UJROm1AcOSPR3Zn7ELixZOP4bPf-7pXFW4
