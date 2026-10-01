@@ -118,6 +118,9 @@ async function enumerateRuntimeDependencyGraph(runtimeRoot, options = {}) {
   // They remain Core-owned source artifacts and may be audited independently by recipients.
   const nativeHandoffRoot = path.resolve(runtimeRoot, 'src/schemas/coordination/handoff');
   for (const relative of await enumerateFilesUnder(nativeHandoffRoot, runtimeRoot)) if (!files.has(relative)) files.set(relative, new Uint8Array(await readFile(path.resolve(runtimeRoot, relative))));
+  // Exact authored native Entry assets accompany the generated browser-safe projection.
+  const nativeEntryRoot = path.resolve(runtimeRoot, 'src/schemas/entry/.entries');
+  for (const relative of await enumerateFilesUnder(nativeEntryRoot, runtimeRoot)) if (!files.has(relative)) files.set(relative, new Uint8Array(await readFile(path.resolve(runtimeRoot, relative))));
   const entries = [...files.entries()].map(([entryPath, data]) => Object.freeze({ path: entryPath, data, bytes: data.byteLength, sha256: sha256Hex(data) })).sort((a, b) => a.path.localeCompare(b.path));
   const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
   const representationSha256 = sha256Text(stableJson(entries.map(({ path: entryPath, bytes, sha256 }) => ({ path: `runtime/${entryPath}`, bytes, sha256 }))));

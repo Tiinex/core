@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { projectWorkspaceCarrierEntry } from '../src/tooling/portable/handoff/workspaceEntryProjection.js';
+import { nativeEntryMarkdown } from '../src/tooling/portable/entry/native.entry.generated.js';
 import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodReference.js';
@@ -13,14 +14,70 @@ function roleFixture(label) {
   assert.equal(sealed.state, 'sealed');
   return `${sealed.markdown}\n`;
 }
+
+function sessionEntryFixture() {
+  const source = nativeEntryMarkdown.find(([path]) => path.endsWith('start-entry.trace.md'))?.[1];
+  assert.ok(source);
+  let markdown = source
+    .replace('- Name: Start\n', '- Name: Grounded Session\n')
+    .replace('- Canonical Identifier: tiinex.core.entry.start.v1\n', '- Canonical Identifier: example.grounded.session.v1\n')
+    .replace('- Human Label: Start\n', '- Human Label: Grounded Session\n')
+    .replace('\n## Interpretation Limits\n', `\n## Grounding Material\n\n- Ownership boundary\n  - Reference: https://example.invalid/ownership\n  - Purpose: Establish the ownership boundary that should shape session interpretation.\n\n## Interpretation Limits\n`)
+    .replace(/  - Value:[^\n]*/, '  - Value: ');
+  const sealed = sealC14nV2Self(markdown);
+  assert.equal(sealed.state, 'sealed');
+  return `${sealed.markdown}\n`;
+}
 // These assertions exercise the pure text/intent projection boundary without
 // weakening package inspection; integration coverage supplies a qualified
 // pointerless carrier to the public operation.
 test('Guided Entry mode catalog is Core-owned and transport-only', () => {
   const result = projectWorkspaceCarrierEntry({ inspection: { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] } });
   assert.equal(result.state, 'catalog');
-  assert.deepEqual(result.modes.map((mode) => mode.id), ['START', 'RESUME', 'EXPLORE', 'CUSTOM']);
-  assert.match(result.boundary, /do not alter the carrier/i);
+  assert.deepEqual(result.modes.map((mode) => mode.label), ['Explore', 'Resume', 'Start', 'Custom']);
+  assert.deepEqual(result.modes.map((mode) => mode.sourceKind), ['native', 'native', 'native', 'runtime']);
+  assert.match(result.boundary, /does not alter the carrier/i);
+});
+
+test('Core renders Session Entry grounding obligations without VS Code semantics', () => {
+  const markdown = sessionEntryFixture();
+  const inspection = {
+    status: 'valid',
+    carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+    workspaces: [{ workspaceId: 'business', archive: { state: 'qualified', entries: [
+      { path: '.topics/entries/grounded-session.trace.md', data: new TextEncoder().encode(markdown) }
+    ] } }],
+    findings: []
+  };
+  const catalog = projectWorkspaceCarrierEntry({ inspection });
+  const carried = catalog.modes.find((mode) => mode.canonicalIdentifier === 'example.grounded.session.v1');
+  assert.ok(carried);
+  assert.equal(carried.schemaId, 'tiinex.entry.session.v1');
+  const rendered = projectWorkspaceCarrierEntry({ inspection, entryId: carried.id });
+  assert.equal(rendered.status, 'ready');
+  assert.match(rendered.transportText, /Entry schema: tiinex\.entry\.session\.v1/);
+  assert.match(rendered.transportText, /Grounding material \(required before this Entry is fully grounded\)/);
+  assert.match(rendered.transportText, /Reference: https:\/\/example\.invalid\/ownership/);
+  assert.match(rendered.transportText, /Purpose: Establish the ownership boundary/);
+  assert.match(rendered.transportText, /Qualify and interpret every declared Grounding Material reference/);
+});
+
+
+
+test('EXPLORE requires current cross-Workspace grounding before participant-facing directions', () => {
+  const result = projectWorkspaceCarrierEntry({
+    inspection: { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] },
+    mode: 'EXPLORE'
+  });
+  assert.equal(result.status, 'ready');
+  assert.match(result.transportText, /most current truthful multi-Workspace grounding reasonably available/);
+  assert.match(result.transportText, /do not stop at the Workspace containing the Role or at the first plausible active or ready artifact/);
+  assert.match(result.transportText, /reconcile lineage, supersession, returns, dependencies, implementation state, and ownership boundaries/);
+  assert.match(result.transportText, /duplicated responsibility, ownership drift, scope creep, and missing continuity/);
+  assert.match(result.transportText, /present the useful current picture, material seams or contradictions, and plausible directions/);
+  assert.match(result.transportText, /presentation or communication preferences from participating Role material/);
+  assert.match(result.transportText, /concise, scan-friendly, current-first presentation/);
+  assert.doesNotMatch(result.transportText, /TL;DR/i);
 });
 
 test('Guided Entry renders canonical cold-start shell plus RESUME intent and session context', () => {
@@ -43,7 +100,7 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
   assert.equal(result.state, 'rendered');
   assert.match(result.transportText, /Cold start: read Start directly; do not enumerate or broadly extract this package/);
   assert.match(result.transportText, /This is a pointerless Workspace carrier/);
-  assert.match(result.transportText, /Entry intent: RESUME/);
+  assert.match(result.transportText, /Entry intent: Resume/);
   assert.match(result.transportText, /Session Role: Anchor/);
   assert.match(result.transportText, /The receiving LLM session operates as the Session Role established above\./);
   assert.match(result.transportText, /Role material: carried in this package at `business::\.topics\/roles\/anchor\.trace\.md`/);

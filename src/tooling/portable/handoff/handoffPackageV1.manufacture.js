@@ -132,7 +132,7 @@ export function manufactureHandoffPackageV1Direct(input = {}, options = {}) {
   const rootPath = `${packageDimension}-tiinex-handoff-package.trace.md`;
   const startPath = `${packageDimension}-1-READ-BEFORE-PROCEEDING.trace.md`;
   const rootMarkdown = renderHandoffPackageV1Root({
-    createdAt, carrierPrefix: input.carrierLineage?.prefix || '', dimension: carrierDimension, parentDimension: input.carrierLineage?.parentDimension || '', checkpointKind: input.carrierLineage?.checkpointKind || 'major', majorReason: input.carrierLineage?.majorReason || 'direct Package V1 carrier',
+    createdAt, carrierPrefix: input.carrierLineage?.prefix || '', dimension: carrierDimension, parentDimension: input.carrierLineage?.parentDimension || '', checkpointKind: input.carrierLineage?.checkpointKind || 'major', majorReason: input.carrierLineage?.majorReason || '',
     carrierMode, startPath, bootstrapArtifactPath, workspaces, caches
   });
   const rootFile = finalizeFile({ path: rootPath, kind: 'handoff-package-root', logicalKind: 'tiinex-handoff-package-v1-root', mediaType: 'text/markdown', content: rootMarkdown });

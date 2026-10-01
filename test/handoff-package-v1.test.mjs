@@ -56,6 +56,7 @@ test('direct Package V1 Workspace carrier is first-class pointerless transport w
   assert.match(rootText, /Package Role: recipient-facing-workspace-carrier/);
   assert.match(rootText, /Continue-From Rule: none/);
   assert.match(rootText, /Carrier Dimension: 017-2/);
+  assert.doesNotMatch(rootText, /Major Reason:/);
   const human = projectHandoffCarrierOutputFromPackage({ bundle: result.bundle, filename: 'business-017-2.handoff-package.zip' });
   assert.equal(human.status, 'ready');
   assert.equal(human.presentation.recipientLabel, '');
@@ -79,6 +80,7 @@ test('direct Package V1 bootstrap-only carrier stays material- and route-free wi
   const rootText = new TextDecoder().decode(packageFileBytes(root));
   assert.match(rootText, /Package Role: recipient-facing-bootstrap-carrier/);
   assert.match(rootText, /Route Placement Rule: none/);
+  assert.doesNotMatch(rootText, /Major Reason:/);
   const human = projectHandoffCarrierOutputFromPackage({ bundle: result.bundle, filename: 'tiinex-bootstrap-001.handoff-package.zip' });
   assert.equal(human.status, 'ready');
   assert.match(human.normalInlineRouting.content, /bootstrap-only carrier/);
