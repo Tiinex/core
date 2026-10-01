@@ -27,9 +27,9 @@ test('native schema check reproduces the committed generated catalog from exact 
   t.after(() => rm(docsRoot, { recursive: true, force: true }));
   const result = await checkNativeSchemas({ coreRoot: repoRoot, docsRoot, sourceCommit, repository: 'Tiinex/docs', published: true });
   assert.equal(result.status, 'ready');
-  assert.equal(result.catalog.schemaCount, 106);
+  assert.equal(result.catalog.schemaCount, 108);
   assert.equal(result.catalog.specializedCount, 25);
-  assert.equal(result.catalog.genericCount, 81);
+  assert.equal(result.catalog.genericCount, 83);
   assert.equal(result.generated.driftCount, 0);
   assert.equal(result.generated.staleLocalSchemaCopies, 0);
   assert.equal(result.findingSummary.counts.error, 0);
@@ -51,6 +51,10 @@ test('native schema check fails closed when one canonical source byte changes', 
 test('local-unpublished sync plan preserves content authority without inventing immutable publication locators', async (t) => {
   const docsRoot = await materializeDocsSnapshot();
   t.after(() => rm(docsRoot, { recursive: true, force: true }));
+  const evidenceEntry = catalog.entries.find((entry) => entry.schemaId === 'tiinex.evidence.v1');
+  assert.ok(evidenceEntry);
+  const evidenceSource = path.join(docsRoot, evidenceEntry.binding.sourcePath);
+  await writeFile(evidenceSource, `${await readFile(evidenceSource, 'utf8')}\n<!-- local-unpublished-schema-edit -->\n`, 'utf8');
   const plan = await buildNativeSchemaSyncPlan({ coreRoot: repoRoot, docsRoot, repository: 'Tiinex/docs', published: false });
   assert.equal(plan.status, 'ready');
   const evidence = plan.outputs.find((output) => output.path.endsWith('/core/evidence/tiinex.evidence.v1.schema.json'));

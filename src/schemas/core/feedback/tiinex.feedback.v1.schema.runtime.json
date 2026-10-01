@@ -1620,10 +1620,10 @@
         "schemaId": "tiinex.root.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "",
+          "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
           "path": ".topics/.schemas/tiinex.root.v1.schema.md",
-          "publicationState": "qualified-local-unpublished",
-          "snapshotCompleteness": "exact-local-docs-snapshot"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "",
         "parentSourceCandidates": []
@@ -1632,17 +1632,17 @@
         "schemaId": "tiinex.signal.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "",
+          "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
           "path": ".topics/.schemas/core/signal/tiinex.signal.v1.schema.md",
-          "publicationState": "qualified-local-unpublished",
-          "snapshotCompleteness": "exact-local-docs-snapshot"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "tiinex.root.v1",
         "parentSourceCandidates": [
           {
             "provider": "github",
             "repository": "Tiinex/docs",
-            "commit": "",
+            "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
             "path": ".topics/.schemas/tiinex.root.v1.schema.md"
           }
         ]
@@ -1651,17 +1651,17 @@
         "schemaId": "tiinex.feedback.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "",
+          "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
           "path": ".topics/.schemas/core/feedback/tiinex.feedback.v1.schema.md",
-          "publicationState": "qualified-local-unpublished",
-          "snapshotCompleteness": "exact-local-docs-snapshot"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "tiinex.signal.v1",
         "parentSourceCandidates": [
           {
             "provider": "github",
             "repository": "Tiinex/docs",
-            "commit": "",
+            "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
             "path": ".topics/.schemas/core/signal/tiinex.signal.v1.schema.md"
           }
         ]

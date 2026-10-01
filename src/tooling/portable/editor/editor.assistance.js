@@ -38,7 +38,8 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
     ? qualifyTiinexRouteArtifact({ markdown, expectedSchemaId: 'tiinex.workspace.v1', requireExactContract: true })
     : null;
   const packageQualifiedWorkspace = workspaceConformance?.status === 'qualified';
-  const sharedFindings = [...(audit.findings || []), ...lineageFindings].filter((finding) => !(packageQualifiedWorkspace && String(finding?.code || '') === 'audit.schema-authority.unqualified'));
+  const reachabilityFindings = schemaReferenceReachabilityFindings(record, records, audit, markdown);
+  const sharedFindings = [...(audit.findings || []), ...lineageFindings, ...reachabilityFindings].filter((finding) => !(packageQualifiedWorkspace && String(finding?.code || '') === 'audit.schema-authority.unqualified'));
   const diagnostics = sharedFindings
     .filter((item) => item.severity === 'error' || item.severity === 'warning')
     .map((finding) => projectDiagnostic(finding, markdown));
@@ -54,27 +55,32 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
     diagnosticCodes: workspacePackagingRepair.diagnosticCodes,
     boundary: 'Repairs only a tiinex.workspace.v1 artifact whose replacement independently qualifies through the same exact registered Workspace contract and c14n-v2 self-integrity requirements used by Handoff package manufacture. Existing resolver-capable Current Schema references are preserved; permalink refresh is a separate resolution operation and must not be inferred from integrity repair.'
   }));
-  const referenceRepair = deterministicReferenceHygieneRepair(record, audit, markdown);
-  const referenceQualification = referenceRepair.state === 'ready'
-    ? qualifyReplacementAgainstSharedGuardrails(record, records, referenceRepair.markdown, {
-      allowQualifiedExternalParentUnresolved: true,
-      allowExistingWarningCodes: (audit.findings || []).filter((item) => item.severity === 'warning').map((item) => String(item.code || ''))
-    })
+  const referenceRepair = deterministicReferenceHygieneRepair(record, records, audit, markdown);
+  const referencePlan = referenceRepair.state === 'ready'
+    ? deterministicReferenceRepairChangeset(record, records, lineageInspection, referenceRepair)
     : { state: 'unavailable' };
-  if (referenceRepair.state === 'ready' && referenceRepair.markdown !== markdown && referenceQualification.state === 'qualified') actions.push(freeze({
-    id: 'repair-qualified-references-and-self-integrity',
-    title: referenceRepair.parentReferenceChanged && referenceRepair.schemaReferenceChanged
-      ? 'Repair Tiinex Parent/schema references and self integrity'
-      : referenceRepair.parentReferenceChanged
-        ? 'Repair Tiinex Parent references and self integrity'
-        : 'Repair Tiinex schema reference and self integrity',
-    kind: 'replace-document',
-    qualification: 'deterministic-shared-core',
-    sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
-    replacementMarkdown: referenceRepair.markdown,
-    diagnosticCodes: referenceRepair.diagnosticCodes,
-    boundary: 'Repairs only deterministically malformed Workspace-qualified Parent recovery locators and/or bare Envelope/Current Schema ids when shared audit exposes exact qualified immutable schema targets; reseals self integrity and exposes the replacement only after shared audit and loaded-descendant guardrails re-qualify it. External Parent availability is not invented.'
-  }));
+  if (referencePlan.state === 'ready' && referencePlan.replacements.length) {
+    const dependentCount = Math.max(0, referencePlan.replacements.length - 1);
+    actions.push(freeze({
+      id: 'repair-qualified-references-and-self-integrity',
+      title: dependentCount
+        ? `Repair Tiinex references and refresh ${dependentCount} dependent lineage artifact${dependentCount === 1 ? '' : 's'}`
+        : referenceRepair.parentReferenceChanged && referenceRepair.schemaReferenceChanged
+          ? 'Repair Tiinex Parent/schema references and self integrity'
+          : referenceRepair.parentReferenceChanged
+            ? 'Repair Tiinex Parent references and self integrity'
+            : 'Repair Tiinex schema reference and self integrity',
+      kind: dependentCount ? 'replace-record-set' : 'replace-document',
+      qualification: 'deterministic-shared-core',
+      sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
+      replacementMarkdown: referencePlan.focusReplacement,
+      replacements: referencePlan.replacements,
+      diagnosticCodes: referenceRepair.diagnosticCodes,
+      boundary: dependentCount
+        ? 'Core selected exact schema-reference locators and produced one deterministic loaded-lineage changeset. Each changed descendant receives only the required Parent digest refresh and self reseal, plus independently-qualified schema-reference hygiene. Presentation hosts may apply this changeset only when every source document still matches its qualified source hash.'
+        : 'Repairs deterministic Parent/schema references using Core-owned source-resolution policy, preferring an exact immutable published target when it denotes the same local schema bytes, otherwise a same-Workspace relative schema target when available; reseals self integrity. Cross-Workspace unpublished references remain unresolved rather than fabricated.'
+    }));
+  }
 
   const referenceResolution = projectReferenceResolutionAssistance(markdown, referenceResolutions);
   diagnostics.push(...referenceResolution.diagnostics);
@@ -398,7 +404,7 @@ function qualifyReplacementAgainstSharedGuardrails(record = {}, records = [], re
   return freeze({ state: 'qualified', affectedPaths: [...affectedPaths] });
 }
 
-function deterministicReferenceHygieneRepair(record = {}, audit = {}, markdown = '') {
+function deterministicReferenceHygieneRepair(record = {}, records = [], audit = {}, markdown = '') {
   const source = String(markdown || '');
   if (!source) return freeze({ state: 'unavailable' });
   let candidate = source;
@@ -438,38 +444,211 @@ function deterministicReferenceHygieneRepair(record = {}, audit = {}, markdown =
     diagnosticCodes.push('root.parent.recovery.workspace-qualified.malformed', 'portable.lineage-integrity.parent-unresolved');
   }
 
-  const schemaReferenceRepairs = (audit?.findings || [])
+  const exactTargetByField = new Map((audit?.findings || [])
     .filter((item) => String(item?.code || '') === 'schema.reference.exact-target-omitted')
-    .map((item) => Object.freeze({
-      field: String(item?.params?.field || '').trim(),
-      schemaId: String(item?.params?.schemaId || '').trim(),
-      exactTarget: String(item?.params?.exactTarget || '').trim()
-    }))
-    .filter((item) => (item.field === 'Envelope Schema' || item.field === 'Current Schema') && item.schemaId && item.exactTarget);
-  if (schemaReferenceRepairs.length) {
-    const schemaLines = candidate.replace(/\r\n?/g, '\n').split('\n');
-    for (const repair of schemaReferenceRepairs) {
-      const pattern = repair.field === 'Envelope Schema'
-        ? /^\s*-\s+Envelope Schema:\s*/
-        : /^\s*-\s+Current Schema:\s*/;
-      const index = schemaLines.findIndex((line) => pattern.test(line));
-      if (index < 0) continue;
-      const match = schemaLines[index].match(new RegExp(`^(\\s*-\\s+${repair.field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*)([^\\s].*)$`));
-      const raw = String(match?.[2] || '').trim();
-      if (!match || raw !== repair.schemaId) continue;
-      schemaLines[index] = `${match[1]}[${repair.schemaId}](${repair.exactTarget})`;
-      schemaReferenceChanged = true;
-    }
-    if (schemaReferenceChanged) {
-      candidate = schemaLines.join('\n');
-      diagnosticCodes.push('schema.reference.exact-target-omitted');
-    }
+    .map((item) => [String(item?.params?.field || '').trim(), String(item?.params?.exactTarget || '').trim()]));
+  const schemaLines = candidate.replace(/\r\n?/g, '\n').split('\n');
+  const fields = [
+    Object.freeze({ field: 'Envelope Schema', pattern: /^\s*-\s+Envelope Schema:\s*/ }),
+    Object.freeze({ field: 'Parent Schema', pattern: /^\s*-\s+Parent Schema:\s*/ }),
+    Object.freeze({ field: 'Current Schema', pattern: /^\s*-\s+Current Schema:\s*/ })
+  ];
+  const changedSchemaFields = [];
+  for (const descriptor of fields) {
+    const index = schemaLines.findIndex((line) => descriptor.pattern.test(line));
+    if (index < 0) continue;
+    const prefixMatch = schemaLines[index].match(new RegExp(`^(\\s*-\\s+${descriptor.field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*)(.*)$`));
+    if (!prefixMatch) continue;
+    const raw = String(prefixMatch[2] || '').trim();
+    if (!isBareSchemaId(raw)) continue;
+    const schemaId = raw;
+    const target = preferredSchemaReferenceTarget(record, records, schemaId, exactTargetByField.get(descriptor.field) || '');
+    if (!target?.target) continue;
+    schemaLines[index] = `${prefixMatch[1]}[${schemaId}](${target.target})`;
+    schemaReferenceChanged = true;
+    changedSchemaFields.push(Object.freeze({ field: descriptor.field, schemaId, target: target.target, targetKind: target.kind }));
+    diagnosticCodes.push(target.kind === 'workspace-relative' ? 'schema.reference.local-target-omitted' : 'schema.reference.exact-target-omitted');
   }
+  if (schemaReferenceChanged) candidate = schemaLines.join('\n');
 
   if (!parentReferenceChanged && !schemaReferenceChanged) return freeze({ state: 'unavailable' });
   const sealed = sealC14nV2Self(candidate);
   if (sealed.state !== 'sealed' && sealed.state !== 'unchanged') return freeze({ state: 'unavailable' });
-  return freeze({ state: 'ready', markdown: String(sealed.markdown || candidate), parentReferenceChanged, schemaReferenceChanged, diagnosticCodes: [...new Set(diagnosticCodes)] });
+  return freeze({
+    state: 'ready',
+    markdown: String(sealed.markdown || candidate),
+    parentReferenceChanged,
+    schemaReferenceChanged,
+    changedSchemaFields: Object.freeze(changedSchemaFields),
+    diagnosticCodes: [...new Set(diagnosticCodes)]
+  });
+}
+
+function schemaReferenceReachabilityFindings(record = {}, records = [], audit = {}, markdown = '') {
+  const source = String(markdown || '');
+  if (!source) return [];
+  const exactTargetFields = new Set((audit?.findings || [])
+    .filter((item) => String(item?.code || '') === 'schema.reference.exact-target-omitted')
+    .map((item) => String(item?.params?.field || '').trim()));
+  const lines = source.replace(/\r\n?/g, '\n').split('\n');
+  const fields = [
+    ['Envelope Schema', /^\s*-\s+Envelope Schema:\s*(.*)$/],
+    ['Parent Schema', /^\s*-\s+Parent Schema:\s*(.*)$/],
+    ['Current Schema', /^\s*-\s+Current Schema:\s*(.*)$/]
+  ];
+  const findings = [];
+  for (const [field, pattern] of fields) {
+    if (exactTargetFields.has(field)) continue;
+    const line = lines.find((value) => pattern.test(value));
+    if (!line) continue;
+    const match = line.match(pattern);
+    const raw = String(match?.[1] || '').trim();
+    if (!isBareSchemaId(raw)) continue;
+    const selected = preferredSchemaReferenceTarget(record, records, raw, '');
+    if (selected?.kind !== 'workspace-relative') continue;
+    findings.push(Object.freeze({
+      severity: 'warning',
+      code: 'schema.reference.local-target-omitted',
+      message: `${field}: local schema source ${raw} is available in this Workspace but the artifact carries only the schema id; use the resolvable same-Workspace relative target until exact published bytes are available.`,
+      source: 'tiinex.schema.reference.reachability.v1',
+      params: Object.freeze({ field, schemaId: raw, exactTarget: selected.target })
+    }));
+  }
+  return findings;
+}
+
+function preferredSchemaReferenceTarget(record = {}, records = [], schemaId = '', publishedExactTarget = '') {
+  const id = String(schemaId || '').trim();
+  if (!id) return null;
+  const recordPath = norm(record.path || record.id || '');
+  const local = schemaSourceIndex(records).get(id) || null;
+  const published = String(publishedExactTarget || '').trim();
+  if (local?.path) {
+    const native = nativeSchemaMarkdown(id);
+    const localMatchesRegistered = Boolean(native) && normalizeMarkdownBytes(local.markdown) === normalizeMarkdownBytes(native);
+    if (published && localMatchesRegistered) return freeze({ target: published, kind: 'published-immutable-exact' });
+    const relative = relativePortableReference(recordPath, local.path);
+    if (relative) return freeze({ target: relative, kind: 'workspace-relative' });
+  }
+  if (published) return freeze({ target: published, kind: 'published-immutable-exact' });
+  return null;
+}
+
+function deterministicReferenceRepairChangeset(record = {}, records = [], lineageInspection = null, focusRepair = {}) {
+  const focusPath = norm(record.path || record.id || '');
+  if (!focusPath || focusRepair.state !== 'ready' || !focusRepair.markdown) return freeze({ state: 'unavailable', replacements: Object.freeze([]) });
+  const recordByPath = new Map((records || []).map((item) => [norm(item.path || item.id || ''), item]).filter(([path]) => Boolean(path)));
+  if (!recordByPath.has(focusPath)) return freeze({ state: 'unavailable', replacements: Object.freeze([]) });
+  const lineageByPath = new Map((lineageInspection?.artifacts || []).map((item) => [norm(item?.path || ''), item]).filter(([path]) => Boolean(path)));
+  const focusLineage = lineageByPath.get(focusPath) || null;
+  const descendants = [...(focusLineage?.downstreamDescendants || [])]
+    .filter((item) => recordByPath.has(norm(item?.path || '')))
+    .sort((a, b) => Number(a?.depth || 0) - Number(b?.depth || 0) || norm(a?.path || '').localeCompare(norm(b?.path || '')));
+  const orderedPaths = [focusPath, ...descendants.map((item) => norm(item.path || ''))];
+  const working = new Map((records || []).map((item) => [norm(item.path || item.id || ''), String(item.markdown || '')]));
+  working.set(focusPath, String(focusRepair.markdown || ''));
+
+  for (const path of orderedPaths.slice(1)) {
+    const original = recordByPath.get(path);
+    if (!original) return freeze({ state: 'blocked', reason: `descendant-record-missing:${path}`, replacements: Object.freeze([]) });
+    let current = working.get(path) || String(original.markdown || '');
+    const currentRecord = { ...original, markdown: current };
+    const currentAudit = auditPortableRecord(currentRecord, { requireExactSchemaAuthority: true });
+    const refRepair = deterministicReferenceHygieneRepair(currentRecord, records, currentAudit, current);
+    if (refRepair.state === 'ready') current = String(refRepair.markdown || current);
+
+    const lineageArtifact = lineageByPath.get(path) || null;
+    const parentPath = norm(lineageArtifact?.exactParent?.path || '');
+    if (!parentPath || !working.has(parentPath)) return freeze({ state: 'blocked', reason: `loaded-parent-unavailable:${path}`, replacements: Object.freeze([]) });
+    const parentMarkdown = working.get(parentPath) || '';
+    const refreshed = refreshLoadedParentDigest(current, parentMarkdown);
+    if (refreshed.state !== 'ready' && refreshed.state !== 'unchanged') return freeze({ state: 'blocked', reason: `parent-digest-refresh-unavailable:${path}`, replacements: Object.freeze([]) });
+    current = String(refreshed.markdown || current);
+    working.set(path, current);
+  }
+
+  const replacements = orderedPaths
+    .map((path) => {
+      const original = String(recordByPath.get(path)?.markdown || '');
+      const replacementMarkdown = String(working.get(path) || original);
+      if (replacementMarkdown === original) return null;
+      return freeze({ path, sourceSha256: sha256Hex(new TextEncoder().encode(original)), replacementMarkdown });
+    })
+    .filter(Boolean);
+  if (!replacements.length) return freeze({ state: 'unavailable', replacements: Object.freeze([]) });
+
+  const qualified = qualifyReferenceRepairChangeset(records, replacements, lineageInspection);
+  if (qualified.state !== 'qualified') return freeze({ state: 'blocked', reason: qualified.reason || 'changeset-unqualified', replacements: Object.freeze([]) });
+  return freeze({ state: 'ready', replacements: Object.freeze(replacements), focusReplacement: String(working.get(focusPath) || focusRepair.markdown || '') });
+}
+
+function qualifyReferenceRepairChangeset(records = [], replacements = [], beforeLineage = null) {
+  const replacementByPath = new Map((replacements || []).map((item) => [norm(item.path || ''), item]));
+  const replacedRecords = (records || []).map((item) => {
+    const replacement = replacementByPath.get(norm(item.path || item.id || ''));
+    return replacement ? { ...item, markdown: replacement.replacementMarkdown } : item;
+  });
+  for (const replacement of replacements || []) {
+    const path = norm(replacement.path || '');
+    const beforeRecord = (records || []).find((item) => norm(item.path || item.id || '') === path);
+    const afterRecord = replacedRecords.find((item) => norm(item.path || item.id || '') === path);
+    if (!beforeRecord || !afterRecord) return freeze({ state: 'blocked', reason: `record-unavailable:${path}` });
+    const beforeAudit = auditPortableRecord(beforeRecord, { requireExactSchemaAuthority: true });
+    const afterAudit = auditPortableRecord(afterRecord, { requireExactSchemaAuthority: true });
+    const beforeWarnings = new Set((beforeAudit.findings || []).filter((item) => item.severity === 'warning').map((item) => String(item.code || '')));
+    const blocker = (afterAudit.findings || []).find((item) => item.severity === 'error' || (item.severity === 'warning' && !beforeWarnings.has(String(item.code || ''))));
+    if (blocker) return freeze({ state: 'blocked', reason: `audit:${path}:${String(blocker.code || '')}` });
+  }
+  const afterLineage = inspectPortableLineageIntegrity({ records: replacedRecords });
+  const beforeByPath = new Map((beforeLineage?.artifacts || []).map((item) => [norm(item.path || ''), String(item.state || '')]));
+  const afterByPath = new Map((afterLineage?.artifacts || []).map((item) => [norm(item.path || ''), String(item.state || '')]));
+  for (const replacement of replacements || []) {
+    const path = norm(replacement.path || '');
+    const before = beforeByPath.get(path) || '';
+    const after = afterByPath.get(path) || '';
+    if (after === 'healthy' || after === before) continue;
+    return freeze({ state: 'blocked', reason: `lineage:${path}:${before || 'unavailable'}->${after || 'unavailable'}` });
+  }
+  return freeze({ state: 'qualified' });
+}
+
+function refreshLoadedParentDigest(childMarkdown = '', parentMarkdown = '') {
+  const parentSelf = canonicalC14nV2SelfState(String(parentMarkdown || ''));
+  if (parentSelf.state !== 'verified' || !parentSelf.declaredValue) return freeze({ state: 'unavailable', markdown: childMarkdown });
+  const lines = String(childMarkdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const index = primaryParentIntegrityValueLine(lines);
+  if (index < 0) return freeze({ state: 'unavailable', markdown: childMarkdown });
+  const match = lines[index].match(/^(\s*-\s+Value\s*:\s*)(.*)$/i);
+  if (!match) return freeze({ state: 'unavailable', markdown: childMarkdown });
+  const prior = String(match[2] || '').trim();
+  if (prior === parentSelf.declaredValue) {
+    const self = canonicalC14nV2SelfState(lines.join('\n'));
+    if (self.state === 'verified') return freeze({ state: 'unchanged', markdown: lines.join('\n') });
+  }
+  lines[index] = `${match[1]}${parentSelf.declaredValue}`;
+  const sealed = sealC14nV2Self(lines.join('\n'));
+  if (sealed.state !== 'sealed' && sealed.state !== 'unchanged') return freeze({ state: 'unavailable', markdown: childMarkdown });
+  return freeze({ state: prior === parentSelf.declaredValue ? 'unchanged' : 'ready', markdown: String(sealed.markdown || lines.join('\n')) });
+}
+
+function isBareSchemaId(value = '') {
+  return /^tiinex(?:\.[A-Za-z0-9_-]+)+\.v\d+$/.test(String(value || '').trim());
+}
+
+function normalizeMarkdownBytes(value = '') {
+  return String(value || '').replace(/\r\n?/g, '\n');
+}
+
+function relativePortableReference(fromPath = '', toPath = '') {
+  const from = norm(fromPath).split('/').filter(Boolean);
+  const to = norm(toPath).split('/').filter(Boolean);
+  if (!from.length || !to.length) return '';
+  from.pop();
+  let common = 0;
+  while (common < from.length && common < to.length && from[common] === to[common]) common += 1;
+  const relative = [...Array(from.length - common).fill('..'), ...to.slice(common)].join('/');
+  if (!relative) return './';
+  return relative.startsWith('.') ? relative : `./${relative}`;
 }
 
 function referenceResolutionsForRecord(resolutions = [], record = {}) {

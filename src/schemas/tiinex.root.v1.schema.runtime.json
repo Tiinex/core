@@ -1558,10 +1558,10 @@
         "schemaId": "tiinex.root.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "",
+          "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
           "path": ".topics/.schemas/tiinex.root.v1.schema.md",
-          "publicationState": "qualified-local-unpublished",
-          "snapshotCompleteness": "exact-local-docs-snapshot"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "",
         "parentSourceCandidates": []

@@ -7,6 +7,7 @@ import { prepareEpistemicMaterialization } from '../src/tooling/portable/materia
 import { createPortableLocalDraft } from '../src/tooling/portable/draft/draft.create.js';
 import { canonicalC14nV2SelfState, sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { locateFindingLine, projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
+import { nativeSchemaMarkdown } from '../src/schemas/generated/native.schema.pack.js';
 
 const TOPIC = 'tiinex.topic.v1';
 const VALUES = Object.freeze({ 'Current Read': 'read', 'Design Direction': 'direction', 'Next Artifacts': 'next' });
@@ -376,4 +377,76 @@ test('editor assistance repairs bare Envelope and Current Schema ids when exact 
   assert.match(action.replacementMarkdown, /- Envelope Schema: \[tiinex\.root\.v1\]\(https:\/\/github\.com\/Tiinex\/docs\/blob\//);
   assert.match(action.replacementMarkdown, /  - Current Schema: \[tiinex\.topic\.v1\]\(https:\/\/github\.com\/Tiinex\/docs\/blob\//);
   assert.equal(canonicalC14nV2SelfState(action.replacementMarkdown).state, 'verified');
+});
+
+
+test('editor assistance prefers same-Workspace relative schema source when local schema bytes differ from published authority', () => {
+  const path = '.topics/source/001-local-schema-reference.trace.md';
+  const canonical = parentMarkdown(path);
+  const degraded = sealC14nV2Self(canonical.replace(/^  - Current Schema: \[tiinex\.topic\.v1\]\([^)]+\)$/m, '  - Current Schema: tiinex.topic.v1'));
+  assert.equal(degraded.state, 'sealed');
+  const topicSourcePath = '.topics/.schemas/core/topic/tiinex.topic.v1.schema.md';
+  const localTopic = `${nativeSchemaMarkdown(TOPIC)}\n<!-- unpublished-local-schema-bytes -->`;
+  const records = [
+    { path, markdown: degraded.markdown },
+    { path: topicSourcePath, markdown: localTopic }
+  ];
+  const assistance = projectPortableEditorAssistance({ records, focusPath: path });
+  const doc = assistance.documents[0];
+  assert.ok(doc.diagnostics.some((item) => item.code === 'schema.reference.exact-target-omitted'));
+  const action = doc.actions.find((item) => item.id === 'repair-qualified-references-and-self-integrity');
+  assert.ok(action);
+  assert.match(action.replacementMarkdown, /Current Schema: \[tiinex\.topic\.v1\]\(\.\.\/\.schemas\/core\/topic\/tiinex\.topic\.v1\.schema\.md\)/);
+  assert.doesNotMatch(action.replacementMarkdown, /Current Schema: \[tiinex\.topic\.v1\]\(https:\/\/github\.com\/Tiinex\/docs\/blob\//);
+});
+
+test('editor assistance emits one Core-owned lineage changeset when schema-reference repair changes an ancestor self digest', () => {
+  const parentPath = '.topics/process/001-parent.trace.md';
+  const childPath = '.topics/process/001-1-child.trace.md';
+  const canonicalParent = parentMarkdown(parentPath);
+  const degradedParent = sealC14nV2Self(canonicalParent.replace(/^  - Current Schema: \[tiinex\.topic\.v1\]\([^)]+\)$/m, '  - Current Schema: tiinex.topic.v1'));
+  assert.equal(degradedParent.state, 'sealed');
+  const projected = projectPortableAuthoringParent({ records: [{ path: parentPath, markdown: canonicalParent, sourceMode: 'portable-node-local' }] });
+  assert.equal(projected.status, 'ready');
+  const created = createPortableLocalDraft({
+    schemaId: TOPIC,
+    transitionType: 'continue-from-record',
+    path: childPath,
+    parent: projected.parentRecord,
+    values: VALUES,
+    title: 'Child',
+    materials: []
+  });
+  assert.equal(created.status, 'created-clean');
+  const degradedParentSelf = canonicalC14nV2SelfState(degradedParent.markdown);
+  assert.equal(degradedParentSelf.state, 'verified');
+  const childLines = created.draft.markdown.split(/\r?\n/);
+  const parentTowards = childLines.findIndex((line) => /^\s*-\s+Towards:\s*(?!self)/i.test(line) && /\[[^\]]+\]\([^)]+\)/.test(line));
+  const parentValue = childLines.findIndex((line, index) => index > parentTowards && /^\s*-\s+Value\s*:/.test(line));
+  assert.ok(parentTowards >= 0 && parentValue > parentTowards);
+  childLines[parentValue] = childLines[parentValue].replace(/^(\s*-\s+Value\s*:\s*).*$/, `$1${degradedParentSelf.declaredValue}`);
+  const resealedChild = sealC14nV2Self(childLines.join('\n'));
+  assert.equal(resealedChild.state, 'sealed');
+  const records = [
+    { path: parentPath, markdown: degradedParent.markdown },
+    { path: childPath, markdown: resealedChild.markdown }
+  ];
+  const assistance = projectPortableEditorAssistance({ records, focusPath: parentPath });
+  const action = assistance.documents[0].actions.find((item) => item.id === 'repair-qualified-references-and-self-integrity');
+  assert.ok(action);
+  assert.equal(action.kind, 'replace-record-set');
+  assert.equal(action.replacements.length, 2);
+  const parentReplacement = action.replacements.find((item) => item.path === parentPath);
+  const childReplacement = action.replacements.find((item) => item.path === childPath);
+  assert.ok(parentReplacement && childReplacement);
+  assert.equal(canonicalC14nV2SelfState(parentReplacement.replacementMarkdown).state, 'verified');
+  assert.equal(canonicalC14nV2SelfState(childReplacement.replacementMarkdown).state, 'verified');
+  const repaired = projectPortableEditorAssistance({
+    records: [
+      { path: parentPath, markdown: parentReplacement.replacementMarkdown },
+      { path: childPath, markdown: childReplacement.replacementMarkdown }
+    ],
+    focusPath: childPath
+  });
+  assert.equal(repaired.documents[0].diagnostics.some((item) => item.code === 'portable.lineage-integrity.parent-target-mismatch' || item.code === 'integrity.c14n-v2.mismatch'), false);
 });
