@@ -25,6 +25,27 @@ export function continueHandoffCarrierLineage(parent = {}, siblingIndex = 1) {
   });
 }
 
+export function allocateHandoffCarrierMajor(prefix = '', major = '', reason = '', parent = null) {
+  const normalizedPrefix = normalizeCarrierPrefix(prefix);
+  const majorValue = String(major || '').trim();
+  if (!/^\d{3}$/.test(majorValue)) throw new Error('portable.handoff-carrier-lineage.major.invalid');
+  const numericMajor = Number.parseInt(majorValue, 10);
+  if (!Number.isInteger(numericMajor) || numericMajor < 1 || numericMajor >= 999) throw new Error('portable.handoff-carrier-lineage.major.invalid');
+  const majorReason = String(reason || '').trim();
+  if (!majorReason) throw new Error('portable.handoff-carrier-lineage.major-reason.required');
+  return freezeLineage({
+    mode: 'major',
+    prefix: normalizedPrefix,
+    dimension: majorValue,
+    parentDimension: String(parent?.dimension || '').trim(),
+    parentPackageSha256: normalizeSha256(parent?.packageSha256 || ''),
+    parentPackageFilename: String(parent?.packageFilename || ''),
+    major: majorValue,
+    majorReason,
+    checkpointKind: 'major'
+  });
+}
+
 export function advanceHandoffCarrierMajor(parent = {}, reason = '') {
   const normalized = normalizeParentLineage(parent);
   if (!normalized.dimension) throw new Error('portable.handoff-carrier-lineage.parent.unresolved');

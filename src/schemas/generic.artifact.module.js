@@ -2,7 +2,7 @@ import { defineSchemaModule } from './contracts.js';
 import { defineArtifactCreationCapability } from './creation.capability.js';
 import { genericArtifactCreationImplementation } from './creation.renderer.js';
 
-export function defineGenericArtifactSchemaModule({ id, label, parentSchemaId, summary, role = 'workflow-artifact', kind = 'concrete', binding, schemaSource }) {
+export function defineGenericArtifactSchemaModule({ id, label, parentSchemaId, summary, role = 'workflow-artifact', kind = 'concrete', binding, schemaSource, authoringAffordances = [] }) {
   return defineSchemaModule({
     id,
     label,
@@ -12,6 +12,7 @@ export function defineGenericArtifactSchemaModule({ id, label, parentSchemaId, s
     summary,
     binding,
     schemaSource,
+    authoringAffordances: Object.freeze([...(authoringAffordances || [])].map((item) => Object.freeze({ ...item, fills: item?.fills ? Object.freeze({ ...item.fills }) : undefined }))),
     artifactCreation: defineArtifactCreationCapability(binding, Object.freeze({ ...genericArtifactCreationImplementation, transitionTypes: Object.freeze(['create-artifact', 'continue-from-record']) })),
     present: (artifact = {}, context = {}) => Object.freeze({ title: artifact?.title || label, summary: artifact?.summary || summary, badges: Object.freeze(['concrete', id]), disclosure: context.degraded ? 'degraded' : 'normal' }),
     capabilities: Object.freeze({

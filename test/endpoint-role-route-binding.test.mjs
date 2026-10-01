@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { qualifiedHandoffFixture } from '../src/tooling/portable/handoff/qualifiedHandoffFixture.js';
 import { projectQualifiedHandoffEndpoints } from '../src/tooling/portable/handoff/handoffEndpointProjection.js';
+import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 import { projectHandoffMaterialRequirements } from '../src/tooling/portable/handoff/materialClosure.requirements.js';
 import { planRecipientRelativeHandoffMaterialClosure } from '../src/tooling/portable/handoff/materialClosure.plan.js';
 import {
@@ -111,8 +112,6 @@ import { prepareNodeHandoffManufacturingInput } from '../src/tooling/portable/ad
 import { manufactureRecipientRelativeHandoffPackage } from '../src/tooling/portable/handoff/manufacture.js';
 import { orientColdConsumerFromHandoffPackage } from '../src/tooling/portable/handoff/coldConsumerEntrypoint.js';
 import { projectPortableGroundingReadiness } from '../src/tooling/portable/grounding/grounding.readiness.js';
-import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
-
 const rootSchemaTarget = currentSchemaTarget('tiinex.root.v1');
 const workspaceSchemaTarget = currentSchemaTarget('tiinex.workspace.v1');
 const roleSchemaTarget = currentSchemaTarget('tiinex.party.role.v1');
@@ -169,6 +168,27 @@ test('projects exact Role authoringLabel separately from presentation label for 
     assert.equal(candidate.canonicalReference, '');
   }
 
+});
+
+
+test('Role endpoint projection exposes only current Role lineage leaves for session selection', () => {
+  const historical = roleFixture('Anchor');
+  const currentBody = roleFixture('Anchor')
+    .replace('# Anchor Role', '# Anchor Role — Current Successor')
+    .replace('- Summary: Anchor role.', '- Summary: Anchor current role.')
+    .replace(`- Envelope Schema: [tiinex.root.v1](${rootSchemaTarget})\n- Current`, `- Envelope Schema: [tiinex.root.v1](${rootSchemaTarget})\n- Parent\n  - Parent Schema: [tiinex.party.role.v1](${roleSchemaTarget})\n  - Created At: 2026-09-20 20:01:00\n  - Trace: [Anchor](001-anchor-role.trace.md)\n  - Origin:\n    - [relative](001-anchor-role.trace.md)\n- Current`)
+    .replace(/  - Value: .*$/m, '  - Value: ');
+  const currentSealed = seal(currentBody);
+  const files = [
+    { path: '.topics/.workspaces/tiinex-business.workspace.md', content: workspaceFixture('Business', 'Tiinex/business') },
+    { path: '.topics/roles/001-anchor-role.trace.md', content: historical },
+    { path: '.topics/roles/001-1-anchor-current-role.trace.md', content: currentSealed }
+  ];
+  const projection = projectQualifiedHandoffEndpoints({ files, workspaceId: 'business' });
+  assert.equal(projection.status, 'ready', JSON.stringify(projection.findings || [], null, 2));
+  assert.equal(projection.candidates.length, 2);
+  assert.deepEqual(projection.currentRoleCandidates.map((item) => item.artifactPath), ['.topics/roles/001-1-anchor-current-role.trace.md']);
+  assert.equal(projection.currentRoleCandidates[0].currentLeaf, true);
 });
 
 test('endpoint source eligibility is bounded by the explicitly selected qualified Workspace material root', () => {

@@ -162,6 +162,15 @@ export async function commandInput(parsed, runtime = {}) {
     return { input: { prefix: flags.prefix || value.prefix || '', candidates: value.candidates || (Array.isArray(value) ? value : []) }, options: {} };
   }
 
+  if (parsed.command === 'project-handoff-carrier-major-allocation') {
+    const value = await readOptionalJson(flags.existing || flags.names || '');
+    return { input: {
+      prefix: flags.prefix || value.prefix || '',
+      parentFilename: flags['parent-filename'] || flags.parentFilename || '',
+      existingFilenames: value.existingFilenames || value.names || (Array.isArray(value) ? value : [])
+    }, options: {} };
+  }
+
   if (parsed.command === 'project-handoff-carrier-transport-name') {
     const value = await readOptionalJson(flags.existing || flags.names || '');
     return { input: {
@@ -175,6 +184,22 @@ export async function commandInput(parsed, runtime = {}) {
   if (parsed.command === 'project-handoff-carrier-output-collision') {
     const value = await readOptionalJson(flags.existing || flags.names || parsed.positionals[0]);
     return { input: { filename: flags.filename || flags.base || value.filename || '', existingFilenames: value.existingFilenames || value.names || (Array.isArray(value) ? value : []) }, options: {} };
+  }
+
+  if (parsed.command === 'project-workspace-carrier-entry') {
+    const packagePath = String(flags.package || parsed.positionals[0] || '').trim();
+    if (!packagePath) throw new Error('portable.cli.workspace-entry.package-required');
+    const material = await loadNodePortableInput([packagePath], { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] });
+    const primaryRole = await readOptionalJson(flags['primary-role'] || flags.role);
+    const participants = await readOptionalJson(flags.participants);
+    return { input: {
+      bundle: material,
+      packageSourcePath: packagePath,
+      mode: flags.mode || '',
+      customInstruction: flags['custom-instruction'] || flags.instruction || '',
+      primaryRole: primaryRole.primaryRole || primaryRole.role || primaryRole || null,
+      participants: participants.participants || (Array.isArray(participants) ? participants : [])
+    }, options: {} };
   }
 
   if (parsed.command === 'manufacture-handoff-package' || parsed.command === 'project-handoff-participants') {

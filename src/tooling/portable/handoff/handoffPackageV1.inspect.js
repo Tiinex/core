@@ -191,7 +191,7 @@ export function inspectHandoffPackageV1(bundle = {}) {
     mode: packageModeForRole(contract?.packageRole) || 'handoff',
     startPath: contract?.startPath || '',
     bootstrapDescriptorPath: contract?.bootstrapArtifactPath || '',
-    lineage: Object.freeze({ mode: contract?.checkpointKind === 'major' && contract?.parentDimension ? 'major' : contract?.dimension?.includes('-') ? 'continue' : 'root', prefix: contract?.prefix || '', dimension: contract?.dimension || '001', parentDimension: contract?.parentDimension || '', checkpointKind: contract?.checkpointKind || 'major', majorReason: contract?.majorReason || '' }),
+    lineage: Object.freeze({ mode: contract?.carrierMode === 'workspace' || contract?.carrierMode === 'bootstrap' ? (contract?.checkpointKind === 'major' && contract?.majorReason && contract?.majorReason !== 'initial carrier root' ? 'major' : (contract?.dimension?.includes('-') ? 'continue' : 'root')) : contract?.carrierMode === 'handoff' && contract?.checkpointKind === 'major' && contract?.majorReason && contract?.majorReason !== 'initial carrier root' ? 'major' : contract?.dimension?.includes('-') ? 'continue' : 'root', prefix: contract?.prefix || '', dimension: contract?.dimension || '001', parentDimension: contract?.parentDimension || '', checkpointKind: contract?.checkpointKind || 'major', majorReason: contract?.majorReason || '' }),
     workspaces: Object.freeze(workspaces.map((w) => Object.freeze({ id: w.workspaceId, workspaceId: w.workspaceId, title: w.workspaceId, archivePath: w.archivePath }))),
     routes: Object.freeze(projectedRoutes),
     findings: Object.freeze(findings)
@@ -492,6 +492,7 @@ function parsePackageRoot(markdown='') {
     workspaces: Object.freeze(wb), caches: Object.freeze(caches), materialRepresentationCount: materialDeclarations.length,
     routePlacementRule: field(route,'Route Placement Rule'), continueFromRule: field(route,'Continue-From Rule'), preHandoffClosureRule: field(route,'Pre-Handoff Closure Rule'),
     genericTransportRule: field(transport,'Generic Transport Rule'), routeTransportRule: field(transport,'Route Transport Rule'), recipientProjectionRule: field(transport,'Recipient Projection Rule'),
+    carrierMode: field(section(markdown,'Carrier Continuity'),'Carrier Mode'),
     prefix: field(section(markdown,'Carrier Continuity'),'Carrier Prefix'), dimension: field(section(markdown,'Carrier Continuity'),'Carrier Dimension'), parentDimension: field(section(markdown,'Carrier Continuity'),'Parent Carrier Dimension'), checkpointKind: field(section(markdown,'Carrier Continuity'),'Carrier Checkpoint'), majorReason: field(section(markdown,'Carrier Continuity'),'Major Reason')
   });
 }

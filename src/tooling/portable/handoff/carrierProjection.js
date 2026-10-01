@@ -1,5 +1,6 @@
 import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
 import { normalizeHandoffCarrierPrefix } from './carrierLineage.js';
+import { parseHandoffCarrierTransportMajor } from './carrierMajorAllocation.js';
 import { HANDOFF_PACKAGE_V1_ARTIFACT_ROOT_DIMENSION } from './handoffPackageV1.constants.js';
 
 export const HANDOFF_CARRIER_PROJECTION_SCHEMA_ID = 'tiinex.portable.handoff-carrier-projection.v1';
@@ -255,12 +256,8 @@ export function projectHandoffCarrierTransportName(input = {}) {
 }
 
 function parseTransportMajor(filename = '') {
-  const stem = String(filename || '').replace(/\.handoff-package\.zip$/i, '');
-  const prefixed = stem.match(/^(.*?)-(\d{3})(?=$|-)/);
-  if (prefixed) return Object.freeze({ prefix: prefixed[1].toLocaleLowerCase(), major: Number(prefixed[2]) });
-  const bare = stem.match(/^(\d{3})(?=$|-)/);
-  if (bare) return Object.freeze({ prefix: '', major: Number(bare[1]) });
-  return null;
+  const parsed = parseHandoffCarrierTransportMajor(filename);
+  return parsed ? Object.freeze({ prefix: parsed.prefix, major: parsed.major }) : null;
 }
 
 function transportNameResult(status, mode, reasonCode, parentFilename, filename, ordinalOrMajor, prefix) {

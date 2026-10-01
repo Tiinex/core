@@ -82,6 +82,17 @@ test('transport Major progression uses only transport filenames and host-observe
   assert.equal(result.filename, 'tiinex-core-vscode-005.handoff-package.zip');
 });
 
+test('transport Major progression counts collision-suffixed observations as their existing Major', () => {
+  const result = projectHandoffCarrierTransportName({
+    mode: 'major',
+    parentFilename: 'tiinex-core-vscode-002.handoff-package.zip',
+    existingFilenames: ['tiinex-core-vscode-003 (1).handoff-package.zip']
+  });
+  assert.equal(result.status, 'ready');
+  assert.equal(result.ordinalOrMajor, 4);
+  assert.equal(result.filename, 'tiinex-core-vscode-004.handoff-package.zip');
+});
+
 test('Core selects one same-prefix Major frontier and exposes the next Major dimension', () => {
   const result = projectHandoffCarrierMajorFrontier({
     prefix: 'tiinex-core',

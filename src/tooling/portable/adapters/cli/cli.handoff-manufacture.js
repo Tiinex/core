@@ -7,7 +7,8 @@ import { projectHandoffHumanOutput, projectWorkspaceCarrierHumanOutput, projectB
 import { writePortableRuntimePackageZip } from '../../output/node.zip.js';
 import { handoffPackageV1ZipBytes } from '../../handoff/handoffPackageV1.zip.js';
 import { inspectHandoffPackageV1 } from '../../handoff/handoffPackageV1.inspect.js';
-import { carrierLineageFromCliParent, initialHandoffCarrierLineage, normalizeHandoffCarrierLineage, normalizeHandoffCarrierPrefix, parentHandoffCarrierLineageFromBundle, parentHandoffCarrierProfileFromBundle } from '../../handoff/carrierLineage.js';
+import { allocateHandoffCarrierMajor, carrierLineageFromCliParent, initialHandoffCarrierLineage, normalizeHandoffCarrierLineage, normalizeHandoffCarrierPrefix, parentHandoffCarrierLineageFromBundle, parentHandoffCarrierProfileFromBundle } from '../../handoff/carrierLineage.js';
+import { projectHandoffCarrierMajorAllocation } from '../../handoff/carrierMajorAllocation.js';
 import { loadNodePortableInput } from '../../input/node.input.js';
 import { resolveHandoffSiblingAllocation } from './cli.handoff-sibling-allocation.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
@@ -69,6 +70,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   const packageParentWorkspaceIds = splitFlag(flags['package-parent-workspaces']);
   const packageParentWorkspaceAliases = await readOptionalJson(flags['package-parent-workspace-aliases']);
   const operatorCarrierProfile = await readOptionalJson(flags['carrier-profile']);
+  const carrierExistingNamesValue = await readOptionalJson(flags['carrier-existing-filenames'] || flags['carrier-existing']);
+  const carrierExistingFilenames = carrierExistingNamesValue.existingFilenames || carrierExistingNamesValue.names || (Array.isArray(carrierExistingNamesValue) ? carrierExistingNamesValue : []);
   const expectedToolingBootstrap = await readOptionalJson(flags['tooling-bootstrap-manifest']);
   const workspaceDescriptorValue = await readOptionalJson(flags['workspace-roots'] || flags['workspace-descriptors']);
   const workspaceTargetValue = await readOptionalJson(flags['workspace-targets']);
@@ -119,11 +122,21 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
       throw new Error(`portable.cli.handoff-carrier.received-package-parent.identity-mismatch: expected ${expectedContinuationParentSha256} at ${resolvedParent}, observed ${provisionalLineage.parentPackageSha256}. Restore the exact received package used by ground --continue; Tooling will not substitute a different carrier by path.`);
     }
     if (flags['package-major']) {
-      carrierLineage = provisionalLineage;
+      const allocation = projectHandoffCarrierMajorAllocation({
+        prefix: requestedCarrierPrefix || provisionalLineage.prefix,
+        parentFilename: resolvedParent,
+        existingFilenames: carrierExistingFilenames
+      });
+      if (allocation.state !== 'ready') throw new Error(`portable.cli.handoff-carrier.package-major.allocation-blocked:${allocation.reasonCode || allocation.state}`);
+      carrierLineage = allocateHandoffCarrierMajor(requestedCarrierPrefix || provisionalLineage.prefix, allocation.nextMajorDimension, flags['major-reason'] || '', {
+        dimension: provisionalLineage.parentDimension,
+        packageSha256: provisionalLineage.parentPackageSha256,
+        packageFilename: path.basename(resolvedParent)
+      });
       carrierAllocation = Object.freeze({
-        state: 'qualified', allocationMode: 'explicit-major', siblingIndex: null,
-        provenance: Object.freeze({ basis: 'explicit-major-request', parentPackagePath: resolvedParent, parentPackageSha256: provisionalLineage.parentPackageSha256, parentDimension: provisionalLineage.parentDimension }),
-        boundary: 'Carrier Major creation remains explicit and separate from non-Major pointer-order allocation.'
+        state: 'qualified', allocationMode: 'monotonic-prefix-major-with-parent', siblingIndex: null, childDimension: carrierLineage.dimension,
+        provenance: Object.freeze({ basis: 'highest-observed-prefix-major-plus-one', parentPackagePath: resolvedParent, parentPackageSha256: provisionalLineage.parentPackageSha256, parentDimension: provisionalLineage.parentDimension, highestObservedMajor: allocation.highestObservedMajor, observedCount: allocation.observed.length }),
+        boundary: allocation.boundary
       });
     } else {
       const siblingAllocation = await resolveHandoffSiblingAllocation({
@@ -151,7 +164,20 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     if (inheritedPrefix && requestedCarrierPrefix && inheritedPrefix !== requestedCarrierPrefix) throw new Error('portable.cli.handoff-carrier.carrier-prefix.parent-conflict');
     if (!inheritedPrefix && requestedCarrierPrefix) carrierLineage = normalizeHandoffCarrierLineage({ ...carrierLineage, prefix: requestedCarrierPrefix });
   }
-  if (!parentPackagePath && flags['package-major']) throw new Error('portable.cli.handoff-carrier.package-major.parent-required');
+  if (!parentPackagePath && flags['package-major']) {
+    if (!requestedCarrierPrefix) throw new Error('portable.cli.handoff-carrier.package-major.prefix-required');
+    const allocation = projectHandoffCarrierMajorAllocation({ prefix: requestedCarrierPrefix, existingFilenames: carrierExistingFilenames });
+    if (allocation.state !== 'ready') throw new Error(`portable.cli.handoff-carrier.package-major.allocation-blocked:${allocation.reasonCode || allocation.state}`);
+    carrierLineage = allocateHandoffCarrierMajor(requestedCarrierPrefix, allocation.nextMajorDimension, flags['major-reason'] || '');
+    carrierAllocation = Object.freeze({
+      state: 'qualified',
+      allocationMode: 'monotonic-prefix-major',
+      siblingIndex: null,
+      childDimension: carrierLineage.dimension,
+      provenance: Object.freeze({ basis: 'highest-observed-prefix-major-plus-one', prefix: requestedCarrierPrefix, highestObservedMajor: allocation.highestObservedMajor, observedCount: allocation.observed.length, parentPackagePath: '' }),
+      boundary: allocation.boundary
+    });
+  }
   if (!parentPackagePath && flags['package-consolidation']) throw new Error('portable.cli.handoff-carrier.package-consolidation.parent-required');
   const carrierProfile = selectCarrierProfile({
     operator: operatorCarrierProfile,
@@ -255,6 +281,8 @@ export async function materializeHandoffManufactureCliOutput(result = {}, flags 
 async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.', runtime = {}) {
   if (flags.handoff || flags.route || flags.routes || flags['handoff-routes'] || flags['workspace-routes']) throw new Error('portable.cli.workspace-carrier.handoff-route.forbidden');
   const operatorCarrierProfile = await readOptionalJson(flags['carrier-profile']);
+  const carrierExistingNamesValue = await readOptionalJson(flags['carrier-existing-filenames'] || flags['carrier-existing']);
+  const carrierExistingFilenames = carrierExistingNamesValue.existingFilenames || carrierExistingNamesValue.names || (Array.isArray(carrierExistingNamesValue) ? carrierExistingNamesValue : []);
   const expectedToolingBootstrap = await readOptionalJson(flags['tooling-bootstrap-manifest']);
   const workspaceDescriptorValue = await readOptionalJson(flags['workspace-roots'] || flags['workspace-descriptors']);
   const workspaceTargetValue = await readOptionalJson(flags['workspace-targets']);
@@ -263,10 +291,13 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   const verifyRoundtrip = !flags['no-roundtrip'];
   const parentPackagePath = String(flags['package-parent'] || '').trim();
   const explicitNewRoot = flags['new-root'] === true;
+  const explicitMajor = flags['package-major'] === true;
   if (parentPackagePath && explicitNewRoot) throw new Error('portable.cli.workspace-carrier.root-parent.conflict');
-  if (!parentPackagePath && !explicitNewRoot) throw new Error('portable.cli.workspace-carrier.root-intent.required');
+  if (explicitMajor && explicitNewRoot) throw new Error('portable.cli.workspace-carrier.major-root.conflict');
+  if (!parentPackagePath && !explicitNewRoot && !explicitMajor) throw new Error('portable.cli.workspace-carrier.root-intent.required');
   let carrierLineage = Object.freeze({ ...initialHandoffCarrierLineage(flags['carrier-prefix'] || ''), checkpointKind: 'progression', majorReason: '' });
   let inheritedCarrierProfile = normalizeHandoffCarrierProfile(null);
+  let carrierAllocation = Object.freeze({ state: explicitMajor ? 'unresolved' : explicitNewRoot ? 'root' : 'qualified', allocationMode: explicitMajor ? 'pending-prefix-major' : explicitNewRoot ? 'initial-root' : 'parent-continuation', siblingIndex: null, provenance: Object.freeze({ basis: explicitMajor ? 'pending-prefix-major' : explicitNewRoot ? 'initial-carrier-root' : 'explicit-carrier-parent' }) });
   if (parentPackagePath) {
     const resolvedParent = path.resolve(parentPackagePath);
     const parentBytes = new Uint8Array(await readFile(resolvedParent));
@@ -282,8 +313,20 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
       majorReason: flags['major-reason'] || '',
       siblingIndex: 1
     });
-  } else if (flags['package-major']) {
-    throw new Error('portable.cli.workspace-carrier.package-major.parent-required');
+  } else if (explicitMajor) {
+    const requestedPrefix = normalizeHandoffCarrierPrefix(flags['carrier-prefix'] || '');
+    if (!requestedPrefix) throw new Error('portable.cli.workspace-carrier.package-major.prefix-required');
+    const allocation = projectHandoffCarrierMajorAllocation({ prefix: requestedPrefix, existingFilenames: carrierExistingFilenames });
+    if (allocation.state !== 'ready') throw new Error(`portable.cli.workspace-carrier.package-major.allocation-blocked:${allocation.reasonCode || allocation.state}`);
+    carrierLineage = allocateHandoffCarrierMajor(requestedPrefix, allocation.nextMajorDimension, flags['major-reason'] || '');
+    carrierAllocation = Object.freeze({
+      state: 'qualified',
+      allocationMode: 'monotonic-prefix-major',
+      siblingIndex: null,
+      childDimension: carrierLineage.dimension,
+      provenance: Object.freeze({ basis: 'highest-observed-prefix-major-plus-one', prefix: requestedPrefix, highestObservedMajor: allocation.highestObservedMajor, observedCount: allocation.observed.length, parentPackagePath: '' }),
+      boundary: allocation.boundary
+    });
   }
   const carrierProfile = selectCarrierProfile({ operator: operatorCarrierProfile, inherited: inheritedCarrierProfile, runtime: runtime.defaultCarrierProfile || null });
   const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || '').trim();
@@ -304,6 +347,7 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
     createdAt: flags['built-at'] || undefined,
     projectedFilename,
     carrierLineage,
+    carrierAllocation,
     carrierProfile
   }, runtime);
   return { input, options: { verifyRoundtrip, packageInput: { builtAt: flags['built-at'] || undefined } } };

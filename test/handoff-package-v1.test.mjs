@@ -297,7 +297,7 @@ test('legacy pre-correction Package V1 topology may qualify carrier continuation
   assert.equal(deniedRoute.state,'unqualified');
 });
 
-test('CLI explicit Major continuation accepts exact qualified parent and still rejects missing parent',async()=>{
+test('CLI explicit Major continuation accepts exact qualified parent and also supports parentless Major allocation',async()=>{
   const {root,input}=await fixture({external:false});
   const parent=manufactureRecipientRelativeHandoffPackage({...input,carrierLineage:initialHandoffCarrierLineage('business')},{verifyRoundtrip:true});
   assert.equal(parent.status,'ready');
@@ -327,10 +327,14 @@ test('CLI explicit Major continuation accepts exact qualified parent and still r
   const majorOrientation=orientColdConsumerFromHandoffPackage({bundle:majorResult.bundle});
   assert.equal(majorOrientation.carrierLineage.mode,'major');
   assert.equal(majorOrientation.carrierLineage.parentDimension,'001');
-  await assert.rejects(
-    prepareHandoffManufactureCliCommand({flags:{workspace:root,handoff:'.topics/handoffs/001-handoff.trace.md','workspace-id':'work','workspace-target':'.topics/.workspaces/tiinex-work.workspace.md','package-major':true,'major-reason':'missing parent'},positionals:[]},{runtimeRoot:path.resolve('.')}),
-    /portable\.cli\.handoff-carrier\.package-major\.parent-required/
-  );
+  const parentless = await prepareHandoffManufactureCliCommand({flags:{workspace:root,handoff:'.topics/handoffs/001-handoff.trace.md','workspace-id':'work','workspace-target':'.topics/.workspaces/tiinex-work.workspace.md','package-major':true,'major-reason':'independent major','carrier-prefix':'business'},positionals:[]},{runtimeRoot:path.resolve('.')});
+  assert.equal(parentless.input.carrierLineage.dimension,'001');
+  assert.equal(parentless.input.carrierLineage.parentDimension,'');
+  assert.equal(parentless.input.carrierLineage.mode,'major');
+  const parentlessResult=manufactureRecipientRelativeHandoffPackage(parentless.input,{verifyRoundtrip:true});
+  assert.equal(parentlessResult.status,'ready',JSON.stringify(parentlessResult.findings||[],null,2));
+  assert.equal(parentlessResult.inspection.carrierProjection.lineage.mode,'major');
+  assert.equal(parentlessResult.inspection.carrierProjection.lineage.parentDimension,'');
 });
 
 

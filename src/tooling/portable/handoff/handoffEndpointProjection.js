@@ -2,6 +2,8 @@ import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { auditPortableRecord } from '../audit/audit.capability.js';
 import { portableRuntimeValidationAuthorityForRecord } from '../schema/qualifiedLocalRoot.runtime.js';
 import { projectQualifiedWorkspacePackageSources } from './workspacePackageSources.js';
+import { resolveLineage } from '../../../lineage/lineage.resolve.js';
+import { schemaIdForRecord } from '../../../schemas/schema.identity.js';
 import { sectionField, sectionText } from './coldStartQualification.shared.js';
 
 export const PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID = 'tiinex.portable.handoff-endpoint-projection.v1';
@@ -34,6 +36,7 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
   const workspaceId = token(input.workspaceId || input.workspace || 'workspace') || 'workspace';
   const records = normalizeRecords(input);
   const candidates = [];
+  const authoringCandidates = [];
   const findings = [];
   const sourceAuthority = qualifyEndpointSourceAuthority(records, workspaceId);
   if (sourceAuthority.state !== 'qualified') {
@@ -58,11 +61,10 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     const schemaId = String(parsed.envelope?.current?.schema?.id || record.schemaId || '').trim();
     if (!schemaId) continue;
     const audit = auditPortableRecord({ ...record, schemaId, currentSchemaId: schemaId, title: parsed.title || record.title || '' }, { requireExactSchemaAuthority: true });
-    if (audit.status !== 'readable' || audit.qualification?.exact !== true || (audit.findings || []).some((item) => item.severity === 'error')) continue;
+    if (audit.status !== 'readable' || (audit.findings || []).some((item) => item.severity === 'error' && !['schema-reference-unresolved', 'schema-authority-unresolved'].includes(String(item.code || '')))) continue;
     const authority = portableRuntimeValidationAuthorityForRecord({ ...record, schemaId, currentSchemaId: schemaId });
-    if (authority.state !== 'qualified') continue;
     const lineage = Array.isArray(authority.compiledContract?.lineage) ? authority.compiledContract.lineage.map(String) : [];
-    const kind = lineage.includes('tiinex.party.role.v1') || schemaId === 'tiinex.party.role.v1'
+    const kind = lineage.includes('tiinex.party.role.v1') || schemaId === 'tiinex.party.role.v1' || schemaId.startsWith('tiinex.party.role.')
       ? 'role'
       : lineage.includes('tiinex.party.v1') || schemaId === 'tiinex.party.v1' || schemaId.startsWith('tiinex.party.')
         ? 'party'
@@ -74,35 +76,87 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
       ? sectionField(sectionText(parsed.body?.text || '', 'Role Identity'), 'Role Label')
       : '';
     const providerReference = exactQualifiedProviderReference(record);
-    const canonicalReference = canonicalHandoffEndpointReference({ target, label, kind, workspaceId, artifactPath: path, qualification: 'qualified-exact', ...(providerReference ? { referenceTarget: providerReference.target, referenceQualification: providerReference.qualification } : {}) });
-    if (canonicalReference.state !== 'qualified') continue;
-    candidates.push(freeze({
-      id: target,
-      target,
-      workspaceCoordinate: target,
-      reference: canonicalReference.referenceTarget,
-      referenceQualification: providerReference?.qualification || 'none',
-      canonicalReference: canonicalReference.reference,
-      kind,
-      label,
-      ...(authoringLabel ? { authoringLabel } : {}),
-      workspaceId,
-      artifactPath: path,
-      schemaId,
-      qualification: 'qualified-exact'
-    }));
+    if (authority.state === 'qualified' && audit.qualification?.exact === true) {
+      const canonicalReference = canonicalHandoffEndpointReference({ target, label, kind, workspaceId, artifactPath: path, qualification: 'qualified-exact', ...(providerReference ? { referenceTarget: providerReference.target, referenceQualification: providerReference.qualification } : {}) });
+      if (canonicalReference.state !== 'qualified') continue;
+      candidates.push(freeze({
+        id: target,
+        target,
+        workspaceCoordinate: target,
+        reference: canonicalReference.referenceTarget,
+        referenceQualification: providerReference?.qualification || 'none',
+        canonicalReference: canonicalReference.reference,
+        kind,
+        label,
+        ...(authoringLabel ? { authoringLabel } : {}),
+        workspaceId,
+        artifactPath: path,
+        schemaId,
+        qualification: 'qualified-exact'
+      }));
+    } else {
+      authoringCandidates.push(freeze({
+        id: target,
+        target,
+        workspaceCoordinate: target,
+        reference: '',
+        referenceQualification: providerReference?.qualification || 'unresolved',
+        canonicalReference: '',
+        kind,
+        label,
+        ...(authoringLabel ? { authoringLabel } : {}),
+        workspaceId,
+        artifactPath: path,
+        schemaId,
+        qualification: 'authoring-assist',
+        qualificationBoundary: 'Readable Role/Party material is presented as authoring assistance only. It does not establish an exact endpoint Reference or semantic authority.'
+      }));
+    }
   }
   candidates.sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label) || a.target.localeCompare(b.target));
+  const currentRoleCandidates = projectCurrentRoleCandidates(records, candidates);
   return freeze({
     schema: PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID,
     status: 'ready',
     workspaceId,
     sourceAuthority,
     candidates,
+    currentRoleCandidates,
+    authoringCandidates,
     findings,
     operationBoundary: { sourceMutation: false, remoteWrite: false, identityInference: false },
     boundary: 'Projects only exactly qualified Role/Party artifacts from the bounded .topics material surface owned by one exact qualified requested Workspace artifact. target/workspaceCoordinate preserves explicit Workspace artifact identity; reference preserves an exact-qualified provider reference when supplied and otherwise remains absent; workspaceCoordinate alone carries the internal package-local Workspace/path identity; Role authoringLabel is the exact qualified Role Identity / Role Label semantic value while label remains presentation-only; nested fixture Workspaces, repository-wide scans, caches, chronology, filenames, holder labels, and repository basenames never infer endpoint identity.'
   });
+}
+
+
+function projectCurrentRoleCandidates(records = [], candidates = []) {
+  const roleCandidates = candidates.filter((candidate) => String(candidate.kind || '') === 'role');
+  if (!roleCandidates.length) return [];
+  const roleRecords = records.filter((record) => {
+    const path = norm(record.path || record.id || '');
+    if (!path) return false;
+    try { return schemaIdForRecord(record) === 'tiinex.party.role.v1'; }
+    catch { return false; }
+  });
+  if (!roleRecords.length) return [];
+  const resolved = resolveLineage(roleRecords, { depth: 'loaded-workspace' });
+  const roleNodeIds = new Set(resolved.nodes.map((node) => String(node.id || '')));
+  const childRoleIds = new Set(
+    (resolved.edges || [])
+      .filter((edge) => edge.kind === 'parent' && edge.status !== 'missing' && roleNodeIds.has(String(edge.to || '')) && roleNodeIds.has(String(edge.from || '')))
+      .map((edge) => String(edge.from || ''))
+  );
+  const leaves = new Set(
+    resolved.nodes
+      .filter((node) => !childRoleIds.has(String(node.id || '')))
+      .map((node) => norm(node.path || node.id || ''))
+      .filter(Boolean)
+  );
+  return roleCandidates
+    .filter((candidate) => leaves.has(norm(candidate.artifactPath || '')))
+    .map((candidate) => ({ ...candidate, currentLeaf: true }))
+    .sort((a, b) => a.label.localeCompare(b.label) || a.target.localeCompare(b.target));
 }
 
 
@@ -140,7 +194,16 @@ function finding(severity, code, message, context = {}) { return freeze({ severi
 
 function normalizeRecords(input = {}) {
   if (Array.isArray(input.records)) return input.records;
-  return (Array.isArray(input.files) ? input.files : []).filter((item) => typeof item?.content === 'string').map((item) => ({ id: String(item.path || ''), path: String(item.path || ''), markdown: String(item.content || ''), sourceMode: item.sourceMode || '' }));
+  return (Array.isArray(input.files) ? input.files : []).filter((item) => typeof item?.content === 'string').map((item) => {
+    const record = { id: String(item.path || ''), path: String(item.path || ''), markdown: String(item.content || ''), sourceMode: item.sourceMode || '' };
+    try {
+      const parsed = parseArtifactMarkdown(record.markdown);
+      const parent = parsed.envelope?.parent || {};
+      return { ...record, title: parsed.title || '', trace: String(parent.trace || parent.traceRaw || ''), origin: String(parent.origin || '') };
+    } catch {
+      return record;
+    }
+  });
 }
 function norm(value = '') { return String(value || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, ''); }
 function token(value = '') { return String(value || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, ''); }

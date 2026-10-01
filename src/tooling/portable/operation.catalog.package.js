@@ -15,9 +15,11 @@ import { projectQualifiedWorkspacePackageSources } from './handoff/workspacePack
 import { projectPortableHandoffAuthoringPlan } from './handoff/handoffAuthoringPlan.js';
 import { projectQualifiedHandoffEndpoints } from './handoff/handoffEndpointProjection.js';
 import { projectPortableHandoffParticipants } from './handoff/handoffParticipantProjection.js';
+import { projectWorkspaceCarrierEntry } from './handoff/workspaceEntryProjection.js';
 import { projectPortableOperatorContext } from './handoff/operatorContextProjection.js';
 import { projectPortableStagedValidation } from './editor/staged.validation.js';
 import { projectHandoffCarrierMajorFrontier } from './handoff/carrierMajorFrontier.js';
+import { projectHandoffCarrierMajorAllocation } from './handoff/carrierMajorAllocation.js';
 
 export function createPortablePackageOperationEntries({ operation, wrapPortableResult, sessionOperationResult }) {
   return Object.freeze({
@@ -56,6 +58,13 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     inputSchema: 'tiinex.portable.handoff-carrier-major-frontier.request.v1',
     handler: (input = {}) => wrapPortableResult('project-handoff-carrier-major-frontier', projectHandoffCarrierMajorFrontier(input))
   }),
+  'project-handoff-carrier-major-allocation': operation({
+    name: 'project-handoff-carrier-major-allocation',
+    description: 'Allocate the next monotonic carrier Major for a transport prefix from explicit observed filenames; Parent is optional and qualified separately.',
+    safety: 'planning-only-read-only',
+    inputSchema: 'tiinex.portable.handoff-carrier-major-allocation.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-handoff-carrier-major-allocation', projectHandoffCarrierMajorAllocation(input))
+  }),
   'project-handoff-carrier-transport-name': operation({
     name: 'project-handoff-carrier-transport-name',
     description: 'Project transport-only continuation or Major filenames from explicit transport filenames without consulting carrier lineage.',
@@ -69,6 +78,13 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     safety: 'planning-only-read-only',
     inputSchema: 'tiinex.portable.handoff-carrier-output-collision.request.v1',
     handler: (input = {}) => wrapPortableResult('project-handoff-carrier-output-collision', projectHandoffCarrierOutputCollision(input))
+  }),
+  'project-workspace-carrier-entry': operation({
+    name: 'project-workspace-carrier-entry',
+    description: 'Project Guided Entry modes and exact cold-start transport text for a qualified pointerless Workspace carrier.',
+    safety: 'planning-only-read-only',
+    inputSchema: 'tiinex.portable.workspace-entry-projection.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-workspace-carrier-entry', projectWorkspaceCarrierEntry(input))
   }),
   'orient-handoff-package': operation({
     name: 'orient-handoff-package',

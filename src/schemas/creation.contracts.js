@@ -40,7 +40,7 @@ export function buildArtifactCreationContract(input = {}, options = {}) {
   const transitionType = String(input.transitionType || options.transitionType || 'create-artifact').trim();
   const creationCapability = qualifyArtifactCreationCapability(module, transitionType);
   const creationAuthority = creationCapability.authority?.compiledContract?.creation || {};
-  const creation = composeCreationAuthority(module, creationCapability.authority, creationAuthority);
+  const creation = Object.freeze({ ...composeCreationAuthority(module, creationCapability.authority, creationAuthority), authoringAffordances: Object.freeze([...(module?.authoringAffordances || [])].map((item) => Object.freeze({ ...item, fills: item?.fills ? Object.freeze({ ...item.fills }) : undefined }))) });
   const renderer = creationCapability.implementation?.state === 'implemented'
     ? { status: CapabilityStatus.implemented, ...(creationCapability.implementation.renderer || {}) }
     : { status: CapabilityStatus.unavailable, id: '', scope: transitionType };

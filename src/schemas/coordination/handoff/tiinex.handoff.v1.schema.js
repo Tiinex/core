@@ -10,5 +10,10 @@ export const handoffSchemaModule = defineGenericArtifactSchemaModule({
   role: 'workflow-handoff-artifact',
   summary: 'Maintained declarative bounded work/responsibility transfer artifact.',
   binding,
-  schemaSource
+  schemaSource,
+  authoringAffordances: Object.freeze([
+    { input: 'From', displayLabel: 'From', control: 'reference-picker', candidateSource: 'qualified-handoff-endpoints', manualAllowed: true, selectionKey: 'From', fills: { 'From Kind': 'kind', 'From Reference': 'reference' } },
+    { input: 'To', displayLabel: 'To', control: 'reference-picker', candidateSource: 'qualified-handoff-endpoints', manualAllowed: true, selectionKey: 'To', fills: { 'To Kind': 'kind', 'To Reference': 'reference' } },
+    { input: 'Return To Reference', displayLabel: 'Return To', control: 'reference-picker', candidateSource: 'qualified-handoff-endpoints', manualAllowed: true, selectionKey: 'Return To', fills: { 'Return To Reference': 'reference' } }
+  ])
 });
