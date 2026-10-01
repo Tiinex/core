@@ -186,8 +186,11 @@ export async function buildNativeSchemaSyncPlan(options = {}) {
 }
 
 function buildBinding(entry, existing, published) {
-  const permalink = published ? `https://github.com/${entry.sourceRepository}/blob/${entry.sourceCommit}/${encodeGithubPath(entry.sourcePath)}` : '';
-  const rawUrl = published ? `https://raw.githubusercontent.com/${entry.sourceRepository}/${entry.sourceCommit}/${encodeGithubPath(entry.sourcePath)}` : '';
+  const preservedPublication = !published && publishedBindingMatchesEntry(existing, entry) ? existing : null;
+  const sourceCommit = published ? entry.sourceCommit : String(preservedPublication?.sourceCommit || '');
+  const referencePublished = Boolean(published || preservedPublication);
+  const permalink = referencePublished ? `https://github.com/${entry.sourceRepository}/blob/${sourceCommit}/${encodeGithubPath(entry.sourcePath)}` : '';
+  const rawUrl = referencePublished ? `https://raw.githubusercontent.com/${entry.sourceRepository}/${sourceCommit}/${encodeGithubPath(entry.sourcePath)}` : '';
   return Object.freeze({
     schemaId: entry.schemaId,
     kind: String(existing?.kind || 'structural'),
@@ -199,17 +202,31 @@ function buildBinding(entry, existing, published) {
     rawUrl,
     sourcePath: entry.sourcePath,
     sourceRepository: entry.sourceRepository,
-    sourceCommit: published ? entry.sourceCommit : '',
+    sourceCommit,
     sourceBlobSha: entry.gitBlobSha,
-    originId: published ? `tiinex-docs-${entry.sourceCommit.slice(0, 8)}` : 'tiinex-docs-local',
+    originId: referencePublished ? `tiinex-docs-${sourceCommit.slice(0, 8)}` : 'tiinex-docs-local',
     originTrustRole: String(existing?.originTrustRole || 'canonical-core'),
     checksum: Object.freeze({ algorithm: 'sha256', value: entry.sha256 }),
     capabilityContract: String(existing?.capabilityContract || 'tiinex.schema.module.v1'),
-    snapshotCompleteness: entry.snapshotCompleteness,
-    publicationState: entry.publicationState,
-    schemaReferencePublicationState: entry.schemaReferencePublicationState,
+    snapshotCompleteness: referencePublished ? 'exact-canonical-docs-snapshot' : entry.snapshotCompleteness,
+    publicationState: referencePublished ? 'published-immutable-canonical' : entry.publicationState,
+    schemaReferencePublicationState: referencePublished ? 'published-immutable-canonical' : entry.schemaReferencePublicationState,
     bindingVersion: String(existing?.bindingVersion || 'tiinex.web.schema-binding.v1')
   });
+}
+
+function publishedBindingMatchesEntry(existing = null, entry = {}) {
+  if (!existing || String(existing?.publicationState || '') !== 'published-immutable-canonical') return false;
+  if (String(existing?.schemaReferencePublicationState || '') !== 'published-immutable-canonical') return false;
+  const sourceCommit = String(existing?.sourceCommit || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(sourceCommit)) return false;
+  if (String(existing?.sourceRepository || '') !== String(entry?.sourceRepository || '')) return false;
+  if (normalizePath(existing?.sourcePath || '') !== normalizePath(entry?.sourcePath || '')) return false;
+  const bindingBlob = String(existing?.sourceBlobSha || '').trim().toLowerCase();
+  const entryBlob = String(entry?.gitBlobSha || '').trim().toLowerCase();
+  const bindingSha256 = String(existing?.checksum?.value || existing?.checksum || '').trim().toLowerCase();
+  const entrySha256 = String(entry?.sha256 || '').trim().toLowerCase();
+  return Boolean(bindingBlob && entryBlob && bindingBlob === entryBlob && bindingSha256 && entrySha256 && bindingSha256 === entrySha256);
 }
 
 function buildPackManifest({ repository, sourceCommit, published, entries, catalogEntries }) {

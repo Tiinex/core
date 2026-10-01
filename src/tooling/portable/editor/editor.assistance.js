@@ -73,7 +73,7 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
     sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
     replacementMarkdown: referenceRepair.markdown,
     diagnosticCodes: referenceRepair.diagnosticCodes,
-    boundary: 'Repairs only deterministically malformed Workspace-qualified Parent recovery locators and/or a bare Current Schema id when exact qualified current-schema source authority exists; reseals self integrity and exposes the replacement only after shared audit and loaded-descendant guardrails re-qualify it. External Parent availability is not invented.'
+    boundary: 'Repairs only deterministically malformed Workspace-qualified Parent recovery locators and/or bare Envelope/Current Schema ids when shared audit exposes exact qualified immutable schema targets; reseals self integrity and exposes the replacement only after shared audit and loaded-descendant guardrails re-qualify it. External Parent availability is not invented.'
   }));
 
   const referenceResolution = projectReferenceResolutionAssistance(markdown, referenceResolutions);
@@ -438,21 +438,31 @@ function deterministicReferenceHygieneRepair(record = {}, audit = {}, markdown =
     diagnosticCodes.push('root.parent.recovery.workspace-qualified.malformed', 'portable.lineage-integrity.parent-unresolved');
   }
 
-  const exactTarget = String(audit?.schemaValidationAuthority?.currentReference?.target || '').trim();
-  const schemaId = String(audit?.schemaId || '').trim();
-  const schemaWarning = (audit?.findings || []).some((item) => String(item?.code || '') === 'schema.reference.exact-target-omitted');
-  if (schemaWarning && schemaId && exactTarget && audit?.schemaValidationAuthority?.currentReference?.state === 'qualified') {
+  const schemaReferenceRepairs = (audit?.findings || [])
+    .filter((item) => String(item?.code || '') === 'schema.reference.exact-target-omitted')
+    .map((item) => Object.freeze({
+      field: String(item?.params?.field || '').trim(),
+      schemaId: String(item?.params?.schemaId || '').trim(),
+      exactTarget: String(item?.params?.exactTarget || '').trim()
+    }))
+    .filter((item) => (item.field === 'Envelope Schema' || item.field === 'Current Schema') && item.schemaId && item.exactTarget);
+  if (schemaReferenceRepairs.length) {
     const schemaLines = candidate.replace(/\r\n?/g, '\n').split('\n');
-    const index = schemaLines.findIndex((line) => /^\s*-\s+Current Schema:\s*/.test(line));
-    if (index >= 0) {
-      const match = schemaLines[index].match(/^(\s*-\s+Current Schema:\s*)([^\s].*)$/);
+    for (const repair of schemaReferenceRepairs) {
+      const pattern = repair.field === 'Envelope Schema'
+        ? /^\s*-\s+Envelope Schema:\s*/
+        : /^\s*-\s+Current Schema:\s*/;
+      const index = schemaLines.findIndex((line) => pattern.test(line));
+      if (index < 0) continue;
+      const match = schemaLines[index].match(new RegExp(`^(\\s*-\\s+${repair.field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*)([^\\s].*)$`));
       const raw = String(match?.[2] || '').trim();
-      if (match && raw === schemaId) {
-        schemaLines[index] = `${match[1]}[${schemaId}](${exactTarget})`;
-        candidate = schemaLines.join('\n');
-        schemaReferenceChanged = true;
-        diagnosticCodes.push('schema.reference.exact-target-omitted');
-      }
+      if (!match || raw !== repair.schemaId) continue;
+      schemaLines[index] = `${match[1]}[${repair.schemaId}](${repair.exactTarget})`;
+      schemaReferenceChanged = true;
+    }
+    if (schemaReferenceChanged) {
+      candidate = schemaLines.join('\n');
+      diagnosticCodes.push('schema.reference.exact-target-omitted');
     }
   }
 

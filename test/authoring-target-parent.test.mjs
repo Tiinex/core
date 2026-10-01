@@ -362,3 +362,18 @@ test('Feedback continuation composes exact inherited Signal creation bindings an
     assert.match(created.draft.markdown, new RegExp(`^## ${heading}$`, 'm'));
   }
 });
+
+test('editor assistance repairs bare Envelope and Current Schema ids when exact immutable authorities are qualified', () => {
+  const canonical = parentMarkdown('.topics/source/001-schema-reference-repair.trace.md');
+  const degraded = sealC14nV2Self(canonical
+    .replace(/^- Envelope Schema: \[tiinex\.root\.v1\]\([^)]+\)$/m, '- Envelope Schema: tiinex.root.v1')
+    .replace(/^  - Current Schema: \[tiinex\.topic\.v1\]\([^)]+\)$/m, '  - Current Schema: tiinex.topic.v1'));
+  assert.equal(degraded.state, 'sealed');
+  const path = '.topics/source/001-schema-reference-repair.trace.md';
+  const assistance = projectPortableEditorAssistance({ records: [{ path, markdown: degraded.markdown }], focusPath: path });
+  const action = assistance.documents[0].actions.find((item) => item.id === 'repair-qualified-references-and-self-integrity');
+  assert.ok(action);
+  assert.match(action.replacementMarkdown, /- Envelope Schema: \[tiinex\.root\.v1\]\(https:\/\/github\.com\/Tiinex\/docs\/blob\//);
+  assert.match(action.replacementMarkdown, /  - Current Schema: \[tiinex\.topic\.v1\]\(https:\/\/github\.com\/Tiinex\/docs\/blob\//);
+  assert.equal(canonicalC14nV2SelfState(action.replacementMarkdown).state, 'verified');
+});

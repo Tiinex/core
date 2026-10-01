@@ -78,3 +78,39 @@ test('specialized runtime projections omit compiler-only merged group trees whil
   assert.ok(Array.isArray(runtime.validationContract.validation.ordinaryGroups));
   assert.ok(Array.isArray(runtime.validationContract.declarations));
 });
+
+test('local-unpublished sync preserves exact previously published schema-reference authority for unchanged specialized schema bytes', async (t) => {
+  const docsRoot = await materializeDocsSnapshot();
+  const coreRoot = await mkdtemp(path.join(os.tmpdir(), 'tiinex-schema-sync-core-'));
+  t.after(() => rm(docsRoot, { recursive: true, force: true }));
+  t.after(() => rm(coreRoot, { recursive: true, force: true }));
+  const topic = catalog.entries.find((entry) => entry.schemaId === 'tiinex.topic.v1');
+  assert.ok(topic);
+  const commit = 'a'.repeat(40);
+  const bindingPath = path.join(coreRoot, 'src/schemas/core/topic/tiinex.topic.v1.schema.json');
+  await mkdir(path.dirname(bindingPath), { recursive: true });
+  await writeFile(bindingPath, JSON.stringify({
+    schemaId: 'tiinex.topic.v1',
+    kind: 'concrete',
+    role: 'core-topic-artifact',
+    module: './tiinex.topic.v1.schema.js',
+    canonicalUri: 'tiinex://schemas/core/topic/tiinex.topic.v1',
+    sourceRepository: 'Tiinex/docs',
+    sourcePath: topic.binding.sourcePath,
+    sourceCommit: commit,
+    sourceBlobSha: topic.binding.sourceBlobSha,
+    checksum: topic.binding.checksum,
+    publicationState: 'published-immutable-canonical',
+    schemaReferencePublicationState: 'published-immutable-canonical',
+    bindingVersion: 'tiinex.web.schema-binding.v1'
+  }, null, 2));
+  const plan = await buildNativeSchemaSyncPlan({ coreRoot, docsRoot, repository: 'Tiinex/docs', published: false });
+  assert.equal(plan.status, 'ready');
+  const output = plan.outputs.find((item) => item.path.endsWith('/core/topic/tiinex.topic.v1.schema.json'));
+  assert.ok(output);
+  const binding = JSON.parse(output.bytes.toString('utf8'));
+  assert.equal(binding.publicationState, 'published-immutable-canonical');
+  assert.equal(binding.schemaReferencePublicationState, 'published-immutable-canonical');
+  assert.equal(binding.sourceCommit, commit);
+  assert.match(binding.permalink, new RegExp(`/blob/${commit}/\\.topics/\\.schemas/core/topic/tiinex\\.topic\\.v1\\.schema\\.md$`));
+});
