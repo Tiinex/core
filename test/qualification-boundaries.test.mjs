@@ -156,6 +156,25 @@ test('cross-Workspace Parent authoring error names the missing explicit Parent-b
  } finally { await rm(dir,{recursive:true,force:true}); }
 });
 
+
+test('cross-Workspace durable authoring requires a version-stable Parent permalink in addition to exact Parent bytes',async()=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'tiinex-author-parent-ref-'));
+ try {
+  const bodyPath=path.join(dir,'body.md');
+  const parentPath=path.join(dir,'parent.md');
+  await writeFile(bodyPath,'# Child\n','utf8');
+  await writeFile(parentPath,root,'utf8');
+  await assert.rejects(
+   runCommonAuthorCli({flags:{workspace:dir,schema:'tiinex.task.v1',path:'.topics/child.trace.md',body:bodyPath,parent:'business::.topics/parent.trace.md','parent-source':parentPath}},{}),
+   (error)=>/portable\.cli\.author\.parent-reference\.required/.test(String(error?.message||'')) && /commit-pinned browse\+git permalink/.test(String(error?.message||''))
+  );
+  await assert.rejects(
+   runCommonAuthorCli({flags:{workspace:dir,schema:'tiinex.task.v1',path:'.topics/child.trace.md',body:bodyPath,parent:'business::.topics/parent.trace.md','parent-source':parentPath,'parent-reference':'https://github.com/Tiinex/business/blob/master/.topics/parent.trace.md'}},{}),
+   (error)=>/portable\.cli\.author\.parent-reference\.unqualified/.test(String(error?.message||''))
+  );
+ } finally { await rm(dir,{recursive:true,force:true}); }
+});
+
 test('qualified package-parent Workspace providers supply exact requirement bytes without local-root provenance',async()=>{
  const data=new TextEncoder().encode('# Loom Role\n');
  const workspaceRuntimeById=new Map([['business',{

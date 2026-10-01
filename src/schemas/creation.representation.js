@@ -59,10 +59,27 @@ export function qualifyRootCreationRepresentation(markdown = '', contract = {}) 
   expectCount(findings, 'Continuity Integrity method entry', observed.integrityEntries, 1);
   expectCount(findings, `${C14N_V2_METHOD_ID} Towards:self entry`, observed.selfIntegrityEntries.length, 1);
   qualifyPrimarySelfMethodReference(findings, observed, contract);
-  for (const section of sections) expectCount(findings, `bound section ${section}`, observed.sectionBodies[section]?.length || 0, 1);
+  qualifyBoundSectionMultiplicity(findings, observed, sections, creation);
   return Object.freeze({ state: findings.length ? 'ambiguous' : 'qualified', findings: Object.freeze(findings), observed });
 }
 
+
+
+function qualifyBoundSectionMultiplicity(findings, observed, sections, creation = {}) {
+  const requiredInputs = new Set((creation.requiredInputs || []).map((value) => String(value || '').trim()).filter(Boolean));
+  const requiredSections = new Set((creation.requiredSections || []).map((value) => String(value || '').trim()).filter(Boolean));
+  const bindings = Array.isArray(creation.inputBindings) ? creation.inputBindings : [];
+  const supplemental = Array.isArray(creation.supplementalRequiredFields) ? creation.supplementalRequiredFields : [];
+  for (const section of sections) {
+    const count = observed.sectionBodies[section]?.length || 0;
+    const sectionBindings = bindings.filter((binding) => String(binding?.section || '') === String(section || ''));
+    const required = requiredSections.has(section)
+      || sectionBindings.some((binding) => requiredInputs.has(String(binding?.input || '').trim()))
+      || supplemental.some((item) => String(item?.section || '') === String(section || ''));
+    if (required) expectCount(findings, `bound section ${section}`, count, 1);
+    else if (count > 1) findings.push(`optional bound section ${section} allows at most 1 occurrence; observed ${count}.`);
+  }
+}
 
 function qualifyPrimarySelfMethodReference(findings, observed, contract) {
   if (observed.selfIntegrityEntries.length !== 1) return;
@@ -195,7 +212,7 @@ export function qualifyContinuationCreationRepresentation(markdown = '', contrac
   expectCount(findings, `${C14N_V2_METHOD_ID} Towards:self entry`, observed.selfIntegrityEntries.length, 1);
   qualifyPrimarySelfMethodReference(findings, observed, contract);
   qualifyParentTargetIntegrityEntry(findings, observed, contract, options.parentIntegrityTarget || '');
-  for (const section of sections) expectCount(findings, `bound section ${section}`, observed.sectionBodies[section]?.length || 0, 1);
+  qualifyBoundSectionMultiplicity(findings, observed, sections, creation);
 
   const text = String(markdown || '').replace(/\r\n?/g, '\n');
   const parentBlock = exactTopLevelBlock(text, 'Parent');

@@ -3,8 +3,11 @@
 - Envelope Schema: tiinex.root.v1
 - Current
   - Current Schema: tiinex.entry.session.v1
-  - Created At: 2026-10-01 00:00:00
+  - Created At: 2026-10-01 19:51:43
+  - Authors: Anchor; Axiom
+  - Why: Provide the Core-native Resume Session Entry through the ordinary schema authoring path.
   - Summary: Core-native Entry for reconstructing available continuity before continuing.
+  - Status: active/local
 
 ---
 
@@ -66,6 +69,6 @@
 
 # Continuity Integrity
 
-- sha256-base64url-c14n-v2
+- [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value:oms3UG7n1nh6MvMCiXV2YL4pUIy-5gvxdAExbYs5d8E
+  - Value: 8Rn0_V6zb3mKWR1s_MW30JkMqd_3VRegp4T2biC0-vY

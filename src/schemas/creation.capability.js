@@ -210,7 +210,10 @@ function qualifyOrdinaryCreationExecutionResult(module = {}, authority = {}, con
       }
     } catch (error) { portableFindings.push(String(error?.message || error || 'portable-contract-validation-failed')); }
   }
-  if (exactValidation) inputFindings.push(...qualifyStructuredCreationInputFidelity(requiredInputs, inputBindings, values, exactValidation));
+  if (exactValidation) {
+    const suppliedInputs = [...requiredInputs, ...(creation.optionalInputs || []).filter((name) => Object.prototype.hasOwnProperty.call(values, name))];
+    inputFindings.push(...qualifyStructuredCreationInputFidelity([...new Set(suppliedInputs)], inputBindings, values, exactValidation));
+  }
   const integrity = canonicalC14nV2SelfState(markdown);
   const integrityFindings = integrity.state === 'verified' ? [] : [`Creation result self-integrity is not verified: ${integrity.reason || integrity.state}.`];
   const inputBindingQualification = Object.freeze({ state: inputFindings.length ? 'failed' : 'qualified', findings: Object.freeze(inputFindings) });

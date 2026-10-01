@@ -100,9 +100,14 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
   if ((creation.requiredShape || []).some((item) => String(item?.primitive?.kind || '') === 'body-prose-block')) {
     lines.push('', 'Provide the required unheaded body prose here.');
   }
+  const optionalInputs = new Set((creation.optionalInputs || []).map((value) => String(value || '').trim()).filter(Boolean));
   for (const section of sections) {
     const sectionBindings = bindings.filter((candidate) => candidate?.section === section && candidate?.kind !== 'root-current-summary-body-title');
     if (!sectionBindings.length) throw new Error(`creation-input-binding-unavailable:${section}`);
+    const supplementalForSection = supplementalRequiredFields.filter((item) => String(item?.section || '') === String(section || ''));
+    const hasProvidedInput = sectionBindings.some((binding) => creationValue(values, binding?.input) !== undefined);
+    const hasRequiredInput = sectionBindings.some((binding) => !optionalInputs.has(String(binding?.input || '').trim()));
+    if (!hasProvidedInput && !hasRequiredInput && supplementalForSection.length === 0) continue;
     lines.push('', `## ${section}`, '');
     if (sectionBindings.length === 1 && sectionBindings[0]?.kind === 'section-body') {
       const binding = sectionBindings[0];
@@ -118,7 +123,6 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
     if ((fieldBindings.length || groupBindings.length) && declarationBindings.length) throw new Error(`creation-section-binding-ambiguous:${section}`);
     if (declarationBindings.length > 1 || groupBindings.length > 1) throw new Error(`creation-section-binding-ambiguous:${section}`);
     if (fieldBindings.length) {
-      const optionalInputs = new Set((creation.optionalInputs || []).map((value) => String(value || '').trim()).filter(Boolean));
       for (const binding of fieldBindings) {
         const value = creationValue(values, binding.input);
         const optional = String(binding?.requirement || '').trim() === 'optional' || optionalInputs.has(String(binding?.input || '').trim());
@@ -128,7 +132,7 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
         }
         lines.push(`- ${binding.field || binding.input}: ${exactOneLineValue(value, binding.input)}`);
       }
-      for (const supplemental of supplementalRequiredFields.filter((item) => String(item?.section || '') === String(section || ''))) {
+      for (const supplemental of supplementalForSection) {
         lines.push(`- ${supplemental.field}: ${exactOneLineValue(supplemental.value, supplemental.field)}`);
       }
       continue;

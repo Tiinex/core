@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { nativeEntryMarkdown } from '../src/tooling/portable/entry/native.entry.generated.js';
-import { nativeEntrySchemaMarkdown, nativeEntrySchemaMarkdownById } from '../src/tooling/portable/entry/native.entry.schema.generated.js';
+import { nativeSchemaMarkdown } from '../src/schemas/generated/native.schema.pack.js';
 import { projectPortableEntryCatalog } from '../src/tooling/portable/entry/entry.catalog.js';
 import { canonicalC14nV2SelfState, sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 
@@ -77,7 +77,7 @@ test('carried Entry artifacts remain distinct from native entries and .schemas n
         workspaceId: 'business',
         archive: { entries: [
           { path: '.topics/entries/team-start.trace.md', data: new TextEncoder().encode(carried) },
-          { path: '.topics/.schemas/entry/tiinex.entry.v1.schema.md', data: new TextEncoder().encode(nativeEntrySchemaMarkdown) }
+          { path: '.topics/.schemas/entry/tiinex.entry.v1.schema.md', data: new TextEncoder().encode(nativeSchemaMarkdown('tiinex.entry.v1')) }
         ] }
       }]
     }
@@ -92,13 +92,13 @@ test('carried Entry artifacts remain distinct from native entries and .schemas n
 });
 
 test('Entry schema and native Entry artifacts carry valid self integrity', () => {
-  assert.equal(canonicalC14nV2SelfState(nativeEntrySchemaMarkdown).state, 'verified');
-  assert.equal(canonicalC14nV2SelfState(nativeEntrySchemaMarkdownById['tiinex.entry.session.v1']).state, 'verified');
+  assert.equal(canonicalC14nV2SelfState(nativeSchemaMarkdown('tiinex.entry.v1')).state, 'verified');
+  assert.equal(canonicalC14nV2SelfState(nativeSchemaMarkdown('tiinex.entry.session.v1')).state, 'verified');
   for (const [, markdown] of nativeEntryMarkdown) assert.equal(canonicalC14nV2SelfState(markdown).state, 'verified');
 });
 
 test('authored Core-native Entry material cannot drift from its generated runtime projection', () => {
-  const check = spawnSync(process.execPath, ['tools/build-native-entries.mjs', '--check', '--docs', '../docs'], { cwd: root, encoding: 'utf8' });
+  const check = spawnSync(process.execPath, ['tools/build-native-entries.mjs', '--check'], { cwd: root, encoding: 'utf8' });
   assert.equal(check.status, 0, check.stderr || check.stdout);
 });
 

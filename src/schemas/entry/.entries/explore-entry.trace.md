@@ -3,8 +3,11 @@
 - Envelope Schema: tiinex.root.v1
 - Current
   - Current Schema: tiinex.entry.session.v1
-  - Created At: 2026-10-01 00:00:00
+  - Created At: 2026-10-01 19:51:44
+  - Authors: Anchor; Axiom
+  - Why: Provide the Core-native Explore Session Entry through the ordinary schema authoring path.
   - Summary: Core-native Entry for broad current grounding before choosing a substantive direction.
+  - Status: active/local
 
 ---
 
@@ -68,6 +71,6 @@
 
 # Continuity Integrity
 
-- sha256-base64url-c14n-v2
+- [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value:Vg5le6hnShwRRr8kZ5-uhTQhw-QiIBAJsf2YapiaDa4
+  - Value: BFnH2zMfpwlrq-MZRlg1umBs-ypX8ozVs7twGfvHFgA

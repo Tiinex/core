@@ -1,5 +1,8 @@
 import { auditPortableRecord } from '../audit/audit.capability.js';
 import { C14N_V2_METHOD_ID, canonicalC14nV2SelfState, sealC14nV2Self } from '../../../integrity/integrity.c14nV2.js';
+import { parsePortableSchemaDocument } from '../schema/schema.contract.js';
+import { compilePortableSchemaContractChain } from '../schema/contract.compile.js';
+import { nativeSchemaMarkdown } from '../../../schemas/generated/native.schema.pack.js';
 import { sha256Hex } from '../../../export/package.bytes.js';
 import { integrityMethodReferenceAuthorityForCreation } from '../../../integrity/integrity.methodReference.js';
 import { inspectPortableLineageIntegrity } from '../lineage/lineage.integrity.plan.js';
@@ -26,6 +29,7 @@ export function projectPortableEditorAssistance(input = {}) {
 }
 
 function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = []) {
+  if (isCanonicalSchemaSourceRecord(record)) return projectSchemaSourceDocument(record, records);
   const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true });
   const markdown = String(record.markdown || '');
   const recordPath = norm(record.path || record.id || '');
@@ -128,6 +132,208 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
     diagnostics,
     actions
   });
+}
+
+
+function isCanonicalSchemaSourceRecord(record = {}) {
+  const path = norm(record.path || record.id || '');
+  return /(?:^|\/)\.topics\/\.schemas\/.+\.schema\.md$/i.test(path) || /\.schema\.md$/i.test(path);
+}
+
+function projectSchemaSourceDocument(record = {}, records = []) {
+  const markdown = String(record.markdown || '');
+  const recordPath = norm(record.path || record.id || '');
+  const findings = [];
+  let document = null;
+  try { document = parsePortableSchemaDocument(markdown); }
+  catch (error) {
+    findings.push(schemaSourceFinding('error', 'schema-source.parse.invalid', error?.message || 'Schema source could not be parsed.', { line: 1 }));
+  }
+  const schemaId = String(document?.schemaId || '').trim();
+  if (document && !schemaId) findings.push(schemaSourceFinding('error', 'schema-source.schema-id.missing', 'Schema source has no Current Schema identifier.', { field: 'Current Schema' }));
+
+  const index = schemaSourceIndex(records);
+  if (schemaId && markdown) index.set(schemaId, Object.freeze({ path: recordPath, markdown, document }));
+  const lineage = schemaId ? schemaSourceLineage(schemaId, index) : { state: 'blocked', records: [], reason: 'schema-id-missing', missingSchemaId: '' };
+  if (lineage.state === 'missing-parent') findings.push(schemaSourceFinding('error', 'schema-source.parent.missing', `Schema ${schemaId} declares unavailable Parent ${lineage.missingSchemaId}.`, { field: 'Parent Schema' }));
+  else if (lineage.state === 'cycle') findings.push(schemaSourceFinding('error', 'schema-source.lineage.cycle', `Schema lineage cycle detected: ${lineage.cycle.join(' -> ')}.`, { field: 'Parent Schema' }));
+  else if (lineage.state === 'ready') {
+    try {
+      const compiled = compilePortableSchemaContractChain(lineage.records.map((item) => item.markdown));
+      if (compiled?.lineageQualification?.state !== 'valid') findings.push(schemaSourceFinding('error', 'schema-source.lineage.compile-unqualified', `Compiled schema lineage is not valid for ${schemaId}. ${(compiled?.lineageQualification?.findings || []).join(' ')}`.trim(), { field: 'Current Schema' }));
+    } catch (error) {
+      findings.push(schemaSourceFinding('error', 'schema-source.contract.compile-failed', error?.message || `Schema contract compilation failed for ${schemaId}.`, { field: 'Current Schema' }));
+    }
+  }
+
+  const self = canonicalC14nV2SelfState(markdown);
+  if (self.state === 'mismatch') findings.push(schemaSourceFinding('error', 'integrity.c14n-v2.mismatch', 'c14n-v2 self-integrity does not match the current canonical schema bytes.'));
+  else if (self.state === 'unavailable') findings.push(schemaSourceFinding('error', 'schema-source.integrity.self-missing', 'Schema source has no primary c14n-v2 self-integrity entry.'));
+  else if (self.state === 'ambiguous') findings.push(schemaSourceFinding('error', 'integrity.c14n-v2.ambiguous', 'Schema source self-integrity is ambiguous and cannot be deterministically validated.'));
+  else if (self.state === 'prepared') findings.push(schemaSourceFinding('warning', 'schema-source.integrity.self-unsealed', 'Schema source self-integrity is prepared but not sealed.'));
+
+  let parentDigestRepairRequired = false;
+  let parentDigestCode = '';
+  let parentDigest = '';
+  if (document?.parentSchemaId && lineage.state === 'ready' && lineage.records.length >= 2) {
+    const parentRecord = lineage.records.at(-2);
+    const parentSelf = canonicalC14nV2SelfState(parentRecord.markdown);
+    const declared = primaryParentIntegrityValue(markdown);
+    const declaredTarget = primaryParentIntegrityTarget(markdown);
+    const targetIsLocal = Boolean(declaredTarget) && !/^(?:https?:\/\/|[A-Za-z][A-Za-z0-9+.-]*:|[^/]+::)/i.test(declaredTarget);
+    if (targetIsLocal) {
+      if (parentSelf.state !== 'verified') findings.push(schemaSourceFinding('error', 'schema-source.parent.integrity-unavailable', `Parent schema ${document.parentSchemaId} does not expose verified c14n-v2 self-integrity.`, { field: 'Parent Schema' }));
+      else if (!declared) {
+        parentDigestRepairRequired = true;
+        parentDigestCode = 'schema-source.parent.integrity-missing';
+        parentDigest = parentSelf.declaredValue;
+        findings.push(schemaSourceFinding('error', 'schema-source.parent.integrity-missing', `Schema source does not declare Parent integrity for ${document.parentSchemaId}.`, { field: 'Value' }));
+      } else if (declared !== parentSelf.declaredValue) {
+        parentDigestRepairRequired = true;
+        parentDigestCode = 'portable.lineage-integrity.parent-target-mismatch';
+        parentDigest = parentSelf.declaredValue;
+        findings.push(schemaSourceFinding('error', 'portable.lineage-integrity.parent-target-mismatch', `Declared local Parent integrity does not match the loaded ${document.parentSchemaId} schema source.`));
+      }
+    }
+  }
+
+  const diagnostics = findings.map((finding) => projectDiagnostic(finding, markdown));
+  const actions = [];
+  const repair = deterministicSchemaSourceIntegrityRepair(markdown, { parentDigestRepairRequired, parentDigestCode, parentDigest, findings });
+  if (repair.state === 'ready' && qualifySchemaSourceReplacement(repair.markdown, record, records).state === 'qualified') actions.push(freeze({
+    id: 'repair-schema-source-integrity',
+    title: parentDigestRepairRequired ? 'Refresh schema Parent integrity and self seal' : 'Refresh schema self integrity',
+    kind: 'replace-document',
+    qualification: 'deterministic-shared-core',
+    sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
+    replacementMarkdown: repair.markdown,
+    diagnosticCodes: repair.diagnosticCodes,
+    boundary: 'Repairs only deterministic c14n-v2 integrity over the current schema source bytes and, when exact loaded Parent schema bytes are available, the declared Parent digest. It does not rewrite schema semantics, select a different Parent, publish authority, or invent source identity.'
+  }));
+
+  return freeze({
+    path: String(record.path || record.id || ''),
+    schemaId,
+    validator: {
+      state: findings.some((item) => item.severity === 'error') ? 'schema-source-invalid' : findings.some((item) => item.severity === 'warning') ? 'schema-source-degraded' : 'qualified-local-schema-source',
+      requestedSchema: schemaId,
+      resolvedThrough: schemaId,
+      fallbackUsed: false,
+      authorityState: 'schema-source-local',
+      authorityBasis: 'loaded-schema-source+compiled-inheritance+integrity',
+      authorityFindings: findings.map((item) => item.message)
+    },
+    diagnostics,
+    actions
+  });
+}
+
+function schemaSourceFinding(severity, code, message, params = {}) {
+  return Object.freeze({ severity, code, message, params: Object.freeze({ ...(params || {}) }) });
+}
+
+function schemaSourceIndex(records = []) {
+  const index = new Map();
+  for (const record of records || []) {
+    if (!isCanonicalSchemaSourceRecord(record)) continue;
+    const markdown = String(record.markdown || '');
+    let document; try { document = parsePortableSchemaDocument(markdown); } catch { continue; }
+    const schemaId = String(document?.schemaId || '').trim();
+    if (!schemaId || index.has(schemaId)) continue;
+    index.set(schemaId, Object.freeze({ path: norm(record.path || record.id || ''), markdown, document }));
+  }
+  return index;
+}
+
+function schemaSourceLineage(schemaId = '', index = new Map()) {
+  const records = [];
+  const seen = new Map();
+  let current = String(schemaId || '').trim();
+  while (current) {
+    if (seen.has(current)) return Object.freeze({ state: 'cycle', records: Object.freeze(records), cycle: Object.freeze([...records.slice(seen.get(current)).map((item) => item.document.schemaId), current]), missingSchemaId: '' });
+    seen.set(current, records.length);
+    let record = index.get(current) || null;
+    if (!record) {
+      const markdown = nativeSchemaMarkdown(current);
+      if (markdown) {
+        try { record = Object.freeze({ path: '', markdown, document: parsePortableSchemaDocument(markdown) }); } catch { record = null; }
+      }
+    }
+    if (!record) return Object.freeze({ state: 'missing-parent', records: Object.freeze(records), cycle: Object.freeze([]), missingSchemaId: current });
+    records.unshift(record);
+    const parentSchemaId = String(record.document?.parentSchemaId || '').trim();
+    if (!parentSchemaId) break;
+    current = parentSchemaId;
+  }
+  return Object.freeze({ state: 'ready', records: Object.freeze(records), cycle: Object.freeze([]), missingSchemaId: '' });
+}
+
+function primaryParentIntegrityValue(markdown = '') {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const index = primaryParentIntegrityValueLine(lines);
+  if (index < 0) return '';
+  const match = String(lines[index] || '').match(/^\s*-\s+Value\s*:\s*(.*?)\s*$/i);
+  return String(match?.[1] || '').trim();
+}
+
+function primaryParentIntegrityTarget(markdown = '') {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const headingIndex = lines.findIndex((line) => String(line || '').trim() === '# Continuity Integrity');
+  if (headingIndex < 0) return '';
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    const match = String(lines[index] || '').match(/^\s*-\s+Towards\s*:\s*(?:\[[^\]]+\]\(([^)]+)\)|(\S.*?))\s*$/i);
+    if (!match) continue;
+    const target = String(match[1] || match[2] || '').trim();
+    if (target && target.toLowerCase() !== 'self') return target;
+  }
+  return '';
+}
+
+function deterministicSchemaSourceIntegrityRepair(markdown = '', state = {}) {
+  const source = String(markdown || '');
+  let candidate = source;
+  const diagnosticCodes = [];
+  if (state.parentDigestRepairRequired && state.parentDigest) {
+    const lines = candidate.replace(/\r\n?/g, '\n').split('\n');
+    const index = primaryParentIntegrityValueLine(lines);
+    if (index < 0) return freeze({ state: 'unavailable', markdown: source, diagnosticCodes: [] });
+    const match = lines[index].match(/^(\s*-\s+Value\s*:\s*)(.*)$/i);
+    if (!match) return freeze({ state: 'unavailable', markdown: source, diagnosticCodes: [] });
+    lines[index] = `${match[1]}${state.parentDigest}`;
+    candidate = lines.join('\n');
+    diagnosticCodes.push(String(state.parentDigestCode || 'portable.lineage-integrity.parent-target-mismatch'));
+  }
+  const self = canonicalC14nV2SelfState(candidate);
+  const selfRepairable = self.state === 'mismatch' || self.state === 'prepared' || state.parentDigestRepairRequired;
+  if (!selfRepairable) return freeze({ state: 'unavailable', markdown: source, diagnosticCodes: [] });
+  const sealed = sealC14nV2Self(candidate);
+  if (sealed.state !== 'sealed') return freeze({ state: 'unavailable', markdown: source, diagnosticCodes: [] });
+  diagnosticCodes.push('integrity.c14n-v2.mismatch', 'schema-source.integrity.self-unsealed');
+  return freeze({ state: 'ready', markdown: sealed.markdown, diagnosticCodes: [...new Set(diagnosticCodes)] });
+}
+
+function qualifySchemaSourceReplacement(markdown = '', record = {}, records = []) {
+  const replacement = { ...record, markdown };
+  const index = schemaSourceIndex(records.map((item) => norm(item.path || item.id || '') === norm(record.path || record.id || '') ? replacement : item));
+  let document; try { document = parsePortableSchemaDocument(markdown); } catch { return freeze({ state: 'blocked', reason: 'parse-invalid' }); }
+  const schemaId = String(document?.schemaId || '').trim();
+  if (!schemaId) return freeze({ state: 'blocked', reason: 'schema-id-missing' });
+  index.set(schemaId, Object.freeze({ path: norm(record.path || record.id || ''), markdown, document }));
+  const lineage = schemaSourceLineage(schemaId, index);
+  if (lineage.state !== 'ready') return freeze({ state: 'blocked', reason: lineage.state });
+  let compiled; try { compiled = compilePortableSchemaContractChain(lineage.records.map((item) => item.markdown)); } catch { return freeze({ state: 'blocked', reason: 'compile-failed' }); }
+  if (compiled?.lineageQualification?.state !== 'valid') return freeze({ state: 'blocked', reason: 'lineage-unqualified' });
+  const self = canonicalC14nV2SelfState(markdown);
+  if (self.state !== 'verified') return freeze({ state: 'blocked', reason: 'self-integrity-unverified' });
+  if (document.parentSchemaId && lineage.records.length >= 2) {
+    const declaredTarget = primaryParentIntegrityTarget(markdown);
+    const targetIsLocal = Boolean(declaredTarget) && !/^(?:https?:\/\/|[A-Za-z][A-Za-z0-9+.-]*:|[^/]+::)/i.test(declaredTarget);
+    if (targetIsLocal) {
+      const parentSelf = canonicalC14nV2SelfState(lineage.records.at(-2).markdown);
+      if (parentSelf.state !== 'verified' || primaryParentIntegrityValue(markdown) !== parentSelf.declaredValue) return freeze({ state: 'blocked', reason: 'parent-integrity-unverified' });
+    }
+  }
+  return freeze({ state: 'qualified' });
 }
 
 function findingsForPath(findings = [], path = '') {

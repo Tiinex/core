@@ -36,13 +36,17 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
 
   const parentReference = resolveParentReference(flags, state);
   const parentSource = String(flags['parent-source'] || flags['parent-file'] || '').trim();
+  const parentPublishedReference = String(flags['parent-reference'] || flags['parent-permalink'] || '').trim();
   if (isWorkspaceQualifiedReference(parentReference) && !parentSource) throw new Error(`portable.cli.author.parent-source.required: --parent ${parentReference} names an explicit cross-Workspace Parent. Supply --parent-source <local-file> containing the exact qualified Parent bytes; Tooling will not discover or fetch that Parent automatically.`);
+  if (isWorkspaceQualifiedReference(parentReference) && !parentPublishedReference) throw new Error(`portable.cli.author.parent-reference.required: --parent ${parentReference} is a cross-Workspace selector and cannot become a durable recovery locator. Supply --parent-reference <commit-pinned browse+git permalink> for the exact Parent representation.`);
+  if (parentPublishedReference && !parentReference) throw new Error('portable.cli.author.parent.required: --parent-reference supplies durable Parent recovery authority but no semantic Parent selector. Supply --parent <workspace::path|relative-path> explicitly.');
+  if (parentPublishedReference && !isQualifiedVersionStableParentReference(parentPublishedReference)) throw new Error('portable.cli.author.parent-reference.unqualified: --parent-reference must be a version-stable external recovery locator. Current common authoring accepts commit-pinned GitHub browse+git blob permalinks.');
   if (parentSource && !parentReference) throw new Error('portable.cli.author.parent.required: --parent-source supplies Parent bytes but no semantic Parent reference. Supply --parent <workspace::path|relative-path> explicitly; Tooling will not infer Parent identity from the source file.');
   if (isWorkspaceQualifiedReference(parentReference) && !requestedArtifactRelativePath && !targetDirectory) throw new Error('portable.cli.author.cross-workspace-parent.target-required');
   const parentPath = parentReference ? (parentSource ? path.resolve(parentSource) : safeWorkspaceTarget(workspaceRoot, parentReference)) : '';
   const artifactRelativePath = requestedArtifactRelativePath || await allocateArtifactRelativePath({ workspaceRoot, targetDirectory, parentRelativePath: parentReference, schemaId, title });
   const artifactPath = safeWorkspaceTarget(workspaceRoot, artifactRelativePath);
-  const parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentReference, { workspaceRoot, childRelativePath: artifactRelativePath, runtime }) : {};
+  const parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentReference, { workspaceRoot, childRelativePath: artifactRelativePath, runtime, publishedReference: parentPublishedReference }) : {};
   const transitionType = String(flags.transition || defaultTransition(schemaId, Boolean(parentPath))).trim();
   const contract = buildArtifactCreationContract({ schemaId, transitionType });
   const summary = String(flags.summary || title).trim();
@@ -98,7 +102,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
         schema: 'tiinex.portable.common-author.result.v1',
         operation: 'author',
         status: 'blocked',
-        artifact: Object.freeze({ path: artifactRelativePath, schemaId, written: false, parentPath: parentReference, parentSource: parentSource || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord) }),
+        artifact: Object.freeze({ path: artifactRelativePath, schemaId, written: false, parentPath: parentReference, parentSource: parentSource || '', parentReference: parentPublishedReference || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord) }),
         audit,
         stage,
         findingSummary: mergeFindingSummaries(audit?.findingSummary, stage?.findingSummary),
@@ -114,7 +118,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
         schema: 'tiinex.portable.common-author.result.v1',
         operation: 'author',
         status: 'qualified-preflight',
-        artifact: Object.freeze({ path: artifactRelativePath, schemaId, written: false, parentPath: parentReference, parentSource: parentSource || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord), selfIntegrity: selfIntegrity.state, preflight: true }),
+        artifact: Object.freeze({ path: artifactRelativePath, schemaId, written: false, parentPath: parentReference, parentSource: parentSource || '', parentReference: parentPublishedReference || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord), selfIntegrity: selfIntegrity.state, preflight: true }),
         qualification: Object.freeze({ audit: audit.status, stage: stage.status, exportReady: Boolean(stage?.stagedArtifact?.qualification?.exportReady) }),
         findingSummary: mergeFindingSummaries(audit?.findingSummary, stage?.findingSummary),
         nextAction: 'Run the same author command without --preflight to retain the qualified artifact; no candidate artifact or continuation-state mutation was retained by this preflight.',
@@ -130,7 +134,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
       schema: 'tiinex.portable.common-author.result.v1',
       operation: 'author',
       status: 'qualified',
-      artifact: Object.freeze({ path: artifactRelativePath, absolutePath: artifactPath, schemaId, parentPath: parentReference, parentSource: parentSource || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord), selfIntegrity: selfIntegrity.state, written: true }),
+      artifact: Object.freeze({ path: artifactRelativePath, absolutePath: artifactPath, schemaId, parentPath: parentReference, parentSource: parentSource || '', parentReference: parentPublishedReference || '', parentSchemaReferenceAuthority: projectHistoricalParentReferenceAuthority(parentRecord), selfIntegrity: selfIntegrity.state, written: true }),
       qualification: Object.freeze({ audit: audit.status, stage: stage.status, exportReady: Boolean(stage?.stagedArtifact?.qualification?.exportReady) }),
       findingSummary: mergeFindingSummaries(audit?.findingSummary, stage?.findingSummary),
       nextAction: schemaId === 'tiinex.handoff.v1'
@@ -251,7 +255,8 @@ async function parentRecordFromArtifact(parentPath, parentRelativePath, context 
     currentCreatedAt: String(current.createdAt || ''),
     createdAt: String(current.createdAt || ''),
     markdown,
-    recoveryMode: parentRecoveryMode(parentRelativePath),
+    recoveryMode: context.publishedReference ? 'external-versioned' : parentRecoveryMode(parentRelativePath),
+    ...(context.publishedReference ? { publishedReference: Object.freeze({ target: String(context.publishedReference), state: 'qualified', resolutionState: 'qualified' }) } : {}),
     schemaReferenceAuthority
   });
 }
@@ -297,9 +302,14 @@ function projectAuthorActionableFindings(audit = {}, stage = {}) {
   return Object.freeze(out.slice(0, 20));
 }
 
+function isQualifiedVersionStableParentReference(reference = '') {
+  return /^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/[0-9a-f]{40}\/.+/i.test(String(reference || '').trim());
+}
+
 export function parentRecoveryMode(reference = '') {
   const classification = classifyParentRecoveryReference(reference);
   if (classification.kind === 'workspace-qualified') return 'workspace-qualified';
+  if (classification.kind === 'external') return 'external-versioned';
   if (classification.kind === 'malformed-workspace-qualified') throw new Error('portable.cli.author.parent.workspace-qualified.malformed');
   return 'local-relative';
 }

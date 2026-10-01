@@ -2156,10 +2156,10 @@
         "schemaId": "tiinex.root.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
+          "commit": "",
           "path": ".topics/.schemas/tiinex.root.v1.schema.md",
-          "publicationState": "published-immutable-canonical",
-          "snapshotCompleteness": "exact-canonical-docs-snapshot"
+          "publicationState": "qualified-local-unpublished",
+          "snapshotCompleteness": "exact-local-docs-snapshot"
         },
         "parentSchemaId": "",
         "parentSourceCandidates": []
@@ -2168,17 +2168,17 @@
         "schemaId": "tiinex.party.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
+          "commit": "",
           "path": ".topics/.schemas/party/tiinex.party.v1.schema.md",
-          "publicationState": "published-immutable-canonical",
-          "snapshotCompleteness": "exact-canonical-docs-snapshot"
+          "publicationState": "qualified-local-unpublished",
+          "snapshotCompleteness": "exact-local-docs-snapshot"
         },
         "parentSchemaId": "tiinex.root.v1",
         "parentSourceCandidates": [
           {
             "provider": "github",
             "repository": "Tiinex/docs",
-            "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
+            "commit": "",
             "path": ".topics/.schemas/tiinex.root.v1.schema.md"
           }
         ]
@@ -2187,17 +2187,17 @@
         "schemaId": "tiinex.party.organization.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
+          "commit": "",
           "path": ".topics/.schemas/party/organization/tiinex.party.organization.v1.schema.md",
-          "publicationState": "published-immutable-canonical",
-          "snapshotCompleteness": "exact-canonical-docs-snapshot"
+          "publicationState": "qualified-local-unpublished",
+          "snapshotCompleteness": "exact-local-docs-snapshot"
         },
         "parentSchemaId": "tiinex.party.v1",
         "parentSourceCandidates": [
           {
             "provider": "github",
             "repository": "Tiinex/docs",
-            "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
+            "commit": "",
             "path": ".topics/.schemas/party/tiinex.party.v1.schema.md"
           }
         ]

@@ -5,11 +5,6 @@ import { compilePortableSchemaContractChain } from '../schema/contract.compile.j
 import { parsePortableSchemaDocument } from '../schema/schema.contract.js';
 import { projectPortableContractInstance } from '../schema/contract.project.js';
 import { nativeEntryMarkdown } from './native.entry.generated.js';
-import {
-  nativeEntrySchemaMarkdownById,
-  nativeEntrySchemaSource,
-  nativeEntrySchemaSourceById
-} from './native.entry.schema.generated.js';
 
 export const ENTRY_SCHEMA_ID = 'tiinex.entry.v1';
 export const PORTABLE_ENTRY_CATALOG_SCHEMA_ID = 'tiinex.portable.entry-catalog.v1';
@@ -72,14 +67,20 @@ export function projectPortableEntryCatalog(input = {}) {
     entries: Object.freeze(entries),
     findings: Object.freeze(findings),
     entrySchemaIds: Object.freeze([...entrySchemaIds].sort()),
-    contractAuthority: Object.freeze({
-      schemaId: ENTRY_SCHEMA_ID,
-      repository: nativeEntrySchemaSource.repository || '',
-      commit: nativeEntrySchemaSource.commit || '',
-      publicationState: nativeEntrySchemaSource.publicationState || '',
-      sourcePath: nativeEntrySchemaSource.sourcePath || ''
-    }),
+    contractAuthority: nativeEntryContractAuthority(),
     boundary: 'Projects qualified reusable Entry definitions across tiinex.entry.v1 and qualified descendant schemas. Entry discovery or selection does not establish that entry occurred and does not create routing, recipient authority, Role-holder state, participant authority, acceptance, ownership, task selection, continuation, work transfer, or completion.'
+  });
+}
+
+function nativeEntryContractAuthority() {
+  const descriptor = (nativeSchemaPackManifest?.schemas || []).find((item) => String(item?.schemaId || '') === ENTRY_SCHEMA_ID) || {};
+  const source = nativeSchemaPackManifest?.source || {};
+  return Object.freeze({
+    schemaId: ENTRY_SCHEMA_ID,
+    repository: String(source.repository || ''),
+    commit: String(source.commit || ''),
+    publicationState: String(source.publicationState || ''),
+    sourcePath: String(descriptor.sourcePath || '')
   });
 }
 
@@ -103,19 +104,10 @@ function buildEntrySchemaIndex(inspection = {}, findings = []) {
     candidates.get(record.schemaId).push(Object.freeze(record));
   };
 
-  for (const [schemaId, markdown] of Object.entries(nativeEntrySchemaMarkdownById || {})) {
-    add(schemaRecord({
-      schemaId,
-      markdown,
-      sourceKind: 'native-entry-schema',
-      source: nativeEntrySchemaSourceById?.[schemaId] || {},
-      path: nativeEntrySchemaSourceById?.[schemaId]?.sourcePath || ''
-    }));
-  }
   for (const descriptor of nativeSchemaPackManifest?.schemas || []) {
     const schemaId = String(descriptor?.schemaId || '').trim();
     const markdown = nativeSchemaMarkdown(schemaId);
-    if (!schemaId || !markdown || nativeEntrySchemaMarkdownById?.[schemaId]) continue;
+    if (!schemaId || !markdown) continue;
     add(schemaRecord({
       schemaId,
       markdown,
@@ -303,7 +295,7 @@ function projectEntry(material, projection, validation, schemaResolution = {}) {
   const rootDeclarations = rootDeclarationGroupNames();
   const declarations = declarationGroups(projection).filter((group) => !rootDeclarations.has(group.group));
   const groundingMaterial = declarations
-    .filter((group) => group.group === 'Grounding Material Declaration')
+    .filter((group) => group.group === 'Grounding Material' || group.entries.some((entry) => entry.heading === '## Grounding Material'))
     .flatMap((group) => group.entries)
     .map((entry) => Object.freeze({
       name: entry.name,

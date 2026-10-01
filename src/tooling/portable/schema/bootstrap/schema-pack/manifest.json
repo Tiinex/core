@@ -4,12 +4,12 @@
   "source": {
     "provider": "docs-workspace",
     "repository": "Tiinex/docs",
-    "commit": "668753e47a281db060cb74ef957683f4f773b3a4",
-    "publicationState": "published-immutable-canonical",
-    "snapshotCompleteness": "exact-canonical-docs-snapshot",
+    "commit": "",
+    "publicationState": "qualified-local-unpublished",
+    "snapshotCompleteness": "exact-local-docs-snapshot",
     "networkRequired": false
   },
-  "count": 106,
+  "count": 108,
   "schemas": [
     {
       "schemaId": "tiinex.access.v1",
@@ -240,6 +240,26 @@
       "sha256": "3f5746d8982594ceaf542b6e4e4095f1687ba4b05256eebe77c06831ffb4a4f2",
       "gitBlobSha": "1e18d78521c6298d243f1c87a84155be040f032c",
       "specialized": true
+    },
+    {
+      "schemaId": "tiinex.entry.session.v1",
+      "parentSchemaId": "tiinex.entry.v1",
+      "sourcePath": ".topics/.schemas/entry/session/tiinex.entry.session.v1.schema.md",
+      "packPath": "schemas/entry/session/tiinex.entry.session.v1.schema.md",
+      "bytes": 10088,
+      "sha256": "becbc69dfed4b8989aebe85b6187eb5624ed484a18a044169d88cc5320cf4bec",
+      "gitBlobSha": "e041d83281c7b62a69942b4a8d37bf5cc28986a3",
+      "specialized": false
+    },
+    {
+      "schemaId": "tiinex.entry.v1",
+      "parentSchemaId": "tiinex.root.v1",
+      "sourcePath": ".topics/.schemas/entry/tiinex.entry.v1.schema.md",
+      "packPath": "schemas/entry/tiinex.entry.v1.schema.md",
+      "bytes": 11489,
+      "sha256": "ab8d9cff39206dc9e33d1ddbd2ddeb8d7e908bda191b9f239dce45b5737138c4",
+      "gitBlobSha": "75d6ef8d60517375735618f56f83308cbb30b7c0",
+      "specialized": false
     },
     {
       "schemaId": "tiinex.event.deadline.v1",

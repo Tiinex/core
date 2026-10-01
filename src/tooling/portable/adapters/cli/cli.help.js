@@ -14,7 +14,7 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> [--holder-assignment-mode <mode>] --recipient --continue <workspace-dir>`,
     `${command} qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>`,
     `${command} prepare-return <continued-workspace-dir>`,
-    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
+    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
     `${command} project-transition-catalog [<workspace-or-material-root> ...] [--output-schema <schema-id>] [--input-schema <schema-id>]`,
     `${command} project-transition-neighborhood [<workspace-or-material-root> ...] --output-schema <schema-id> [--input-schema <schema-id>]`,
     `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
@@ -151,12 +151,12 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'author') return [
     'Tiinex portable tooling — author',
     '',
-    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
+    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
     `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     `${command} schemas sync <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     `${command} schemas check <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     '',
-    'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted. Supply `--path` for an exact requested coordinate or `--directory` to let Tooling allocate inside that directory-local filename namespace. For a Workspace-qualified Parent such as `business::.topics/...`, also supply `--parent-source` so Tooling reads and seals against the exact Parent bytes without treating the foreign address as a local path. Authoring seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. `--preflight` uses that exact qualification path but removes the candidate and leaves continuation state unchanged; use it before the durable author step when validating a filled runtime scaffold. Invalid output is not retained.',
+    'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted. Supply `--path` for an exact requested coordinate or `--directory` to let Tooling allocate inside that directory-local filename namespace. For a Workspace-qualified Parent such as `business::.topics/...`, also supply `--parent-source` for the exact Parent bytes and `--parent-reference` with the commit-pinned browse+git permalink. The `workspace::path` value remains an internal selector only and is never serialized as durable cross-Workspace recovery authority. Authoring seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. `--preflight` uses that exact qualification path but removes the candidate and leaves continuation state unchanged; use it before the durable author step when validating a filled runtime scaffold. Invalid output is not retained.',
     '',
     `Advanced/internal catalog: ${command} operations`
   ];
