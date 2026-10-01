@@ -231,3 +231,15 @@ test('an explicit endpoint Reference remains required transport closure and fail
   assert.equal(plan.requirements.endpointRoles.every((item) => item.disposition === 'unresolved'), true);
   assert.equal(plan.findings.some((item) => item.severity === 'error' && item.code === 'portable.handoff-material.endpoint-role.unresolved'), true);
 });
+
+test('Role and Party endpoint discovery excludes schema-definition material without disabling schema discovery elsewhere', () => {
+  const files = [
+    { path: '.topics/.workspaces/tiinex-business.workspace.md', content: workspaceFixture('Business', 'Tiinex/business') },
+    { path: '.topics/roles/anchor.trace.md', content: roleFixture('Anchor') },
+    { path: '.topics/.schemas/party/role/tiinex.party.role.v1.schema.md', content: roleFixture('Schema Masquerade', 'Role Schema Material') }
+  ];
+  const projection = projectQualifiedHandoffEndpoints({ files, workspaceId: 'business' });
+  assert.equal(projection.status, 'ready', JSON.stringify(projection.findings || [], null, 2));
+  assert.deepEqual(projection.candidates.map((item) => item.artifactPath), ['.topics/roles/anchor.trace.md']);
+  assert.deepEqual(projection.currentRoleCandidates.map((item) => item.artifactPath), ['.topics/roles/anchor.trace.md']);
+});

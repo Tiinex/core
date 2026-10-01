@@ -119,3 +119,23 @@ test('shared Workspace enumeration preserves tracked files even when .gitignore 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('Workspace package-source discovery excludes schema-definition material while leaving dedicated schema discovery untouched', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'tiinex-workspace-schema-exclusion-'));
+  const schemaCopy = path.join(root, 'workspace.schema.md');
+  try {
+    await writeFile(schemaCopy, await readFile(WORKSPACE_SCHEMA, 'utf8'), 'utf8');
+    const created = await runCommonWorkspaceInitCli({ positionals: [root], flags: { authors: 'Fixture' } });
+    assert.equal(created.status, 'ready', JSON.stringify(created.findings || [], null, 2));
+    const markdown = await readFile(created.writeReceipt.path, 'utf8');
+    const projected = projectQualifiedWorkspacePackageSources({ records: [
+      { path: created.writeReceipt.workspaceRelativePath, markdown },
+      { path: '.topics/.schemas/tiinex.workspace.v1.schema.md', markdown }
+    ] });
+    assert.equal(projected.status, 'ready');
+    assert.equal(projected.candidates.length, 1);
+    assert.equal(projected.candidates[0].workspaceTargetPath, created.writeReceipt.workspaceRelativePath);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

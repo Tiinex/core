@@ -16,6 +16,7 @@ import { projectPortableHandoffAuthoringPlan } from './handoff/handoffAuthoringP
 import { projectQualifiedHandoffEndpoints } from './handoff/handoffEndpointProjection.js';
 import { projectPortableHandoffParticipants } from './handoff/handoffParticipantProjection.js';
 import { projectWorkspaceCarrierEntry } from './handoff/workspaceEntryProjection.js';
+import { projectWorkspaceSessionRoles } from './handoff/workspaceSessionRoleProjection.js';
 import { projectPortableOperatorContext } from './handoff/operatorContextProjection.js';
 import { projectPortableStagedValidation } from './editor/staged.validation.js';
 import { projectHandoffCarrierMajorFrontier } from './handoff/carrierMajorFrontier.js';
@@ -78,6 +79,13 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     safety: 'planning-only-read-only',
     inputSchema: 'tiinex.portable.handoff-carrier-output-collision.request.v1',
     handler: (input = {}) => wrapPortableResult('project-handoff-carrier-output-collision', projectHandoffCarrierOutputCollision(input))
+  }),
+  'project-workspace-session-roles': operation({
+    name: 'project-workspace-session-roles',
+    description: 'Project current readable Role lineage leaves for Guided Entry session-role selection without creating Handoff endpoint or holder authority.',
+    safety: 'planning-only-read-only',
+    inputSchema: 'tiinex.portable.workspace-session-role-projection.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-workspace-session-roles', projectWorkspaceSessionRoles(input))
   }),
   'project-workspace-carrier-entry': operation({
     name: 'project-workspace-carrier-entry',

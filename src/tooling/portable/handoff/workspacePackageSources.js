@@ -2,6 +2,7 @@ import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { auditPortableRecord } from '../audit/audit.capability.js';
 import { normalizeRepositoryIdentity, parseWorkspaceEntrypoints } from './workspaceSourceIdentity.js';
 import { sha256Hex, utf8Bytes } from '../../../export/package.bytes.js';
+import { isSchemaDefinitionRecord } from '../../../workspaces/workspace.materialRole.js';
 
 export const PORTABLE_WORKSPACE_PACKAGE_SOURCES_SCHEMA_ID = 'tiinex.portable.workspace-package-sources.v1';
 
@@ -11,6 +12,7 @@ export function projectQualifiedWorkspacePackageSources(input = {}) {
   const candidates = [];
   const repositories = normalizeRepositories(input.repositories || input.localRepositories || []);
   for (const record of records) {
+    if (isSchemaDefinitionRecord(record)) continue;
     let parsed;
     try { parsed = parseArtifactMarkdown(record.markdown); } catch { continue; }
     if (String(parsed.envelope?.current?.schema?.id || '') !== 'tiinex.workspace.v1') continue;

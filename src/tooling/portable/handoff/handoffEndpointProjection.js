@@ -5,6 +5,7 @@ import { projectQualifiedWorkspacePackageSources } from './workspacePackageSourc
 import { resolveLineage } from '../../../lineage/lineage.resolve.js';
 import { schemaIdForRecord } from '../../../schemas/schema.identity.js';
 import { sectionField, sectionText } from './coldStartQualification.shared.js';
+import { isSchemaDefinitionRecord } from '../../../workspaces/workspace.materialRole.js';
 
 export const PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID = 'tiinex.portable.handoff-endpoint-projection.v1';
 
@@ -53,6 +54,7 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     });
   }
   for (const record of records) {
+    if (isSchemaDefinitionRecord(record)) continue;
     const path = norm(record.path || record.id || '');
     if (!pathWithinMaterialRoot(path, sourceAuthority.materialRoot)) continue;
     if (!path || !/\.md$/i.test(path)) continue;
@@ -134,6 +136,7 @@ function projectCurrentRoleCandidates(records = [], candidates = []) {
   const roleCandidates = candidates.filter((candidate) => String(candidate.kind || '') === 'role');
   if (!roleCandidates.length) return [];
   const roleRecords = records.filter((record) => {
+    if (isSchemaDefinitionRecord(record)) return false;
     const path = norm(record.path || record.id || '');
     if (!path) return false;
     try { return schemaIdForRecord(record) === 'tiinex.party.role.v1'; }

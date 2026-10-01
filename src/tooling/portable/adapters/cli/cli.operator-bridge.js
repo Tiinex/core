@@ -5,6 +5,7 @@ export async function prepareOperatorBridgeCliInput(command = '', material = {},
   }
   if (command === 'project-handoff-authoring-plan') return { input: { ...material, parentPath: flags.parent || flags['parent-path'] || '', title: flags.title || '' }, options: {} };
   if (command === 'project-handoff-endpoints') return { input: { ...material, workspaceId: flags['workspace-id'] || flags.workspace || 'workspace' }, options: {} };
+  if (command === 'project-workspace-session-roles') return { input: { ...material, workspaceId: flags['workspace-id'] || flags.workspace || 'workspace' }, options: {} };
   if (command === 'project-operator-context') {
     const repositories = await readOptionalJson(flags.repositories);
     const workspaceRoots = await readOptionalJson(flags['workspace-roots'] || flags.roots);
