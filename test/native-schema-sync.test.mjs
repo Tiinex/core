@@ -57,7 +57,7 @@ test('local-unpublished sync plan preserves content authority without inventing 
   await writeFile(evidenceSource, `${await readFile(evidenceSource, 'utf8')}\n<!-- local-unpublished-schema-edit -->\n`, 'utf8');
   const plan = await buildNativeSchemaSyncPlan({ coreRoot: repoRoot, docsRoot, repository: 'Tiinex/docs', published: false });
   assert.equal(plan.status, 'ready');
-  const evidence = plan.outputs.find((output) => output.path.endsWith('/core/evidence/tiinex.evidence.v1.schema.json'));
+  const evidence = plan.outputs.find((output) => String(output.path).replace(/\\/g, '/').endsWith('/core/evidence/tiinex.evidence.v1.schema.json'));
   assert.ok(evidence);
   const binding = JSON.parse(evidence.bytes.toString('utf8'));
   assert.equal(binding.publicationState, 'qualified-local-unpublished');
@@ -110,7 +110,7 @@ test('local-unpublished sync preserves exact previously published schema-referen
   }, null, 2));
   const plan = await buildNativeSchemaSyncPlan({ coreRoot, docsRoot, repository: 'Tiinex/docs', published: false });
   assert.equal(plan.status, 'ready');
-  const output = plan.outputs.find((item) => item.path.endsWith('/core/topic/tiinex.topic.v1.schema.json'));
+  const output = plan.outputs.find((item) => String(item.path).replace(/\\/g, '/').endsWith('/core/topic/tiinex.topic.v1.schema.json'));
   assert.ok(output);
   const binding = JSON.parse(output.bytes.toString('utf8'));
   assert.equal(binding.publicationState, 'published-immutable-canonical');

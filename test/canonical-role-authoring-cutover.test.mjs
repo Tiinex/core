@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { buildArtifactCreationContract } from '../src/schemas/creation.contracts.js';
 import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.renderer.js';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
@@ -15,6 +16,7 @@ import runtimeProjection from '../src/schemas/party/role/tiinex.party.role.v1.sc
 const ROLE_SCHEMA_SHA = '2887aef16cf827b78fe38c1a2ba97cb5820d79049729d2cf8696ecf1de828871';
 const EXACT_PRE_MIGRATION_AXIOM_SHA = 'f17e74db07c6a2d1288119c330a20b3b19cd0eb01f6a2c9f207d21102d9488d5';
 const EXACT_PRE_MIGRATION_AXIOM_PARENT = new URL('./fixtures/roles/001-2-axiom-role.pre-migration.trace.md', import.meta.url);
+const EXACT_PRE_MIGRATION_AXIOM_REFERENCE = 'https://github.com/Tiinex/business/blob/0123456789abcdef0123456789abcdef01234567/.topics/roles/001-2-axiom-role.trace.md';
 const HISTORICAL_SCHEMA_TARGET = 'https://example.invalid/historical/tiinex.party.role.v1.schema.md';
 const CURRENT_ROLE_SCHEMA_TARGET = binding.permalink;
 const VALUES = Object.freeze({
@@ -139,7 +141,8 @@ test('common author qualifies a continuation from the exact pre-migration Axiom 
       path: '.topics/roles/001-2-1-axiom-role.trace.md',
       body: bodyPath,
       parent: 'business::.topics/roles/001-2-axiom-role.trace.md',
-      'parent-source': EXACT_PRE_MIGRATION_AXIOM_PARENT.pathname,
+      'parent-source': fileURLToPath(EXACT_PRE_MIGRATION_AXIOM_PARENT),
+      'parent-reference': EXACT_PRE_MIGRATION_AXIOM_REFERENCE,
       'created-at': '2026-09-15T21:00:00Z',
       authors: 'Loom'
     } }, {});
@@ -148,7 +151,7 @@ test('common author qualifies a continuation from the exact pre-migration Axiom 
     assert.ok(Number(result.findingSummary?.counts?.warning || 0) >= 1, JSON.stringify(result.findingSummary));
 
     const candidate = await readFile(path.join(dir, '.topics', 'roles', '001-2-1-axiom-role.trace.md'), 'utf8');
-    assert.match(candidate, /Trace: \[001-2-axiom-role\.trace\.md\]\(business::\.topics\/roles\/001-2-axiom-role\.trace\.md\)/);
+    assert.match(candidate, new RegExp(`Trace: \\[001-2-axiom-role\\.trace\\.md\\]\\(${EXACT_PRE_MIGRATION_AXIOM_REFERENCE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
     assert.match(candidate, /- Assignment Modes: explicit-session, handoff/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -169,6 +172,7 @@ test('common author still fails closed when exact historical Parent bytes are ta
         body: bodyPath,
         parent: 'business::.topics/roles/001-2-axiom-role.trace.md',
         'parent-source': parentSource,
+        'parent-reference': EXACT_PRE_MIGRATION_AXIOM_REFERENCE,
         'created-at': '2026-09-15T21:00:00Z',
         authors: 'Loom'
       } }, {}),

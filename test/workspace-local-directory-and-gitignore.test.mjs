@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -11,9 +12,9 @@ import { inspectNodeWorkspaceSourceIdentity } from '../src/tooling/portable/adap
 import { projectQualifiedWorkspacePackageSources } from '../src/tooling/portable/handoff/workspacePackageSources.js';
 
 const run = promisify(execFile);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WORKSPACE_SCHEMA = path.join(ROOT, 'src', 'tooling', 'portable', 'schema', 'bootstrap', 'schema-pack', 'schemas', 'tiinex.workspace.v1.schema.md');
-const WORKSPACE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/668753e47a281db060cb74ef957683f4f773b3a4/.topics/.schemas/tiinex.workspace.v1.schema.md';
+const WORKSPACE_SCHEMA_TARGET = 'https://github.com/Tiinex/docs/blob/302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6/.topics/.schemas/tiinex.workspace.v1.schema.md';
 
 async function git(root, ...args) { return (await run('git', args, { cwd: root })).stdout; }
 

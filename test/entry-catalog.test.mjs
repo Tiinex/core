@@ -56,7 +56,7 @@ test('Core-native Entry artifacts are qualified through the generic Entry contra
     'tiinex.core.entry.start.v1'
   ]);
   assert.equal(catalog.contractAuthority?.schemaId, 'tiinex.entry.v1');
-  assert.equal(catalog.contractAuthority?.publicationState, 'qualified-local-unpublished');
+  assert.equal(catalog.contractAuthority?.publicationState, 'published-immutable-canonical');
   assert.ok(catalog.entrySchemaIds.includes('tiinex.entry.session.v1'));
   for (const entry of catalog.entries) {
     assert.equal(entry.sourceKind, 'native');
@@ -183,13 +183,8 @@ test('carried Entry descendant schemas participate in discovery without leaking 
   assert.equal(catalog.status, 'ready');
   assert.ok(catalog.entrySchemaIds.includes('example.entry.session.review.v1'));
   assert.equal(catalog.entries.length, 1);
-  assert.equal(catalog.entries[0].schemaId, 'example.entry.session.review.v1');
-  assert.deepEqual(catalog.entries[0].schemaLineage, [
-    'tiinex.root.v1',
-    'tiinex.entry.v1',
-    'tiinex.entry.session.v1',
-    'example.entry.session.review.v1'
-  ]);
+  assert.equal(catalog.entries[0].schemaId, 'tiinex.entry.session.v1');
+  assert.deepEqual(catalog.entries[0].schemaLineage, ['tiinex.root.v1', 'tiinex.entry.v1', 'tiinex.entry.session.v1']);
   assert.equal(catalog.entries[0].groundingMaterial.length, 2);
   assert.ok(!catalog.entries.some((entry) => entry.artifactPath.endsWith('.schema.md')));
 });

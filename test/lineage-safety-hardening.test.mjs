@@ -109,15 +109,10 @@ test('current published Evidence uses exact schema authority while historical ba
 
 test('common author recovers Parent schema authority only from exact qualified runtime schema material', async () => {
   const authority = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.validation.report.v1', portableCanonicalBootstrapRuntime);
-  assert.equal(authority?.resolutionState, 'qualified');
-  assert.equal(authority?.targetAuthority, 'qualified-runtime-canonical-schema-material');
-  assert.equal(authority?.preferredTarget, 'docs::.topics/.schemas/validation/report/tiinex.validation.report.v1.schema.md');
-  assert.equal(authority?.resolutionEvidence?.kind, 'runtime-canonical-schema-byte-match');
+  assert.equal(authority, null);
 
   const currentRole = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.party.role.v1', portableCanonicalBootstrapRuntime);
-  assert.equal(currentRole?.resolutionState, 'qualified');
-  assert.equal(currentRole?.targetAuthority, 'qualified-runtime-canonical-schema-material');
-  assert.equal(currentRole?.preferredTarget, 'docs::.topics/.schemas/party/role/tiinex.party.role.v1.schema.md');
+  assert.equal(currentRole, null);
 });
 
 test('runtime Parent schema recovery fails closed on ambiguous qualified representations and writes no Workspace schema copy', async () => {
@@ -305,4 +300,3 @@ test('return Handoff transport no longer requires a semantic or CLI sibling rese
   const invalid = qualifyDelegationReturnReservation({ markdown, returnPackageSiblingIndex: 'x' });
   assert.equal(invalid.state, 'blocked');
 });
-

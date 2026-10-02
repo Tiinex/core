@@ -4,13 +4,14 @@ import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { buildToolingBootstrapTransportFiles } from '../src/tooling/portable/adapters/node/handoff.manufacture.bootstrap.js';
 import { inspectPortableToolingBootstrap } from '../src/tooling/portable/handoff/toolingBootstrap.js';
 import { packageFileBytes } from '../src/export/package.bytes.js';
 
 const run = promisify(execFile);
-const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
+const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 test('bootstrap build timestamp is truthful bundle metadata while composition identity stays timestamp-independent', async () => {
   const first = await buildToolingBootstrapTransportFiles({ runtimeRoot: ROOT, builtAt: '2026-09-29T10:00:00.000Z' });
@@ -69,10 +70,10 @@ test('extracted bootstrap version command projects exact local Core, composition
     assert.equal(receipt.bundle.orderingAuthority, 'none');
     assert.equal(receipt.core.name, '@tiinex/core');
     assert.equal(receipt.composition.sha256, tooling.manifest.composition.sha256);
-    assert.equal(receipt.schemaPacks[0].count, 106);
-    assert.equal(receipt.schemaPacks[0].schemas.length, 106);
+    assert.equal(receipt.schemaPacks[0].count, 108);
+    assert.equal(receipt.schemaPacks[0].schemas.length, 108);
     assert.equal(receipt.companions.specialized, 25);
-    assert.equal(receipt.companions.generic, 81);
+    assert.equal(receipt.companions.generic, 83);
     const evidence = receipt.schemaPacks[0].schemas.find((item) => item.schemaId === 'tiinex.evidence.v1');
     assert.equal(evidence.parentSchemaId, 'tiinex.preservation.v1');
     assert.equal(evidence.companion.mode, 'specialized');
@@ -94,5 +95,5 @@ test('source-checkout version stays truthful when no bootstrap manifest surround
   assert.equal(receipt.bundle.builtAt, '');
   assert.equal(receipt.composition.state, 'unbundled-source-runtime');
   assert.equal(receipt.composition.sha256, '');
-  assert.equal(receipt.schemaPacks[0].count, 106);
+  assert.equal(receipt.schemaPacks[0].count, 108);
 });

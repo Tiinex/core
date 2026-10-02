@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runCommonAuthorCli, sameExactSchemaReferenceAuthority } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
 import { buildArtifactCreationContract } from '../src/schemas/creation.contracts.js';
 import { isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority, qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority } from '../src/schemas/schema.reference.js';
@@ -59,11 +60,16 @@ function roleBody(label, modes) {
 - Must Not Be Treated As: universal authority or participant proof`;
 }
 
+function parentPublishedReference(parentReference = '') {
+  const relativePath = String(parentReference || '').replace(/^[^:]+::/, '');
+  return `https://github.com/Tiinex/business/blob/0123456789abcdef0123456789abcdef01234567/${relativePath}`;
+}
+
 async function authorFromExactParent(parent, overrides = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), `tiinex-id-only-${parent.label.toLowerCase()}-`));
   const bodyPath = path.join(dir, 'body.md');
   await writeFile(bodyPath, roleBody(parent.label, parent.modes), 'utf8');
-  const parentSource = overrides.parentSource || parent.fixture.pathname;
+  const parentSource = overrides.parentSource || fileURLToPath(parent.fixture);
   const result = await runCommonAuthorCli({ flags: {
     workspace: dir,
     schema: ROLE_SCHEMA_ID,
@@ -71,6 +77,7 @@ async function authorFromExactParent(parent, overrides = {}) {
     body: bodyPath,
     parent: parent.reference,
     'parent-source': parentSource,
+    'parent-reference': overrides.parentReference || parentPublishedReference(parent.reference),
     'created-at': '2026-09-16T00:15:00Z',
     authors: 'Loom'
   } }, overrides.runtime || {});
@@ -123,8 +130,9 @@ test('real active Anchor and Prism identifier-only historical Parents continue d
       const child = await readFile(authored.childPath, 'utf8');
       assert.match(child, /  - Parent Schema: tiinex\.party\.role\.v1$/m, parent.label);
       assert.doesNotMatch(child, /  - Parent Schema: \[tiinex\.party\.role\.v1\]\(/, parent.label);
-      assert.match(child, new RegExp(`  - Trace: \\[.*?\\]\\(${parent.reference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`), parent.label);
-      assert.match(child, new RegExp(`    - \\[relative\\]\\(${parent.reference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`), parent.label);
+      const reference = parentPublishedReference(parent.reference);
+      assert.match(child, new RegExp(`  - Trace: \\[.*?\\]\\(${reference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`), parent.label);
+      assert.match(child, new RegExp(`    - \\[browse \\+ git\\]\\(${reference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`), parent.label);
       assert.match(child, new RegExp(`- Assignment Modes: ${parent.modes.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), parent.label);
     } finally {
       await rm(authored.dir, { recursive: true, force: true });
