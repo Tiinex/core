@@ -3,12 +3,12 @@
   "source": {
     "provider": "docs-workspace",
     "repository": "Tiinex/docs",
-    "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
-    "publicationState": "published-immutable-canonical",
-    "snapshotCompleteness": "exact-canonical-docs-snapshot",
+    "commit": "",
+    "publicationState": "qualified-local-unpublished",
+    "snapshotCompleteness": "exact-local-docs-snapshot",
     "networkRequired": false
   },
-  "count": 108,
+  "count": 109,
   "entries": [
     {
       "schemaId": "tiinex.access.v1",
@@ -2709,6 +2709,42 @@
       "specialized": false,
       "creationDeclared": false,
       "creationRepresentable": false
+    },
+    {
+      "schemaId": "tiinex.scaffold.v1",
+      "parentSchemaId": "tiinex.root.v1",
+      "envelopeSchemaId": "tiinex.root.v1",
+      "title": "Structural Scaffold",
+      "summary": "Defines a human-readable, machine-projectable contract for reusable material structure such as repository roots, Workspace roots, and bounded directory subtrees.",
+      "bytes": 16641,
+      "binding": {
+        "schemaId": "tiinex.scaffold.v1",
+        "kind": "structural",
+        "role": "canonical-schema",
+        "module": "",
+        "snapshot": "schema-pack:tiinex.scaffold.v1",
+        "canonicalUri": "tiinex://schemas/scaffold/tiinex.scaffold.v1",
+        "permalink": "",
+        "rawUrl": "",
+        "sourcePath": ".topics/.schemas/scaffold/tiinex.scaffold.v1.schema.md",
+        "sourceRepository": "Tiinex/docs",
+        "sourceCommit": "",
+        "sourceBlobSha": "dbb802f6aea7f85a151b6144ef37ac0cf0fc34a2",
+        "originId": "tiinex-docs-local",
+        "originTrustRole": "canonical-core",
+        "checksum": {
+          "algorithm": "sha256",
+          "value": "4bb0548f93bad2ae7962d638f0cb3b2072ed81bfc6be3d361dd788553976548d"
+        },
+        "capabilityContract": "tiinex.schema.module.v1",
+        "snapshotCompleteness": "exact-local-docs-snapshot",
+        "publicationState": "qualified-local-unpublished",
+        "schemaReferencePublicationState": "qualified-local-unpublished",
+        "bindingVersion": "tiinex.web.schema-binding.v1"
+      },
+      "specialized": false,
+      "creationDeclared": true,
+      "creationRepresentable": true
     },
     {
       "schemaId": "tiinex.schedule.v1",

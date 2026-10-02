@@ -3,6 +3,7 @@ import { searchPortableLineage as searchPortableLineageIndex } from './lineage.s
 import { inspectPortableLineageIntegrity } from './lineage.integrity.plan.js';
 import { applyPortableLineageIntegrityRepair } from './lineage.integrity.apply.js';
 import { buildPortableLineageIntegrityRepairProjection } from './lineage.integrity.projection.js';
+import { projectPortableLineageOperativeState as projectPortableLineageOperativeStateProjection } from './lineage.operativeState.js';
 
 export function planPortableLineageIntegrity(input = {}, options = {}) {
   const inspection = inspectPortableLineageIntegrity(input, options);
@@ -19,12 +20,18 @@ export function projectPortableLineageIntegrityRepair(input = {}, options = {}) 
   return operationResult('lineage-integrity-project', { status: projection.status, projection, repairPlan: projection.preparedRepairPlan, boundary: projection.boundary, findings: projection.findings || [] });
 }
 
+export function projectPortableLineageOperativeState(input = {}, options = {}) {
+  const projection = projectPortableLineageOperativeStateProjection(input, options);
+  return operationResult('project-lineage-operative-state', { status: projection.status, resultSchema: projection.schema, nodes: projection.nodes, summary: projection.summary, boundary: projection.boundary, findings: projection.findings || [] });
+}
+
 export function searchPortableLineage(input = {}, options = {}) {
   const search = searchPortableLineageIndex(input, options);
   return operationResult('search-lineage', { boundary: search.boundary, query: search.query, filters: search.filters, scope: search.scope, matches: search.matches, page: search.page, facets: search.facets, findings: search.findings || [] });
 }
 
 export const portableLineageOperationDescriptors = Object.freeze([
+  Object.freeze({ name: 'project-lineage-operative-state', description: 'Compose loaded lineage topology, explicit qualified currentness facts, and existing project-lifecycle-readiness receipts into separate host-neutral operative-state axes without inferring completion, Reduction, or deletion authority.', safety: 'read-only', inputSchema: 'tiinex.portable.lineage-operative-state.request.v1', sourceMutation: false, remoteWrite: false, handler: projectPortableLineageOperativeState }),
   Object.freeze({ name: 'lineage-integrity-plan', description: 'Inspect loaded Parent/self/Parent-target integrity and produce a read-only cascade-aware repair plan without mutating lineage or publication state.', safety: 'planning-only-read-only', inputSchema: 'tiinex.portable.lineage-integrity-plan.request.v1', handler: planPortableLineageIntegrity }),
   Object.freeze({ name: 'lineage-integrity-project', description: 'Project shared lineage repair opportunities, compact human guidance, prepared local-only plan steps, capability boundaries, and export readiness without Viewer/VS Code policy forks or remote writes.', safety: 'planning-only-read-only', inputSchema: 'tiinex.portable.lineage-integrity-projection.request.v1', sourceMutation: false, remoteWrite: false, handler: projectPortableLineageIntegrityRepair }),
   Object.freeze({ name: 'lineage-integrity-apply', description: 'Apply one explicit lineage-integrity repair plan to local material under per-artifact approval, structure-preservation, cascade, semantic-disposition, and no-remote-write gates.', safety: 'local-result-no-source-mutation', inputSchema: 'tiinex.portable.lineage-integrity-apply.request.v1', sourceMutation: false, remoteWrite: false, handler: applyPortableLineageIntegrity }),

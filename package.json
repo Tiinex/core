@@ -103,6 +103,7 @@
     "./tooling/portable/lifecycle/lifecycle.readiness.js": "./src/tooling/portable/lifecycle/lifecycle.readiness.js",
     "./tooling/portable/lineage/lineage.integrity.apply.js": "./src/tooling/portable/lineage/lineage.integrity.apply.js",
     "./tooling/portable/lineage/lineage.integrity.projection.js": "./src/tooling/portable/lineage/lineage.integrity.projection.js",
+    "./tooling/portable/lineage/lineage.operativeState.js": "./src/tooling/portable/lineage/lineage.operativeState.js",
     "./tooling/portable/operation.catalog.js": "./src/tooling/portable/operation.catalog.js",
     "./tooling/portable/package/generation.binding.js": "./src/tooling/portable/package/generation.binding.js",
     "./tooling/portable/package/runtime.package.js": "./src/tooling/portable/package/runtime.package.js",
@@ -135,7 +136,9 @@
     "./tooling/portable/grounding/grounding.delegationReadiness.js": "./src/tooling/portable/grounding/grounding.delegationReadiness.js",
     "./tooling/portable/workspace/workspace.initialize.js": "./src/tooling/portable/workspace/workspace.initialize.js",
     "./tooling/portable/handoff/carrierContinuationProjection.js": "./src/tooling/portable/handoff/carrierContinuationProjection.js",
-    "./tooling/portable/transitions/transition.catalog.js": "./src/tooling/portable/transitions/transition.catalog.js"
+    "./tooling/portable/transitions/transition.catalog.js": "./src/tooling/portable/transitions/transition.catalog.js",
+    "./scaffolds/scaffold.parse.js": "./src/scaffolds/scaffold.parse.js",
+    "./scaffolds/scaffold.plan.js": "./src/scaffolds/scaffold.plan.js"
   },
   "files": [
     "src",

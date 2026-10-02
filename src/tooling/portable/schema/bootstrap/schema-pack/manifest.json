@@ -4,12 +4,12 @@
   "source": {
     "provider": "docs-workspace",
     "repository": "Tiinex/docs",
-    "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
-    "publicationState": "published-immutable-canonical",
-    "snapshotCompleteness": "exact-canonical-docs-snapshot",
+    "commit": "",
+    "publicationState": "qualified-local-unpublished",
+    "snapshotCompleteness": "exact-local-docs-snapshot",
     "networkRequired": false
   },
-  "count": 108,
+  "count": 109,
   "schemas": [
     {
       "schemaId": "tiinex.access.v1",
@@ -759,6 +759,16 @@
       "bytes": 6150,
       "sha256": "0a55c2a2942ea81ccd075058f99b52789aa958a21188f5a564829d9da2b4c1b0",
       "gitBlobSha": "6d5ef1d61150ed6f76e95916e9c29f7d7ca8fee8",
+      "specialized": false
+    },
+    {
+      "schemaId": "tiinex.scaffold.v1",
+      "parentSchemaId": "tiinex.root.v1",
+      "sourcePath": ".topics/.schemas/scaffold/tiinex.scaffold.v1.schema.md",
+      "packPath": "schemas/scaffold/tiinex.scaffold.v1.schema.md",
+      "bytes": 16641,
+      "sha256": "4bb0548f93bad2ae7962d638f0cb3b2072ed81bfc6be3d361dd788553976548d",
+      "gitBlobSha": "dbb802f6aea7f85a151b6144ef37ac0cf0fc34a2",
       "specialized": false
     },
     {
