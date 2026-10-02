@@ -227,7 +227,7 @@ function buildRoutePointerSpecs({ input, route, routeWorkspace, routeEntry, cach
   const routeParticipantRequirements = routeRequirements(input.requirements?.participantRoles || [], route);
   const roleReferences = new Set([...routeEndpointRequirements, ...routeParticipantRequirements].map((requirement) => String(requirement.reference?.target || '')).filter(Boolean));
   const requiredContextRequirements = routeRequirements(input.requirements?.required || [], route).filter((requirement) => !roleReferences.has(String(requirement.reference?.target || '')));
-  const preHandoffRequirements = requiredContextRequirements.filter(shouldProjectGenericPointer);
+  const preHandoffRequirements = requiredContextRequirements.filter((requirement) => shouldProjectGenericPointer(requirement, materialByRequirement));
   const dependencyRequirements = preHandoffDependencyRequirements(routeRequirements(input.requirements?.dependencies || [], route), preHandoffRequirements)
     .filter((requirement) => requirementNeedsCachePointer(requirement, materialByRequirement, carriedIndex));
   const genericRequirements = [...preHandoffRequirements, ...dependencyRequirements];
@@ -483,7 +483,10 @@ function requirementNeedsCachePointer(requirement, materialIndex, carriedIndex) 
   const sourcePath = normalizePath(material.provenance?.path || material.path || '');
   return !carriedEntry(carriedIndex, workspaceId, sourcePath);
 }
-function shouldProjectGenericPointer(req) { return isHandoffPackageV1PreHandoffGroundingRequirement(req); }
+function shouldProjectGenericPointer(req, materialIndex) {
+  if (isHandoffPackageV1PreHandoffGroundingRequirement(req)) return true;
+  return !String(req.reference?.target || '').trim() && Boolean(materialForRequirement(materialIndex, req));
+}
 function pointerKindForRequirement(req) { const text=`${req.name||''} ${req.material||''}`.toLowerCase(); if(/policy|governance/.test(text))return'policy'; if(/process|procedure|runbook/.test(text))return'process'; return'required-context'; }
 function endpointOrdinal(req){const id=String(req.id||'');return id.includes(':from')?0:id.includes(':to')?1:2;}
 function packageRequirementId(requirement = {}) {

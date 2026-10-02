@@ -65,6 +65,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   if (!flags.route && handoffPath) flags.route = handoffPath;
   if (!flags.output && !flags['output-dir'] && parsed.surfaceCommand === 'handoff' && continuationState.returnOutputDir) flags['output-dir'] = continuationState.returnOutputDir;
   const materialBindings = await readOptionalJson(flags['material-bindings'] || flags.materials);
+  const schemaReferenceResolutionValue = await readOptionalJson(flags['reference-resolutions']);
+  const schemaReferenceResolutions = schemaReferenceResolutionValue.referenceResolutions || (Array.isArray(schemaReferenceResolutionValue) ? schemaReferenceResolutionValue : []);
   const reconciliationProof = await readOptionalJson(flags['reconciliation-proof']);
   const requireReconciliationProof = Boolean(flags['require-reconciliation-proof']);
   const packageParentWorkspaceIds = splitFlag(flags['package-parent-workspaces']);
@@ -197,6 +199,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     toolingBootstrap: flags['tooling-bootstrap'] || 'embedded',
     expectedToolingBootstrap,
     materialBindings,
+    schemaReferenceResolutions,
     referenceTargets: splitFlag(flags['reference-targets']),
     maxFiles: flags['max-files'],
     bootstrapMaxFiles: flags['bootstrap-max-files'],

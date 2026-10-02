@@ -8,7 +8,7 @@ import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.ren
 import { validatePortableDraft } from '../src/tooling/portable/draft/draft.operations.js';
 import { auditPortableRecord } from '../src/tooling/portable/audit/audit.capability.js';
 import { projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
-import { qualifyPortableManufactureSchemaReferenceCandidate } from '../src/tooling/portable/handoff/schemaReferencePreflight.js';
+import { projectPortableManufactureSchemaReferenceAuthorities, qualifyPortableManufactureSchemaReferenceCandidate } from '../src/tooling/portable/handoff/schemaReferencePreflight.js';
 import { qualifyTiinexRouteArtifact } from '../src/tooling/portable/handoff/routeArtifactConformance.js';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
@@ -113,6 +113,81 @@ test('qualified exact Evidence material renders an exact Current link while stal
   assert.doesNotMatch(render('tiinex.evidence.v1', stale), new RegExp(EVIDENCE_EXACT_TARGET.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')));
 });
 
+
+
+test('candidate validation treats an older immutable schema locator as qualified when explicit resolution proves byte-equivalent material', () => {
+  const contract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
+  const material = contract.schemaReferences.current.semanticMaterialIdentity;
+  assert.equal(material.state, 'qualified');
+  const olderTarget = EVIDENCE_CURRENT_TARGET.replace(/\/blob\/[^/]+\//, '/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/');
+  assert.notEqual(olderTarget, EVIDENCE_CURRENT_TARGET);
+  const markdown = reseal(render('tiinex.evidence.v1', contract).replace(EVIDENCE_CURRENT_TARGET, olderTarget));
+  const resolutions = [{
+    target: olderTarget,
+    exact: { state: 'resolved', sha256: material.sha256, sourceBlobSha: material.sourceBlobSha, bytes: material.bytes },
+    latest: { state: 'resolved', target: EVIDENCE_CURRENT_TARGET, sha256: material.sha256, sourceBlobSha: material.sourceBlobSha, bytes: material.bytes }
+  }];
+  const record = { path: '.topics/testing/equivalent-old-schema-locator.trace.md', markdown, schemaId: 'tiinex.evidence.v1' };
+  const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true, schemaReferenceContext: 'candidate', schemaReferenceResolutions: resolutions });
+  assert.equal(audit.findings.some((item) => String(item.code || '').startsWith('schema.reference.') && item.severity === 'error'), false);
+  assert.equal(audit.findings.some((item) => item.code === 'schema.reference.locator.unresolved'), false);
+  assert.equal(audit.schemaValidationAuthority?.state, 'qualified');
+  assert.equal(audit.schemaValidationAuthority?.currentReference?.basis, 'declared-current-schema-equivalent-source-target');
+  assert.equal(audit.findings.some((item) => item.code === 'audit.schema-authority.unqualified'), false);
+  assert.equal(audit.validation?.state, 'exact-schema-validated');
+  assert.equal(audit.validation?.semanticContract?.available, true);
+
+  const editor = projectPortableEditorAssistance({ records: [record], focusPath: record.path, referenceResolutions: resolutions });
+  assert.equal(editor.documents[0].diagnostics.some((item) => item.code === 'reference.permalink.stale'), false);
+  assert.equal(editor.documents[0].actions.length, 0);
+  const preflight = qualifyPortableManufactureSchemaReferenceCandidate(record, { schemaReferenceResolutions: resolutions });
+  assert.equal(preflight.state, 'qualified');
+  assert.equal(preflight.findings.some((item) => item.code === 'schema.reference.target-unqualified'), false);
+});
+
+test('candidate validation does not grant authority to byte-identical material at a different canonical source path', () => {
+  const contract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
+  const material = contract.schemaReferences.current.semanticMaterialIdentity;
+  const copiedTarget = EVIDENCE_CURRENT_TARGET.replace('/core/evidence/tiinex.evidence.v1.schema.md', '/core/topic/tiinex.evidence.v1.schema.md');
+  assert.notEqual(copiedTarget, EVIDENCE_CURRENT_TARGET);
+  const markdown = reseal(render('tiinex.evidence.v1', contract).replace(EVIDENCE_CURRENT_TARGET, copiedTarget));
+  const audit = auditPortableRecord({ path: '.topics/testing/copied-schema-material.trace.md', markdown, schemaId: 'tiinex.evidence.v1' }, {
+    requireExactSchemaAuthority: true,
+    schemaReferenceContext: 'candidate',
+    schemaReferenceResolutions: [{ target: copiedTarget, exact: { state: 'resolved', sha256: material.sha256, sourceBlobSha: material.sourceBlobSha, bytes: material.bytes } }]
+  });
+  assert.equal(audit.findings.some((item) => item.code === 'schema.reference.target-unqualified' && item.severity === 'error'), true);
+  assert.equal(audit.schemaValidationAuthority?.state, 'unavailable');
+  assert.equal(audit.findings.some((item) => item.code === 'audit.schema-authority.unqualified'), true);
+});
+
+test('candidate validation still blocks an immutable schema locator when explicit resolution proves different material', () => {
+  const contract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
+  const material = contract.schemaReferences.current.semanticMaterialIdentity;
+  const olderTarget = EVIDENCE_CURRENT_TARGET.replace(/\/blob\/[^/]+\//, '/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/');
+  const markdown = reseal(render('tiinex.evidence.v1', contract).replace(EVIDENCE_CURRENT_TARGET, olderTarget));
+  const record = { path: '.topics/testing/mismatched-old-schema-locator.trace.md', markdown, schemaId: 'tiinex.evidence.v1' };
+  const audit = auditPortableRecord(record, {
+    requireExactSchemaAuthority: true,
+    schemaReferenceContext: 'candidate',
+    schemaReferenceResolutions: [{ target: olderTarget, exact: { state: 'resolved', sha256: '0'.repeat(64), sourceBlobSha: material.sourceBlobSha, bytes: material.bytes } }]
+  });
+  assert.equal(audit.findings.some((item) => item.code === 'schema.reference.target-unqualified' && item.severity === 'error'), true);
+  assert.equal(audit.schemaValidationAuthority?.state, 'unavailable');
+  assert.equal(audit.findings.some((item) => item.code === 'audit.schema-authority.unqualified'), true);
+});
+
+test('candidate validation remains fail-closed for an older immutable schema locator without material-resolution evidence', () => {
+  const contract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
+  const olderTarget = EVIDENCE_CURRENT_TARGET.replace(/\/blob\/[^/]+\//, '/blob/cccccccccccccccccccccccccccccccccccccccc/');
+  const markdown = reseal(render('tiinex.evidence.v1', contract).replace(EVIDENCE_CURRENT_TARGET, olderTarget));
+  const record = { path: '.topics/testing/unresolved-old-schema-locator.trace.md', markdown, schemaId: 'tiinex.evidence.v1' };
+  const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true, schemaReferenceContext: 'candidate' });
+  assert.equal(audit.schemaValidationAuthority?.state, 'unavailable');
+  assert.equal(audit.findings.some((item) => item.code === 'schema.reference.target-unqualified' && item.severity === 'error'), true);
+  assert.equal(audit.findings.some((item) => item.code === 'audit.schema-authority.unqualified'), true);
+});
+
 test('historical bare Root bytes are preserved while shared audit and editor project the same warning severity', () => {
   const canonical = render('tiinex.task.v1');
   const historical = reseal(canonical.replace(`- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})`, '- Envelope Schema: tiinex.root.v1'));
@@ -135,6 +210,63 @@ test('resolved link material identity contradiction remains blocking even in his
   const finding = audit.findings.find((item) => item.code === 'schema.reference.material-identity-contradiction');
   assert.equal(finding?.severity, 'error');
   assert.match(finding?.message || '', /positively qualified as tiinex\.root\.v1/);
+});
+
+
+test('manufacture preflight preserves exact historical Parent Schema authority from the integrity-qualified local Parent while Current Schema stays prospective', () => {
+  const parentPath = '.topics/testing/001-parent.trace.md';
+  const childPath = '.topics/testing/001-1-handoff.trace.md';
+  const olderTaskTarget = TASK_SCHEMA_TARGET.replace(/\/blob\/[^/]+\//, '/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/');
+  assert.notEqual(olderTaskTarget, TASK_SCHEMA_TARGET);
+
+  const parentCanonical = renderArtifactCreationDraftMarkdown(buildArtifactCreationContract({ schemaId: 'tiinex.task.v1', transitionType: 'create-artifact' }), {
+    currentSchemaId: 'tiinex.task.v1',
+    childPath: parentPath,
+    bodyMarkdown: '# Parent Task\n\nExact historical Parent.',
+    title: 'Parent Task',
+    summary: 'Parent Task',
+    createdAt: '2026-09-12 01:00:00'
+  });
+  const parentMarkdown = reseal(parentCanonical.replace(TASK_SCHEMA_TARGET, olderTaskTarget));
+  const parentRecord = {
+    id: parentPath,
+    path: parentPath,
+    schemaId: 'tiinex.task.v1',
+    currentSchemaId: 'tiinex.task.v1',
+    currentCreatedAt: '2026-09-12 01:00:00',
+    createdAt: '2026-09-12 01:00:00',
+    markdown: parentMarkdown,
+    schemaReferenceAuthority: { schemaId: 'tiinex.task.v1', exactTargets: [olderTaskTarget], preferredTarget: olderTaskTarget, resolutionState: 'qualified' }
+  };
+  const childMarkdown = renderArtifactCreationDraftMarkdown(buildArtifactCreationContract({ schemaId: 'tiinex.handoff.v1', transitionType: 'continue-from-record' }), {
+    currentSchemaId: 'tiinex.handoff.v1',
+    parentRecord,
+    childPath,
+    bodyMarkdown: '# Handoff\n\nCandidate Handoff.',
+    title: 'Handoff',
+    summary: 'Handoff',
+    createdAt: '2026-09-12 02:00:00'
+  });
+  const record = { path: childPath, markdown: childMarkdown, schemaId: 'tiinex.handoff.v1' };
+  const withoutHistoricalParent = qualifyPortableManufactureSchemaReferenceCandidate(record);
+  assert.equal(withoutHistoricalParent.findings.some((item) => item.code === 'schema.reference.target-unqualified' && item.params?.field === 'Parent Schema'), true);
+
+  const authorities = projectPortableManufactureSchemaReferenceAuthorities(record, {
+    workspaceEntries: [{ path: parentPath, data: new TextEncoder().encode(parentMarkdown) }]
+  });
+  assert.equal(authorities.parent?.schemaId, 'tiinex.task.v1');
+  assert.equal(authorities.parent?.preferredTarget, olderTaskTarget);
+  assert.equal(authorities.parent?.resolutionState, 'qualified');
+  const qualified = qualifyPortableManufactureSchemaReferenceCandidate(record, { schemaReferenceAuthorities: authorities });
+  assert.equal(qualified.findings.some((item) => item.code === 'schema.reference.target-unqualified' && item.params?.field === 'Parent Schema'), false);
+  assert.equal(qualified.state, 'qualified');
+
+  const currentHandoffTarget = currentSchemaTarget('tiinex.handoff.v1');
+  const wrongCurrentTarget = currentHandoffTarget.replace(/\/blob\/[^/]+\//, '/blob/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/');
+  const wrongCurrent = reseal(childMarkdown.replace(currentHandoffTarget, wrongCurrentTarget));
+  const blocked = qualifyPortableManufactureSchemaReferenceCandidate({ ...record, markdown: wrongCurrent }, { schemaReferenceAuthorities: authorities });
+  assert.equal(blocked.findings.some((item) => item.code === 'schema.reference.target-unqualified' && item.params?.field === 'Current Schema'), true);
+  assert.equal(blocked.state, 'blocked');
 });
 
 test('manufacture preflight gates active Handoff candidate prospectively without reclassifying carried history', () => {

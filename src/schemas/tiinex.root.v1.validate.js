@@ -1,4 +1,4 @@
-import { isMalformedWorkspaceQualifiedRecoveryReference } from '../lineage/parentRecoveryReference.js';
+import { classifyParentRecoveryReference, isMalformedWorkspaceQualifiedRecoveryReference } from '../lineage/parentRecoveryReference.js';
 
 export function rootValidate(artifact) {
   const findings = [];
@@ -33,6 +33,20 @@ export function rootValidate(artifact) {
   if (envelope.repairsDeclared) findings.push(info('root.repairs.declared', 'Envelope declares repair notes; validators should preserve unknown repair fields.'));
   if (!findings.some((finding) => finding.severity === 'error')) findings.push(info('root.envelope.readable', 'Root envelope is readable at current validation depth.'));
   return findings;
+}
+
+export function rootProspectiveValidate(artifact, context = 'historical') {
+  if (String(context || '').trim() !== 'candidate') return [];
+  const parent = artifact?.envelope?.parent || {};
+  const hasParent = Boolean(parent.schema?.id || parent.createdAt || parent.trace || parent.origin);
+  if (!hasParent) return [];
+  const recoveryReferences = [
+    Object.freeze({ field: 'Trace', target: String(parent.trace || '').trim() }),
+    ...(Array.isArray(parent.originEntries) ? parent.originEntries : []).map((entry) => Object.freeze({ field: `Origin:${String(entry?.label || '').trim() || 'unlabelled'}`, target: String(entry?.target || '').trim() }))
+  ].filter((entry) => entry.target);
+  return recoveryReferences
+    .filter((reference) => classifyParentRecoveryReference(reference.target).kind === 'workspace-qualified')
+    .map((reference) => error('root.parent.recovery.workspace-qualified.non-durable', `Parent ${reference.field} uses a Workspace-qualified runtime/material selector as persisted recovery authority: ${reference.target}. New candidates must use a truthful durable Parent recovery locator; package carriage may bind material separately but does not turn the Workspace selector into source authority.`));
 }
 
 export function rootFallbackFinding(schemaId) {

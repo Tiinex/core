@@ -8,6 +8,7 @@ import { createPortableLocalDraft } from '../src/tooling/portable/draft/draft.cr
 import { canonicalC14nV2SelfState, sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { locateFindingLine, projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
 import { nativeSchemaMarkdown } from '../src/schemas/generated/native.schema.pack.js';
+import { validateArtifact } from '../src/validation/validateArtifact.js';
 
 const TOPIC = 'tiinex.topic.v1';
 const VALUES = Object.freeze({ 'Current Read': 'read', 'Design Direction': 'direction', 'Next Artifacts': 'next' });
@@ -57,13 +58,20 @@ test('explicit repository-root target directory allocates in the repository root
   assert.equal(plan.proposals[0].path, '001-root-child.trace.md');
 });
 
-test('Workspace-qualified Parent renders and validates clean while child stays in target Workspace directory', () => {
+test('Workspace-qualified Parent requires durable published recovery and renders only the immutable locator', () => {
   const markdown = parentMarkdown('.topics/source/001-parent.trace.md');
   const reference = 'business::.topics/source/001-parent.trace.md';
-  const projected = projectPortableAuthoringParent({ reference, records: [{ path: '001-parent.trace.md', markdown, sourceMode: 'portable-node-local' }] });
+  const publishedReference = `https://github.com/Tiinex/business/blob/${'a'.repeat(40)}/.topics/source/001-parent.trace.md`;
+
+  const blocked = projectPortableAuthoringParent({ reference, records: [{ path: '001-parent.trace.md', markdown, sourceMode: 'portable-node-local' }] });
+  assert.equal(blocked.status, 'blocked');
+  assert.equal(blocked.findings.some((item) => item.code === 'portable.authoring-parent.published-reference.required'), true);
+
+  const projected = projectPortableAuthoringParent({ reference, publishedReference, records: [{ path: '001-parent.trace.md', markdown, sourceMode: 'portable-node-local' }] });
   assert.equal(projected.status, 'ready');
-  assert.equal(projected.parentRecord.recoveryMode, 'workspace-qualified');
+  assert.equal(projected.parentRecord.recoveryMode, 'external-versioned');
   assert.equal(projected.parentRecord.path, reference);
+  assert.equal(projected.parentRecord.publishedReference.target, publishedReference);
 
   const plan = prepareEpistemicMaterialization({
     records: [], files: [],
@@ -87,15 +95,35 @@ test('Workspace-qualified Parent renders and validates clean while child stays i
   });
   assert.equal(created.status, 'created-clean');
   assert.equal(created.findings.some((item) => item.severity === 'error'), false);
-  assert.match(created.draft.markdown, /- Trace: \[001-parent\.trace\.md\]\(business::\.topics\/source\/001-parent\.trace\.md\)/);
+  assert.match(created.draft.markdown, new RegExp(`- Trace: \\[001-parent\\.trace\\.md\\]\\(${publishedReference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`));
+  assert.doesNotMatch(created.draft.markdown, /business::/);
   assert.match(created.draft.markdown, /- Current Schema: \[tiinex\.topic\.v1\]\(https:\/\/github\.com\/Tiinex\/docs\/blob\//);
+});
+
+
+test('candidate validation blocks persisted Workspace-qualified Parent recovery while historical audit preserves it', () => {
+  const rootMarkdown = parentMarkdown('.topics/source/001-parent.trace.md');
+  const reference = 'business::.topics/source/001-parent.trace.md';
+  const publishedReference = `https://github.com/Tiinex/business/blob/${'b'.repeat(40)}/.topics/source/001-parent.trace.md`;
+  const projected = projectPortableAuthoringParent({ reference, publishedReference, records: [{ path: '001-parent.trace.md', markdown: rootMarkdown, sourceMode: 'portable-node-local' }] });
+  assert.equal(projected.status, 'ready');
+  const created = createPortableLocalDraft({ schemaId: TOPIC, transitionType: 'continue-from-record', path: '.topics/target/001-child.trace.md', parent: projected.parentRecord, values: VALUES, title: 'Child', materials: [] });
+  assert.equal(created.status, 'created-clean');
+  const historicalWorkspaceLocator = sealC14nV2Self(created.draft.markdown.replaceAll(publishedReference, reference));
+  assert.equal(historicalWorkspaceLocator.state, 'sealed');
+
+  const candidate = validateArtifact({ markdown: historicalWorkspaceLocator.markdown, schemaReferenceContext: 'candidate' });
+  assert.equal(candidate.findings.some((item) => item.code === 'root.parent.recovery.workspace-qualified.non-durable' && item.severity === 'error'), true);
+  const historical = validateArtifact({ markdown: historicalWorkspaceLocator.markdown, schemaReferenceContext: 'historical' });
+  assert.equal(historical.findings.some((item) => item.code === 'root.parent.recovery.workspace-qualified.non-durable'), false);
 });
 
 
 test('authoring Parent permits direct continuation from exact verified bytes carrying only historical malformed ancestor recovery debt', () => {
   const rootMarkdown = parentMarkdown('.topics/source/001-parent.trace.md');
   const externalReference = 'business::.topics/source/001-parent.trace.md';
-  const externalParent = projectPortableAuthoringParent({ reference: externalReference, records: [{ path: '001-parent.trace.md', markdown: rootMarkdown, sourceMode: 'portable-node-local' }] });
+  const publishedReference = `https://github.com/Tiinex/business/blob/${'c'.repeat(40)}/.topics/source/001-parent.trace.md`;
+  const externalParent = projectPortableAuthoringParent({ reference: externalReference, publishedReference, records: [{ path: '001-parent.trace.md', markdown: rootMarkdown, sourceMode: 'portable-node-local' }] });
   assert.equal(externalParent.status, 'ready');
   const created = createPortableLocalDraft({
     schemaId: TOPIC,
@@ -107,7 +135,8 @@ test('authoring Parent permits direct continuation from exact verified bytes car
     materials: []
   });
   assert.equal(created.status, 'created-clean');
-  const legacy = sealC14nV2Self(created.draft.markdown.replaceAll('](business::', '](../../business::'));
+  const malformedReference = '../../business::.topics/source/001-parent.trace.md';
+  const legacy = sealC14nV2Self(created.draft.markdown.replaceAll(publishedReference, malformedReference));
   assert.equal(legacy.state, 'sealed');
 
   const projected = projectPortableAuthoringParent({
@@ -119,25 +148,22 @@ test('authoring Parent permits direct continuation from exact verified bytes car
   assert.equal(projected.findings.some((item) => item.code === 'portable.authoring-parent.historical-ancestor-recovery-debt'), true);
 });
 
-test('editor assistance offers deterministic repair for malformed Workspace-qualified Parent locators on a leaf', () => {
+test('editor assistance preserves malformed Workspace-qualified Parent debt when no exact durable replacement is proven', () => {
   const rootMarkdown = parentMarkdown('.topics/source/001-parent.trace.md');
-  const externalParent = projectPortableAuthoringParent({ reference: 'business::.topics/source/001-parent.trace.md', records: [{ path: '001-parent.trace.md', markdown: rootMarkdown, sourceMode: 'portable-node-local' }] });
-  const created = createPortableLocalDraft({
-    schemaId: TOPIC,
-    transitionType: 'continue-from-record',
-    path: '.topics/target/001-legacy-child.trace.md',
-    parent: externalParent.parentRecord,
-    values: VALUES,
-    title: 'Legacy Child',
-    materials: []
-  });
-  const legacy = sealC14nV2Self(created.draft.markdown.replaceAll('](business::', '](../../business::'));
+  const reference = 'business::.topics/source/001-parent.trace.md';
+  const publishedReference = `https://github.com/Tiinex/business/blob/${'d'.repeat(40)}/.topics/source/001-parent.trace.md`;
+  const externalParent = projectPortableAuthoringParent({ reference, publishedReference, records: [{ path: '001-parent.trace.md', markdown: rootMarkdown, sourceMode: 'portable-node-local' }] });
+  assert.equal(externalParent.status, 'ready');
+  const created = createPortableLocalDraft({ schemaId: TOPIC, transitionType: 'continue-from-record', path: '.topics/target/001-legacy-child.trace.md', parent: externalParent.parentRecord, values: VALUES, title: 'Legacy Child', materials: [] });
+  assert.equal(created.status, 'created-clean');
+  const malformedReference = '../../business::.topics/source/001-parent.trace.md';
+  const legacy = sealC14nV2Self(created.draft.markdown.replaceAll(publishedReference, malformedReference));
   assert.equal(legacy.state, 'sealed');
   const assistance = projectPortableEditorAssistance({ records: [{ path: '.topics/target/001-legacy-child.trace.md', markdown: legacy.markdown }], focusPath: '.topics/target/001-legacy-child.trace.md' });
-  const action = assistance.documents[0].actions.find((item) => item.id === 'repair-qualified-references-and-self-integrity');
-  assert.ok(action);
-  assert.doesNotMatch(action.replacementMarkdown, /\.\.\/\.\.\/business::/);
-  assert.match(action.replacementMarkdown, /\]\(business::\.topics\/source\/001-parent\.trace\.md\)/);
+  const document = assistance.documents[0];
+  assert.equal(document.diagnostics.some((item) => item.code === 'root.parent.recovery.workspace-qualified.malformed'), true);
+  const action = document.actions.find((item) => item.id === 'repair-qualified-references-and-self-integrity');
+  assert.equal(action, undefined);
 });
 
 test('editor assistance locates child self mismatch on the primary self Value and offers a deterministic reseal Quick Fix', () => {

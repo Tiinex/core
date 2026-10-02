@@ -217,9 +217,9 @@ function returnHandoffMarkdown({parentHandoff,anchorRef,sigmaRef}){
 
 function roleMarkdown(){return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE})\n  - Created At: 2026-09-24 01:03:00\n  - Authors: Fixture\n  - Summary: Anchor fixture Role.\n  - Status: ready/local\n\n---\n\n# Anchor\n\n## Role Identity\n\n- Role Label: Anchor\n- Role Kind: fixture\n\n## Role Boundary\n\n- In Scope: direct Package V1 fixture\n- Out Of Scope: remote mutation\n\n## Authority And Responsibility Boundary\n\n- May Do: execute fixture work\n- Does Not Authorize: remote mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session or Handoff\n- Assignment Modes: explicit-session, handoff\n\n## Interpretation Limits\n\n- Does Not Prove: durable holder identity\n- Must Not Be Treated As: broader authority\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);}
 function guidanceMarkdown(title,summary){return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT})\n- Current\n  - Current Schema: [tiinex.task.v1](${TASK})\n  - Created At: 2026-09-24 01:04:00\n  - Authors: Fixture\n  - Summary: ${summary}.\n  - Status: ready/local\n\n---\n\n# ${title}\n\nUse exact material and fail closed.\n\n## Scope\n\n- fixture\n\n## Dependencies\n\n- none\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);}
-function handoffMarkdown({task, roleRef, processRef='', policyRef='', ordinaryRef='', title='Handoff'}){
+function handoffMarkdown({task, roleRef, processRef='', policyRef='', ordinaryRef='', rawRequired='', title='Handoff'}){
   const digest=validatedC14nV2PrimarySelfDigest(task);assert.equal(digest.state,'verified');
-  const required=[processRef?`- execution-process\n  - Material: exact execution process\n  - Material Reference: [Process](${processRef})\n  - Purpose: supplies required execution procedure\n  - Availability: available`:null,policyRef?`- acceptance-policy\n  - Material: exact acceptance policy guidance\n  - Material Reference: [Policy](${policyRef})\n  - Purpose: supplies required review constraints\n  - Availability: available`:null,ordinaryRef?`- supporting-evidence\n  - Material: exact supporting evidence\n  - Material Reference: [Evidence](${ordinaryRef})\n  - Purpose: supplies ordinary post-Handoff review context\n  - Availability: available`:null].filter(Boolean).join('\n\n')||'- none';
+  const required=rawRequired || [processRef?`- execution-process\n  - Material: exact execution process\n  - Material Reference: [Process](${processRef})\n  - Purpose: supplies required execution procedure\n  - Availability: available`:null,policyRef?`- acceptance-policy\n  - Material: exact acceptance policy guidance\n  - Material Reference: [Policy](${policyRef})\n  - Purpose: supplies required review constraints\n  - Availability: available`:null,ordinaryRef?`- supporting-evidence\n  - Material: exact supporting evidence\n  - Material Reference: [Evidence](${ordinaryRef})\n  - Purpose: supplies ordinary post-Handoff review context\n  - Availability: available`:null].filter(Boolean).join('\n\n')||'- none';
   return seal(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT})\n- Parent\n  - Parent Schema: [tiinex.task.v1](${TASK})\n  - Created At: 2026-09-24 01:01:00\n  - Trace: [Task](../task.trace.md)\n  - Origin:\n    - [relative](../task.trace.md)\n- Current\n  - Current Schema: [tiinex.handoff.v1](${HANDOFF})\n  - Created At: 2026-09-24 01:02:00\n  - Authors: Fixture\n  - Summary: ${title}.\n  - Status: ready/local\n\n---\n\n# ${title}\n\n## Handoff Parties\n\n- Purpose: exercise direct Package V1 grounding.\n- From: Anchor\n- From Kind: role\n- From Reference: [Anchor Role](${roleRef})\n- To: Anchor\n- To Kind: role\n- To Reference: [Anchor Role](${roleRef})\n\n## Transfers\n\n- execute\n  - Transfer Kind: work-and-responsibility\n  - Description: execute the bounded fixture task\n  - Controlling Artifact: [Task](../task.trace.md)\n\n## Required Context\n\n${required}\n\n## Reference Context\n\n- none\n\n## Retained Responsibilities\n\n- none\n\n## Exclusions And Dependencies\n\n- no-remote-write\n  - Kind: excluded-scope\n  - Description: no remote mutation\n\n## Completion Expectation\n\n- Signal Kind: result\n- Signal Meaning: exact grounded continuation result\n- Return To: Anchor\n- Return To Reference: [Anchor Role](${roleRef})\n\n## Interpretation Limits\n\n- Does Not Mean: transport creates authority\n- Must Not Be Used To Claim: remote write permission\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: [Task](../task.trace.md)\n  - Value: ${digest.value}\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
 }
 
@@ -473,6 +473,68 @@ async function ordinaryContextFixture({cached=false}={}){
   const input=await prepareNodeHandoffManufacturingInput({workspaceRoot:root,workspaceId:'work',workspaceTargetPath:'.topics/.workspaces/tiinex-work.workspace.md',handoffPath:'.topics/handoffs/001-handoff.trace.md',materialBindings:bindings,runtimeRoot:path.resolve('.')});
   return {input,refs};
 }
+
+test('Required Context without Material Reference preserves an explicit carried-Workspace binding through Package V1 roundtrip',async()=>{
+  const root=await mkdtemp(path.join(tmpdir(),'tiinex-package-v1-reference-absent-'));
+  const contextRoot=await mkdtemp(path.join(tmpdir(),'tiinex-package-v1-reference-absent-context-'));
+  const workspace=workspaceMarkdown(); const task=taskMarkdown(); const role=roleMarkdown();
+  await put(root,'.topics/.workspaces/tiinex-work.workspace.md',workspace);
+  await put(root,'.topics/task.trace.md',task);
+  await put(root,'.topics/roles/anchor.trace.md',role);
+  const contextPath='.topics/.workspaces/tiinex-context.workspace.md';
+  await put(contextRoot,contextPath,workspaceMarkdown());
+  const rawRequired=`- workspace-context\n  - Material: current Context Workspace\n  - Purpose: supplies exact carried Workspace context without requiring source-level transport coordinates\n  - Availability: available`;
+  await put(root,'.topics/handoffs/001-handoff.trace.md',handoffMarkdown({task,roleRef:'work::.topics/roles/anchor.trace.md',rawRequired,title:'Reference-Absent Context'}));
+  const input=await prepareNodeHandoffManufacturingInput({
+    workspaceRoot:root,workspaceId:'work',workspaceTargetPath:'.topics/.workspaces/tiinex-work.workspace.md',handoffPath:'.topics/handoffs/001-handoff.trace.md',
+    additionalWorkspaces:[{id:'context',root:contextRoot,workspaceTargetPath:contextPath}],
+    materialBindings:{'required:workspace-context':{workspaceId:'context',workspacePath:contextPath}},
+    runtimeRoot:path.resolve('.')
+  });
+  const result=manufactureRecipientRelativeHandoffPackage(input,{verifyRoundtrip:true});
+  assert.equal(result.status,'ready',JSON.stringify(result.findings||[],null,2));
+  assert.equal(result.inspection.status,'valid');
+  assert.equal(result.roundtrip.status,'passed');
+  const route=result.inspection.routes[0];
+  const requirement=route.requiredClosure.requirements.find((item)=>item.requirementId==='required:workspace-context');
+  assert.ok(requirement);
+  assert.equal(requirement.referenceTarget,'');
+  assert.equal(requirement.state,'qualified');
+  assert.equal(requirement.resolution.providerMode,'archive');
+  assert.equal(requirement.resolution.workspaceId,'context');
+  assert.equal(requirement.resolution.workspaceRelativePath,contextPath);
+  const pointer=result.inspection.groundingPointers.find((item)=>item.requirementId==='required:workspace-context');
+  assert.ok(pointer,'reference-absent explicit binding must survive as a package-local grounding pointer');
+  assert.equal(pointer.referenceTarget,'');
+  assert.equal(pointer.targetWorkspaceId,'context');
+  assert.equal(pointer.targetInnerPath,contextPath);
+});
+
+test('Required Context without Material Reference is not inferred from package placement when no exact binding is supplied',async()=>{
+  const root=await mkdtemp(path.join(tmpdir(),'tiinex-package-v1-reference-absent-unbound-'));
+  const contextRoot=await mkdtemp(path.join(tmpdir(),'tiinex-package-v1-reference-absent-unbound-context-'));
+  const workspace=workspaceMarkdown(); const task=taskMarkdown(); const role=roleMarkdown();
+  await put(root,'.topics/.workspaces/tiinex-work.workspace.md',workspace);
+  await put(root,'.topics/task.trace.md',task);
+  await put(root,'.topics/roles/anchor.trace.md',role);
+  const contextPath='.topics/.workspaces/tiinex-context.workspace.md';
+  await put(contextRoot,contextPath,workspaceMarkdown());
+  const rawRequired=`- workspace-context\n  - Material: current Context Workspace\n  - Purpose: supplies exact carried Workspace context without requiring source-level transport coordinates\n  - Availability: available`;
+  await put(root,'.topics/handoffs/001-handoff.trace.md',handoffMarkdown({task,roleRef:'work::.topics/roles/anchor.trace.md',rawRequired,title:'Reference-Absent Unbound Context'}));
+  const input=await prepareNodeHandoffManufacturingInput({
+    workspaceRoot:root,workspaceId:'work',workspaceTargetPath:'.topics/.workspaces/tiinex-work.workspace.md',handoffPath:'.topics/handoffs/001-handoff.trace.md',
+    additionalWorkspaces:[{id:'context',root:contextRoot,workspaceTargetPath:contextPath}],
+    runtimeRoot:path.resolve('.')
+  });
+  const result=manufactureRecipientRelativeHandoffPackage(input,{verifyRoundtrip:true});
+  assert.equal(result.status,'blocked');
+  assert.equal(result.preflight.state,'blocked');
+  assert.equal(result.bundle,null);
+  assert.equal(result.inspection,null);
+  const planned=(result.plan?.requirements?.required||[]).find((item)=>item.requirementId==='required:workspace-context');
+  assert.ok(planned);
+  assert.notEqual(planned.disposition,'qualified');
+});
 
 test('ordinary carried Required Context resolves after Handoff without becoming a root grounding pointer',async()=>{
   const {input,refs}=await ordinaryContextFixture({cached:false}); const result=manufactureRecipientRelativeHandoffPackage(input,{verifyRoundtrip:true});

@@ -8,7 +8,6 @@ import { integrityMethodReferenceAuthorityForCreation } from '../../../integrity
 import { inspectPortableLineageIntegrity } from '../lineage/lineage.integrity.plan.js';
 import { portableFinding } from '../findings.js';
 import { qualifyTiinexRouteArtifact } from '../handoff/routeArtifactConformance.js';
-import { classifyParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
 
 export const PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID = 'tiinex.portable.editor-assistance.v1';
 
@@ -30,7 +29,7 @@ export function projectPortableEditorAssistance(input = {}) {
 
 function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = []) {
   if (isCanonicalSchemaSourceRecord(record)) return projectSchemaSourceDocument(record, records);
-  const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true });
+  const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true, schemaReferenceResolutions: referenceResolutions });
   const markdown = String(record.markdown || '');
   const recordPath = norm(record.path || record.id || '');
   const lineageFindings = findingsForPath(lineageInspection?.findings || [], recordPath);
@@ -397,7 +396,6 @@ function qualifyReplacementAgainstSharedGuardrails(record = {}, records = [], re
   const affectedPaths = new Set([focusPath, ...((beforeFocus?.downstreamDescendants || []).map((item) => norm(item.path || '')).filter(Boolean))]);
   const lineageBlockers = (after.artifacts || []).filter((item) => {
     if (!affectedPaths.has(norm(item.path || '')) || item.state === 'healthy') return false;
-    if (options.allowQualifiedExternalParentUnresolved === true && norm(item.path || '') === focusPath && item.state === 'parent-unresolved' && hasQualifiedWorkspaceParentReference(replacementMarkdown)) return false;
     return true;
   });
   if (lineageBlockers.length) return freeze({ state: 'blocked', reason: 'replacement-shared-lineage-not-clean', blockers: lineageBlockers.map((item) => ({ path: item.path, state: item.state })) });
@@ -412,37 +410,6 @@ function deterministicReferenceHygieneRepair(record = {}, records = [], audit = 
   let schemaReferenceChanged = false;
   const diagnosticCodes = [];
 
-  const lines = candidate.replace(/\r\n?/g, '\n').split('\n');
-  const parentStart = lines.findIndex((line) => /^\s*-\s+Parent\s*$/.test(line));
-  if (parentStart >= 0) {
-    let parentEnd = lines.length;
-    for (let index = parentStart + 1; index < lines.length; index += 1) {
-      if (/^-\s+\S/.test(lines[index])) { parentEnd = index; break; }
-    }
-    for (let index = parentStart + 1; index < parentEnd; index += 1) {
-      lines[index] = lines[index].replace(/\]\(([^)]+::[^)]+)\)/g, (whole, target) => {
-        const normalized = normalizeMalformedWorkspaceQualifiedTarget(target);
-        if (!normalized || normalized === target) return whole;
-        parentReferenceChanged = true;
-        return `](${normalized})`;
-      });
-    }
-  }
-  if (parentReferenceChanged) {
-    candidate = lines.join('\n');
-    const integrityLines = candidate.replace(/\r\n?/g, '\n').split('\n');
-    const integrityStart = integrityLines.findIndex((line) => line.trim() === '# Continuity Integrity');
-    if (integrityStart >= 0) {
-      for (let index = integrityStart + 1; index < integrityLines.length; index += 1) {
-        integrityLines[index] = integrityLines[index].replace(/\]\(([^)]+::[^)]+)\)/g, (whole, target) => {
-          const normalized = normalizeMalformedWorkspaceQualifiedTarget(target);
-          return normalized && normalized !== target ? `](${normalized})` : whole;
-        });
-      }
-      candidate = integrityLines.join('\n');
-    }
-    diagnosticCodes.push('root.parent.recovery.workspace-qualified.malformed', 'portable.lineage-integrity.parent-unresolved');
-  }
 
   const exactTargetByField = new Map((audit?.findings || [])
     .filter((item) => String(item?.code || '') === 'schema.reference.exact-target-omitted')
@@ -755,26 +722,6 @@ function sealIfSelfIntegrityPresent(markdown = '') {
   return sealed.state === 'sealed' ? freeze({ state: 'ready', markdown: sealed.markdown }) : freeze({ state: 'blocked', markdown: String(markdown || '') });
 }
 
-function normalizeMalformedWorkspaceQualifiedTarget(value = '') {
-  const raw = String(value || '').trim();
-  if (classifyParentRecoveryReference(raw).kind !== 'malformed-workspace-qualified') return raw;
-  const stripped = raw.replace(/^(?:\.\.\/)+/, '').replace(/^\.\//, '');
-  return classifyParentRecoveryReference(stripped).kind === 'workspace-qualified' ? stripped : raw;
-}
-
-function hasQualifiedWorkspaceParentReference(markdown = '') {
-  const source = String(markdown || '');
-  const parentStart = source.split(/\r?\n/).findIndex((line) => /^\s*-\s+Parent\s*$/.test(line));
-  if (parentStart < 0) return false;
-  const lines = source.split(/\r?\n/);
-  let parentEnd = lines.length;
-  for (let index = parentStart + 1; index < lines.length; index += 1) if (/^-\s+\S/.test(lines[index])) { parentEnd = index; break; }
-  const targets = [];
-  for (let index = parentStart + 1; index < parentEnd; index += 1) {
-    for (const match of lines[index].matchAll(/\]\(([^)]+)\)/g)) targets.push(String(match[1] || ''));
-  }
-  return targets.some((target) => classifyParentRecoveryReference(target).kind === 'workspace-qualified');
-}
 
 function projectDiagnostic(finding = {}, markdown = '') {
   const located = locateFindingLine(finding, markdown);

@@ -1,6 +1,6 @@
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { resolveSchemaModule } from '../../../schemas/resolver.js';
-import { qualifySchemaReferenceValue, schemaReferenceAuthorityFromBinding } from '../../../schemas/schema.reference.js';
+import { qualifySchemaReferenceValue, schemaReferenceAuthorityFromBinding, schemaReferenceAuthorityWithEquivalentResolvedTarget, schemaReferenceResolutionForTarget } from '../../../schemas/schema.reference.js';
 import {
   PORTABLE_QUALIFIED_LOCAL_ROOT_RUNTIME_PROJECTION_SCHEMA_ID,
   qualifiedLocalRootRuntimeProjection,
@@ -28,7 +28,7 @@ export function portableRuntimeValidationContractForSchema(schemaId = '', resolu
   return deepFreeze({ ...projected, resolution, lineageAuthority, baseQualificationState: String(qualification?.state || 'unavailable') });
 }
 
-export function portableRuntimeValidationAuthorityForRecord(record = {}) {
+export function portableRuntimeValidationAuthorityForRecord(record = {}, options = {}) {
   const markdown = String(record?.markdown || '');
   const parsed = parseArtifactMarkdown(markdown);
   const declaredSchema = parsed?.envelope?.current?.schema || {};
@@ -58,11 +58,20 @@ export function portableRuntimeValidationAuthorityForRecord(record = {}) {
     findings.push(`Current Schema ${schemaId} declares no version-bearing locator and no qualified local workspace authority supersedes that omission.`);
     currentReferenceBasis = 'schema-id-only-version-unresolved';
   } else {
-    const referenceAuthority = schemaReferenceAuthorityFromBinding(schemaId, currentBinding, currentQualification?.authority || null, currentQualification);
+    const baseReferenceAuthority = schemaReferenceAuthorityFromBinding(schemaId, currentBinding, currentQualification?.authority || null, currentQualification);
+    const schemaReferenceResolutions = options.schemaReferenceResolutions || record.schemaReferenceResolutions || [];
+    const resolution = declaredSchema.form === 'markdown-link'
+      ? schemaReferenceResolutionForTarget(schemaReferenceResolutions, declaredSchema.target)
+      : null;
+    const referenceAuthority = resolution
+      ? schemaReferenceAuthorityWithEquivalentResolvedTarget(baseReferenceAuthority, declaredSchema.target, resolution)
+      : baseReferenceAuthority;
     const referenceQualification = qualifySchemaReferenceValue(String(declaredSchema.raw || ''), referenceAuthority);
     if (referenceQualification.state === 'qualified' && referenceQualification.targetState === 'qualified') {
       currentReferenceState = 'qualified';
-      currentReferenceBasis = 'declared-current-schema-exact-source-target';
+      currentReferenceBasis = (referenceAuthority.equivalentTargets || []).includes(String(declaredSchema.target || ''))
+        ? 'declared-current-schema-equivalent-source-target'
+        : 'declared-current-schema-exact-source-target';
     } else {
       findings.push(...(referenceQualification.findings || []).map((item) => `Current Schema authority: ${item}`));
       currentReferenceBasis = 'declared-current-schema-target-unqualified';

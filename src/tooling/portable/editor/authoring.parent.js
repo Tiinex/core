@@ -1,6 +1,6 @@
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { auditPortableRecord } from '../audit/audit.capability.js';
-import { classifyParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
+import { classifyParentRecoveryReference, isQualifiedVersionStableParentRecoveryReference } from '../../../lineage/parentRecoveryReference.js';
 import { buildArtifactCreationContract } from '../../../schemas/creation.contracts.js';
 import { canonicalC14nV2SelfState } from '../../../integrity/integrity.c14nV2.js';
 
@@ -29,7 +29,9 @@ export function projectPortableAuthoringParent(input = {}) {
   const projectedPath = explicitReference || String(record.path || record.id || '');
   const referenceClassification = classifyParentRecoveryReference(projectedPath);
   if (referenceClassification.kind === 'malformed-workspace-qualified') return freeze({ schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID, status: 'blocked', parentRecord: null, findings: [{ severity: 'error', code: 'portable.authoring-parent.reference.malformed', message: 'Selected Parent reference is malformed and cannot be used for native authoring.' }], operationBoundary: boundary() });
-  const recoveryMode = referenceClassification.kind === 'workspace-qualified' ? 'workspace-qualified' : 'local-relative';
+  const publishedReference = String(input.publishedReference || input.parentPublishedReference || input.browseGitReference || '').trim();
+  if (referenceClassification.kind === 'workspace-qualified' && !isQualifiedVersionStableParentRecoveryReference(publishedReference)) return freeze({ schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID, status: 'blocked', parentRecord: null, findings: [{ severity: 'error', code: 'portable.authoring-parent.published-reference.required', message: 'A Workspace-qualified Parent selector is runtime/material addressing only. Persisted cross-Workspace continuation requires an explicit qualified version-stable Parent recovery locator.' }], operationBoundary: boundary() });
+  const recoveryMode = referenceClassification.kind === 'workspace-qualified' ? 'external-versioned' : 'local-relative';
   const canonicalCurrent = buildArtifactCreationContract({ schemaId, transitionType: 'continue-from-record' })?.schemaReferences?.current || null;
   const canonicalTargets = new Set([...(canonicalCurrent?.exactTargets || []), String(canonicalCurrent?.preferredTarget || '')].filter(Boolean));
   const schemaReferenceQualified = Boolean(schemaTarget && canonicalCurrent?.resolutionState === 'qualified' && canonicalTargets.has(schemaTarget));
@@ -40,7 +42,8 @@ export function projectPortableAuthoringParent(input = {}) {
     schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID,
     status: 'ready',
     parentRecord: {
-      id: projectedPath, path: projectedPath, schemaId, currentSchemaId: schemaId, currentCreatedAt: createdAt, createdAt, recoveryMode, relativeReference: recoveryMode === 'workspace-qualified' ? projectedPath : '',
+      id: projectedPath, path: projectedPath, schemaId, currentSchemaId: schemaId, currentCreatedAt: createdAt, createdAt, recoveryMode, relativeReference: '',
+      ...(recoveryMode === 'external-versioned' ? { publishedReference: { target: publishedReference, state: 'qualified', resolutionState: 'qualified' } } : {}),
       markdown: record.markdown, sourceMode: String(record.sourceMode || 'portable-node-local'),
       schemaReferenceAuthority
     },

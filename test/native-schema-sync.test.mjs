@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import catalog from '../src/schemas/generated/native.schema.catalog.json' with { type: 'json' };
 import { nativeSchemaMarkdownById } from '../src/schemas/generated/native.schema.pack.js';
 import { resolveSchemaModule } from '../src/schemas/resolver.js';
-import { buildNativeSchemaSyncPlan, checkNativeSchemas } from '../src/tooling/portable/adapters/node/schema.sync.js';
+import { buildNativeSchemaSyncPlan, checkNativeSchemas, synchronizeNativeSchemas } from '../src/tooling/portable/adapters/node/schema.sync.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourceCommit = String(catalog?.source?.commit || '');
@@ -65,6 +65,74 @@ test('local-unpublished sync plan preserves content authority without inventing 
   assert.equal(binding.sourceCommit, '');
   assert.equal(binding.permalink, '');
   assert.equal(binding.rawUrl, '');
+});
+
+
+
+test('published sync does not rewrite generated files when a newer Docs commit carries identical schema material', async (t) => {
+  const docsRoot = await materializeDocsSnapshot();
+  const coreRoot = await mkdtemp(path.join(os.tmpdir(), 'tiinex-schema-sync-no-rewrite-core-'));
+  t.after(() => rm(docsRoot, { recursive: true, force: true }));
+  t.after(() => rm(coreRoot, { recursive: true, force: true }));
+  const firstCommit = 'a'.repeat(40);
+  const newerCommit = 'b'.repeat(40);
+  const first = await synchronizeNativeSchemas({ coreRoot, docsRoot, sourceCommit: firstCommit, repository: 'Tiinex/docs', published: true });
+  assert.equal(first.status, 'ready');
+  assert.ok(first.generated.filesWritten > 0);
+
+  const catalogPath = path.join(coreRoot, 'src', 'schemas', 'generated', 'native.schema.catalog.json');
+  const marker = new Date('2001-02-03T04:05:06.000Z');
+  await utimes(catalogPath, marker, marker);
+  const before = await stat(catalogPath);
+
+  const second = await synchronizeNativeSchemas({ coreRoot, docsRoot, sourceCommit: newerCommit, repository: 'Tiinex/docs', published: true });
+  const after = await stat(catalogPath);
+  assert.equal(second.status, 'ready');
+  assert.equal(second.generated.filesWritten, 0);
+  assert.equal(second.generated.unchangedFiles, second.generated.files);
+  assert.equal(after.mtimeMs, before.mtimeMs);
+
+  const projected = JSON.parse(await readFile(catalogPath, 'utf8'));
+  assert.equal(projected.source.commit, firstCommit);
+  assert.ok(projected.entries.every((entry) => entry.binding?.sourceCommit === firstCommit));
+});
+
+test('published sync is a byte-no-op when a newer Docs commit carries an identical schema snapshot', async (t) => {
+  const docsRoot = await materializeDocsSnapshot();
+  t.after(() => rm(docsRoot, { recursive: true, force: true }));
+  const newerCommit = sourceCommit === 'b'.repeat(40) ? 'c'.repeat(40) : 'b'.repeat(40);
+  assert.notEqual(newerCommit, sourceCommit);
+  const plan = await buildNativeSchemaSyncPlan({ coreRoot: repoRoot, docsRoot, sourceCommit: newerCommit, repository: 'Tiinex/docs', published: true });
+  assert.equal(plan.status, 'ready');
+  const drift = [];
+  for (const output of plan.outputs) {
+    let actual = null;
+    try { actual = await readFile(output.path); } catch {}
+    if (!actual || !actual.equals(output.bytes)) drift.push(path.relative(repoRoot, output.path).replace(/\\/g, '/'));
+  }
+  assert.deepEqual(drift, []);
+});
+
+test('published sync rebinds only materially changed schemas while preserving equivalent immutable schema bindings', async (t) => {
+  const docsRoot = await materializeDocsSnapshot();
+  t.after(() => rm(docsRoot, { recursive: true, force: true }));
+  const newerCommit = sourceCommit === 'b'.repeat(40) ? 'c'.repeat(40) : 'b'.repeat(40);
+  const evidenceEntry = catalog.entries.find((entry) => entry.schemaId === 'tiinex.evidence.v1');
+  assert.ok(evidenceEntry);
+  const evidenceSource = path.join(docsRoot, evidenceEntry.binding.sourcePath);
+  await writeFile(evidenceSource, `${await readFile(evidenceSource, 'utf8')}
+<!-- material schema change -->
+`, 'utf8');
+
+  const plan = await buildNativeSchemaSyncPlan({ coreRoot: repoRoot, docsRoot, sourceCommit: newerCommit, repository: 'Tiinex/docs', published: true });
+  assert.equal(plan.status, 'ready');
+  const catalogOutput = plan.outputs.find((output) => String(output.path).replace(/\\/g, '/').endsWith('/src/schemas/generated/native.schema.catalog.json'));
+  assert.ok(catalogOutput);
+  const projected = JSON.parse(catalogOutput.bytes.toString('utf8'));
+  assert.equal(projected.source.commit, newerCommit);
+  assert.equal(projected.entries.find((entry) => entry.schemaId === 'tiinex.evidence.v1')?.binding?.sourceCommit, newerCommit);
+  assert.equal(projected.entries.find((entry) => entry.schemaId === 'tiinex.topic.v1')?.binding?.sourceCommit, sourceCommit);
+  assert.equal(projected.entries.find((entry) => entry.schemaId === 'tiinex.claim.v1')?.binding?.sourceCommit, sourceCommit);
 });
 
 test('canonical schemas without handwritten companions remain registry-known through generic Schema Pack modules', () => {

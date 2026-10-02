@@ -10,9 +10,9 @@ import { loadNodePortableInput } from '../../input/node.input.js';
 import { runPortableOperation } from '../../operation.catalog.js';
 import { markPortableBootstrapCanonicalSource } from '../../providers/schema.bootstrap.provenance.js';
 import { allocateContinuationPath, allocateDirectoryArtifactPath } from '../../../../transitions/record.transitions.js';
-import { classifyParentRecoveryReference } from '../../../../lineage/parentRecoveryReference.js';
+import { classifyParentRecoveryReference, isQualifiedVersionStableParentRecoveryReference } from '../../../../lineage/parentRecoveryReference.js';
 import { creationSchemaReferenceValidationContext } from '../../draft/draft.validation-context.js';
-import { isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority, qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority } from '../../../../schemas/schema.reference.js';
+import { historicalDeclaredSchemaReferenceAuthority, isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority, qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority } from '../../../../schemas/schema.reference.js';
 import { validatePreparedReturnBodyAuthority } from './cli.prepare-return.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
@@ -40,7 +40,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   if (isWorkspaceQualifiedReference(parentReference) && !parentSource) throw new Error(`portable.cli.author.parent-source.required: --parent ${parentReference} names an explicit cross-Workspace Parent. Supply --parent-source <local-file> containing the exact qualified Parent bytes; Tooling will not discover or fetch that Parent automatically.`);
   if (isWorkspaceQualifiedReference(parentReference) && !parentPublishedReference) throw new Error(`portable.cli.author.parent-reference.required: --parent ${parentReference} is a cross-Workspace selector and cannot become a durable recovery locator. Supply --parent-reference <commit-pinned browse+git permalink> for the exact Parent representation.`);
   if (parentPublishedReference && !parentReference) throw new Error('portable.cli.author.parent.required: --parent-reference supplies durable Parent recovery authority but no semantic Parent selector. Supply --parent <workspace::path|relative-path> explicitly.');
-  if (parentPublishedReference && !isQualifiedVersionStableParentReference(parentPublishedReference)) throw new Error('portable.cli.author.parent-reference.unqualified: --parent-reference must be a version-stable external recovery locator. Current common authoring accepts commit-pinned GitHub browse+git blob permalinks.');
+  if (parentPublishedReference && !isQualifiedVersionStableParentRecoveryReference(parentPublishedReference)) throw new Error('portable.cli.author.parent-reference.unqualified: --parent-reference must be a version-stable external recovery locator. Current common authoring accepts commit-pinned GitHub browse+git blob permalinks.');
   if (parentSource && !parentReference) throw new Error('portable.cli.author.parent.required: --parent-source supplies Parent bytes but no semantic Parent reference. Supply --parent <workspace::path|relative-path> explicitly; Tooling will not infer Parent identity from the source file.');
   if (isWorkspaceQualifiedReference(parentReference) && !requestedArtifactRelativePath && !targetDirectory) throw new Error('portable.cli.author.cross-workspace-parent.target-required');
   const parentPath = parentReference ? (parentSource ? path.resolve(parentSource) : safeWorkspaceTarget(workspaceRoot, parentReference)) : '';
@@ -240,13 +240,11 @@ async function parentRecordFromArtifact(parentPath, parentRelativePath, context 
   const self = canonicalC14nV2SelfState(markdown);
   if (!schemaId) throw new Error('portable.cli.author.parent.schema-authority.required: the supplied Parent does not declare a Current Schema. Supply exact qualified Parent bytes with an explicit Current Schema reference; Tooling will not infer Parent schema authority from path or filename.');
   if (self.state !== 'verified') throw new Error(`portable.cli.author.parent.integrity.${self.reason || self.state}`);
-  const schemaReferenceAuthority = schemaTarget
-    ? exactDeclaredSchemaReferenceAuthority(schemaId, schemaTarget)
-    : qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority(schemaId, {
-      basis: 'exact-historical-parent-current-schema-identifier',
-      parentPath: String(parentRelativePath || ''),
-      parentSha256: sha256Hex(utf8Bytes(markdown))
-    });
+  const schemaReferenceAuthority = historicalDeclaredSchemaReferenceAuthority(schemaId, schemaTarget, {
+    basis: schemaTarget ? 'exact-historical-parent-current-schema-reference' : 'exact-historical-parent-current-schema-identifier',
+    parentPath: String(parentRelativePath || ''),
+    parentSha256: sha256Hex(utf8Bytes(markdown))
+  });
   return Object.freeze({
     id: parentRelativePath,
     path: parentRelativePath,
@@ -302,9 +300,6 @@ function projectAuthorActionableFindings(audit = {}, stage = {}) {
   return Object.freeze(out.slice(0, 20));
 }
 
-function isQualifiedVersionStableParentReference(reference = '') {
-  return /^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/[0-9a-f]{40}\/.+/i.test(String(reference || '').trim());
-}
 
 export function parentRecoveryMode(reference = '') {
   const classification = classifyParentRecoveryReference(reference);
@@ -314,14 +309,6 @@ export function parentRecoveryMode(reference = '') {
   return 'local-relative';
 }
 
-function exactDeclaredSchemaReferenceAuthority(schemaId, schemaTarget) {
-  return Object.freeze({
-    schemaId,
-    exactTargets: Object.freeze([schemaTarget]),
-    preferredTarget: schemaTarget,
-    resolutionState: 'qualified'
-  });
-}
 
 export async function recoverQualifiedRuntimeSchemaReferenceAuthority(schemaId, runtime = {}) {
   const resolution = resolveSchemaModule({ schemaId });

@@ -1,4 +1,5 @@
-import { canonicalGithubSchemaSourceTargets } from './schema.githubSourceTarget.js';
+import { canonicalGithubSchemaSourceTargets, parseExactGithubSchemaSourceTarget } from './schema.githubSourceTarget.js';
+import { schemaMaterialIdentitiesEquivalent } from './schema.materialIdentity.js';
 
 export const SCHEMA_REFERENCE_AUTHORITY_SCHEMA_ID = 'tiinex.site.schema-reference-authority.v1';
 export const SCHEMA_REFERENCE_MATERIAL_COHERENCE_SCHEMA_ID = 'tiinex.site.schema-reference-material-coherence.v1';
@@ -41,6 +42,40 @@ function qualifiedImmutableReferencePublication(binding = {}, sourceQualificatio
   return Boolean(bindingBlobSha && loadedBlobSha && bindingBlobSha === loadedBlobSha && expectedChecksum && loadedChecksum && expectedChecksum === loadedChecksum);
 }
 
+
+export function schemaReferenceResolutionForTarget(resolutions = [], target = '') {
+  const exactTarget = String(target || '').trim();
+  if (!exactTarget) return null;
+  const match = (Array.isArray(resolutions) ? resolutions : []).find((item) => String(item?.target || '').trim() === exactTarget) || null;
+  return match?.exact || match?.resolution || null;
+}
+
+export function schemaReferenceAuthorityWithEquivalentResolvedTarget(authority = {}, target = '', resolution = {}) {
+  const observedTarget = String(target || '').trim();
+  if (!observedTarget || String(authority?.resolutionState || authority?.state || '') !== 'qualified') return authority;
+  const coordinate = parseExactGithubSchemaSourceTarget(observedTarget);
+  if (coordinate.state !== 'qualified') return authority;
+  const semantic = normalizeMaterialIdentity(authority?.semanticMaterialIdentity || {});
+  if (semantic.sourceRepository && coordinate.repository !== semantic.sourceRepository) return authority;
+  if (semantic.sourcePath && coordinate.path !== semantic.sourcePath) return authority;
+  if (semantic.state !== 'qualified') return authority;
+  const resolutionState = String(resolution?.state || resolution?.qualification || '').trim();
+  if (resolutionState !== 'resolved' && resolutionState !== 'qualified') return authority;
+  const resolved = normalizeResolvedMaterialIdentity(resolution?.materialIdentity || resolution?.material || resolution);
+  if (resolved.state !== 'qualified' || !schemaMaterialIdentitiesEquivalent(semantic, resolved)) return authority;
+  const exactTargets = [...new Set([...(authority?.exactTargets || []), observedTarget].map((item) => String(item || '')).filter(Boolean))];
+  const equivalentTargets = [...new Set([...(authority?.equivalentTargets || []), observedTarget].map((item) => String(item || '')).filter(Boolean))];
+  return Object.freeze({
+    ...authority,
+    exactTargets: Object.freeze(exactTargets),
+    equivalentTargets: Object.freeze(equivalentTargets),
+    equivalentTargetEvidence: Object.freeze({
+      ...(authority?.equivalentTargetEvidence || {}),
+      [observedTarget]: Object.freeze({ state: 'qualified', basis: 'immutable-target+resolved-material-equivalence', materialIdentity: resolved })
+    })
+  });
+}
+
 export function qualifySchemaReferenceMaterialCoherence(authority = {}) {
   const semantic = normalizeMaterialIdentity(authority?.semanticMaterialIdentity || {});
   const target = String(authority?.preferredTarget || authority?.target || '').trim();
@@ -59,7 +94,7 @@ export function qualifySchemaReferenceMaterialCoherence(authority = {}) {
     match = true;
     mode = 'declared-source-target';
   } else if (semantic.state === 'qualified' && resolutionEvidence.state === 'qualified' && evidence.state === 'qualified') {
-    match = materialIdentitiesMatch(semantic, evidence);
+    match = schemaMaterialIdentitiesEquivalent(semantic, evidence);
     mode = match ? 'resolved-byte-equivalent-material' : 'resolved-material-mismatch';
     if (!match) findings.push('Resolved schema-reference material does not match the semantic schema material used for exact creation.');
   } else if (semantic.state === 'qualified') {
@@ -97,15 +132,26 @@ function resolvedMaterialEvidence(target = '', identity = {}) {
   return Object.freeze({ state: 'qualified', target: String(target || ''), materialIdentity: Object.freeze({ state: 'qualified', sha256: String(identity?.sha256 || ''), gitBlobSha: String(identity?.sourceBlobSha || ''), bytes: Number(identity?.bytes || 0), sourceRepository: String(identity?.sourceRepository || ''), sourceCommit: String(identity?.sourceCommit || ''), sourcePath: String(identity?.sourcePath || '') }) });
 }
 
-function materialIdentitiesMatch(semantic = {}, resolved = {}) {
-  const cryptographic = [];
-  if (semantic.sha256 && resolved.sha256) cryptographic.push(semantic.sha256 === resolved.sha256);
-  if (semantic.sourceBlobSha && resolved.sourceBlobSha) cryptographic.push(semantic.sourceBlobSha === resolved.sourceBlobSha);
-  if (!cryptographic.length || cryptographic.some((match) => !match)) return false;
-  if (semantic.bytes && resolved.bytes && semantic.bytes !== resolved.bytes) return false;
-  return true;
-}
 
+export function historicalDeclaredSchemaReferenceAuthority(schemaId = '', target = '', evidence = {}) {
+  const id = String(schemaId || '').trim();
+  const declaredTarget = String(target || '').trim();
+  if (!declaredTarget) return qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority(id, evidence);
+  return Object.freeze({
+    schema: SCHEMA_REFERENCE_AUTHORITY_SCHEMA_ID,
+    schemaId: id,
+    exactTargets: Object.freeze([declaredTarget]),
+    semanticSourceTargets: Object.freeze([declaredTarget]),
+    materialBoundTarget: false,
+    preferredTarget: declaredTarget,
+    targetAuthority: 'historical-declared-exact-reference',
+    resolutionState: 'qualified',
+    resolutionEvidence: Object.freeze({ state: 'qualified', kind: 'historical-declared-exact-reference', schemaId: id, target: declaredTarget, ...evidence }),
+    semanticMaterialIdentity: Object.freeze({ state: 'unavailable', schemaId: id }),
+    exactSourceTargets: Object.freeze({ state: 'qualified', targets: Object.freeze([declaredTarget]), findings: Object.freeze([]) }),
+    historicalReferenceAuthority: Object.freeze({ state: 'qualified', kind: 'exact-target', exactRevisionState: 'declared-exact-reference', target: declaredTarget, evidence: Object.freeze({ ...evidence }) })
+  });
+}
 
 export function qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority(schemaId = '', evidence = {}) {
   const id = String(schemaId || '').trim();

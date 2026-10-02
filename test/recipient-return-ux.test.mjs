@@ -110,8 +110,9 @@ test('prepare-return fails closed until a separate exact-result return transitio
   assert.equal(qualified.status,'qualified');
   assert.equal(qualified.transition.state,'qualified');
   assert.equal(qualified.transition.result.path,'result.txt');
-  assert.equal(qualified.nextAction.cli, `/usr/bin/node /tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs prepare-return "${root.replace(/\\/g, '\\\\')}"`);
+  assert.match(qualified.nextAction.cli, /tiinex-portable\.mjs prepare-return /);
   assert.equal(qualified.nextAction.invocation.entrypoint, '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
+  assert.deepEqual(qualified.nextAction.invocation.args, ['/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs', 'prepare-return', root]);
   const prepared=await runPrepareReturnCli({positionals:[root],flags:{}});
   assert.equal(prepared.returnTransition.state,'qualified');
 });

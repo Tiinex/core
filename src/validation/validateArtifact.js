@@ -2,10 +2,10 @@ import { parseArtifactMarkdown } from '../artifacts/artifact.parse.js';
 import { normalizeArtifact } from '../artifacts/artifact.normalize.js';
 import { resolveSchemaModule } from '../schemas/resolver.js';
 import { schemaRegistry } from '../schemas/registry.js';
-import { rootValidate, rootFallbackFinding } from '../schemas/tiinex.root.v1.validate.js';
+import { rootValidate, rootProspectiveValidate, rootFallbackFinding } from '../schemas/tiinex.root.v1.validate.js';
 import { validateIntegrity } from '../integrity/integrity.validate.js';
 import { validatePortableContractInstance } from '../tooling/portable/schema/contract.validate.js';
-import { qualifySchemaReferenceValue, qualifiedExactSchemaReferenceTarget, schemaReferenceAuthorityFromBinding } from '../schemas/schema.reference.js';
+import { parseSchemaReferenceValue, qualifySchemaReferenceValue, qualifiedExactSchemaReferenceTarget, schemaReferenceAuthorityFromBinding, schemaReferenceAuthorityWithEquivalentResolvedTarget, schemaReferenceResolutionForTarget } from '../schemas/schema.reference.js';
 import { normalizeFindings, normalizeFinding } from './findings.js';
 import { parseExactGithubSchemaSourceTarget } from '../schemas/schema.githubSourceTarget.js';
 
@@ -17,16 +17,17 @@ export function validateArtifact(input = {}, options = {}) {
   const schemaId = parsed?.envelope?.current?.schema?.id || input.schemaId || input.record?.schemaId || input.record?.currentSchemaId || '';
   const resolution = input.resolution || resolveSchemaModule({ schemaId, checksum: input.checksum });
   const rootFindings = normalizeFindings(rootValidate(parsed), { schemaId: 'tiinex.root.v1', qualification: 'readability-root-diagnostic' });
+  const prospectiveRootFindings = normalizeFindings(rootProspectiveValidate(parsed, input.schemaReferenceContext || 'historical'), { schemaId: 'tiinex.root.v1', qualification: 'candidate-parent-recovery' });
   const schemaValidationAuthority = input.schemaValidationAuthority || null;
   const machineContract = runMachineContractValidation({ markdown: markdown || parsed?.markdown || '', schemaId, resolution, validationContractOverride: input.validationContractOverride || null, schemaValidationAuthority });
   const contractFindings = normalizeFindings(machineContract.findings, { schemaId: machineContract.schemaId || schemaId, qualification: 'machine-contract' });
-  const schemaReferenceFindings = normalizeFindings(validateDeclaredSchemaReferences(parsed, input.schemaReferenceAuthorities || null, { context: input.schemaReferenceContext || 'historical' }), { qualification: 'schema-reference' });
+  const schemaReferenceFindings = normalizeFindings(validateDeclaredSchemaReferences(parsed, input.schemaReferenceAuthorities || null, { context: input.schemaReferenceContext || 'historical', resolutions: input.schemaReferenceResolutions || [] }), { qualification: 'schema-reference' });
   const integrityFindings = normalizeFindings(validateIntegrity(parsed, options.integrity), { schemaId: 'tiinex.root.v1', qualification: 'integrity' });
   const schemaAuthorityFindings = normalizeFindings(schemaValidationAuthorityFindings(schemaValidationAuthority, schemaId), { schemaId, qualification: 'schema-validation-authority' });
   const childValidation = runExactSchemaValidator({ parsed, schemaId, resolution, schemaValidationAuthority });
   const childFindings = childValidation.findings;
   const fallbackFindings = fallbackFindingsFor({ schemaId, resolution, childFindings, childValidatorRan: childValidation.ran, machineContract });
-  const findings = [...rootFindings, ...contractFindings, ...schemaReferenceFindings, ...integrityFindings, ...schemaAuthorityFindings, ...childFindings, ...fallbackFindings];
+  const findings = [...rootFindings, ...prospectiveRootFindings, ...contractFindings, ...schemaReferenceFindings, ...integrityFindings, ...schemaAuthorityFindings, ...childFindings, ...fallbackFindings];
   const validation = validationTruthFor({ parsed, schemaId, resolution, childFindings, childValidatorRan: childValidation.ran, machineContract, findings });
   return Object.freeze({
     schema: ARTIFACT_VALIDATION_PIPELINE_ID,
@@ -59,7 +60,10 @@ function validateDeclaredSchemaReferences(parsed = {}, contextualAuthorities = n
     const sourceQualification = typeof resolved.module.schemaSource?.qualify === 'function' ? resolved.module.schemaSource.qualify() : null;
     const registeredAuthority = schemaReferenceAuthorityFromBinding(reference.schemaId, resolved.module.binding || {}, sourceQualification?.authority || null, sourceQualification);
     const contextualAuthority = contextualSchemaReferenceAuthority(contextualAuthorities, reference.role, reference.schemaId);
-    const authority = contextualAuthority || registeredAuthority;
+    const baseAuthority = contextualAuthority || registeredAuthority;
+    const observedReference = parseSchemaReferenceValue(reference.value);
+    const resolution = observedReference.form === 'markdown-link' ? schemaReferenceResolutionForTarget(options?.resolutions || [], observedReference.target) : null;
+    const authority = resolution ? schemaReferenceAuthorityWithEquivalentResolvedTarget(baseAuthority, observedReference.target, resolution) : baseAuthority;
     const qualification = qualifySchemaReferenceValue(reference.value, authority);
     const context = String(options?.context || 'historical').trim() === 'candidate' ? 'candidate' : 'historical';
     const exactTarget = qualifiedExactSchemaReferenceTarget(authority);
@@ -114,6 +118,7 @@ function validateDeclaredSchemaReferences(parsed = {}, contextualAuthorities = n
   }
   return findings;
 }
+
 
 
 function qualifiedRegisteredSchemaIdentitiesForTarget(target = '') {

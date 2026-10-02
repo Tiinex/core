@@ -20,6 +20,10 @@ export function classifyParentRecoveryReference(value = '') {
   return Object.freeze({ kind: 'local-relative', raw, workspaceQualified: null });
 }
 
+export function isQualifiedVersionStableParentRecoveryReference(value = '') {
+  return /^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\/[0-9a-f]{40}\/.+/i.test(String(value || '').trim());
+}
+
 export function isMalformedWorkspaceQualifiedRecoveryReference(value = '') {
   return classifyParentRecoveryReference(value).kind === 'malformed-workspace-qualified';
 }

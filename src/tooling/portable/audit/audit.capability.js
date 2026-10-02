@@ -9,7 +9,7 @@ export function auditPortableRecord(record = {}, options = {}) {
   const schemaId = String(record.schemaId || record.currentSchemaId || '');
   const requireExactSchemaAuthority = options.requireExactSchemaAuthority === true;
   const explicitSchemaValidationAuthority = options.schemaValidationAuthority || null;
-  const runtimeAuthority = explicitSchemaValidationAuthority || (requireExactSchemaAuthority ? portableRuntimeValidationAuthorityForRecord(record) : null);
+  const runtimeAuthority = explicitSchemaValidationAuthority || (requireExactSchemaAuthority ? portableRuntimeValidationAuthorityForRecord(record, { schemaReferenceResolutions: options.schemaReferenceResolutions || [] }) : null);
   const runtimeProjection = explicitSchemaValidationAuthority
     ? (explicitSchemaValidationAuthority.state === 'qualified' ? explicitSchemaValidationAuthority : null)
     : requireExactSchemaAuthority
@@ -23,7 +23,8 @@ export function auditPortableRecord(record = {}, options = {}) {
       validationContractOverride: options.validationContractOverride || (runtimeProjection?.state === 'qualified' ? runtimeProjection.compiledContract : null),
       schemaValidationAuthority: explicitSchemaValidationAuthority || (requireExactSchemaAuthority ? runtimeAuthority : null),
       schemaReferenceAuthorities: options.schemaReferenceAuthorities || null,
-      schemaReferenceContext: options.schemaReferenceContext || 'historical'
+      schemaReferenceContext: options.schemaReferenceContext || 'historical',
+      schemaReferenceResolutions: options.schemaReferenceResolutions || []
     });
   } catch (error) {
     const finding = portableFinding('error', 'portable.audit.exception', error?.message || 'Audit failed.', {

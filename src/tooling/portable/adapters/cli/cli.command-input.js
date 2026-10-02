@@ -236,7 +236,7 @@ export async function commandInput(parsed, runtime = {}) {
     options: {}
   };
   if(parsed.command==='project-workspace-landing')return land(flags,material,readOptionalJson,splitFlag);
-  if (parsed.command === 'project-authoring-parent') return { input: { ...material, reference: flags.reference || '' }, options: {} };
+  if (parsed.command === 'project-authoring-parent') return { input: { ...material, reference: flags.reference || '', publishedReference: flags['published-reference'] || flags['parent-reference'] || '' }, options: {} };
   const operatorBridgeInput = await prepareOperatorBridgeCliInput(parsed.command, material, flags, readOptionalJson);
   if (operatorBridgeInput) return operatorBridgeInput;
   if (parsed.command === 'project-editor-assistance') return prepareEditorAssistanceCliInput(material, flags);

@@ -9,7 +9,7 @@ import { qualifyRecipientRelativeHandoffManufacturePreflight } from '../../hando
 import { enumerateNodeWorkspace, PORTABLE_NODE_WORKSPACE_ENUMERATION_SCHEMA_ID } from './handoff.manufacture.enumeration.js';
 import { preparePackageParentExactMaterialProvider, preparePackageParentWorkspaceReuse, projectPackageParentMaterialClosurePreflight, projectRequiredContextWorkspaceSelectionPreflight, rebindPackageParentEndpointRoleRequirements, resolvePackageParentRequirementMaterials } from './handoff.manufacture.packageParent.js';
 import { qualifyPortableSourceReconciliationProofForManufacture } from '../../comparison/sourceFrontierReconciliationProof.js';
-import { qualifyPortableManufactureSchemaReferenceCandidate } from '../../handoff/schemaReferencePreflight.js';
+import { projectPortableManufactureSchemaReferenceAuthorities, qualifyPortableManufactureSchemaReferenceCandidate } from '../../handoff/schemaReferencePreflight.js';
 import { qualifyDelegationReturnReservation } from '../../handoff/delegationReturnReservation.js';
 import {
   assertInside,
@@ -111,7 +111,8 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     markdown: handoffMarkdown
   });
 
-  const schemaReferencePreflight = qualifyPortableManufactureSchemaReferenceCandidate(handoff);
+  const schemaReferenceAuthorities = projectPortableManufactureSchemaReferenceAuthorities(handoff, { workspaceEntries: enumeration.materialization?.entries || [] });
+  const schemaReferencePreflight = qualifyPortableManufactureSchemaReferenceCandidate(handoff, { schemaReferenceAuthorities, schemaReferenceResolutions: input.schemaReferenceResolutions || [] });
   const returnCarrierReservationPreflight = qualifyDelegationReturnReservation({ markdown: handoffMarkdown, returnPackageSiblingIndex: input.returnPackageSiblingIndex, returnPackageMajor: input.returnPackageMajor === true });
 
   if (enumeration.status !== 'qualified-complete') throw new Error(`portable.handoff-manufacture.workspace-enumeration.${enumeration.status}`);
