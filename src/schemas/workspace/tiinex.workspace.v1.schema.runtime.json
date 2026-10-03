@@ -2,10 +2,10 @@
   "schema": "tiinex.site.schema-runtime-projection.v1",
   "generator": "schema-runtime-projection-v2-schema-pack",
   "schemaId": "tiinex.workspace.v1",
-  "sourceChecksum": "7f086bbb7f0230fa874ceb8a528f9d23d3c8cdbf4a3d9519b5f46d650df3f2b2",
-  "sourceBlobSha": "62f712beac5693f8400fdbe6a28d89346656a2c1",
-  "sourceBytes": 16540,
-  "bindingChecksum": "7f086bbb7f0230fa874ceb8a528f9d23d3c8cdbf4a3d9519b5f46d650df3f2b2",
+  "sourceChecksum": "4852d04feda3b07712b325c705287321bfa7272d65826e162d73ba4500faa0c7",
+  "sourceBlobSha": "fab4c1257f41520548b3e1bbfff6c1582d970b2b",
+  "sourceBytes": 16643,
+  "bindingChecksum": "4852d04feda3b07712b325c705287321bfa7272d65826e162d73ba4500faa0c7",
   "validationContract": {
     "schema": "tiinex.portable.compiled-schema-contract-chain.v1",
     "schemaId": "tiinex.workspace.v1",
@@ -1588,10 +1588,10 @@
         "schemaId": "tiinex.workspace.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
-          "path": ".topics/.schemas/tiinex.workspace.v1.schema.md",
-          "publicationState": "published-immutable-canonical",
-          "snapshotCompleteness": "exact-canonical-docs-snapshot"
+          "commit": "",
+          "path": ".topics/.schemas/workspace/tiinex.workspace.v1.schema.md",
+          "publicationState": "qualified-local-unpublished",
+          "snapshotCompleteness": "exact-local-docs-snapshot"
         },
         "parentSchemaId": "tiinex.root.v1",
         "parentSourceCandidates": [

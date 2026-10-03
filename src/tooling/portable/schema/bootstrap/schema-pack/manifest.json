@@ -4,9 +4,9 @@
   "source": {
     "provider": "docs-workspace",
     "repository": "Tiinex/docs",
-    "commit": "d0e2b274558c2ee931c84318e4b84411a9da3265",
-    "publicationState": "published-immutable-canonical",
-    "snapshotCompleteness": "exact-canonical-docs-snapshot",
+    "commit": "",
+    "publicationState": "qualified-local-unpublished",
+    "snapshotCompleteness": "exact-local-docs-snapshot",
     "networkRequired": false
   },
   "count": 109,
@@ -1094,11 +1094,11 @@
     {
       "schemaId": "tiinex.workspace.v1",
       "parentSchemaId": "tiinex.root.v1",
-      "sourcePath": ".topics/.schemas/tiinex.workspace.v1.schema.md",
-      "packPath": "schemas/tiinex.workspace.v1.schema.md",
-      "bytes": 16540,
-      "sha256": "7f086bbb7f0230fa874ceb8a528f9d23d3c8cdbf4a3d9519b5f46d650df3f2b2",
-      "gitBlobSha": "62f712beac5693f8400fdbe6a28d89346656a2c1",
+      "sourcePath": ".topics/.schemas/workspace/tiinex.workspace.v1.schema.md",
+      "packPath": "schemas/workspace/tiinex.workspace.v1.schema.md",
+      "bytes": 16643,
+      "sha256": "4852d04feda3b07712b325c705287321bfa7272d65826e162d73ba4500faa0c7",
+      "gitBlobSha": "fab4c1257f41520548b3e1bbfff6c1582d970b2b",
       "specialized": true
     }
   ]
