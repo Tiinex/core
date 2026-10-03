@@ -1720,10 +1720,10 @@
         "schemaId": "tiinex.discovery.finding.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "",
+          "commit": "d0e2b274558c2ee931c84318e4b84411a9da3265",
           "path": ".topics/.schemas/discovery/finding/tiinex.discovery.finding.v1.schema.md",
-          "publicationState": "qualified-local-unpublished",
-          "snapshotCompleteness": "exact-local-docs-snapshot"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "tiinex.discovery.v1",
         "parentSourceCandidates": [

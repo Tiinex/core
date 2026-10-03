@@ -5,21 +5,21 @@
   "module": "./tiinex.party.organization.v1.schema.js",
   "snapshot": "schema-pack:tiinex.party.organization.v1",
   "canonicalUri": "tiinex://schemas/party/organization/tiinex.party.organization.v1",
-  "permalink": "",
-  "rawUrl": "",
+  "permalink": "https://github.com/Tiinex/docs/blob/d0e2b274558c2ee931c84318e4b84411a9da3265/.topics/.schemas/party/organization/tiinex.party.organization.v1.schema.md",
+  "rawUrl": "https://raw.githubusercontent.com/Tiinex/docs/d0e2b274558c2ee931c84318e4b84411a9da3265/.topics/.schemas/party/organization/tiinex.party.organization.v1.schema.md",
   "sourcePath": ".topics/.schemas/party/organization/tiinex.party.organization.v1.schema.md",
   "sourceRepository": "Tiinex/docs",
-  "sourceCommit": "",
+  "sourceCommit": "d0e2b274558c2ee931c84318e4b84411a9da3265",
   "sourceBlobSha": "e21bb0dbb3febf0040c3b1752ff5aaae0a19f168",
-  "originId": "tiinex-docs-local",
+  "originId": "tiinex-docs-d0e2b274",
   "originTrustRole": "canonical-core",
   "checksum": {
     "algorithm": "sha256",
     "value": "58d6f4fa0538aaba95b84af05e91ac7eeba3be5bae99badb911014477e88be84"
   },
   "capabilityContract": "tiinex.schema.module.v1",
-  "snapshotCompleteness": "exact-local-docs-snapshot",
-  "publicationState": "qualified-local-unpublished",
-  "schemaReferencePublicationState": "qualified-local-unpublished",
+  "snapshotCompleteness": "exact-canonical-docs-snapshot",
+  "publicationState": "published-immutable-canonical",
+  "schemaReferencePublicationState": "published-immutable-canonical",
   "bindingVersion": "tiinex.web.schema-binding.v1"
 }
