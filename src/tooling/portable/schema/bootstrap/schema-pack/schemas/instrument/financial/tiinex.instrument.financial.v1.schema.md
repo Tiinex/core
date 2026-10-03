@@ -56,6 +56,24 @@ Rules
 - `Resource Links` specializes the resource-facing part of `Boundaries`.
 - `Interpretation Limits` preserves inherited limits and adds finance/legal/accounting boundaries.
 
+Inheritance Overrides
+
+- instrument-financial-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.instrument.v1
+  - Parent Node: Schema Validation Contract / Instrument Body / Required Shape
+  - Child Node: Schema Validation Contract / Financial Instrument Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
+- instrument-financial-identity-domain
+  - Merge Operation: override
+  - Parent Schema: tiinex.instrument.v1
+  - Parent Node: Schema Validation Contract / Instrument Identity / Allowed Shapes
+  - Child Node: Schema Validation Contract / Instrument Identity / Allowed Shapes
+  - Reason: Financial Instrument keeps the inherited Instrument Identity heading but replaces the generic instrument type/status vocabulary with the financial child vocabulary.
+  - Effective Result: Financial Instrument Allowed Shapes are authoritative for Instrument Identity while compatible non-domain parent semantics remain active.
+
 ### Financial Instrument Body
 
 Required Shape
@@ -319,4 +337,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: tyoUJblttzXOmrkxJFa5XSRR9-oBTcD8sWHmwg13p0c
+  - Value: ayUqUlb0DpL3N_g6LTF3jSF8u48naGrd3i4sHOBg0yk

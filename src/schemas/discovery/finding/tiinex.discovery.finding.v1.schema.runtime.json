@@ -2,10 +2,10 @@
   "schema": "tiinex.site.schema-runtime-projection.v1",
   "generator": "schema-runtime-projection-v2-schema-pack",
   "schemaId": "tiinex.discovery.finding.v1",
-  "sourceChecksum": "dafb380d7ee1b0cfe91bc1db3c5c18a40fc3826d2120bb71f54491b885d2b696",
-  "sourceBlobSha": "e4f4b5caaf590ed3dc138b5bf2f25e2ece85e6b8",
-  "sourceBytes": 8309,
-  "bindingChecksum": "dafb380d7ee1b0cfe91bc1db3c5c18a40fc3826d2120bb71f54491b885d2b696",
+  "sourceChecksum": "12d9345c7b825bcd955a7669ba469d9b154894fe6bb7de6ce56cd4e7dc664be7",
+  "sourceBlobSha": "6e31bf3e0bf694235148235b7127209954337566",
+  "sourceBytes": 8998,
+  "bindingChecksum": "12d9345c7b825bcd955a7669ba469d9b154894fe6bb7de6ce56cd4e7dc664be7",
   "validationContract": {
     "schema": "tiinex.portable.compiled-schema-contract-chain.v1",
     "schemaId": "tiinex.discovery.finding.v1",
@@ -26,9 +26,81 @@
     },
     "inheritanceResolution": {
       "schema": "tiinex.portable.schema-inheritance-resolution.v1",
-      "state": "not-declared",
-      "declarations": [],
-      "applications": [],
+      "state": "qualified",
+      "declarations": [
+        {
+          "name": "discovery-finding-body-structure",
+          "sourceSchemaId": "tiinex.discovery.finding.v1",
+          "sourceGroup": "Parent Body Specialization",
+          "declarationLine": 60,
+          "operation": "override",
+          "parentSchemaId": "tiinex.discovery.v1",
+          "parentNode": "Schema Validation Contract / Discovery Body / Required Shape",
+          "childNode": "Schema Validation Contract / Finding Body / Required Shape",
+          "reason": "This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.",
+          "effectiveResult": "The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active."
+        }
+      ],
+      "applications": [
+        {
+          "handle": "discovery-finding-body-structure",
+          "declaration": {
+            "sourceSchemaId": "tiinex.discovery.finding.v1",
+            "sourceGroup": "Parent Body Specialization",
+            "name": "discovery-finding-body-structure",
+            "line": 60,
+            "reason": "This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.",
+            "effectiveResult": "The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active."
+          },
+          "operation": "override",
+          "parentSchemaId": "tiinex.discovery.v1",
+          "childSchemaId": "tiinex.discovery.finding.v1",
+          "parentNode": "Schema Validation Contract / Discovery Body / Required Shape",
+          "childNode": "Schema Validation Contract / Finding Body / Required Shape",
+          "state": "applied",
+          "deactivatedContributions": [
+            {
+              "sourceSchemaId": "tiinex.discovery.v1",
+              "group": "Discovery Body",
+              "category": "Required Shape",
+              "state": "inactive",
+              "items": [
+                "first body heading after the continuity envelope",
+                "`## Discovery Intent` section",
+                "`## Discovery Field` section",
+                "`## Discovery Method` section",
+                "`## Discovery Boundaries` section",
+                "`## Discovery Outcome` section",
+                "`## Interpretation Limits` section"
+              ],
+              "declarationName": "discovery-finding-body-structure"
+            },
+            {
+              "sourceSchemaId": "tiinex.discovery.v1",
+              "group": "Discovery Field",
+              "category": "ordinary-instance-field-group",
+              "state": "inactive",
+              "items": [],
+              "declarationName": "discovery-finding-body-structure"
+            }
+          ],
+          "replacementContribution": {
+            "sourceSchemaId": "tiinex.discovery.finding.v1",
+            "group": "Finding Body",
+            "category": "Required Shape",
+            "state": "active",
+            "items": [
+              "first body heading after the continuity envelope",
+              "`## Discovery Context` section",
+              "`## Finding` section",
+              "`## Provenance` section",
+              "`## Triage` section",
+              "`## Interpretation Limits` section"
+            ],
+            "declarationName": "discovery-finding-body-structure"
+          }
+        }
+      ],
       "corroborations": [],
       "findings": []
     },
@@ -36,48 +108,13 @@
       "requiredSections": [
         "Continuity Context",
         "Continuity Integrity",
-        "Discovery Intent",
-        "Discovery Field",
-        "Discovery Method",
-        "Discovery Boundaries",
-        "Discovery Outcome",
-        "Interpretation Limits",
         "Discovery Context",
         "Finding",
         "Provenance",
-        "Triage"
+        "Triage",
+        "Interpretation Limits"
       ],
       "requiredHeadings": [
-        {
-          "level": 2,
-          "title": "Discovery Intent",
-          "source": "`## Discovery Intent` section"
-        },
-        {
-          "level": 2,
-          "title": "Discovery Field",
-          "source": "`## Discovery Field` section"
-        },
-        {
-          "level": 2,
-          "title": "Discovery Method",
-          "source": "`## Discovery Method` section"
-        },
-        {
-          "level": 2,
-          "title": "Discovery Boundaries",
-          "source": "`## Discovery Boundaries` section"
-        },
-        {
-          "level": 2,
-          "title": "Discovery Outcome",
-          "source": "`## Discovery Outcome` section"
-        },
-        {
-          "level": 2,
-          "title": "Interpretation Limits",
-          "source": "`## Interpretation Limits` section"
-        },
         {
           "level": 2,
           "title": "Discovery Context",
@@ -97,6 +134,11 @@
           "level": 2,
           "title": "Triage",
           "source": "`## Triage` section"
+        },
+        {
+          "level": 2,
+          "title": "Interpretation Limits",
+          "source": "`## Interpretation Limits` section"
         }
       ],
       "optionalSections": [
@@ -127,26 +169,14 @@
         "Envelope Schema",
         "Current",
         "Current Schema",
-        "Created At",
-        "Field",
-        "In Scope",
-        "Out Of Scope"
+        "Created At"
       ],
       "optionalFields": [
         "Parent",
         "Repairs",
         "Summary",
         "Status",
-        "Why",
-        "Source Or Origin",
-        "Target",
-        "Destination",
-        "Terrain",
-        "Time Window",
-        "Access Boundary",
-        "Privacy Boundary",
-        "Consent Or Authority",
-        "Freshness Boundary"
+        "Why"
       ],
       "requiredEntries": [
         {
@@ -278,66 +308,7 @@
         "overrideCategory": "Instance Target",
         "overrideShape": "one-literal-markdown-heading-token"
       },
-      "ordinaryGroups": [
-        {
-          "group": "Discovery Field",
-          "qualification": "valid",
-          "target": {
-            "heading": "## Discovery Field",
-            "title": "Discovery Field",
-            "level": 2,
-            "authority": "root-same-name-default",
-            "requiredness": "required",
-            "qualification": "valid",
-            "findings": []
-          },
-          "requiredFields": [
-            "Field",
-            "In Scope",
-            "Out Of Scope"
-          ],
-          "optionalFields": [
-            "Source Or Origin",
-            "Target",
-            "Destination",
-            "Terrain",
-            "Time Window",
-            "Access Boundary",
-            "Privacy Boundary",
-            "Consent Or Authority",
-            "Freshness Boundary"
-          ],
-          "contributors": [
-            {
-              "sourceSchemaId": "tiinex.discovery.v1",
-              "group": "Discovery Field",
-              "requiredFields": [
-                "Field",
-                "In Scope",
-                "Out Of Scope"
-              ],
-              "optionalFields": [
-                "Source Or Origin",
-                "Target",
-                "Destination",
-                "Terrain",
-                "Time Window",
-                "Access Boundary",
-                "Privacy Boundary",
-                "Consent Or Authority",
-                "Freshness Boundary"
-              ],
-              "target": {
-                "heading": "## Discovery Field",
-                "title": "Discovery Field",
-                "level": 2,
-                "authority": "root-same-name-default",
-                "qualification": "valid"
-              }
-            }
-          ]
-        }
-      ],
+      "ordinaryGroups": [],
       "fieldShapes": [
         {
           "kind": "field-shape",
@@ -1407,6 +1378,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.root.v1",
         "sourceGroup": "Inheritance Overrides",
+        "sourceCategory": "Field Value Constraints",
         "field": "Merge Operation",
         "allowedValues": [
           "override"
@@ -1748,10 +1720,10 @@
         "schemaId": "tiinex.discovery.finding.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
+          "commit": "",
           "path": ".topics/.schemas/discovery/finding/tiinex.discovery.finding.v1.schema.md",
-          "publicationState": "published-immutable-canonical",
-          "snapshotCompleteness": "exact-canonical-docs-snapshot"
+          "publicationState": "qualified-local-unpublished",
+          "snapshotCompleteness": "exact-local-docs-snapshot"
         },
         "parentSchemaId": "tiinex.discovery.v1",
         "parentSourceCandidates": [
@@ -1835,22 +1807,22 @@
     "supplementalRequiredFields": [],
     "requiredShape": [
       {
-        "id": "unknown#artifact-creation/Template Body/required-shape/214",
+        "id": "unknown#artifact-creation/Template Body/required-shape/224",
         "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
-        "line": 214,
+        "line": 224,
         "sourceText": "first heading uses `# {summary}`",
         "primitive": {
           "kind": "residual"
         }
       },
       {
-        "id": "unknown#artifact-creation/Template Body/required-shape/215",
+        "id": "unknown#artifact-creation/Template Body/required-shape/225",
         "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
-        "line": 215,
+        "line": 225,
         "sourceText": "`## Discovery Context` section",
         "primitive": {
           "kind": "section-body",
@@ -1859,11 +1831,11 @@
         }
       },
       {
-        "id": "unknown#artifact-creation/Template Body/required-shape/216",
+        "id": "unknown#artifact-creation/Template Body/required-shape/226",
         "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
-        "line": 216,
+        "line": 226,
         "sourceText": "`## Finding` section",
         "primitive": {
           "kind": "section-body",
@@ -1872,11 +1844,11 @@
         }
       },
       {
-        "id": "unknown#artifact-creation/Template Body/required-shape/217",
+        "id": "unknown#artifact-creation/Template Body/required-shape/227",
         "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
-        "line": 217,
+        "line": 227,
         "sourceText": "`## Provenance` section",
         "primitive": {
           "kind": "section-body",
@@ -1885,11 +1857,11 @@
         }
       },
       {
-        "id": "unknown#artifact-creation/Template Body/required-shape/218",
+        "id": "unknown#artifact-creation/Template Body/required-shape/228",
         "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
-        "line": 218,
+        "line": 228,
         "sourceText": "`## Triage` section",
         "primitive": {
           "kind": "section-body",
@@ -1898,11 +1870,11 @@
         }
       },
       {
-        "id": "unknown#artifact-creation/Template Body/required-shape/219",
+        "id": "unknown#artifact-creation/Template Body/required-shape/229",
         "sourceSchemaId": "",
         "group": "Template Body",
         "category": "Required Shape",
-        "line": 219,
+        "line": 229,
         "sourceText": "`## Interpretation Limits` section",
         "primitive": {
           "kind": "section-body",

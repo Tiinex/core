@@ -53,6 +53,16 @@ Rules
 - `Constraint Impact` specializes the blocked, insufficient, or degraded portion of `Resource State`.
 - `Interpretation Limits` preserves inherited resource limit semantics.
 
+Inheritance Overrides
+
+- resource-need-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.resource.v1
+  - Parent Node: Schema Validation Contract / Resource Body / Required Shape
+  - Child Node: Schema Validation Contract / Resource Need Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Resource Need Body
 
 Required Shape
@@ -284,4 +294,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: YqO_WF2FzgK038cyJGfd4ue-i740zgyw9Rp4Rvp7OVY
+  - Value: BX6V3y1nFE5fpOcM5rYekWRt0_m12H-gxybrNd-YPr8

@@ -171,8 +171,13 @@ function deactivateParentContribution(parent = {}, node = {}, suppressedGroups =
     return [Object.freeze({ ...group, categories: Object.freeze(categories) })];
   });
   const declarationNames = new Set((parent.declarations || []).map((item) => String(item.group || '')));
+  const constraints = Object.freeze((parent.constraints || []).filter((constraint) => !(
+    String(constraint?.sourceGroup || '') === node.group
+    && String(constraint?.sourceCategory || '') === node.category
+  )));
   return Object.freeze({
     ...parent,
+    constraints,
     validation: Object.freeze({
       ...parent.validation,
       groups: Object.freeze(groups),

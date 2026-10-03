@@ -60,6 +60,16 @@ Rules
 - `Use With Digital Adapters`, `Failure And Ambiguity Handling`, and `Portability Notes` preserve the corresponding parent origin semantics.
 - Parent origin specialization applies to the artifact body only; it does not alter root continuity, integrity, or parent-origin requirements.
 
+Inheritance Overrides
+
+- digital-origin-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.origin.v1
+  - Parent Node: Schema Validation Contract / Origin Body / Required Shape
+  - Child Node: Schema Validation Contract / Digital Origin Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Digital Origin Body
 
 Required Shape
@@ -452,4 +462,4 @@ Maintain the section headings exactly in this schema note. Free markdown inside 
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: xz-wXUm8VoiFyCTl00dl_DTD57wvLFIeOj6Y5oYpayg
+  - Value: 4SglsWyGnFhEW9PDbgllf5NTU85KPWmCpyegYts9_xE

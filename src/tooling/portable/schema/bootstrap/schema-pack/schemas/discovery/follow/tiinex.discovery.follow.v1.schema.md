@@ -54,6 +54,16 @@ Rules
 - `Stop Or Review Condition` preserves the required boundedness and review semantics of `Discovery Boundaries` and `Discovery Outcome`.
 - `Interpretation Limits` preserves the inherited limit semantics.
 
+Inheritance Overrides
+
+- discovery-follow-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.discovery.v1
+  - Parent Node: Schema Validation Contract / Discovery Body / Required Shape
+  - Child Node: Schema Validation Contract / Follow Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Follow Body
 
 Required Shape
@@ -238,4 +248,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: nWOL7I4w_m0rGqC7XlueEFPF9qEGzOSPj6R72aJmhw4
+  - Value: vxyIH8ZJB5JrbKqj4As45qdvC_zLeCmKuE8x1P6dgpQ

@@ -55,6 +55,16 @@ Rules
 - `Revocation Or Expiry` specializes `Status And Effect`.
 - `Interpretation Limits` preserves inherited limits and prevents treating consent as legal compliance, identity proof, or broad permission by default.
 
+Inheritance Overrides
+
+- instrument-consent-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.instrument.v1
+  - Parent Node: Schema Validation Contract / Instrument Body / Required Shape
+  - Child Node: Schema Validation Contract / Consent Instrument Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Consent Instrument Body
 
 Required Shape
@@ -369,4 +379,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: IfPGUoceCJRio_hNcCTAUPyPGxUBW4svQGWsuJ54qw4
+  - Value: gE67AQKX5tlTovLYidR3OHE1bFkwzwPYZmWPyLlViQA

@@ -15,8 +15,9 @@ export function compileInlineSchemaInheritanceOverrides(document = {}) {
       if (!(category?.nodes || []).length) findings.push(`Inheritance Overrides in contract group ${group?.name || '(unnamed)'} must contain at least one Named Declaration.`);
       for (const node of category?.nodes || []) {
         const parsed = parseOverrideDeclaration(node, { sourceSchemaId, sourceGroup: String(group?.name || '') });
-        if (seenNames.has(parsed.name)) findings.push(`Inheritance Overrides declaration name is duplicated in ${sourceSchemaId || '(unknown schema)'}: ${parsed.name || '(unnamed)'}.`);
-        seenNames.add(parsed.name);
+        const declarationName = String(parsed.declaration?.name || '');
+        if (seenNames.has(declarationName)) findings.push(`Inheritance Overrides declaration name is duplicated in ${sourceSchemaId || '(unknown schema)'}: ${declarationName || '(unnamed)'}.`);
+        seenNames.add(declarationName);
         findings.push(...parsed.findings);
         declarations.push(parsed.declaration);
       }

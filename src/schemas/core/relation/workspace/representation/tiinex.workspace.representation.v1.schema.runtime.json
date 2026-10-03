@@ -2,10 +2,10 @@
   "schema": "tiinex.site.schema-runtime-projection.v1",
   "generator": "schema-runtime-projection-v2-schema-pack",
   "schemaId": "tiinex.workspace.representation.v1",
-  "sourceChecksum": "69b7d91a8e4b64f2a1510d83e4d001a015ab723967d401dea386acc2d878e233",
-  "sourceBlobSha": "ace693274518fe3d27bd50e7023ae1e0c95bcce7",
-  "sourceBytes": 34647,
-  "bindingChecksum": "69b7d91a8e4b64f2a1510d83e4d001a015ab723967d401dea386acc2d878e233",
+  "sourceChecksum": "786cac55de52b4e37a4df1385f7b78ed57b506b7f30349b69582a909e4f10305",
+  "sourceBlobSha": "65a7d395af559a9591f3c1e76d43d282e0cce3d0",
+  "sourceBytes": 35358,
+  "bindingChecksum": "786cac55de52b4e37a4df1385f7b78ed57b506b7f30349b69582a909e4f10305",
   "validationContract": {
     "schema": "tiinex.portable.compiled-schema-contract-chain.v1",
     "schemaId": "tiinex.workspace.representation.v1",
@@ -26,9 +26,78 @@
     },
     "inheritanceResolution": {
       "schema": "tiinex.portable.schema-inheritance-resolution.v1",
-      "state": "not-declared",
-      "declarations": [],
-      "applications": [],
+      "state": "qualified",
+      "declarations": [
+        {
+          "name": "workspace-representation-body-structure",
+          "sourceSchemaId": "tiinex.workspace.representation.v1",
+          "sourceGroup": "Parent Relation Specialization",
+          "declarationLine": 80,
+          "operation": "override",
+          "parentSchemaId": "tiinex.relation.v1",
+          "parentNode": "Schema Validation Contract / Relation Body / Required Shape",
+          "childNode": "Schema Validation Contract / Workspace Representation Body / Required Shape",
+          "reason": "This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.",
+          "effectiveResult": "The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active."
+        }
+      ],
+      "applications": [
+        {
+          "handle": "workspace-representation-body-structure",
+          "declaration": {
+            "sourceSchemaId": "tiinex.workspace.representation.v1",
+            "sourceGroup": "Parent Relation Specialization",
+            "name": "workspace-representation-body-structure",
+            "line": 80,
+            "reason": "This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.",
+            "effectiveResult": "The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active."
+          },
+          "operation": "override",
+          "parentSchemaId": "tiinex.relation.v1",
+          "childSchemaId": "tiinex.workspace.representation.v1",
+          "parentNode": "Schema Validation Contract / Relation Body / Required Shape",
+          "childNode": "Schema Validation Contract / Workspace Representation Body / Required Shape",
+          "state": "applied",
+          "deactivatedContributions": [
+            {
+              "sourceSchemaId": "tiinex.relation.v1",
+              "group": "Relation Body",
+              "category": "Required Shape",
+              "state": "inactive",
+              "items": [
+                "first body heading after the continuity envelope",
+                "`## Relation Declaration` section",
+                "`## Relation Target` section",
+                "`## Relation Boundary` section"
+              ],
+              "declarationName": "workspace-representation-body-structure"
+            },
+            {
+              "sourceSchemaId": "tiinex.relation.v1",
+              "group": "Relation Declaration",
+              "category": "ordinary-instance-field-group",
+              "state": "inactive",
+              "items": [],
+              "declarationName": "workspace-representation-body-structure"
+            }
+          ],
+          "replacementContribution": {
+            "sourceSchemaId": "tiinex.workspace.representation.v1",
+            "group": "Workspace Representation Body",
+            "category": "Required Shape",
+            "state": "active",
+            "items": [
+              "first body heading after the continuity envelope",
+              "`## Representation Binding` section",
+              "`## Representation Correlation` section",
+              "`## Provider Qualification` section",
+              "`## Relation Boundary` section",
+              "`## Interpretation Limits` section"
+            ],
+            "declarationName": "workspace-representation-body-structure"
+          }
+        }
+      ],
       "corroborations": [],
       "findings": []
     },
@@ -36,30 +105,13 @@
       "requiredSections": [
         "Continuity Context",
         "Continuity Integrity",
-        "Relation Declaration",
-        "Relation Target",
-        "Relation Boundary",
         "Representation Binding",
         "Representation Correlation",
         "Provider Qualification",
+        "Relation Boundary",
         "Interpretation Limits"
       ],
       "requiredHeadings": [
-        {
-          "level": 2,
-          "title": "Relation Declaration",
-          "source": "`## Relation Declaration` section"
-        },
-        {
-          "level": 2,
-          "title": "Relation Target",
-          "source": "`## Relation Target` section"
-        },
-        {
-          "level": 2,
-          "title": "Relation Boundary",
-          "source": "`## Relation Boundary` section"
-        },
         {
           "level": 2,
           "title": "Representation Binding",
@@ -74,6 +126,11 @@
           "level": 2,
           "title": "Provider Qualification",
           "source": "`## Provider Qualification` section"
+        },
+        {
+          "level": 2,
+          "title": "Relation Boundary",
+          "source": "`## Relation Boundary` section"
         },
         {
           "level": 2,
@@ -96,9 +153,6 @@
         "Current",
         "Current Schema",
         "Created At",
-        "Relation Type",
-        "Relation Direction",
-        "Relation Scope",
         "Workspace Artifact",
         "Representation Payload",
         "Representation Kind",
@@ -130,12 +184,6 @@
         "Summary",
         "Status",
         "Why",
-        "Relation Family",
-        "Relation Strength",
-        "Confidence",
-        "Domain Vocabulary",
-        "Valid From",
-        "Valid Until",
         "Mapping Manifest",
         "Entry Integrity Manifest",
         "Preservation Boundary",
@@ -292,58 +340,6 @@
         "overrideShape": "one-literal-markdown-heading-token"
       },
       "ordinaryGroups": [
-        {
-          "group": "Relation Declaration",
-          "qualification": "valid",
-          "target": {
-            "heading": "## Relation Declaration",
-            "title": "Relation Declaration",
-            "level": 2,
-            "authority": "root-same-name-default",
-            "requiredness": "required",
-            "qualification": "valid",
-            "findings": []
-          },
-          "requiredFields": [
-            "Relation Type",
-            "Relation Direction",
-            "Relation Scope"
-          ],
-          "optionalFields": [
-            "Relation Family",
-            "Relation Strength",
-            "Confidence",
-            "Domain Vocabulary",
-            "Valid From",
-            "Valid Until"
-          ],
-          "contributors": [
-            {
-              "sourceSchemaId": "tiinex.relation.v1",
-              "group": "Relation Declaration",
-              "requiredFields": [
-                "Relation Type",
-                "Relation Direction",
-                "Relation Scope"
-              ],
-              "optionalFields": [
-                "Relation Family",
-                "Relation Strength",
-                "Confidence",
-                "Domain Vocabulary",
-                "Valid From",
-                "Valid Until"
-              ],
-              "target": {
-                "heading": "## Relation Declaration",
-                "title": "Relation Declaration",
-                "level": 2,
-                "authority": "root-same-name-default",
-                "qualification": "valid"
-              }
-            }
-          ]
-        },
         {
           "group": "Relation Boundary",
           "qualification": "valid",
@@ -1693,6 +1689,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.root.v1",
         "sourceGroup": "Inheritance Overrides",
+        "sourceCategory": "Field Value Constraints",
         "field": "Merge Operation",
         "allowedValues": [
           "override"
@@ -1717,397 +1714,12 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Representation Binding",
+        "sourceCategory": "Field Value Constraints",
         "field": "Workspace Artifact",
         "allowedValues": [],
         "allowedShapes": [
           "Markdown Link"
         ],
-        "domainPolicy": "closed",
-        "declarationLine": 115,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Representation Binding",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": [
-          {
-            "shapeLabel": "Markdown Link",
-            "qualification": "evaluable",
-            "useSourceSchemaId": "tiinex.workspace.representation.v1",
-            "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
-            "visibleSchemaIds": [
-              "tiinex.root.v1",
-              "tiinex.relation.v1",
-              "tiinex.workspace.representation.v1"
-            ],
-            "definition": {
-              "kind": "machine-shape-definition",
-              "shapeLabel": "Markdown Link",
-              "sourceSchemaId": "tiinex.root.v1",
-              "sourceGroup": "Machine Shape Authority",
-              "declarationSource": {
-                "line": 412
-              },
-              "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
-              "grammarProfile": "tiinex.lexical.shape.v1",
-              "startRule": "markdown-link",
-              "grammarRules": [
-                " markdown-link = \"[\" label \"](\" target \")\"",
-                " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+"
-              ],
-              "humanMeaning": "Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
-              "qualificationSupport": "available",
-              "definitionQualification": "valid",
-              "definitionFindings": [],
-              "declarationStructure": {
-                "value": "Markdown Link",
-                "children": [
-                  {
-                    "value": "Grammar Profile: tiinex.lexical.shape.v1",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: markdown-link = \"[\" label \"](\" target \")\"",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
-                    "children": []
-                  },
-                  {
-                    "value": "Human Meaning: Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
-                    "children": []
-                  },
-                  {
-                    "value": "Start Rule: markdown-link",
-                    "children": []
-                  }
-                ]
-              },
-              "compiledGrammar": {
-                "profile": "tiinex.lexical.shape.v1",
-                "qualification": "valid",
-                "startRule": "markdown-link",
-                "grammarRules": [
-                  {
-                    "name": "markdown-link",
-                    "source": " markdown-link = \"[\" label \"](\" target \")\"",
-                    "expression": {
-                      "type": "concatenation",
-                      "parts": [
-                        {
-                          "type": "literal",
-                          "value": "["
-                        },
-                        {
-                          "type": "reference",
-                          "name": "label"
-                        },
-                        {
-                          "type": "literal",
-                          "value": "]("
-                        },
-                        {
-                          "type": "reference",
-                          "name": "target"
-                        },
-                        {
-                          "type": "literal",
-                          "value": ")"
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "name": "label",
-                    "source": " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                    "expression": {
-                      "type": "repeat",
-                      "quantifier": "+",
-                      "expression": {
-                        "type": "any-except",
-                        "exclusions": [
-                          "]",
-                          "\t",
-                          "\r",
-                          "\n"
-                        ]
-                      }
-                    }
-                  },
-                  {
-                    "name": "target",
-                    "source": " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
-                    "expression": {
-                      "type": "repeat",
-                      "quantifier": "+",
-                      "expression": {
-                        "type": "any-except",
-                        "exclusions": [
-                          ")",
-                          " ",
-                          "\t",
-                          "\r",
-                          "\n"
-                        ]
-                      }
-                    }
-                  }
-                ],
-                "findings": []
-              }
-            },
-            "resolvedDefinitionProvenance": {
-              "sourceSchemaId": "tiinex.root.v1",
-              "sourceGroup": "Machine Shape Authority",
-              "declarationSource": {
-                "line": 412
-              }
-            },
-            "visibleDefinitions": [
-              {
-                "shapeLabel": "Markdown Link",
-                "sourceSchemaId": "tiinex.root.v1",
-                "sourceGroup": "Machine Shape Authority",
-                "declarationSource": {
-                  "line": 412
-                },
-                "grammarProfile": "tiinex.lexical.shape.v1",
-                "definitionQualification": "valid",
-                "qualificationSupport": "available"
-              }
-            ],
-            "findings": []
-          }
-        ]
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Representation Binding",
-        "field": "Representation Payload",
-        "allowedValues": [],
-        "allowedShapes": [
-          "Markdown Link"
-        ],
-        "domainPolicy": "closed",
-        "declarationLine": 118,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Representation Binding",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": [
-          {
-            "shapeLabel": "Markdown Link",
-            "qualification": "evaluable",
-            "useSourceSchemaId": "tiinex.workspace.representation.v1",
-            "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
-            "visibleSchemaIds": [
-              "tiinex.root.v1",
-              "tiinex.relation.v1",
-              "tiinex.workspace.representation.v1"
-            ],
-            "definition": {
-              "kind": "machine-shape-definition",
-              "shapeLabel": "Markdown Link",
-              "sourceSchemaId": "tiinex.root.v1",
-              "sourceGroup": "Machine Shape Authority",
-              "declarationSource": {
-                "line": 412
-              },
-              "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
-              "grammarProfile": "tiinex.lexical.shape.v1",
-              "startRule": "markdown-link",
-              "grammarRules": [
-                " markdown-link = \"[\" label \"](\" target \")\"",
-                " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+"
-              ],
-              "humanMeaning": "Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
-              "qualificationSupport": "available",
-              "definitionQualification": "valid",
-              "definitionFindings": [],
-              "declarationStructure": {
-                "value": "Markdown Link",
-                "children": [
-                  {
-                    "value": "Grammar Profile: tiinex.lexical.shape.v1",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: markdown-link = \"[\" label \"](\" target \")\"",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
-                    "children": []
-                  },
-                  {
-                    "value": "Human Meaning: Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
-                    "children": []
-                  },
-                  {
-                    "value": "Start Rule: markdown-link",
-                    "children": []
-                  }
-                ]
-              },
-              "compiledGrammar": {
-                "profile": "tiinex.lexical.shape.v1",
-                "qualification": "valid",
-                "startRule": "markdown-link",
-                "grammarRules": [
-                  {
-                    "name": "markdown-link",
-                    "source": " markdown-link = \"[\" label \"](\" target \")\"",
-                    "expression": {
-                      "type": "concatenation",
-                      "parts": [
-                        {
-                          "type": "literal",
-                          "value": "["
-                        },
-                        {
-                          "type": "reference",
-                          "name": "label"
-                        },
-                        {
-                          "type": "literal",
-                          "value": "]("
-                        },
-                        {
-                          "type": "reference",
-                          "name": "target"
-                        },
-                        {
-                          "type": "literal",
-                          "value": ")"
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "name": "label",
-                    "source": " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                    "expression": {
-                      "type": "repeat",
-                      "quantifier": "+",
-                      "expression": {
-                        "type": "any-except",
-                        "exclusions": [
-                          "]",
-                          "\t",
-                          "\r",
-                          "\n"
-                        ]
-                      }
-                    }
-                  },
-                  {
-                    "name": "target",
-                    "source": " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
-                    "expression": {
-                      "type": "repeat",
-                      "quantifier": "+",
-                      "expression": {
-                        "type": "any-except",
-                        "exclusions": [
-                          ")",
-                          " ",
-                          "\t",
-                          "\r",
-                          "\n"
-                        ]
-                      }
-                    }
-                  }
-                ],
-                "findings": []
-              }
-            },
-            "resolvedDefinitionProvenance": {
-              "sourceSchemaId": "tiinex.root.v1",
-              "sourceGroup": "Machine Shape Authority",
-              "declarationSource": {
-                "line": 412
-              }
-            },
-            "visibleDefinitions": [
-              {
-                "shapeLabel": "Markdown Link",
-                "sourceSchemaId": "tiinex.root.v1",
-                "sourceGroup": "Machine Shape Authority",
-                "declarationSource": {
-                  "line": 412
-                },
-                "grammarProfile": "tiinex.lexical.shape.v1",
-                "definitionQualification": "valid",
-                "qualificationSupport": "available"
-              }
-            ],
-            "findings": []
-          }
-        ]
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Representation Binding",
-        "field": "Representation Kind",
-        "allowedValues": [
-          "exact-workspace-byte-tree-archive",
-          "exact-bounded-workspace-byte-tree-archive"
-        ],
-        "allowedShapes": [],
-        "domainPolicy": "closed",
-        "declarationLine": 121,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Representation Binding",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": []
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Representation Binding",
-        "field": "Coverage",
-        "allowedValues": [
-          "complete",
-          "bounded",
-          "partial",
-          "unknown"
-        ],
-        "allowedShapes": [],
         "domainPolicy": "closed",
         "declarationLine": 125,
         "declarationQualification": "valid",
@@ -2121,18 +1733,352 @@
         "appliesToTarget": "",
         "authorityQualification": "valid",
         "authorityFindings": [],
-        "allowedShapeAuthorities": []
+        "allowedShapeAuthorities": [
+          {
+            "shapeLabel": "Markdown Link",
+            "qualification": "evaluable",
+            "useSourceSchemaId": "tiinex.workspace.representation.v1",
+            "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
+            "visibleSchemaIds": [
+              "tiinex.root.v1",
+              "tiinex.relation.v1",
+              "tiinex.workspace.representation.v1"
+            ],
+            "definition": {
+              "kind": "machine-shape-definition",
+              "shapeLabel": "Markdown Link",
+              "sourceSchemaId": "tiinex.root.v1",
+              "sourceGroup": "Machine Shape Authority",
+              "declarationSource": {
+                "line": 412
+              },
+              "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
+              "grammarProfile": "tiinex.lexical.shape.v1",
+              "startRule": "markdown-link",
+              "grammarRules": [
+                " markdown-link = \"[\" label \"](\" target \")\"",
+                " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+"
+              ],
+              "humanMeaning": "Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
+              "qualificationSupport": "available",
+              "definitionQualification": "valid",
+              "definitionFindings": [],
+              "declarationStructure": {
+                "value": "Markdown Link",
+                "children": [
+                  {
+                    "value": "Grammar Profile: tiinex.lexical.shape.v1",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: markdown-link = \"[\" label \"](\" target \")\"",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
+                    "children": []
+                  },
+                  {
+                    "value": "Human Meaning: Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
+                    "children": []
+                  },
+                  {
+                    "value": "Start Rule: markdown-link",
+                    "children": []
+                  }
+                ]
+              },
+              "compiledGrammar": {
+                "profile": "tiinex.lexical.shape.v1",
+                "qualification": "valid",
+                "startRule": "markdown-link",
+                "grammarRules": [
+                  {
+                    "name": "markdown-link",
+                    "source": " markdown-link = \"[\" label \"](\" target \")\"",
+                    "expression": {
+                      "type": "concatenation",
+                      "parts": [
+                        {
+                          "type": "literal",
+                          "value": "["
+                        },
+                        {
+                          "type": "reference",
+                          "name": "label"
+                        },
+                        {
+                          "type": "literal",
+                          "value": "]("
+                        },
+                        {
+                          "type": "reference",
+                          "name": "target"
+                        },
+                        {
+                          "type": "literal",
+                          "value": ")"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "label",
+                    "source": " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                    "expression": {
+                      "type": "repeat",
+                      "quantifier": "+",
+                      "expression": {
+                        "type": "any-except",
+                        "exclusions": [
+                          "]",
+                          "\t",
+                          "\r",
+                          "\n"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "name": "target",
+                    "source": " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
+                    "expression": {
+                      "type": "repeat",
+                      "quantifier": "+",
+                      "expression": {
+                        "type": "any-except",
+                        "exclusions": [
+                          ")",
+                          " ",
+                          "\t",
+                          "\r",
+                          "\n"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "findings": []
+              }
+            },
+            "resolvedDefinitionProvenance": {
+              "sourceSchemaId": "tiinex.root.v1",
+              "sourceGroup": "Machine Shape Authority",
+              "declarationSource": {
+                "line": 412
+              }
+            },
+            "visibleDefinitions": [
+              {
+                "shapeLabel": "Markdown Link",
+                "sourceSchemaId": "tiinex.root.v1",
+                "sourceGroup": "Machine Shape Authority",
+                "declarationSource": {
+                  "line": 412
+                },
+                "grammarProfile": "tiinex.lexical.shape.v1",
+                "definitionQualification": "valid",
+                "qualificationSupport": "available"
+              }
+            ],
+            "findings": []
+          }
+        ]
       },
       {
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Representation Binding",
-        "field": "Binding State",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Representation Payload",
+        "allowedValues": [],
+        "allowedShapes": [
+          "Markdown Link"
+        ],
+        "domainPolicy": "closed",
+        "declarationLine": 128,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Representation Binding",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
+        "allowedShapeAuthorities": [
+          {
+            "shapeLabel": "Markdown Link",
+            "qualification": "evaluable",
+            "useSourceSchemaId": "tiinex.workspace.representation.v1",
+            "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
+            "visibleSchemaIds": [
+              "tiinex.root.v1",
+              "tiinex.relation.v1",
+              "tiinex.workspace.representation.v1"
+            ],
+            "definition": {
+              "kind": "machine-shape-definition",
+              "shapeLabel": "Markdown Link",
+              "sourceSchemaId": "tiinex.root.v1",
+              "sourceGroup": "Machine Shape Authority",
+              "declarationSource": {
+                "line": 412
+              },
+              "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
+              "grammarProfile": "tiinex.lexical.shape.v1",
+              "startRule": "markdown-link",
+              "grammarRules": [
+                " markdown-link = \"[\" label \"](\" target \")\"",
+                " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+"
+              ],
+              "humanMeaning": "Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
+              "qualificationSupport": "available",
+              "definitionQualification": "valid",
+              "definitionFindings": [],
+              "declarationStructure": {
+                "value": "Markdown Link",
+                "children": [
+                  {
+                    "value": "Grammar Profile: tiinex.lexical.shape.v1",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: markdown-link = \"[\" label \"](\" target \")\"",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
+                    "children": []
+                  },
+                  {
+                    "value": "Human Meaning: Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
+                    "children": []
+                  },
+                  {
+                    "value": "Start Rule: markdown-link",
+                    "children": []
+                  }
+                ]
+              },
+              "compiledGrammar": {
+                "profile": "tiinex.lexical.shape.v1",
+                "qualification": "valid",
+                "startRule": "markdown-link",
+                "grammarRules": [
+                  {
+                    "name": "markdown-link",
+                    "source": " markdown-link = \"[\" label \"](\" target \")\"",
+                    "expression": {
+                      "type": "concatenation",
+                      "parts": [
+                        {
+                          "type": "literal",
+                          "value": "["
+                        },
+                        {
+                          "type": "reference",
+                          "name": "label"
+                        },
+                        {
+                          "type": "literal",
+                          "value": "]("
+                        },
+                        {
+                          "type": "reference",
+                          "name": "target"
+                        },
+                        {
+                          "type": "literal",
+                          "value": ")"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "label",
+                    "source": " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                    "expression": {
+                      "type": "repeat",
+                      "quantifier": "+",
+                      "expression": {
+                        "type": "any-except",
+                        "exclusions": [
+                          "]",
+                          "\t",
+                          "\r",
+                          "\n"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "name": "target",
+                    "source": " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
+                    "expression": {
+                      "type": "repeat",
+                      "quantifier": "+",
+                      "expression": {
+                        "type": "any-except",
+                        "exclusions": [
+                          ")",
+                          " ",
+                          "\t",
+                          "\r",
+                          "\n"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "findings": []
+              }
+            },
+            "resolvedDefinitionProvenance": {
+              "sourceSchemaId": "tiinex.root.v1",
+              "sourceGroup": "Machine Shape Authority",
+              "declarationSource": {
+                "line": 412
+              }
+            },
+            "visibleDefinitions": [
+              {
+                "shapeLabel": "Markdown Link",
+                "sourceSchemaId": "tiinex.root.v1",
+                "sourceGroup": "Machine Shape Authority",
+                "declarationSource": {
+                  "line": 412
+                },
+                "grammarProfile": "tiinex.lexical.shape.v1",
+                "definitionQualification": "valid",
+                "qualificationSupport": "available"
+              }
+            ],
+            "findings": []
+          }
+        ]
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Representation Binding",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Representation Kind",
         "allowedValues": [
-          "verified",
-          "declared",
-          "stale",
-          "unresolved"
+          "exact-workspace-byte-tree-archive",
+          "exact-bounded-workspace-byte-tree-archive"
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
@@ -2153,14 +2099,71 @@
       {
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Representation Binding",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Coverage",
+        "allowedValues": [
+          "complete",
+          "bounded",
+          "partial",
+          "unknown"
+        ],
+        "allowedShapes": [],
+        "domainPolicy": "closed",
+        "declarationLine": 135,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Representation Binding",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
+        "allowedShapeAuthorities": []
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Representation Binding",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Binding State",
+        "allowedValues": [
+          "verified",
+          "declared",
+          "stale",
+          "unresolved"
+        ],
+        "allowedShapes": [],
+        "domainPolicy": "closed",
+        "declarationLine": 141,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Representation Binding",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
+        "allowedShapeAuthorities": []
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Representation Scope",
+        "sourceCategory": "Field Value Constraints",
         "field": "Scope Basis",
         "allowedValues": [
           "exact-representation-entry-set"
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 167,
+        "declarationLine": 177,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -2178,13 +2181,14 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Representation Scope",
+        "sourceCategory": "Field Value Constraints",
         "field": "Included Entry Authority",
         "allowedValues": [
           "qualified-decoded-entry-set"
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 170,
+        "declarationLine": 180,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -2202,13 +2206,14 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Representation Scope",
+        "sourceCategory": "Field Value Constraints",
         "field": "Omitted Entry Meaning",
         "allowedValues": [
           "outside-representation-not-absent-from-workspace"
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 173,
+        "declarationLine": 183,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -2226,13 +2231,14 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Representation Scope",
+        "sourceCategory": "Field Value Constraints",
         "field": "Source Membership Claim",
         "allowedValues": [
           "represented-entries-are-workspace-relative-source-bytes"
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 176,
+        "declarationLine": 186,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -2250,13 +2256,14 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Representation Scope",
+        "sourceCategory": "Field Value Constraints",
         "field": "Recovery Closure Boundary",
         "allowedValues": [
           "separate-qualified-closure"
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 179,
+        "declarationLine": 189,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -2274,239 +2281,13 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Representation Correlation",
+        "sourceCategory": "Field Value Constraints",
         "field": "Path Mapping",
         "allowedValues": [
           "identity-relative-paths",
           "manifest"
         ],
         "allowedShapes": [],
-        "domainPolicy": "closed",
-        "declarationLine": 212,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Representation Correlation",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": []
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Representation Correlation",
-        "field": "Collision Policy",
-        "allowedValues": [
-          "reject-ambiguous-or-unsafe-paths"
-        ],
-        "allowedShapes": [],
-        "domainPolicy": "closed",
-        "declarationLine": 216,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Representation Correlation",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": []
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Representation Correlation",
-        "field": "Mapping Manifest",
-        "allowedValues": [],
-        "allowedShapes": [
-          "Markdown Link"
-        ],
-        "domainPolicy": "closed",
-        "declarationLine": 219,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Representation Correlation",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": [
-          {
-            "shapeLabel": "Markdown Link",
-            "qualification": "evaluable",
-            "useSourceSchemaId": "tiinex.workspace.representation.v1",
-            "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
-            "visibleSchemaIds": [
-              "tiinex.root.v1",
-              "tiinex.relation.v1",
-              "tiinex.workspace.representation.v1"
-            ],
-            "definition": {
-              "kind": "machine-shape-definition",
-              "shapeLabel": "Markdown Link",
-              "sourceSchemaId": "tiinex.root.v1",
-              "sourceGroup": "Machine Shape Authority",
-              "declarationSource": {
-                "line": 412
-              },
-              "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
-              "grammarProfile": "tiinex.lexical.shape.v1",
-              "startRule": "markdown-link",
-              "grammarRules": [
-                " markdown-link = \"[\" label \"](\" target \")\"",
-                " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+"
-              ],
-              "humanMeaning": "Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
-              "qualificationSupport": "available",
-              "definitionQualification": "valid",
-              "definitionFindings": [],
-              "declarationStructure": {
-                "value": "Markdown Link",
-                "children": [
-                  {
-                    "value": "Grammar Profile: tiinex.lexical.shape.v1",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: markdown-link = \"[\" label \"](\" target \")\"",
-                    "children": []
-                  },
-                  {
-                    "value": "Grammar Rule: target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
-                    "children": []
-                  },
-                  {
-                    "value": "Human Meaning: Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
-                    "children": []
-                  },
-                  {
-                    "value": "Start Rule: markdown-link",
-                    "children": []
-                  }
-                ]
-              },
-              "compiledGrammar": {
-                "profile": "tiinex.lexical.shape.v1",
-                "qualification": "valid",
-                "startRule": "markdown-link",
-                "grammarRules": [
-                  {
-                    "name": "markdown-link",
-                    "source": " markdown-link = \"[\" label \"](\" target \")\"",
-                    "expression": {
-                      "type": "concatenation",
-                      "parts": [
-                        {
-                          "type": "literal",
-                          "value": "["
-                        },
-                        {
-                          "type": "reference",
-                          "name": "label"
-                        },
-                        {
-                          "type": "literal",
-                          "value": "]("
-                        },
-                        {
-                          "type": "reference",
-                          "name": "target"
-                        },
-                        {
-                          "type": "literal",
-                          "value": ")"
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "name": "label",
-                    "source": " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
-                    "expression": {
-                      "type": "repeat",
-                      "quantifier": "+",
-                      "expression": {
-                        "type": "any-except",
-                        "exclusions": [
-                          "]",
-                          "\t",
-                          "\r",
-                          "\n"
-                        ]
-                      }
-                    }
-                  },
-                  {
-                    "name": "target",
-                    "source": " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
-                    "expression": {
-                      "type": "repeat",
-                      "quantifier": "+",
-                      "expression": {
-                        "type": "any-except",
-                        "exclusions": [
-                          ")",
-                          " ",
-                          "\t",
-                          "\r",
-                          "\n"
-                        ]
-                      }
-                    }
-                  }
-                ],
-                "findings": []
-              }
-            },
-            "resolvedDefinitionProvenance": {
-              "sourceSchemaId": "tiinex.root.v1",
-              "sourceGroup": "Machine Shape Authority",
-              "declarationSource": {
-                "line": 412
-              }
-            },
-            "visibleDefinitions": [
-              {
-                "shapeLabel": "Markdown Link",
-                "sourceSchemaId": "tiinex.root.v1",
-                "sourceGroup": "Machine Shape Authority",
-                "declarationSource": {
-                  "line": 412
-                },
-                "grammarProfile": "tiinex.lexical.shape.v1",
-                "definitionQualification": "valid",
-                "qualificationSupport": "available"
-              }
-            ],
-            "findings": []
-          }
-        ]
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Representation Correlation",
-        "field": "Entry Integrity Manifest",
-        "allowedValues": [],
-        "allowedShapes": [
-          "Markdown Link"
-        ],
         "domainPolicy": "closed",
         "declarationLine": 222,
         "declarationQualification": "valid",
@@ -2520,6 +2301,236 @@
         "appliesToTarget": "",
         "authorityQualification": "valid",
         "authorityFindings": [],
+        "allowedShapeAuthorities": []
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Representation Correlation",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Collision Policy",
+        "allowedValues": [
+          "reject-ambiguous-or-unsafe-paths"
+        ],
+        "allowedShapes": [],
+        "domainPolicy": "closed",
+        "declarationLine": 226,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Representation Correlation",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
+        "allowedShapeAuthorities": []
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Representation Correlation",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Mapping Manifest",
+        "allowedValues": [],
+        "allowedShapes": [
+          "Markdown Link"
+        ],
+        "domainPolicy": "closed",
+        "declarationLine": 229,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Representation Correlation",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
+        "allowedShapeAuthorities": [
+          {
+            "shapeLabel": "Markdown Link",
+            "qualification": "evaluable",
+            "useSourceSchemaId": "tiinex.workspace.representation.v1",
+            "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
+            "visibleSchemaIds": [
+              "tiinex.root.v1",
+              "tiinex.relation.v1",
+              "tiinex.workspace.representation.v1"
+            ],
+            "definition": {
+              "kind": "machine-shape-definition",
+              "shapeLabel": "Markdown Link",
+              "sourceSchemaId": "tiinex.root.v1",
+              "sourceGroup": "Machine Shape Authority",
+              "declarationSource": {
+                "line": 412
+              },
+              "visibilityPolicy": "lineage-prefix-ancestors-and-same-source",
+              "grammarProfile": "tiinex.lexical.shape.v1",
+              "startRule": "markdown-link",
+              "grammarRules": [
+                " markdown-link = \"[\" label \"](\" target \")\"",
+                " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+"
+              ],
+              "humanMeaning": "Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
+              "qualificationSupport": "available",
+              "definitionQualification": "valid",
+              "definitionFindings": [],
+              "declarationStructure": {
+                "value": "Markdown Link",
+                "children": [
+                  {
+                    "value": "Grammar Profile: tiinex.lexical.shape.v1",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: markdown-link = \"[\" label \"](\" target \")\"",
+                    "children": []
+                  },
+                  {
+                    "value": "Grammar Rule: target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
+                    "children": []
+                  },
+                  {
+                    "value": "Human Meaning: Exactly one complete inline Tiinex Markdown link with a non-empty single-line label and non-empty target. ASCII space is allowed in the label; ASCII space, tab, CR, and LF are forbidden in the target.",
+                    "children": []
+                  },
+                  {
+                    "value": "Start Rule: markdown-link",
+                    "children": []
+                  }
+                ]
+              },
+              "compiledGrammar": {
+                "profile": "tiinex.lexical.shape.v1",
+                "qualification": "valid",
+                "startRule": "markdown-link",
+                "grammarRules": [
+                  {
+                    "name": "markdown-link",
+                    "source": " markdown-link = \"[\" label \"](\" target \")\"",
+                    "expression": {
+                      "type": "concatenation",
+                      "parts": [
+                        {
+                          "type": "literal",
+                          "value": "["
+                        },
+                        {
+                          "type": "reference",
+                          "name": "label"
+                        },
+                        {
+                          "type": "literal",
+                          "value": "]("
+                        },
+                        {
+                          "type": "reference",
+                          "name": "target"
+                        },
+                        {
+                          "type": "literal",
+                          "value": ")"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "label",
+                    "source": " label = ANY-EXCEPT(\"]\", TAB, CR, LF)+",
+                    "expression": {
+                      "type": "repeat",
+                      "quantifier": "+",
+                      "expression": {
+                        "type": "any-except",
+                        "exclusions": [
+                          "]",
+                          "\t",
+                          "\r",
+                          "\n"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "name": "target",
+                    "source": " target = ANY-EXCEPT(\")\", SPACE, TAB, CR, LF)+",
+                    "expression": {
+                      "type": "repeat",
+                      "quantifier": "+",
+                      "expression": {
+                        "type": "any-except",
+                        "exclusions": [
+                          ")",
+                          " ",
+                          "\t",
+                          "\r",
+                          "\n"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "findings": []
+              }
+            },
+            "resolvedDefinitionProvenance": {
+              "sourceSchemaId": "tiinex.root.v1",
+              "sourceGroup": "Machine Shape Authority",
+              "declarationSource": {
+                "line": 412
+              }
+            },
+            "visibleDefinitions": [
+              {
+                "shapeLabel": "Markdown Link",
+                "sourceSchemaId": "tiinex.root.v1",
+                "sourceGroup": "Machine Shape Authority",
+                "declarationSource": {
+                  "line": 412
+                },
+                "grammarProfile": "tiinex.lexical.shape.v1",
+                "definitionQualification": "valid",
+                "qualificationSupport": "available"
+              }
+            ],
+            "findings": []
+          }
+        ]
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Representation Correlation",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Entry Integrity Manifest",
+        "allowedValues": [],
+        "allowedShapes": [
+          "Markdown Link"
+        ],
+        "domainPolicy": "closed",
+        "declarationLine": 232,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Representation Correlation",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
         "allowedShapeAuthorities": [
           {
             "shapeLabel": "Markdown Link",
@@ -2681,6 +2692,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Provider Qualification",
+        "sourceCategory": "Field Value Constraints",
         "field": "Activation Rule",
         "allowedValues": [
           "verified-complete-only",
@@ -2688,7 +2700,7 @@
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 254,
+        "declarationLine": 264,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -2706,83 +2718,10 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Provider Qualification",
+        "sourceCategory": "Field Value Constraints",
         "field": "Payload Integrity Requirement",
         "allowedValues": [
           "verified-exact-payload-bytes"
-        ],
-        "allowedShapes": [],
-        "domainPolicy": "closed",
-        "declarationLine": 258,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Provider Qualification",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": []
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Provider Qualification",
-        "field": "Coverage Requirement",
-        "allowedValues": [
-          "complete",
-          "bounded"
-        ],
-        "allowedShapes": [],
-        "domainPolicy": "closed",
-        "declarationLine": 261,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Provider Qualification",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": []
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Provider Qualification",
-        "field": "Staleness Rule",
-        "allowedValues": [
-          "requalify-on-binding-relevant-change"
-        ],
-        "allowedShapes": [],
-        "domainPolicy": "closed",
-        "declarationLine": 265,
-        "declarationQualification": "valid",
-        "declarationFindings": [],
-        "targetMode": "local",
-        "targetOwnership": "source-local",
-        "ownershipSourceSchemaIds": [
-          "tiinex.workspace.representation.v1"
-        ],
-        "targetGroup": "Provider Qualification",
-        "appliesToTarget": "",
-        "authorityQualification": "valid",
-        "authorityFindings": [],
-        "allowedShapeAuthorities": []
-      },
-      {
-        "kind": "field-domain",
-        "sourceSchemaId": "tiinex.workspace.representation.v1",
-        "sourceGroup": "Provider Qualification",
-        "field": "Selection Rule",
-        "allowedValues": [
-          "exactly-one-binding-per-workspace",
-          "explicit-binding-per-bounded-scope"
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
@@ -2804,13 +2743,91 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.workspace.representation.v1",
         "sourceGroup": "Provider Qualification",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Coverage Requirement",
+        "allowedValues": [
+          "complete",
+          "bounded"
+        ],
+        "allowedShapes": [],
+        "domainPolicy": "closed",
+        "declarationLine": 271,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Provider Qualification",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
+        "allowedShapeAuthorities": []
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Provider Qualification",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Staleness Rule",
+        "allowedValues": [
+          "requalify-on-binding-relevant-change"
+        ],
+        "allowedShapes": [],
+        "domainPolicy": "closed",
+        "declarationLine": 275,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Provider Qualification",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
+        "allowedShapeAuthorities": []
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Provider Qualification",
+        "sourceCategory": "Field Value Constraints",
+        "field": "Selection Rule",
+        "allowedValues": [
+          "exactly-one-binding-per-workspace",
+          "explicit-binding-per-bounded-scope"
+        ],
+        "allowedShapes": [],
+        "domainPolicy": "closed",
+        "declarationLine": 278,
+        "declarationQualification": "valid",
+        "declarationFindings": [],
+        "targetMode": "local",
+        "targetOwnership": "source-local",
+        "ownershipSourceSchemaIds": [
+          "tiinex.workspace.representation.v1"
+        ],
+        "targetGroup": "Provider Qualification",
+        "appliesToTarget": "",
+        "authorityQualification": "valid",
+        "authorityFindings": [],
+        "allowedShapeAuthorities": []
+      },
+      {
+        "kind": "field-domain",
+        "sourceSchemaId": "tiinex.workspace.representation.v1",
+        "sourceGroup": "Provider Qualification",
+        "sourceCategory": "Field Value Constraints",
         "field": "Multi-Workspace Isolation",
         "allowedValues": [
           "independent-binding-closure"
         ],
         "allowedShapes": [],
         "domainPolicy": "closed",
-        "declarationLine": 272,
+        "declarationLine": 282,
         "declarationQualification": "valid",
         "declarationFindings": [],
         "targetMode": "local",
@@ -3145,10 +3162,10 @@
         "schemaId": "tiinex.workspace.representation.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
+          "commit": "",
           "path": ".topics/.schemas/relation/workspace/representation/tiinex.workspace.representation.v1.schema.md",
-          "publicationState": "published-immutable-canonical",
-          "snapshotCompleteness": "exact-canonical-docs-snapshot"
+          "publicationState": "qualified-local-unpublished",
+          "snapshotCompleteness": "exact-local-docs-snapshot"
         },
         "parentSchemaId": "tiinex.relation.v1",
         "parentSourceCandidates": [

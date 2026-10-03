@@ -29,6 +29,7 @@ export function compileFieldValueConstraints(document = {}) {
         kind: 'field-domain',
         sourceSchemaId,
         sourceGroup: group.name,
+        sourceCategory: candidate.kind === 'legacy' ? 'Allowed Shapes' : 'Field Value Constraints',
         field,
         allowedValues: Object.freeze(parsed.allowedValues),
         allowedShapes: Object.freeze(parsed.allowedShapes),

@@ -55,6 +55,16 @@ Rules
 - `Retention And Stop Condition` specializes `Review Or Stop Condition`.
 - `Interpretation Limits` preserves inherited monitoring limits and adds safeguards against automated or unsupported decisions.
 
+Inheritance Overrides
+
+- discovery-surveillance-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.discovery.monitoring.v1
+  - Parent Node: Schema Validation Contract / Monitoring Body / Required Shape
+  - Child Node: Schema Validation Contract / Surveillance Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Surveillance Body
 
 Required Shape
@@ -398,4 +408,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: hpWqTl44G4jezMt9rPrcjMNKbHNJbJPkNUhEqRWW9sk
+  - Value: 7cS6-W-qgm1zc4Mgnodefah1ZyCk7l8W8fibpgW4opQ

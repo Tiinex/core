@@ -56,6 +56,16 @@ Rules
 - `Budget Or Allocation Impact` specializes `Allocation State` and `Accounting Or Return`.
 - `Interpretation Limits` preserves inherited allocation limits and adds measurement, estimate, and billing boundaries.
 
+Inheritance Overrides
+
+- resource-allocation-usage-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.resource.allocation.v1
+  - Parent Node: Schema Validation Contract / Resource Allocation Body / Required Shape
+  - Child Node: Schema Validation Contract / Resource Allocation Usage Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Resource Allocation Usage Body
 
 Required Shape
@@ -302,4 +312,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: TZCzX79HZUJPUFFwvYARAyRAngCiR8Jg61fcBwkby-w
+  - Value: idmSwX67jV0K2SO_ea8YMJ2Ad3ow5XbI89mdL6upUn8

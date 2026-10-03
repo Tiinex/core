@@ -56,6 +56,16 @@ Rules
 - Receipt status specializes `Contribution Status` without turning ordinary contribution artifacts into receipts.
 - `Interpretation Limits` preserves inherited contribution limits and adds receipt-specific boundaries.
 
+Inheritance Overrides
+
+- resource-contribution-receipt-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.resource.contribution.v1
+  - Parent Node: Schema Validation Contract / Resource Contribution Body / Required Shape
+  - Child Node: Schema Validation Contract / Resource Contribution Receipt Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Resource Contribution Receipt Body
 
 Required Shape
@@ -297,4 +307,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: _EGAJgI5NXdjAnyr-FVkEmA27n59CALIbIVOaYWsFZs
+  - Value: L71BV5SDGzjR4g72KZl7nWSNE6gQ_m_3FXzeZVATrpU

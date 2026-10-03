@@ -60,6 +60,16 @@ Rules
 - `Use With Tools Interfaces And Adapters`, `Failure And Ambiguity Handling`, and `Portability Notes` preserve the corresponding parent origin semantics.
 - Parent origin specialization applies to the artifact body only; it does not alter root continuity, integrity, or parent-origin requirements.
 
+Inheritance Overrides
+
+- natural-origin-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.origin.v1
+  - Parent Node: Schema Validation Contract / Origin Body / Required Shape
+  - Child Node: Schema Validation Contract / Natural Origin Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Natural Origin Body
 
 Required Shape
@@ -443,4 +453,4 @@ Maintain the section headings exactly in this schema note. Free markdown inside 
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: _ZRH4a_EhdyvzQSQYn3dwA2ab9yr1nN7UMkF4c418aQ
+  - Value: LyBwJBi8CR1h3rA93scskK6AV1jLggHeL7RtJsCUfbY

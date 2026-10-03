@@ -1579,6 +1579,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.root.v1",
         "sourceGroup": "Inheritance Overrides",
+        "sourceCategory": "Field Value Constraints",
         "field": "Merge Operation",
         "allowedValues": [
           "override"
@@ -1603,6 +1604,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.redaction.v1",
         "sourceGroup": "Redaction Action",
+        "sourceCategory": "Allowed Shapes",
         "field": "Redaction Type",
         "allowedValues": [
           "removal",
@@ -1636,6 +1638,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.redaction.v1",
         "sourceGroup": "Residual Risk",
+        "sourceCategory": "Allowed Shapes",
         "field": "Residual Disclosure Risk",
         "allowedValues": [
           "low",
@@ -1663,6 +1666,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.redaction.v1",
         "sourceGroup": "Residual Risk",
+        "sourceCategory": "Allowed Shapes",
         "field": "Reidentification Risk",
         "allowedValues": [
           "low",
@@ -1690,6 +1694,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.redaction.v1",
         "sourceGroup": "Validation",
+        "sourceCategory": "Allowed Shapes",
         "field": "Validation Status",
         "allowedValues": [
           "reviewed",

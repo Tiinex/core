@@ -53,6 +53,16 @@ Rules
 - `Contribution Status` specializes `Resource State`.
 - `Interpretation Limits` preserves inherited resource limits and prevents implying receipt or unrestricted use by default.
 
+Inheritance Overrides
+
+- resource-contribution-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.resource.v1
+  - Parent Node: Schema Validation Contract / Resource Body / Required Shape
+  - Child Node: Schema Validation Contract / Resource Contribution Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Resource Contribution Body
 
 Required Shape
@@ -318,4 +328,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: s7OfkKOjgyjvcC89M5kQ2C6uW93qr1jQ3QXyZ22MJ7c
+  - Value: 3gnFNq3V4jD-Rc3K-S_j5BCDgyIjxa3ExSte1CPFSbU

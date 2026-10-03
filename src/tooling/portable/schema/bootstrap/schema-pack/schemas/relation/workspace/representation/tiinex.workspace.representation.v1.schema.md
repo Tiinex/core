@@ -75,6 +75,16 @@ Rules
 - `## Provider Qualification` and required `## Interpretation Limits` add relation-specific state and interpretation obligations.
 - This specialization changes the artifact body contract only; it does not weaken Root continuity, integrity, schema-reference, Parent, or origin semantics.
 
+Inheritance Overrides
+
+- workspace-representation-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.relation.v1
+  - Parent Node: Schema Validation Contract / Relation Body / Required Shape
+  - Child Node: Schema Validation Contract / Workspace Representation Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Workspace Representation Body
 
 Required Shape
@@ -547,4 +557,4 @@ for `Coverage: complete`.
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: ZnL0uFsniOfLKBLp7X3NUDDS8RobgJ1tx_Op9oiYs6c
+  - Value: 3C3LJiU4hJyC5QGDpmCk_ggjCTyR2b0u5z4mnKIRriI

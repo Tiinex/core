@@ -59,6 +59,16 @@ Rules
 - `Output Mapping`, `User Action Boundary`, `Failure And Gap Handling`, and `Portability Notes` preserve the corresponding parent adapter semantics.
 - Parent adapter specialization applies to the artifact body only; it does not alter root continuity, integrity, or parent-origin requirements.
 
+Inheritance Overrides
+
+- digital-adapter-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.adapter.v1
+  - Parent Node: Schema Validation Contract / Adapter Body / Required Shape
+  - Child Node: Schema Validation Contract / Digital Adapter Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Digital Adapter Body
 
 Required Shape
@@ -538,4 +548,4 @@ treated as schema drift.
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: a4JqJeIQVxF9pqhJ5MfM5n4Q0ei2eYO8eJN31CeGTns
+  - Value: oSvDsSWkAKf1HqOpEkKvhFHQzxA_9FPKNxg9neeBLmg

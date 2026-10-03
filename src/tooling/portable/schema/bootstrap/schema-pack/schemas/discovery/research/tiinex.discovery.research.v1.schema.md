@@ -53,6 +53,16 @@ Rules
 - `Findings` and `Synthesis` specialize `Discovery Outcome`.
 - `Interpretation Limits` preserves the inherited uncertainty and overclaiming limits.
 
+Inheritance Overrides
+
+- discovery-research-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.discovery.v1
+  - Parent Node: Schema Validation Contract / Discovery Body / Required Shape
+  - Child Node: Schema Validation Contract / Research Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Research Body
 
 Required Shape
@@ -239,4 +249,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: yyEOnOP4JpslZOk3op76iDPVrcAG_qlFcULprVqEwQI
+  - Value: YYMj5jghPLx4M4AM1D8JOt1kLTJKTvHBBAtsuMLiFRc

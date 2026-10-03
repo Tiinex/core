@@ -1636,6 +1636,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.root.v1",
         "sourceGroup": "Inheritance Overrides",
+        "sourceCategory": "Field Value Constraints",
         "field": "Merge Operation",
         "allowedValues": [
           "override"
@@ -1660,6 +1661,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Handoff Parties",
+        "sourceCategory": "Field Value Constraints",
         "field": "From Kind",
         "allowedValues": [
           "party",
@@ -1686,6 +1688,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Handoff Parties",
+        "sourceCategory": "Field Value Constraints",
         "field": "To Kind",
         "allowedValues": [
           "party",
@@ -1712,6 +1715,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Handoff Parties",
+        "sourceCategory": "Field Value Constraints",
         "field": "From Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -1890,6 +1894,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Handoff Parties",
+        "sourceCategory": "Field Value Constraints",
         "field": "To Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -2068,6 +2073,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Handoff Parties",
+        "sourceCategory": "Field Value Constraints",
         "field": "From Capacity Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -2246,6 +2252,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Handoff Parties",
+        "sourceCategory": "Field Value Constraints",
         "field": "To Capacity Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -2424,6 +2431,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Transfers",
+        "sourceCategory": "Field Value Constraints",
         "field": "Transfer Kind",
         "allowedValues": [
           "work",
@@ -2450,6 +2458,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Transfers",
+        "sourceCategory": "Field Value Constraints",
         "field": "Controlling Artifact",
         "allowedValues": [],
         "allowedShapes": [
@@ -2628,6 +2637,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Required Context",
+        "sourceCategory": "Field Value Constraints",
         "field": "Availability",
         "allowedValues": [
           "available",
@@ -2655,6 +2665,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Required Context",
+        "sourceCategory": "Field Value Constraints",
         "field": "Material Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -2833,6 +2844,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Reference Context",
+        "sourceCategory": "Field Value Constraints",
         "field": "Availability",
         "allowedValues": [
           "available",
@@ -2860,6 +2872,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Reference Context",
+        "sourceCategory": "Field Value Constraints",
         "field": "Material Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -3038,6 +3051,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Retained Responsibilities",
+        "sourceCategory": "Field Value Constraints",
         "field": "Retained By Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -3216,6 +3230,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Exclusions And Dependencies",
+        "sourceCategory": "Field Value Constraints",
         "field": "Kind",
         "allowedValues": [
           "excluded-scope",
@@ -3241,6 +3256,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Exclusions And Dependencies",
+        "sourceCategory": "Field Value Constraints",
         "field": "Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -3419,6 +3435,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Completion Expectation",
+        "sourceCategory": "Field Value Constraints",
         "field": "Signal Kind",
         "allowedValues": [
           "acknowledgement",
@@ -3449,6 +3466,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Completion Expectation",
+        "sourceCategory": "Field Value Constraints",
         "field": "Return To Reference",
         "allowedValues": [],
         "allowedShapes": [
@@ -3627,6 +3645,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.handoff.v1",
         "sourceGroup": "Completion Expectation",
+        "sourceCategory": "Field Value Constraints",
         "field": "Expected Result Reference",
         "allowedValues": [],
         "allowedShapes": [

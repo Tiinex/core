@@ -54,6 +54,16 @@ Rules
 - Parent event specialization applies to the artifact body only; it does not alter root continuity, integrity, or parent-origin requirements.
 
 
+Inheritance Overrides
+
+- event-meeting-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.event.v1
+  - Parent Node: Schema Validation Contract / Event Body / Required Shape
+  - Child Node: Schema Validation Contract / Event Meeting Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Event Meeting Body
 
 Required Shape
@@ -323,4 +333,4 @@ The body headings required for artifacts using this schema are: `## Meeting Iden
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: NHVFFRJ0fusS1-KKoSAi-dFyAFbqEoso9kVFlD7IFpo
+  - Value: zkAu2CJ7sT28bT43dYxuBZXXMya6-AbN7R775xXOaY8

@@ -55,6 +55,16 @@ Rules
 - Budget status specializes `Resource State`.
 - `Interpretation Limits` preserves inherited resource limits and prevents treating budgets as actual usage, receipt, or accounting correctness.
 
+Inheritance Overrides
+
+- resource-budget-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.resource.v1
+  - Parent Node: Schema Validation Contract / Resource Body / Required Shape
+  - Child Node: Schema Validation Contract / Resource Budget Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Resource Budget Body
 
 Required Shape
@@ -317,4 +327,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: gu49yv_bPNv6CvELTg2Z378nN1wsAu0QmrBotm2CI08
+  - Value: jFLNa1Xgn_ZXvcZO2J4a4IMxgEf5wdjMLqpt1iTlCVY

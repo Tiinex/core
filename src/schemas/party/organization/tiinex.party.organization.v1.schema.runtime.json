@@ -2,10 +2,10 @@
   "schema": "tiinex.site.schema-runtime-projection.v1",
   "generator": "schema-runtime-projection-v2-schema-pack",
   "schemaId": "tiinex.party.organization.v1",
-  "sourceChecksum": "7a04210b8e2e30b6212da59f745a79d68ccd300bda066e077a17a098d0124781",
-  "sourceBlobSha": "814a3bb25b166114c2db789b06902aa91e24acbd",
-  "sourceBytes": 10201,
-  "bindingChecksum": "7a04210b8e2e30b6212da59f745a79d68ccd300bda066e077a17a098d0124781",
+  "sourceChecksum": "58d6f4fa0538aaba95b84af05e91ac7eeba3be5bae99badb911014477e88be84",
+  "sourceBlobSha": "e21bb0dbb3febf0040c3b1752ff5aaae0a19f168",
+  "sourceBytes": 10894,
+  "bindingChecksum": "58d6f4fa0538aaba95b84af05e91ac7eeba3be5bae99badb911014477e88be84",
   "validationContract": {
     "schema": "tiinex.portable.compiled-schema-contract-chain.v1",
     "schemaId": "tiinex.party.organization.v1",
@@ -26,9 +26,113 @@
     },
     "inheritanceResolution": {
       "schema": "tiinex.portable.schema-inheritance-resolution.v1",
-      "state": "not-declared",
-      "declarations": [],
-      "applications": [],
+      "state": "qualified",
+      "declarations": [
+        {
+          "name": "party-organization-body-structure",
+          "sourceSchemaId": "tiinex.party.organization.v1",
+          "sourceGroup": "Parent Party Specialization",
+          "declarationLine": 59,
+          "operation": "override",
+          "parentSchemaId": "tiinex.party.v1",
+          "parentNode": "Schema Validation Contract / Party Body / Required Shape",
+          "childNode": "Schema Validation Contract / Party Organization Body / Required Shape",
+          "reason": "This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.",
+          "effectiveResult": "The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active."
+        }
+      ],
+      "applications": [
+        {
+          "handle": "party-organization-body-structure",
+          "declaration": {
+            "sourceSchemaId": "tiinex.party.organization.v1",
+            "sourceGroup": "Parent Party Specialization",
+            "name": "party-organization-body-structure",
+            "line": 59,
+            "reason": "This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.",
+            "effectiveResult": "The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active."
+          },
+          "operation": "override",
+          "parentSchemaId": "tiinex.party.v1",
+          "childSchemaId": "tiinex.party.organization.v1",
+          "parentNode": "Schema Validation Contract / Party Body / Required Shape",
+          "childNode": "Schema Validation Contract / Party Organization Body / Required Shape",
+          "state": "applied",
+          "deactivatedContributions": [
+            {
+              "sourceSchemaId": "tiinex.party.v1",
+              "group": "Party Body",
+              "category": "Required Shape",
+              "state": "inactive",
+              "items": [
+                "first body heading after the continuity envelope",
+                "`## Party Identity` section",
+                "`## Party Boundary` section",
+                "`## Role Or Capacity` section",
+                "`## Reference And Privacy Boundary` section",
+                "`## Use With Other Schemas` section",
+                "`## Interpretation Limits` section"
+              ],
+              "declarationName": "party-organization-body-structure"
+            },
+            {
+              "sourceSchemaId": "tiinex.party.v1",
+              "group": "Party Identity",
+              "category": "ordinary-instance-field-group",
+              "state": "inactive",
+              "items": [],
+              "declarationName": "party-organization-body-structure"
+            },
+            {
+              "sourceSchemaId": "tiinex.party.v1",
+              "group": "Party Boundary",
+              "category": "ordinary-instance-field-group",
+              "state": "inactive",
+              "items": [],
+              "declarationName": "party-organization-body-structure"
+            },
+            {
+              "sourceSchemaId": "tiinex.party.v1",
+              "group": "Role Or Capacity",
+              "category": "ordinary-instance-field-group",
+              "state": "inactive",
+              "items": [],
+              "declarationName": "party-organization-body-structure"
+            },
+            {
+              "sourceSchemaId": "tiinex.party.v1",
+              "group": "Reference And Privacy Boundary",
+              "category": "ordinary-instance-field-group",
+              "state": "inactive",
+              "items": [],
+              "declarationName": "party-organization-body-structure"
+            },
+            {
+              "sourceSchemaId": "tiinex.party.v1",
+              "group": "Use With Other Schemas",
+              "category": "ordinary-instance-field-group",
+              "state": "inactive",
+              "items": [],
+              "declarationName": "party-organization-body-structure"
+            }
+          ],
+          "replacementContribution": {
+            "sourceSchemaId": "tiinex.party.organization.v1",
+            "group": "Party Organization Body",
+            "category": "Required Shape",
+            "state": "active",
+            "items": [
+              "first body heading after the continuity envelope",
+              "`## Organization Identity` section",
+              "`## Organization Boundary` section",
+              "`## Unit Or Parent Relationship` section",
+              "`## Representation Boundary` section",
+              "`## Interpretation Limits` section"
+            ],
+            "declarationName": "party-organization-body-structure"
+          }
+        }
+      ],
       "corroborations": [],
       "findings": []
     },
@@ -36,48 +140,13 @@
       "requiredSections": [
         "Continuity Context",
         "Continuity Integrity",
-        "Party Identity",
-        "Party Boundary",
-        "Role Or Capacity",
-        "Reference And Privacy Boundary",
-        "Use With Other Schemas",
-        "Interpretation Limits",
         "Organization Identity",
         "Organization Boundary",
         "Unit Or Parent Relationship",
-        "Representation Boundary"
+        "Representation Boundary",
+        "Interpretation Limits"
       ],
       "requiredHeadings": [
-        {
-          "level": 2,
-          "title": "Party Identity",
-          "source": "`## Party Identity` section"
-        },
-        {
-          "level": 2,
-          "title": "Party Boundary",
-          "source": "`## Party Boundary` section"
-        },
-        {
-          "level": 2,
-          "title": "Role Or Capacity",
-          "source": "`## Role Or Capacity` section"
-        },
-        {
-          "level": 2,
-          "title": "Reference And Privacy Boundary",
-          "source": "`## Reference And Privacy Boundary` section"
-        },
-        {
-          "level": 2,
-          "title": "Use With Other Schemas",
-          "source": "`## Use With Other Schemas` section"
-        },
-        {
-          "level": 2,
-          "title": "Interpretation Limits",
-          "source": "`## Interpretation Limits` section"
-        },
         {
           "level": 2,
           "title": "Organization Identity",
@@ -97,6 +166,11 @@
           "level": 2,
           "title": "Representation Boundary",
           "source": "`## Representation Boundary` section"
+        },
+        {
+          "level": 2,
+          "title": "Interpretation Limits",
+          "source": "`## Interpretation Limits` section"
         }
       ],
       "optionalSections": [
@@ -109,20 +183,12 @@
         "Current",
         "Current Schema",
         "Created At",
-        "Party Label",
-        "Party Kind",
-        "In Scope",
-        "Out Of Scope",
-        "Capacity",
-        "Capacity Context",
-        "Reference Safety",
-        "Disclosure Boundary",
-        "Usable As",
-        "Must Reference Separately",
         "Does Not Prove",
         "Must Not Be Treated As",
         "Organization Label",
         "Organization Kind",
+        "In Scope",
+        "Out Of Scope",
         "Relationship State",
         "Who May Represent",
         "What Is Not Proven"
@@ -133,29 +199,11 @@
         "Summary",
         "Status",
         "Why",
-        "Canonical Identifier",
-        "Alias",
-        "Public Name",
-        "Private Descriptor",
-        "Organization Boundary",
-        "Group Boundary",
-        "Role Boundary",
-        "Temporal Boundary",
-        "Role",
-        "Authority Claim",
-        "Responsibility",
-        "Stakeholder Context",
-        "Contact Boundary",
-        "Personal Data Boundary",
-        "Sensitive Context",
-        "Project Use",
-        "Event Use",
-        "Invitation Use",
-        "Availability Use",
-        "Attestation Use",
         "Identity Limits",
         "Authority Limits",
         "Consent Limits",
+        "Canonical Identifier",
+        "Public Name",
         "Jurisdiction Or Region",
         "Website Or Source",
         "Department",
@@ -302,236 +350,6 @@
         "overrideShape": "one-literal-markdown-heading-token"
       },
       "ordinaryGroups": [
-        {
-          "group": "Party Identity",
-          "qualification": "valid",
-          "target": {
-            "heading": "## Party Identity",
-            "title": "Party Identity",
-            "level": 2,
-            "authority": "root-same-name-default",
-            "requiredness": "required",
-            "qualification": "valid",
-            "findings": []
-          },
-          "requiredFields": [
-            "Party Label",
-            "Party Kind"
-          ],
-          "optionalFields": [
-            "Canonical Identifier",
-            "Alias",
-            "Public Name",
-            "Private Descriptor"
-          ],
-          "contributors": [
-            {
-              "sourceSchemaId": "tiinex.party.v1",
-              "group": "Party Identity",
-              "requiredFields": [
-                "Party Label",
-                "Party Kind"
-              ],
-              "optionalFields": [
-                "Canonical Identifier",
-                "Alias",
-                "Public Name",
-                "Private Descriptor"
-              ],
-              "target": {
-                "heading": "## Party Identity",
-                "title": "Party Identity",
-                "level": 2,
-                "authority": "root-same-name-default",
-                "qualification": "valid"
-              }
-            }
-          ]
-        },
-        {
-          "group": "Party Boundary",
-          "qualification": "valid",
-          "target": {
-            "heading": "## Party Boundary",
-            "title": "Party Boundary",
-            "level": 2,
-            "authority": "root-same-name-default",
-            "requiredness": "required",
-            "qualification": "valid",
-            "findings": []
-          },
-          "requiredFields": [
-            "In Scope",
-            "Out Of Scope"
-          ],
-          "optionalFields": [
-            "Organization Boundary",
-            "Group Boundary",
-            "Role Boundary",
-            "Temporal Boundary"
-          ],
-          "contributors": [
-            {
-              "sourceSchemaId": "tiinex.party.v1",
-              "group": "Party Boundary",
-              "requiredFields": [
-                "In Scope",
-                "Out Of Scope"
-              ],
-              "optionalFields": [
-                "Organization Boundary",
-                "Group Boundary",
-                "Role Boundary",
-                "Temporal Boundary"
-              ],
-              "target": {
-                "heading": "## Party Boundary",
-                "title": "Party Boundary",
-                "level": 2,
-                "authority": "root-same-name-default",
-                "qualification": "valid"
-              }
-            }
-          ]
-        },
-        {
-          "group": "Role Or Capacity",
-          "qualification": "valid",
-          "target": {
-            "heading": "## Role Or Capacity",
-            "title": "Role Or Capacity",
-            "level": 2,
-            "authority": "root-same-name-default",
-            "requiredness": "required",
-            "qualification": "valid",
-            "findings": []
-          },
-          "requiredFields": [
-            "Capacity",
-            "Capacity Context"
-          ],
-          "optionalFields": [
-            "Role",
-            "Authority Claim",
-            "Responsibility",
-            "Stakeholder Context"
-          ],
-          "contributors": [
-            {
-              "sourceSchemaId": "tiinex.party.v1",
-              "group": "Role Or Capacity",
-              "requiredFields": [
-                "Capacity",
-                "Capacity Context"
-              ],
-              "optionalFields": [
-                "Role",
-                "Authority Claim",
-                "Responsibility",
-                "Stakeholder Context"
-              ],
-              "target": {
-                "heading": "## Role Or Capacity",
-                "title": "Role Or Capacity",
-                "level": 2,
-                "authority": "root-same-name-default",
-                "qualification": "valid"
-              }
-            }
-          ]
-        },
-        {
-          "group": "Reference And Privacy Boundary",
-          "qualification": "valid",
-          "target": {
-            "heading": "## Reference And Privacy Boundary",
-            "title": "Reference And Privacy Boundary",
-            "level": 2,
-            "authority": "root-same-name-default",
-            "requiredness": "required",
-            "qualification": "valid",
-            "findings": []
-          },
-          "requiredFields": [
-            "Reference Safety",
-            "Disclosure Boundary"
-          ],
-          "optionalFields": [
-            "Contact Boundary",
-            "Personal Data Boundary",
-            "Sensitive Context"
-          ],
-          "contributors": [
-            {
-              "sourceSchemaId": "tiinex.party.v1",
-              "group": "Reference And Privacy Boundary",
-              "requiredFields": [
-                "Reference Safety",
-                "Disclosure Boundary"
-              ],
-              "optionalFields": [
-                "Contact Boundary",
-                "Personal Data Boundary",
-                "Sensitive Context"
-              ],
-              "target": {
-                "heading": "## Reference And Privacy Boundary",
-                "title": "Reference And Privacy Boundary",
-                "level": 2,
-                "authority": "root-same-name-default",
-                "qualification": "valid"
-              }
-            }
-          ]
-        },
-        {
-          "group": "Use With Other Schemas",
-          "qualification": "valid",
-          "target": {
-            "heading": "## Use With Other Schemas",
-            "title": "Use With Other Schemas",
-            "level": 2,
-            "authority": "root-same-name-default",
-            "requiredness": "required",
-            "qualification": "valid",
-            "findings": []
-          },
-          "requiredFields": [
-            "Usable As",
-            "Must Reference Separately"
-          ],
-          "optionalFields": [
-            "Project Use",
-            "Event Use",
-            "Invitation Use",
-            "Availability Use",
-            "Attestation Use"
-          ],
-          "contributors": [
-            {
-              "sourceSchemaId": "tiinex.party.v1",
-              "group": "Use With Other Schemas",
-              "requiredFields": [
-                "Usable As",
-                "Must Reference Separately"
-              ],
-              "optionalFields": [
-                "Project Use",
-                "Event Use",
-                "Invitation Use",
-                "Availability Use",
-                "Attestation Use"
-              ],
-              "target": {
-                "heading": "## Use With Other Schemas",
-                "title": "Use With Other Schemas",
-                "level": 2,
-                "authority": "root-same-name-default",
-                "qualification": "valid"
-              }
-            }
-          ]
-        },
         {
           "group": "Interpretation Limits",
           "qualification": "valid",
@@ -1846,6 +1664,7 @@
         "kind": "field-domain",
         "sourceSchemaId": "tiinex.root.v1",
         "sourceGroup": "Inheritance Overrides",
+        "sourceCategory": "Field Value Constraints",
         "field": "Merge Operation",
         "allowedValues": [
           "override"
@@ -2187,10 +2006,10 @@
         "schemaId": "tiinex.party.organization.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6",
+          "commit": "",
           "path": ".topics/.schemas/party/organization/tiinex.party.organization.v1.schema.md",
-          "publicationState": "published-immutable-canonical",
-          "snapshotCompleteness": "exact-canonical-docs-snapshot"
+          "publicationState": "qualified-local-unpublished",
+          "snapshotCompleteness": "exact-local-docs-snapshot"
         },
         "parentSchemaId": "tiinex.party.v1",
         "parentSourceCandidates": [
@@ -2245,15 +2064,21 @@
       },
       {
         "input": "In Scope",
-        "kind": "unmapped",
-        "section": "",
-        "reason": "no-qualified-generic-representation"
+        "kind": "ordinary-field",
+        "section": "Organization Boundary",
+        "group": "Organization Boundary",
+        "field": "In Scope",
+        "sourceSchemaId": "tiinex.party.organization.v1",
+        "requirement": "required"
       },
       {
         "input": "Out Of Scope",
-        "kind": "unmapped",
-        "section": "",
-        "reason": "no-qualified-generic-representation"
+        "kind": "ordinary-field",
+        "section": "Organization Boundary",
+        "group": "Organization Boundary",
+        "field": "Out Of Scope",
+        "sourceSchemaId": "tiinex.party.organization.v1",
+        "requirement": "required"
       },
       {
         "input": "Relationship State",

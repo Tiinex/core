@@ -55,6 +55,16 @@ Rules
 - `Triage` specializes the next-artifact and disposition meaning of `Discovery Outcome`.
 - `Interpretation Limits` preserves the inherited limit semantics and prevents treating findings as evidence by default.
 
+Inheritance Overrides
+
+- discovery-finding-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.discovery.v1
+  - Parent Node: Schema Validation Contract / Discovery Body / Required Shape
+  - Child Node: Schema Validation Contract / Finding Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Finding Body
 
 Required Shape
@@ -237,4 +247,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: lXvhkxT-dIyqZ4whxtX1jz_utFJJBUbTBnCZE6Qifos
+  - Value: UizaDAjA0qur0Gee2f7lb6HVE-ckpJg5n81kG-aAitA

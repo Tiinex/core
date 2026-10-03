@@ -54,6 +54,16 @@ Rules
 - Parent party specialization applies to the artifact body only; it does not alter root continuity, integrity, or parent-origin requirements.
 
 
+Inheritance Overrides
+
+- party-group-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.party.v1
+  - Parent Node: Schema Validation Contract / Party Body / Required Shape
+  - Child Node: Schema Validation Contract / Party Group Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Party Group Body
 
 Required Shape
@@ -287,4 +297,4 @@ The body headings required for artifacts using this schema are: `## Group Identi
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: eUCCj45Y1tVqGKlvxFs0BuiVpQk8HVjrjNpfFh-i1j8
+  - Value: llWfYzoMTEwc2IFYnjJ2mbdUetNU7oqoJFXk5RZHURM

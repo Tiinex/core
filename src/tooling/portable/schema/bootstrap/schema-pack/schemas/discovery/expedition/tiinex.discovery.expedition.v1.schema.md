@@ -55,6 +55,16 @@ Rules
 - `Encounters` and `Map Update` specialize `Discovery Outcome`.
 - `Interpretation Limits` preserves the inherited uncertainty and boundary semantics.
 
+Inheritance Overrides
+
+- discovery-expedition-body-structure
+  - Merge Operation: override
+  - Parent Schema: tiinex.discovery.v1
+  - Parent Node: Schema Validation Contract / Discovery Body / Required Shape
+  - Child Node: Schema Validation Contract / Expedition Body / Required Shape
+  - Reason: This child schema replaces the inherited parent artifact-body structure while retaining compatible non-structural parent semantics and provenance.
+  - Effective Result: The child Required Shape is authoritative for artifacts qualified against this schema; parent-only structural body groups become inactive, while compatible parent contributions targeting surviving child sections remain active.
+
 ### Expedition Body
 
 Required Shape
@@ -240,4 +250,4 @@ Rules
 
 - sha256-base64url-c14n-v2
   - Towards: self
-  - Value: Eix1RFCzLObQyuAx_OmrX9hrncjhFhWz9-oVwd2lrc4
+  - Value: 6IEkr23fzjfaQ4Kar_SzyAcZ6LUsuEB_1LtNg5p7zSo
