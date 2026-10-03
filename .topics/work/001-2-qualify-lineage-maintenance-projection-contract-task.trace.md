@@ -54,8 +54,9 @@ Design and qualify the read-only Core projection contract for deterministic line
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: [001-deterministic-lineage-maintenance-projection-and-apply-task.trace.md](001-deterministic-lineage-maintenance-projection-and-apply-task.trace.md)
-  - Value: G--qz_7mSRK2W3zhf4JetwiGUlEnWnhkgLbSdl8nzCU
+  - Value: PY3SeYcMqPM2_xM_lPUmHAbYB1BS2H6FMv5P0bVyAYI
+
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: iluVnLsuDkj6FYhhovc7CO4yfltvTUglLDyg6g_14YM
+  - Value: 7qBAI9ab5qQpRb1J0dqH8GWlKs2uKv0hCOIfWN10UBA

@@ -1,6 +1,12 @@
 # Continuity Context
 
 - Envelope Schema: [tiinex.root.v1](https://github.com/Tiinex/docs/blob/302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6/.topics/.schemas/tiinex.root.v1.schema.md)
+- Parent
+  - Parent Schema: [tiinex.project.v1](https://github.com/Tiinex/docs/blob/302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6/.topics/.schemas/coordination/project/tiinex.project.v1.schema.md)
+  - Created At: 2026-10-03 21:16:05
+  - Trace: [004-deterministic-lineage-maintenance-project.trace.md](https://github.com/Tiinex/business/blob/ae82dfd895c4ef59f821f95b0ddd823298af4f7e/.topics/initiatives/004-deterministic-lineage-maintenance-project.trace.md)
+  - Origin:
+    - [browse + git](https://github.com/Tiinex/business/blob/ae82dfd895c4ef59f821f95b0ddd823298af4f7e/.topics/initiatives/004-deterministic-lineage-maintenance-project.trace.md)
 - Current
   - Current Schema: [tiinex.task.v1](https://github.com/Tiinex/docs/blob/302506f90537dc23d6f88ad0bd0bb9c97c6cf9f6/.topics/.schemas/core/task/tiinex.task.v1.schema.md)
   - Created At: 2026-10-03 21:16:05
@@ -54,5 +60,9 @@ Implement one Core-owned lineage-maintenance capability that separates directory
 # Continuity Integrity
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
+  - Towards: [004-deterministic-lineage-maintenance-project.trace.md](https://github.com/Tiinex/business/blob/ae82dfd895c4ef59f821f95b0ddd823298af4f7e/.topics/initiatives/004-deterministic-lineage-maintenance-project.trace.md)
+  - Value: Zee3uAtN8vc5y-r-7p5puHMG-b9ajbl_4JQQQxd2AUg
+
+- [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: G--qz_7mSRK2W3zhf4JetwiGUlEnWnhkgLbSdl8nzCU
+  - Value: PY3SeYcMqPM2_xM_lPUmHAbYB1BS2H6FMv5P0bVyAYI

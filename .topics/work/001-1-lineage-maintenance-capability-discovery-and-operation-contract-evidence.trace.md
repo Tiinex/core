@@ -76,8 +76,9 @@
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: [001-deterministic-lineage-maintenance-projection-and-apply-task.trace.md](001-deterministic-lineage-maintenance-projection-and-apply-task.trace.md)
-  - Value: G--qz_7mSRK2W3zhf4JetwiGUlEnWnhkgLbSdl8nzCU
+  - Value: PY3SeYcMqPM2_xM_lPUmHAbYB1BS2H6FMv5P0bVyAYI
+
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: ieCD10bLg6XYmE_6z8ZmKWi2n6HqJMDY_TAUIRCW8PU
+  - Value: DGI7XMdHAlBAvnPF6eyrwyC1oKF5kZiZaLa9zHPWPOc

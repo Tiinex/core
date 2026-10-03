@@ -1588,10 +1588,10 @@
         "schemaId": "tiinex.workspace.v1",
         "source": {
           "repository": "Tiinex/docs",
-          "commit": "",
+          "commit": "94b6d86d95ce47f8050a47d6eb7b29b577669ea4",
           "path": ".topics/.schemas/workspace/tiinex.workspace.v1.schema.md",
-          "publicationState": "qualified-local-unpublished",
-          "snapshotCompleteness": "exact-local-docs-snapshot"
+          "publicationState": "published-immutable-canonical",
+          "snapshotCompleteness": "exact-canonical-docs-snapshot"
         },
         "parentSchemaId": "tiinex.root.v1",
         "parentSourceCandidates": [
