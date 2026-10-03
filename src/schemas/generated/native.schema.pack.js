@@ -5,9 +5,9 @@ export const nativeSchemaPackManifest = Object.freeze({
   "source": {
     "provider": "docs-workspace",
     "repository": "Tiinex/docs",
-    "commit": "",
-    "publicationState": "qualified-local-unpublished",
-    "snapshotCompleteness": "exact-local-docs-snapshot",
+    "commit": "70bdfd1efe39057f2453d3ef40c35799f92fd63e",
+    "publicationState": "published-immutable-canonical",
+    "snapshotCompleteness": "exact-canonical-docs-snapshot",
     "networkRequired": false
   },
   "count": 109,
