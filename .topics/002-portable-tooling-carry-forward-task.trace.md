@@ -40,8 +40,8 @@ Shared Core mechanics only. Do not create a Core-owned CLI product, external-ass
 
 - [Core extraction task](001-package-extraction-task.trace.md)
 - [Turn-2 repository boundary decision](business::.topics/initiatives/001-3-6-4-1-repository-bootstrap-responsibility-boundary-decision.trace.md)
-- Historical source signal: `site::.topics/tooling/005-2-common-cli-surface-and-llm-ergonomics-task.trace.md`.
-- Historical source signal: `site::.topics/tooling/006-explicit-root-fresh-cold-grounding-closure-task.trace.md`.
+- Historical source signal: `site::.topics/work/tooling/005-2-common-cli-surface-and-llm-ergonomics-task.trace.md`.
+- Historical source signal: `site::.topics/work/tooling/006-explicit-root-fresh-cold-grounding-closure-task.trace.md`.
 
 ---
 
@@ -53,4 +53,4 @@ Shared Core mechanics only. Do not create a Core-owned CLI product, external-ass
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: snqRXPnY8uDlLTGtBykibGh1s0nS9I2Uo7WkqUAt-EQ
+  - Value: i1NFystLiJb6cHOfhatmUgLHTvgEaa0EY3BKon7UFRk
