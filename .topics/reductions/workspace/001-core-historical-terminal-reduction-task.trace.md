@@ -48,8 +48,8 @@ Apply the project-wide Major 015 reduction policy to the exact Core branches alr
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: [002-portable-tooling-carry-forward-task.trace.md](../../002-portable-tooling-carry-forward-task.trace.md)
-  - Value: Up5BAWvTjTuePC6QWuA-gPb0mIFhwn1DILxqHdfGKQs
+  - Value: snqRXPnY8uDlLTGtBykibGh1s0nS9I2Uo7WkqUAt-EQ
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: 8W9pX0hIFp9ZGWqi_9U4c1jNG3KsyKIWJVAmxOGJGQY
+  - Value: vAF8kB7I5dz13NyJueUrkaBzV79mRYPeuvbpynqhKMM

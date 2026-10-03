@@ -42,8 +42,8 @@ Shared master-only npm release capability. No new semantic authority, no remote 
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: [001-extraction-task.trace.md](001-extraction-task.trace.md)
-  - Value: VROXRgOjj-BuuMRL9TrKt6hQJIWRE-vly95PBJwCLGM
+  - Value: 7lwEzA0IrlB9aJB5Ocw7OaoVVTcjcGBQwel_dRjdGD0
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: 6ct7i42TmoYK2r40dYCiD8DmTnbKSaJamtxtGIhlSdQ
+  - Value: nJQTd1kPihQwmIpbjL3Tncpo9A-4SxqIgpT-yclCxms

@@ -104,10 +104,10 @@
 ### Surviving Closure Endpoints
 
 - [`business::.topics/initiatives/refactor/security/001-secure-transport-recipient-encryption.trace.md`](https://github.com/Tiinex/business/blob/148a05e37b29baff8cdbe1d73293cfca1de8f9c7/.topics/initiatives/refactor/security/001-secure-transport-recipient-encryption.trace.md)
-- [`core::.topics/refactor/orchestration/001-1-historical-parent-schema-authority-recovery-for-role-continuation-task.trace.md`](https://github.com/Tiinex/core/blob/4d5e55f649a5a3d7284128fe531dd4fe8e5ab014/.topics/refactor/orchestration/001-1-historical-parent-schema-authority-recovery-for-role-continuation-task.trace.md)
-- [`core::.topics/refactor/orchestration/001-2-core-major-003-manufacture-runtime-source-hygiene-alignment-task.trace.md`](https://github.com/Tiinex/core/blob/4d5e55f649a5a3d7284128fe531dd4fe8e5ab014/.topics/refactor/orchestration/001-2-core-major-003-manufacture-runtime-source-hygiene-alignment-task.trace.md)
-- [`core::.topics/refactor/orchestration/002-1-1-core-major-007-per-field-schema-reference-authority-enforcement.trace.md`](https://github.com/Tiinex/core/blob/4d5e55f649a5a3d7284128fe531dd4fe8e5ab014/.topics/refactor/orchestration/002-1-1-core-major-007-per-field-schema-reference-authority-enforcement.trace.md)
-- [`core::.topics/refactor/tooling/001-turn-2-portable-tooling-and-allocation-discipline.trace.md`](https://github.com/Tiinex/core/blob/4d5e55f649a5a3d7284128fe531dd4fe8e5ab014/.topics/refactor/tooling/001-turn-2-portable-tooling-and-allocation-discipline.trace.md)
+- [`core::.topics/work/refactor/orchestration/001-1-historical-parent-schema-authority-recovery-for-role-continuation-task.trace.md`](https://github.com/Tiinex/core/blob/4d5e55f649a5a3d7284128fe531dd4fe8e5ab014/.topics/refactor/orchestration/001-1-historical-parent-schema-authority-recovery-for-role-continuation-task.trace.md)
+- [`core::.topics/work/refactor/orchestration/001-2-core-major-003-manufacture-runtime-source-hygiene-alignment-task.trace.md`](https://github.com/Tiinex/core/blob/4d5e55f649a5a3d7284128fe531dd4fe8e5ab014/.topics/refactor/orchestration/001-2-core-major-003-manufacture-runtime-source-hygiene-alignment-task.trace.md)
+- [`core::.topics/work/refactor/orchestration/002-1-1-core-major-007-per-field-schema-reference-authority-enforcement.trace.md`](https://github.com/Tiinex/core/blob/4d5e55f649a5a3d7284128fe531dd4fe8e5ab014/.topics/refactor/orchestration/002-1-1-core-major-007-per-field-schema-reference-authority-enforcement.trace.md)
+- [`core::.topics/work/refactor/tooling/001-turn-2-portable-tooling-and-allocation-discipline.trace.md`](https://github.com/Tiinex/core/blob/4d5e55f649a5a3d7284128fe531dd4fe8e5ab014/.topics/refactor/tooling/001-turn-2-portable-tooling-and-allocation-discipline.trace.md)
 
 - Baseline carrier-015 Core `.topics` tree SHA matched immutable Git tree SHA `5f9622dccb8690afdafd536bb851940b607831d5`.
 - Rebuilt project prune projection reproduced exactly 15 Core candidates and 5 surviving closure endpoints.
@@ -119,8 +119,8 @@
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: [001-core-historical-terminal-reduction-task.trace.md](001-core-historical-terminal-reduction-task.trace.md)
-  - Value: 8W9pX0hIFp9ZGWqi_9U4c1jNG3KsyKIWJVAmxOGJGQY
+  - Value: vAF8kB7I5dz13NyJueUrkaBzV79mRYPeuvbpynqhKMM
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: kQcQFkzDzNg5WxhGuraceWyuI5RB6v_L5YvyiitfxO8
+  - Value: mfWjHY4lisfLofH0leTjHZICO_EshpOQZ7HOTO9Pb9M

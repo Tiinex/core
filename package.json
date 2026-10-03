@@ -138,7 +138,10 @@
     "./tooling/portable/handoff/carrierContinuationProjection.js": "./src/tooling/portable/handoff/carrierContinuationProjection.js",
     "./tooling/portable/transitions/transition.catalog.js": "./src/tooling/portable/transitions/transition.catalog.js",
     "./scaffolds/scaffold.parse.js": "./src/scaffolds/scaffold.parse.js",
-    "./scaffolds/scaffold.plan.js": "./src/scaffolds/scaffold.plan.js"
+    "./scaffolds/scaffold.plan.js": "./src/scaffolds/scaffold.plan.js",
+    "./scaffolds/scaffold.compose.js": "./src/scaffolds/scaffold.compose.js",
+    "./scaffolds/scaffold.migration.js": "./src/scaffolds/scaffold.migration.js",
+    "./scaffolds/scaffold.relocation.js": "./src/scaffolds/scaffold.relocation.js"
   },
   "files": [
     "src",

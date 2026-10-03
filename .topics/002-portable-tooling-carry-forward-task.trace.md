@@ -49,8 +49,8 @@ Shared Core mechanics only. Do not create a Core-owned CLI product, external-ass
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: [001-extraction-task.trace.md](001-extraction-task.trace.md)
-  - Value: GCTQEKkmomJpU8bKRYyAG4eWNZNUPxDuQLpvJTrhHjk
+  - Value: 7lwEzA0IrlB9aJB5Ocw7OaoVVTcjcGBQwel_dRjdGD0
 
 - [sha256-base64url-c14n-v2](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.validators/sha256-base64url-c14n-v2.validator.md)
   - Towards: self
-  - Value: Up5BAWvTjTuePC6QWuA-gPb0mIFhwn1DILxqHdfGKQs
+  - Value: snqRXPnY8uDlLTGtBykibGh1s0nS9I2Uo7WkqUAt-EQ
