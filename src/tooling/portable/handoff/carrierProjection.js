@@ -232,8 +232,11 @@ export function projectHandoffCarrierTransportName(input = {}) {
   if (mode === 'continuation') {
     const ordinal = Number(input.ordinal || input.continuationOrdinal || 1);
     if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > 999999) return transportNameResult('blocked', mode, 'ordinal-invalid', parentFilename, '', 0, '');
-    const stem = parentFilename.slice(0, -'.handoff-package.zip'.length);
-    return transportNameResult('ready', mode, '', parentFilename, `${stem}-${ordinal}.handoff-package.zip`, ordinal, '');
+    const parsedParent = parseTransportMajor(parentFilename);
+    if (!parsedParent) return transportNameResult('blocked', mode, 'transport-major-unresolved', parentFilename, '', 0, '');
+    const filename = continuedTransportFilename(parentFilename, parsedParent, ordinal);
+    if (!filename) return transportNameResult('blocked', mode, 'transport-continuation-unresolved', parentFilename, '', 0, parsedParent.prefix);
+    return transportNameResult('ready', mode, '', parentFilename, filename, ordinal, parsedParent.prefix);
   }
 
   if (mode === 'major') {
@@ -253,6 +256,21 @@ export function projectHandoffCarrierTransportName(input = {}) {
   }
 
   return transportNameResult('blocked', mode, 'mode-invalid', parentFilename, '', 0, '');
+}
+
+
+function continuedTransportFilename(parentFilename = '', parsedParent = {}, ordinal = 1) {
+  const suffix = '.handoff-package.zip';
+  const stem = String(parentFilename || '').slice(0, -suffix.length);
+  const major = String(parsedParent.major || '').padStart(3, '0');
+  const base = parsedParent.prefix ? `${parsedParent.prefix}-${major}` : major;
+  if (!stem.startsWith(base)) return '';
+  const remainder = stem.slice(base.length);
+  const match = remainder.match(/^((?:-\d+)*)(.*)$/u);
+  if (!match) return '';
+  const dimensionTail = String(match[1] || '');
+  const semanticSlug = String(match[2] || '');
+  return `${base}${dimensionTail}-${ordinal}${semanticSlug}${suffix}`;
 }
 
 function parseTransportMajor(filename = '') {

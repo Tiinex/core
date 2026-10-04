@@ -283,7 +283,8 @@ export async function materializeHandoffManufactureCliOutput(result = {}, flags 
   } else {
     writeReceipt = await writePortableRuntimePackageZip(writeBundle, target);
   }
-  const transportTextReceipt = flags['transport-text'] ? await writeTransportTextSidecar(humanOutput, target, flags['transport-text']) : null;
+  const transportTextTarget = normalizeTransportTextFlag(flags['transport-text']);
+  const transportTextReceipt = transportTextTarget ? await writeTransportTextSidecar(humanOutput, target, transportTextTarget) : null;
   return summarizeHandoffManufactureCliOutput(result, writeReceipt, humanOutput, transportTextReceipt);
 }
 
@@ -527,6 +528,14 @@ function resolveHandoffOutputPath(flags = {}, projectedFilename = '') {
   }
   if (!flags['output-dir']) throw new Error('portable.cli.handoff-carrier.output-dir.required');
   return path.resolve(String(flags['output-dir']), filename);
+}
+function normalizeTransportTextFlag(value) {
+  if (value === true) return true;
+  if (value === false || value === undefined || value === null) return false;
+  const text = String(value).trim();
+  if (!text || text.toLocaleLowerCase() === 'false') return false;
+  if (text.toLocaleLowerCase() === 'true') return true;
+  return text;
 }
 async function writeTransportTextSidecar(humanOutput, packageTarget, flagValue) {
   const target = flagValue === true
