@@ -312,16 +312,40 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
     const parentBytes = new Uint8Array(await readFile(resolvedParent));
     const parentBundle = await loadNodePortableInput([resolvedParent], { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] });
     inheritedCarrierProfile = parentHandoffCarrierProfileFromBundle(parentBundle);
-    const parentLineage = parentHandoffCarrierLineageFromBundle(parentBundle);
-    carrierLineage = carrierLineageFromCliParent({
-      bundle: parentBundle,
-      parentPath: resolvedParent,
-      parentBytes,
-      qualifiedParentLineage: parentLineage,
-      major: Boolean(flags['package-major']),
-      majorReason: flags['major-reason'] || '',
-      siblingIndex: 1
-    });
+    const parentLineage = parentHandoffCarrierLineageFromBundle(parentBundle, { packageSha256: '', packageFilename: path.basename(resolvedParent) });
+    if (explicitMajor) {
+      const requestedPrefix = normalizeHandoffCarrierPrefix(flags['carrier-prefix'] || parentLineage.prefix || '');
+      if (!requestedPrefix) throw new Error('portable.cli.workspace-carrier.package-major.prefix-required');
+      if (parentLineage.prefix && requestedPrefix !== parentLineage.prefix) throw new Error('portable.cli.workspace-carrier.carrier-prefix.parent-conflict');
+      const allocation = projectHandoffCarrierMajorAllocation({
+        prefix: requestedPrefix,
+        parentFilename: resolvedParent,
+        existingFilenames: carrierExistingFilenames
+      });
+      if (allocation.state !== 'ready') throw new Error(`portable.cli.workspace-carrier.package-major.allocation-blocked:${allocation.reasonCode || allocation.state}`);
+      carrierLineage = allocateHandoffCarrierMajor(requestedPrefix, allocation.nextMajorDimension, flags['major-reason'] || '', {
+        dimension: parentLineage.dimension,
+        packageSha256: parentLineage.packageSha256 || '',
+        packageFilename: path.basename(resolvedParent)
+      });
+      carrierAllocation = Object.freeze({
+        state: 'qualified',
+        allocationMode: 'monotonic-prefix-major-with-parent',
+        siblingIndex: null,
+        childDimension: carrierLineage.dimension,
+        provenance: Object.freeze({ basis: 'highest-observed-prefix-major-plus-one', prefix: requestedPrefix, highestObservedMajor: allocation.highestObservedMajor, observedCount: allocation.observed.length, parentPackagePath: resolvedParent, parentDimension: parentLineage.dimension }),
+        boundary: allocation.boundary
+      });
+    } else {
+      carrierLineage = carrierLineageFromCliParent({
+        bundle: parentBundle,
+        parentPath: resolvedParent,
+        parentBytes,
+        qualifiedParentLineage: parentLineage,
+        major: false,
+        siblingIndex: 1
+      });
+    }
   } else if (explicitMajor) {
     const requestedPrefix = normalizeHandoffCarrierPrefix(flags['carrier-prefix'] || '');
     if (!requestedPrefix) throw new Error('portable.cli.workspace-carrier.package-major.prefix-required');
