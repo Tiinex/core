@@ -3,8 +3,9 @@ import { lstat, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256Hex } from '../../../../export/package.bytes.js';
+import { resolveSelectedTiinexContentSources } from './contentSource.discovery.js';
 
-export const PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID = 'tiinex.portable.tooling-bootstrap.manifest.v2';
+export const PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID = 'tiinex.portable.tooling-bootstrap.manifest.v3';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_RUNTIME_ROOT = path.resolve(MODULE_DIR, '../../../../..');
@@ -15,6 +16,8 @@ export async function buildToolingBootstrapTransportFiles(input = {}) {
   const runtimeRoot = path.resolve(String(input.runtimeRoot || DEFAULT_RUNTIME_ROOT));
   const runtime = await enumerateRuntimeDependencyGraph(runtimeRoot, { maxFiles: input.maxFiles });
   const runtimeIdentity = runtimeIdentityFromEnumeration(runtime);
+  const content = await enumerateBootstrapContent(input);
+  const compositionSha256 = sha256Text(stableJson({ runtime: runtime.representationSha256, content: content.representationSha256 }));
   const builtAt = normalizeBuildTimestamp(input.builtAt || input.buildCreatedAt || new Date().toISOString());
   const manifest = Object.freeze({
     schema: PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID,
@@ -23,19 +26,23 @@ export async function buildToolingBootstrapTransportFiles(input = {}) {
     entrypoint: 'runtime/tools/tiinex-portable.mjs',
     build: Object.freeze({ createdAt: builtAt, meaning: 'bootstrap-bundle-manufacture-time', orderingAuthority: 'none' }),
     core: Object.freeze({ name: runtimeIdentity.packageName, version: runtimeIdentity.packageVersion }),
-    composition: Object.freeze({ sha256: runtime.representationSha256, basis: 'exact-manifest-declared-runtime-representation', timestampIndependent: true, supersessionAuthority: 'none' }),
-    qualification: Object.freeze({ authority: 'manifest-declared-exact-runtime-bytes-only', ordinaryWorkspaceBytesAreBootstrapAuthority: false, filenameOrColocationAuthority: false }),
+    composition: Object.freeze({ sha256: compositionSha256, basis: 'exact-manifest-declared-runtime-and-content-representations', timestampIndependent: true, supersessionAuthority: 'none' }),
+    qualification: Object.freeze({ authority: 'manifest-declared-exact-runtime-and-content-bytes-only', ordinaryWorkspaceBytesAreBootstrapAuthority: false, filenameOrColocationAuthority: false, registeredSurfaceMembershipCreatesSemanticAuthority: false }),
     runtime: Object.freeze({ files: runtime.entries.length, bytes: runtime.totalBytes, representationSha256: runtime.representationSha256, entries: Object.freeze(runtime.entries.map(({ path: entryPath, bytes, sha256 }) => Object.freeze({ path: `runtime/${entryPath}`, bytes, sha256 }))) }),
-    canonicalSchemaMaterial: Object.freeze({ boundary: 'Carried as runtime data required by the portable schema provider; canonical schema authority remains the declared external Tiinex/docs binding inside that material, not this bootstrap manifest.' }),
+    content: Object.freeze({ sources: content.sources.length, surfaces: content.surfaceCount, files: content.entries.length, bytes: content.totalBytes, representationSha256: content.representationSha256, sourceRecords: content.sources, entries: Object.freeze(content.entries.map(({ transportPath, sourceId, surface, surfaceRoot, sourcePath, bytes, sha256 }) => Object.freeze({ path: transportPath, sourceId, surface, surfaceRoot, sourcePath, bytes, sha256 }))) }),
+    canonicalSchemaMaterial: Object.freeze({ boundary: 'Schema material is carried only through selected registered .schemas content sources. Canonical schema authority remains the exact artifact/binding authority declared by that content; this bootstrap manifest is transport/composition authority only.' }),
     boundary: 'Portable Tooling bootstrap transport authority only. Build time, Core version, bootstrap hash, and receipt order are comparison facts, not global semantic supersession authority.'
   });
   const manifestBytes = new TextEncoder().encode(`${JSON.stringify(sortJson(manifest), null, 2)}\n`);
   const manifestSha256 = sha256Hex(manifestBytes);
   const persistentVerification = delivery === 'persistent' ? verifyExpectedPersistentBootstrap(input.expected, manifest, manifestSha256) : Object.freeze({ state: 'not-required' });
-  const summary = Object.freeze({ schema: 'tiinex.portable.tooling-bootstrap.summary.v1', delivery, manifestSha256, representationSha256: runtime.representationSha256, compositionSha256: runtime.representationSha256, runtimeFiles: runtime.entries.length, runtimeBytes: runtime.totalBytes, build: manifest.build, core: manifest.core, status: delivery === 'embedded' ? 'embedded-qualified' : 'persistent-identity-verified', persistentVerification });
+  const summary = Object.freeze({ schema: 'tiinex.portable.tooling-bootstrap.summary.v1', delivery, manifestSha256, representationSha256: runtime.representationSha256, runtimeRepresentationSha256: runtime.representationSha256, contentRepresentationSha256: content.representationSha256, compositionSha256, runtimeFiles: runtime.entries.length, runtimeBytes: runtime.totalBytes, contentSources: content.sources.length, contentFiles: content.entries.length, contentBytes: content.totalBytes, build: manifest.build, core: manifest.core, status: delivery === 'embedded' ? 'embedded-qualified' : 'persistent-identity-verified', persistentVerification });
   const files = [transportFile('tiinex.bootstrap/manifest.json', manifestBytes, 'tooling-bootstrap-manifest', 'portable-tooling-bootstrap-control')];
-  if (delivery === 'embedded') for (const entry of runtime.entries) files.push(transportFile(`tiinex.bootstrap/runtime/${entry.path}`, entry.data, 'tooling-bootstrap-runtime', 'portable-tooling-bootstrap-runtime'));
-  return Object.freeze({ manifest, summary, files: Object.freeze(files), runtimeIdentity });
+  if (delivery === 'embedded') {
+    for (const entry of runtime.entries) files.push(transportFile(`tiinex.bootstrap/runtime/${entry.path}`, entry.data, 'tooling-bootstrap-runtime', 'portable-tooling-bootstrap-runtime'));
+    for (const entry of content.entries) files.push(transportFile(`tiinex.bootstrap/${entry.transportPath}`, entry.data, 'tooling-bootstrap-content', 'portable-tooling-bootstrap-content'));
+  }
+  return Object.freeze({ manifest, summary, files: Object.freeze(files), runtimeIdentity, contentIdentity: Object.freeze({ representationSha256: content.representationSha256, sources: content.sources }) });
 }
 
 export async function buildToolingBootstrapRuntimeIdentity(input = {}) {
@@ -44,6 +51,50 @@ export async function buildToolingBootstrapRuntimeIdentity(input = {}) {
   return runtimeIdentityFromEnumeration(runtime);
 }
 
+
+async function enumerateBootstrapContent(input = {}) {
+  const selection = await resolveSelectedTiinexContentSources(input);
+  const sources = [...(selection.sources || [])];
+  const usedKeys = new Set();
+  const sourceRecords = [];
+  const entries = [];
+  let surfaceCount = 0;
+  for (const source of sources) {
+    const key = uniqueSourceKey(source.source.id, usedKeys);
+    surfaceCount += source.surfaces.length;
+    sourceRecords.push(Object.freeze({
+      id: source.source.id,
+      key,
+      kind: source.source.kind,
+      package: source.source.package,
+      capabilities: Object.freeze({ ...(source.source.capabilities || {}) }),
+      representationSha256: source.representationSha256,
+      surfaces: Object.freeze(source.surfaces.map((surface) => Object.freeze({ name: surface.name, path: surface.path })))
+    }));
+    for (const entry of source.entries) entries.push(Object.freeze({
+      ...entry,
+      transportPath: `content/${key}/${entry.sourcePath}`
+    }));
+  }
+  entries.sort((a, b) => a.transportPath.localeCompare(b.transportPath));
+  const representation = entries.map(({ transportPath, sourceId, surface, surfaceRoot, sourcePath, bytes, sha256 }) => ({ path: transportPath, sourceId, surface, surfaceRoot, sourcePath, bytes, sha256 }));
+  return Object.freeze({
+    sources: Object.freeze(sourceRecords),
+    entries: Object.freeze(entries),
+    surfaceCount,
+    totalBytes: entries.reduce((sum, entry) => sum + entry.bytes, 0),
+    representationSha256: sha256Text(stableJson(representation))
+  });
+}
+function uniqueSourceKey(sourceId, used) {
+  const base = String(sourceId || 'source').toLowerCase().replace(/^@/, '').replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'source';
+  if (!used.has(base)) { used.add(base); return base; }
+  let index = 2;
+  while (used.has(`${base}-${index}`)) index += 1;
+  const key = `${base}-${index}`;
+  used.add(key);
+  return key;
+}
 
 function runtimeIdentityFromEnumeration(runtime = {}) {
   const runtimeEntries = runtime.entries || [];
@@ -83,9 +134,13 @@ function verifyExpectedPersistentBootstrap(expected, manifest, manifestSha256) {
   if (expectedFiles && expectedFiles !== manifest.runtime.files) throw new Error('portable.tooling-bootstrap.persistent-verification.file-count-mismatch');
   const expectedBytes = Number(candidate.runtime?.bytes ?? candidate.runtimeBytes ?? expected.runtimeBytes ?? 0);
   if (expectedBytes && expectedBytes !== manifest.runtime.bytes) throw new Error('portable.tooling-bootstrap.persistent-verification.byte-count-mismatch');
+  const expectedContentRepresentationSha256 = String(candidate.content?.representationSha256 || expected.contentRepresentationSha256 || '');
+  if (expectedContentRepresentationSha256 && expectedContentRepresentationSha256 !== manifest.content.representationSha256) throw new Error('portable.tooling-bootstrap.persistent-verification.content-representation-mismatch');
+  const expectedCompositionSha256 = String(candidate.composition?.sha256 || expected.compositionSha256 || '');
+  if (expectedCompositionSha256 && expectedCompositionSha256 !== manifest.composition.sha256) throw new Error('portable.tooling-bootstrap.persistent-verification.composition-mismatch');
   const expectedManifestSha256 = String(expected.manifestSha256 || '');
   if (expectedManifestSha256 && expected.delivery === 'persistent' && expectedManifestSha256 !== manifestSha256) throw new Error('portable.tooling-bootstrap.persistent-verification.manifest-mismatch');
-  return Object.freeze({ state: 'verified', basis: 'caller-supplied-exact-runtime-identity', representationSha256: manifest.runtime.representationSha256, runtimeFiles: manifest.runtime.files, runtimeBytes: manifest.runtime.bytes, manifestSha256 });
+  return Object.freeze({ state: 'verified', basis: 'caller-supplied-exact-runtime-and-content-identity', representationSha256: manifest.runtime.representationSha256, contentRepresentationSha256: manifest.content.representationSha256, compositionSha256: manifest.composition.sha256, runtimeFiles: manifest.runtime.files, runtimeBytes: manifest.runtime.bytes, contentFiles: manifest.content.files, contentBytes: manifest.content.bytes, manifestSha256 });
 }
 
 async function enumerateRuntimeDependencyGraph(runtimeRoot, options = {}) {
@@ -112,15 +167,8 @@ async function enumerateRuntimeDependencyGraph(runtimeRoot, options = {}) {
     }
   }
   for (const explicit of ['package.json', 'src/tooling/portable/bootstrap/tiinex.llm.bootstrap.md', 'src/tooling/portable/bootstrap/tiinex.llm.bootstrap.pointer.json']) if (!files.has(explicit)) files.set(explicit, new Uint8Array(await readFile(path.resolve(runtimeRoot, explicit))));
-  const canonicalRoot = path.resolve(runtimeRoot, 'src/tooling/portable/schema/bootstrap');
-  for (const relative of await enumerateFilesUnder(canonicalRoot, runtimeRoot)) if (!files.has(relative)) files.set(relative, new Uint8Array(await readFile(path.resolve(runtimeRoot, relative))));
-  // Exact authored native Transition assets accompany the generated browser-safe projection.
-  // They remain Core-owned source artifacts and may be audited independently by recipients.
-  const nativeHandoffRoot = path.resolve(runtimeRoot, 'src/schemas/coordination/handoff');
-  for (const relative of await enumerateFilesUnder(nativeHandoffRoot, runtimeRoot)) if (!files.has(relative)) files.set(relative, new Uint8Array(await readFile(path.resolve(runtimeRoot, relative))));
-  // Exact authored native Entry assets accompany the generated browser-safe projection.
-  const nativeEntryRoot = path.resolve(runtimeRoot, 'src/schemas/entry/.entries');
-  for (const relative of await enumerateFilesUnder(nativeEntryRoot, runtimeRoot)) if (!files.has(relative)) files.set(relative, new Uint8Array(await readFile(path.resolve(runtimeRoot, relative))));
+  // First-party semantic content is supplied through registered content sources.
+  // Runtime enumeration follows executable imports only and never sweeps schema/content directories by location.
   const entries = [...files.entries()].map(([entryPath, data]) => Object.freeze({ path: entryPath, data, bytes: data.byteLength, sha256: sha256Hex(data) })).sort((a, b) => a.path.localeCompare(b.path));
   const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
   const representationSha256 = sha256Text(stableJson(entries.map(({ path: entryPath, bytes, sha256 }) => ({ path: `runtime/${entryPath}`, bytes, sha256 }))));

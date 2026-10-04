@@ -18,7 +18,6 @@ async function createCoreRuntimeFixture(policyText, { version = '9.9.9', release
     'src/tooling/portable/bootstrap/tiinex.llm.bootstrap.md': '# fixture bootstrap\n',
     'src/tooling/portable/bootstrap/tiinex.llm.bootstrap.pointer.json': '{"schema":"fixture"}\n',
     'src/tooling/portable/schema/bootstrap/fixture.schema.md': '# fixture schema\n',
-    'src/schemas/entry/.entries/fixture.trace.md': '# fixture entry\n',
     'src/schemas/coordination/handoff/fixture-native.trace.md': '# fixture Core-native Transition data\n'
   };
   for (const [relative, content] of Object.entries(files)) {

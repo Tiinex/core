@@ -2,22 +2,22 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { schemaRegistry } from '../../../../schemas/registry.js';
+import { schemaPackManifest, schemaRegistry } from '../../../../schemas/registry.js';
 
 const RUNTIME_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const BOOTSTRAP_MANIFEST = path.resolve(RUNTIME_ROOT, '..', 'manifest.json');
 const CORE_PACKAGE = path.join(RUNTIME_ROOT, 'package.json');
-const SCHEMA_PACK_MANIFEST = path.join(RUNTIME_ROOT, 'src', 'tooling', 'portable', 'schema', 'bootstrap', 'schema-pack', 'manifest.json');
 const COMPANION_FACETS = Object.freeze(['validate', 'present', 'read', 'capabilities', 'viewActions', 'transitions', 'i18n', 'findings']);
 
 export async function runVersionCli(parsed = {}) {
-  const [corePackage, schemaPack, bootstrapManifestRecord] = await Promise.all([
+  const [corePackage, bootstrapManifestRecord] = await Promise.all([
     readJson(CORE_PACKAGE),
-    readJson(SCHEMA_PACK_MANIFEST),
     readOptionalJsonWithBytes(BOOTSTRAP_MANIFEST)
   ]);
+  const schemaPack = schemaPackManifest();
   const bootstrapManifest = bootstrapManifestRecord?.value || null;
-  const bundled = ['tiinex.portable.tooling-bootstrap.manifest.v1', 'tiinex.portable.tooling-bootstrap.manifest.v2'].includes(String(bootstrapManifest?.schema || ''));
+  const bundled = ['tiinex.portable.tooling-bootstrap.manifest.v1', 'tiinex.portable.tooling-bootstrap.manifest.v2', 'tiinex.portable.tooling-bootstrap.manifest.v3'].includes(String(bootstrapManifest?.schema || ''));
+  const contentBundled = String(bootstrapManifest?.schema || '') === 'tiinex.portable.tooling-bootstrap.manifest.v3';
   const schemas = Object.freeze((schemaPack?.schemas || []).map((entry) => schemaDependency(entry)));
   const specializedCount = schemas.filter((item) => item.companion.mode === 'specialized').length;
   const genericCount = schemas.length - specializedCount;
@@ -35,10 +35,15 @@ export async function runVersionCli(parsed = {}) {
     }),
     core: Object.freeze({ name: String(corePackage?.name || ''), version: String(corePackage?.version || '') }),
     composition: Object.freeze({
-      state: bundled ? 'exact-manifest-runtime-representation' : 'unbundled-source-runtime',
+      state: bundled ? (contentBundled ? 'exact-manifest-runtime-and-content-representations' : 'exact-manifest-runtime-representation') : 'unbundled-source-runtime',
       sha256: compositionSha256,
       runtimeFiles: bundled ? Number(bootstrapManifest?.runtime?.files || 0) : 0,
       runtimeBytes: bundled ? Number(bootstrapManifest?.runtime?.bytes || 0) : 0,
+      runtimeSha256: bundled ? String(bootstrapManifest?.runtime?.representationSha256 || '') : '',
+      contentSources: contentBundled ? Number(bootstrapManifest?.content?.sources || 0) : 0,
+      contentFiles: contentBundled ? Number(bootstrapManifest?.content?.files || 0) : 0,
+      contentBytes: contentBundled ? Number(bootstrapManifest?.content?.bytes || 0) : 0,
+      contentSha256: contentBundled ? String(bootstrapManifest?.content?.representationSha256 || '') : '',
       timestampIndependent: true
     }),
     schemaPacks: Object.freeze([Object.freeze({
@@ -72,11 +77,12 @@ export function formatVersionHuman(result = {}, { tree = false } = {}) {
     `Core: ${result.core?.name || 'unknown'} ${result.core?.version || 'unknown'}`,
     `Composition SHA-256: ${result.composition?.sha256 || 'not available for unbundled source runtime'}`,
     `Runtime: ${result.composition?.runtimeFiles || 0} files / ${result.composition?.runtimeBytes || 0} bytes`,
+    `Content: ${result.composition?.contentSources || 0} sources / ${result.composition?.contentFiles || 0} files / ${result.composition?.contentBytes || 0} bytes`,
     `Schema Pack: ${source.repository || source.provider || 'unknown'}${source.commit ? `@${source.commit}` : ''} (${pack.count || 0} schemas)`,
     `Companions: ${result.companions?.specialized || 0} specialized / ${result.companions?.generic || 0} generic`,
     '',
     'Comparison boundary:',
-    '- Equal Composition SHA-256 means the manifest-declared runtime composition is byte-identical; broad runtime/schema/companion re-reading is unnecessary unless other qualified context changed.',
+    '- Equal Composition SHA-256 means the manifest-declared runtime + bootstrap content composition is byte-identical; broad runtime/content re-reading is unnecessary unless other qualified context changed.',
     '- Built At, Core version, ZIP SHA, and arrival order do not by themselves establish semantic supersession.'
   ];
   if (tree) {

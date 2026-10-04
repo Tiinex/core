@@ -1,6 +1,5 @@
 import { parseArtifactMarkdown } from './artifact.parse.js';
-import { schemaBadgeClass, schemaKey } from '../schemas/tiinex.root.v1.classify.js';
-import { createRootFallbackModel } from '../schemas/tiinex.root.v1.fallback.js';
+import { runtimeRootFallbackModel, runtimeSchemaBadgeClass, runtimeSchemaKey } from '../schemas/root.runtime.js';
 import { inferRecordMaterialRole } from '../workspaces/workspace.materialRole.js';
 import { collectOriginReferencesFromMarkdown } from '../sources/origin.references.js';
 
@@ -12,7 +11,7 @@ export function createRecordFromMarkdown(markdown = '', meta = {}) {
   const parent = envelope.parent || {};
   const schemaId = current.schema?.id || '';
   const resolvedKind = schemaId || (parsed.hasContinuityContext ? 'tiinex.root.v1' : 'markdown');
-  const fallbackModel = createRootFallbackModel(parsed, meta.schemaResolution || { status: schemaId ? 'declared' : 'unknown', fallbackUsed: !schemaId }, meta.findings || []);
+  const fallbackModel = runtimeRootFallbackModel(parsed, meta.schemaResolution || { status: schemaId ? 'declared' : 'unknown', fallbackUsed: !schemaId }, meta.findings || []);
   const originReferences = collectOriginReferencesFromMarkdown(markdown || '');
   return {
     title,
@@ -20,8 +19,8 @@ export function createRecordFromMarkdown(markdown = '', meta = {}) {
     kind: resolvedKind,
     schemaId: schemaId || '',
     envelopeSchemaId: envelope.envelopeSchema?.id || '',
-    schemaKey: schemaKey(schemaId),
-    schemaBadgeClass: schemaBadgeClass(schemaId),
+    schemaKey: runtimeSchemaKey(schemaId),
+    schemaBadgeClass: runtimeSchemaBadgeClass(schemaId),
     status: parsed.hasIntegrity ? 'schema ok' : 'local',
     lifecycleStatus: current.status || meta.lifecycleStatus || '',
     currentCreatedAt: current.createdAt || '',

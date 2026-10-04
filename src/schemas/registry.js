@@ -1,40 +1,84 @@
-import { generatedNativeSchemaModules, nativeSchemaCatalog } from './generated.registry.js';
-import { rootSchemaModule } from './tiinex.root.v1.schema.js';
-import { topicSchemaModule } from './core/topic/tiinex.topic.v1.schema.js';
-import { preservationSchemaModule } from './core/preservation/tiinex.preservation.v1.schema.js';
-import { evidenceSchemaModule } from './core/evidence/tiinex.evidence.v1.schema.js';
-import { taskSchemaModule } from './core/task/tiinex.task.v1.schema.js';
-import { interpretationSchemaModule } from './core/interpretation/tiinex.interpretation.v1.schema.js';
-import { relationSchemaModule } from './core/relation/tiinex.relation.v1.schema.js';
-import { workspaceRepresentationSchemaModule } from './core/relation/workspace/representation/tiinex.workspace.representation.v1.schema.js';
-import { moduleSchemaModule } from './schema/module/tiinex.schema.module.v1.schema.js';
-import { surfaceSchemaModule } from './presentation/surface/tiinex.presentation.surface.v1.schema.js';
-import { workspaceSchemaModule } from './workspace/tiinex.workspace.v1.schema.js';
-import { handoffSchemaModule } from './coordination/handoff/tiinex.handoff.v1.schema.js';
-import { partyRoleSchemaModule } from './party/role/tiinex.party.role.v1.schema.js';
-import { partyOrganizationSchemaModule } from './party/organization/tiinex.party.organization.v1.schema.js';
-import { projectSchemaModule } from './coordination/project/tiinex.project.v1.schema.js';
-import { reductionSchemaModule } from './reduction/tiinex.reduction.v1.schema.js';
-import { redactionSchemaModule } from './reduction/redaction/tiinex.redaction.v1.schema.js';
-import { decisionSchemaModule } from './core/decision/tiinex.decision.v1.schema.js';
-import { feedbackSchemaModule } from './core/feedback/tiinex.feedback.v1.schema.js';
-import { signalSchemaModule } from './core/signal/tiinex.signal.v1.schema.js';
-import { discoverySchemaModule } from './discovery/tiinex.discovery.v1.schema.js';
-import { discoveryFindingSchemaModule } from './discovery/finding/tiinex.discovery.finding.v1.schema.js';
-import { validationFindingSchemaModule } from './validation/finding/tiinex.validation.finding.v1.schema.js';
-import { validationMethodSchemaModule } from './validation/method/tiinex.validation.method.v1.schema.js';
-import { validationReportSchemaModule } from './validation/report/tiinex.validation.report.v1.schema.js';
+const EMPTY_MATERIAL = Object.freeze({
+  markdownById: Object.freeze({}),
+  companionTextByPath: Object.freeze({}),
+  manifest: Object.freeze({ schema: 'tiinex.schema.pack.v1', source: Object.freeze({}), count: 0, schemas: Object.freeze([]) })
+});
 
-const specializedModules = [rootSchemaModule, workspaceSchemaModule, topicSchemaModule, taskSchemaModule, interpretationSchemaModule, relationSchemaModule, workspaceRepresentationSchemaModule, preservationSchemaModule, evidenceSchemaModule, signalSchemaModule, feedbackSchemaModule, decisionSchemaModule, discoverySchemaModule, discoveryFindingSchemaModule, validationFindingSchemaModule, validationMethodSchemaModule, validationReportSchemaModule, handoffSchemaModule, partyRoleSchemaModule, partyOrganizationSchemaModule, projectSchemaModule, reductionSchemaModule, redactionSchemaModule, moduleSchemaModule, surfaceSchemaModule];
-const specializedIds = new Set(specializedModules.map((module) => module.id));
-const modules = [...specializedModules, ...generatedNativeSchemaModules.filter((module) => !specializedIds.has(module.id))];
-const byId = new Map(modules.map((module) => [module.id, module]));
-const byChecksum = new Map(modules.map((module) => [module.binding.checksum.value, module]));
+const state = {
+  modules: Object.freeze([]),
+  byId: new Map(),
+  byChecksum: new Map(),
+  fallback: null,
+  nativeCatalog: null,
+  material: EMPTY_MATERIAL,
+  generation: 0,
+  source: 'uninitialized-content-source'
+};
 
-export const schemaRegistry = Object.freeze({ modules, byId, byChecksum, fallback: rootSchemaModule, nativeCatalog: nativeSchemaCatalog });
+export const schemaRegistry = Object.freeze({
+  get modules() { return state.modules; },
+  get byId() { return state.byId; },
+  get byChecksum() { return state.byChecksum; },
+  get fallback() { return state.fallback; },
+  get nativeCatalog() { return state.nativeCatalog; },
+  get material() { return state.material; },
+  get generation() { return state.generation; },
+  get source() { return state.source; }
+});
+
+export function replaceSchemaRegistry({ modules = [], fallbackSchemaId = 'tiinex.root.v1', nativeCatalog: catalog = null, material = null, source = 'external-composition' } = {}) {
+  const normalized = uniqueSchemaModules(modules);
+  const byId = new Map(normalized.map((module) => [String(module.id || ''), module]));
+  const byChecksum = new Map();
+  for (const module of normalized) {
+    const checksum = String(module?.binding?.checksum?.value || module?.binding?.checksum || '').trim();
+    if (checksum && !byChecksum.has(checksum)) byChecksum.set(checksum, module);
+  }
+  state.modules = Object.freeze(normalized);
+  state.byId = byId;
+  state.byChecksum = byChecksum;
+  state.fallback = byId.get(String(fallbackSchemaId || '').trim()) || null;
+  state.nativeCatalog = catalog || null;
+  state.material = material || EMPTY_MATERIAL;
+  state.generation += 1;
+  state.source = String(source || 'external-composition');
+  return schemaRegistrySnapshot();
+}
+
+export function installSchemaModules(modules = [], { replaceExisting = true, fallbackSchemaId = 'tiinex.root.v1', nativeCatalog: catalog = undefined, material = undefined, source = 'external-composition' } = {}) {
+  const merged = new Map(state.modules.map((module) => [String(module.id || ''), module]));
+  for (const module of uniqueSchemaModules(modules)) {
+    const id = String(module.id || '');
+    if (!replaceExisting && merged.has(id)) continue;
+    merged.set(id, module);
+  }
+  return replaceSchemaRegistry({ modules: [...merged.values()], fallbackSchemaId, nativeCatalog: typeof catalog === 'undefined' ? state.nativeCatalog : catalog, material: typeof material === 'undefined' ? state.material : material, source });
+}
+
+export function clearSchemaRegistry({ source = 'uninitialized-content-source' } = {}) {
+  return replaceSchemaRegistry({ modules: [], nativeCatalog: null, material: EMPTY_MATERIAL, source });
+}
+
+export function schemaRegistrySnapshot() {
+  return Object.freeze({ modules: state.modules, byId: state.byId, byChecksum: state.byChecksum, fallback: state.fallback, nativeCatalog: state.nativeCatalog, material: state.material, generation: state.generation, source: state.source });
+}
+
+export function schemaMarkdown(schemaId = '') { return String(state.material?.markdownById?.[String(schemaId || '')] || ''); }
+export function schemaPackManifest() { return state.material?.manifest || EMPTY_MATERIAL.manifest; }
+export function schemaCompanionTextEntries() { return Object.freeze(Object.entries(state.material?.companionTextByPath || {}).map(([path, content]) => Object.freeze([path, String(content || '')]))); }
 
 export function resolveSchemaModule({ schemaId, checksum } = {}) {
-  if (checksum && byChecksum.has(checksum)) return byChecksum.get(checksum);
-  if (schemaId && byId.has(schemaId)) return byId.get(schemaId);
-  return rootSchemaModule;
+  if (checksum && state.byChecksum.has(checksum)) return state.byChecksum.get(checksum);
+  if (schemaId && state.byId.has(schemaId)) return state.byId.get(schemaId);
+  return state.fallback;
+}
+
+function uniqueSchemaModules(modules = []) {
+  const byId = new Map();
+  for (const module of modules || []) {
+    const id = String(module?.id || '').trim();
+    if (!id || !module || typeof module !== 'object') continue;
+    byId.set(id, module);
+  }
+  return [...byId.values()];
 }

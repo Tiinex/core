@@ -1,9 +1,8 @@
-import { createRootFallbackModel } from '../schemas/tiinex.root.v1.fallback.js';
-import { schemaBadgeClass, schemaKey } from '../schemas/tiinex.root.v1.classify.js';
+import { runtimeRootFallbackModel, runtimeSchemaBadgeClass, runtimeSchemaKey } from '../schemas/root.runtime.js';
 
 export function normalizeArtifact(parsedArtifact, schemaResolution, validation = []) {
   const currentSchemaId = parsedArtifact.envelope.current.schema.id || 'unknown';
-  const fallbackModel = createRootFallbackModel(parsedArtifact, schemaResolution, validation);
+  const fallbackModel = runtimeRootFallbackModel(parsedArtifact, schemaResolution, validation);
   return {
     title: parsedArtifact.title,
     schemaId: currentSchemaId,
@@ -17,8 +16,8 @@ export function normalizeArtifact(parsedArtifact, schemaResolution, validation =
     traceLabel: parsedArtifact.envelope.parent.traceLabel || '',
     origin: parsedArtifact.envelope.parent.origin || parsedArtifact.envelope.origin || '',
     boundary: parsedArtifact.envelope.parent.boundary || parsedArtifact.envelope.boundary || '',
-    schemaKey: schemaKey(currentSchemaId),
-    badgeClass: schemaBadgeClass(currentSchemaId),
+    schemaKey: runtimeSchemaKey(currentSchemaId),
+    badgeClass: runtimeSchemaBadgeClass(currentSchemaId),
     rootReadable: fallbackModel.rootReadable,
     rootDisclosure: fallbackModel.disclosure,
     fallbackModel,

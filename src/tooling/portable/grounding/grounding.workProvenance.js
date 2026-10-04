@@ -1,6 +1,7 @@
 import { posix } from 'node:path';
+import { resolveLineage } from '../../../lineage/lineage.resolve.js';
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
-import { relationValidate } from '../../../schemas/core/relation/tiinex.relation.v1.validate.js';
+import { validateWithRegisteredSchema } from '../../../schemas/runtime.validation.js';
 import { projectQualifiedWorkTargetContext } from './grounding.workContext.js';
 
 const FAMILY = 'work-provenance';
@@ -8,7 +9,9 @@ const MAX_EDGES = 12;
 
 export function projectWorkProvenance({ records = [], topology = {} } = {}) {
   const byPath = recordIndex(records);
-  const edges = records.filter(isCandidate).map((record) => relationEdge(record, byPath)).filter(Boolean).slice(0, MAX_EDGES);
+  const relationEdges = records.filter(isCandidate).map((record) => relationEdge(record, byPath)).filter(Boolean);
+  const parentWorkEdges = declaredParentWorkEdges(records, byPath);
+  const edges = [...relationEdges, ...parentWorkEdges].slice(0, MAX_EDGES);
   const frontierPaths = new Set((topology.currentFrontier || []).map((item) => String(item.path || '')).filter(Boolean));
   const relevantPaths = new Set([
     ...(topology.relevantPaths || []),
@@ -50,7 +53,63 @@ export function projectWorkProvenance({ records = [], topology = {} } = {}) {
     reverseDiscovery: reverseIndex(edges.filter((edge) => edge.state === 'qualified')),
     context: contextProjection(selected, selectionState),
     unresolved: Object.freeze(unresolved),
-    boundary: 'Declared qualified edges only; selected Parent lineage may establish relevance but never creates or redirects an edge; reverse discovery is the same edge.'
+    boundary: 'Work provenance uses explicit qualified work-provenance Relations when present and exact direct Parent ancestry when both endpoints are Project/Task work artifacts. Other Parent shapes are not promoted into project/work provenance; reverse discovery is the same qualified edge.'
+  });
+}
+
+function declaredParentWorkEdges(records = [], byPath = new Map()) {
+  const lineage = resolveLineage(records, { depth: 'grounding-work-provenance' });
+  const nodes = new Map((lineage.nodes || []).map((node) => [String(node.id || ''), node]));
+  const allowedSchemas = new Set(['tiinex.project.v1', 'tiinex.task.v1']);
+  const acceptedStatuses = new Set(['resolved', 'verified']);
+  const out = [];
+  for (const edge of lineage.edges || []) {
+    if (String(edge.kind || '') !== 'parent' || !acceptedStatuses.has(String(edge.status || ''))) continue;
+    const parentNode = nodes.get(String(edge.from || '')) || null;
+    const childNode = nodes.get(String(edge.to || '')) || null;
+    if (!parentNode || !childNode) continue;
+    if (!allowedSchemas.has(String(parentNode.schemaId || '')) || !allowedSchemas.has(String(childNode.schemaId || ''))) continue;
+    const parentRecord = parentNode.record || {};
+    const childRecord = childNode.record || {};
+    if (!qualifiedRecord(parentRecord) || !qualifiedRecord(childRecord)) continue;
+    const source = workEndpoint(childRecord);
+    const target = workEndpoint(parentRecord);
+    const context = projectQualifiedWorkTargetContext(target, byPath);
+    out.push(Object.freeze({
+      state: 'qualified',
+      relationFamily: 'declared-parent-work-ancestry',
+      relationType: 'direct Project/Task Parent ancestry',
+      direction: `${String(parentNode.schemaId || '')} -> ${String(childNode.schemaId || '')}`,
+      scope: 'direct semantic work ancestry',
+      source,
+      target,
+      context,
+      basis: Object.freeze({
+        kind: 'exact-qualified-project-task-parent-ancestry',
+        parentResolutionStatus: String(edge.status || ''),
+        parentResolutionMethod: String(edge.method || ''),
+        parentTarget: String(edge.target || ''),
+        boundary: 'This projects the already-resolved direct Parent edge only because both exact qualified endpoints are Project/Task work artifacts. It does not reinterpret arbitrary Parent ancestry as project membership.'
+      })
+    }));
+  }
+  return Object.freeze(out);
+}
+
+function qualifiedRecord(record = {}) {
+  return Boolean(record && record.hasContinuityContext && record.hasIntegrity);
+}
+
+function workEndpoint(record = {}) {
+  const path = String(record.path || '');
+  return Object.freeze({
+    state: 'qualified-carried',
+    label: String(record.title || ''),
+    reference: path,
+    resolvedPath: path,
+    title: String(record.title || ''),
+    schemaId: String(record.schemaId || ''),
+    summary: compact(record.summary || '', 180)
   });
 }
 
@@ -62,7 +121,7 @@ function relationEdge(record, byPath) {
   const markdown = String(record.markdown || '');
   let parsed;
   try { parsed = parseArtifactMarkdown(markdown); } catch { return null; }
-  const findings = relationValidate(parsed);
+  const findings = validateWithRegisteredSchema('tiinex.relation.v1', parsed, { unavailableCode: 'grounding.work-provenance.relation-validator-unavailable' });
   const declaration = section(markdown, 'Relation Declaration');
   const sourceRef = reference(section(markdown, 'Relation Source'), 'Source');
   const targetRef = reference(section(markdown, 'Relation Target'), 'Target');
@@ -97,7 +156,7 @@ function contextProjection(edges = [], state = 'unresolved') {
       organization: edge.context?.organization || unresolvedContext('organization-context-unresolved'),
       basis: edge.basis
     }))),
-    boundary: 'Project/organization context requires explicit qualified target context; names/paths/Parent/chat do not manufacture membership.'
+    boundary: 'Project/organization context requires explicit qualified target context. Exact Project/Task Parent ancestry may establish work ancestry, but names, paths, chat state and unrelated Parent shapes do not manufacture project or organization membership.'
   });
 }
 

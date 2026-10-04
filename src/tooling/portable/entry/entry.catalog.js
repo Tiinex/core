@@ -1,16 +1,15 @@
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { resolveLineage } from '../../../lineage/lineage.resolve.js';
-import { nativeSchemaMarkdown, nativeSchemaPackManifest } from '../../../schemas/generated/native.schema.pack.js';
+import { schemaMarkdown as nativeSchemaMarkdown, schemaPackManifest } from '../../../schemas/registry.js';
 import { compilePortableSchemaContractChain } from '../schema/contract.compile.js';
 import { parsePortableSchemaDocument } from '../schema/schema.contract.js';
 import { projectPortableContractInstance } from '../schema/contract.project.js';
-import { nativeEntryMarkdown } from './native.entry.generated.js';
+import { decodePortableContentText, portableContentSourceEntries } from '../content/contentSource.records.js';
 
 export const ENTRY_SCHEMA_ID = 'tiinex.entry.v1';
 export const PORTABLE_ENTRY_CATALOG_SCHEMA_ID = 'tiinex.portable.entry-catalog.v1';
 const ROOT_SCHEMA_ID = 'tiinex.root.v1';
 const ACCEPTED_VALIDATION_STATES = new Set(['valid', 'valid-with-preserved-unknowns']);
-const CORE_NATIVE_CARRIED_PATHS = new Set(nativeEntryMarkdown.map(([artifactPath]) => normalizePath(`src/schemas/${artifactPath}`)));
 const BASE_ENTRY_GROUPS = new Set([
   'Entry Identity', 'Purpose And Scope', 'Entry Context', 'Preparation', 'Entry Method',
   'Presentation And Interaction', 'Interpretation Limits', 'Portability Notes'
@@ -19,7 +18,7 @@ let cachedRootDeclarationGroups = null;
 
 export function projectPortableEntryCatalog(input = {}) {
   const findings = [];
-  const schemaIndex = buildEntrySchemaIndex(input.inspection, findings);
+  const schemaIndex = buildEntrySchemaIndex(input.inspection, findings, input.contentSources || input.sources || []);
   const schemaResolutions = new Map();
   const entrySchemaIds = new Set();
   for (const schemaId of schemaIndex.keys()) {
@@ -29,7 +28,7 @@ export function projectPortableEntryCatalog(input = {}) {
   if (!entrySchemaIds.has(ENTRY_SCHEMA_ID)) return blockedCatalog('entry-contract-unavailable', findings);
 
   const representations = [
-    ...(input.includeNative === false ? [] : nativeRepresentations()),
+    ...contentSourceRepresentations(input.contentSources || input.sources || [], entrySchemaIds),
     ...carriedRepresentations(input.inspection, entrySchemaIds)
   ];
   const projected = [];
@@ -57,7 +56,7 @@ export function projectPortableEntryCatalog(input = {}) {
 
   const leaves = currentLeafKeys(projected);
   const entries = projected
-    .filter((entry) => entry.readQualified && (entry.sourceKind === 'native' || leaves.has(entry.id)))
+    .filter((entry) => entry.readQualified && (entry.sourceKind === 'content-source' || leaves.has(entry.id)))
     .map((entry) => Object.freeze({ ...entry, currentLeaf: true }))
     .sort((a, b) => a.label.localeCompare(b.label) || a.sourceKind.localeCompare(b.sourceKind) || a.id.localeCompare(b.id));
   return Object.freeze({
@@ -73,8 +72,8 @@ export function projectPortableEntryCatalog(input = {}) {
 }
 
 function nativeEntryContractAuthority() {
-  const descriptor = (nativeSchemaPackManifest?.schemas || []).find((item) => String(item?.schemaId || '') === ENTRY_SCHEMA_ID) || {};
-  const source = nativeSchemaPackManifest?.source || {};
+  const descriptor = (schemaPackManifest()?.schemas || []).find((item) => String(item?.schemaId || '') === ENTRY_SCHEMA_ID) || {};
+  const source = schemaPackManifest()?.source || {};
   return Object.freeze({
     schemaId: ENTRY_SCHEMA_ID,
     repository: String(source.repository || ''),
@@ -96,7 +95,7 @@ function blockedCatalog(reasonCode, findings = []) {
   });
 }
 
-function buildEntrySchemaIndex(inspection = {}, findings = []) {
+function buildEntrySchemaIndex(inspection = {}, findings = [], contentSources = []) {
   const candidates = new Map();
   const add = (record) => {
     if (!record?.schemaId || !record.markdown) return;
@@ -104,7 +103,7 @@ function buildEntrySchemaIndex(inspection = {}, findings = []) {
     candidates.get(record.schemaId).push(Object.freeze(record));
   };
 
-  for (const descriptor of nativeSchemaPackManifest?.schemas || []) {
+  for (const descriptor of schemaPackManifest()?.schemas || []) {
     const schemaId = String(descriptor?.schemaId || '').trim();
     const markdown = nativeSchemaMarkdown(schemaId);
     if (!schemaId || !markdown) continue;
@@ -112,8 +111,26 @@ function buildEntrySchemaIndex(inspection = {}, findings = []) {
       schemaId,
       markdown,
       sourceKind: 'native-schema-pack',
-      source: nativeSchemaPackManifest?.source || {},
+      source: schemaPackManifest()?.source || {},
       path: String(descriptor?.sourcePath || '')
+    }));
+  }
+
+  for (const material of portableContentSourceEntries(contentSources, '.schemas')) {
+    const sourcePath = normalizePath(material.sourcePath || '');
+    if (!sourcePath || !/\.schema\.md$/i.test(sourcePath)) continue;
+    const markdown = decodePortableContentText(material);
+    if (!markdown) continue;
+    let parsed;
+    try { parsed = parsePortableSchemaDocument(markdown); } catch { continue; }
+    const schemaId = String(parsed?.schemaId || '').trim();
+    if (!schemaId) continue;
+    add(schemaRecord({
+      schemaId,
+      markdown,
+      sourceKind: 'content-schema',
+      source: { sourceId: material.sourceId, package: material.sourcePackage },
+      path: sourcePath
     }));
   }
 
@@ -225,22 +242,31 @@ function resolveEntrySchemaContract(schemaId, schemaIndex, cache = new Map()) {
   return resolved;
 }
 
-function nativeRepresentations() {
-  return nativeEntryMarkdown.map(([artifactPath, markdown], index) => {
+function contentSourceRepresentations(contentSources = [], entrySchemaIds = new Set()) {
+  const out = [];
+  for (const material of portableContentSourceEntries(contentSources, '.entries')) {
+    const artifactPath = normalizePath(material.sourcePath || '');
+    if (!eligibleEntryPath(artifactPath)) continue;
+    const markdown = decodePortableContentText(material);
+    if (!markdown) continue;
     let parsed;
-    try { parsed = parseArtifactMarkdown(markdown); } catch { parsed = null; }
-    return Object.freeze({
-      id: `native::${artifactPath}`,
-      sourceKind: 'native',
-      sourceMode: 'portable-core-native',
+    try { parsed = parseArtifactMarkdown(markdown); } catch { continue; }
+    const schemaId = String(parsed?.envelope?.current?.schema?.id || '').trim();
+    if (!entrySchemaIds.has(schemaId)) continue;
+    out.push(Object.freeze({
+      id: `${material.sourceId}::${artifactPath}`,
+      sourceKind: 'content-source',
+      sourceMode: 'portable-content-source',
       workspaceId: '',
       path: artifactPath,
       markdown,
-      schemaId: String(parsed?.envelope?.current?.schema?.id || '').trim(),
-      lineageRecord: null,
-      index
-    });
-  });
+      schemaId,
+      sourceId: material.sourceId,
+      sourcePackage: material.sourcePackage,
+      lineageRecord: null
+    }));
+  }
+  return out;
 }
 
 function carriedRepresentations(inspection = {}, entrySchemaIds = new Set()) {
@@ -251,7 +277,6 @@ function carriedRepresentations(inspection = {}, entrySchemaIds = new Set()) {
     for (const archiveEntry of workspace?.archive?.entries || []) {
       const artifactPath = normalizePath(archiveEntry?.path || '');
       if (!eligibleEntryPath(artifactPath) || !archiveEntry?.data) continue;
-      if (workspaceId === 'core' && CORE_NATIVE_CARRIED_PATHS.has(artifactPath)) continue;
       let markdown = '';
       try { markdown = new TextDecoder('utf-8', { fatal: true }).decode(archiveEntry.data); } catch { continue; }
       let parsed;
@@ -312,6 +337,8 @@ function projectEntry(material, projection, validation, schemaResolution = {}) {
     schemaLineage: Object.freeze([...(schemaResolution.schemaLineage || [])]),
     sourceKind: material.sourceKind,
     sourceMode: material.sourceMode,
+    sourceId: String(material.sourceId || ''),
+    sourcePackage: Object.freeze({ ...(material.sourcePackage || {}) }),
     workspaceId: material.workspaceId,
     artifactPath: material.path,
     representationQualification: validation,
@@ -396,14 +423,13 @@ function rootDeclarationGroupNames() {
 }
 
 function currentLeafKeys(entries) {
-  const native = new Set(entries.filter((entry) => entry.sourceKind === 'native').map((entry) => entry.id));
   const byWorkspace = new Map();
   for (const entry of entries) {
     if (entry.sourceKind !== 'carried' || !entry.lineageRecord) continue;
     if (!byWorkspace.has(entry.workspaceId)) byWorkspace.set(entry.workspaceId, []);
     byWorkspace.get(entry.workspaceId).push(entry);
   }
-  const leaves = new Set(native);
+  const leaves = new Set();
   for (const group of byWorkspace.values()) {
     const records = group.map((entry) => entry.lineageRecord);
     const lineage = resolveLineage(records, { depth: 'loaded-workspace' });

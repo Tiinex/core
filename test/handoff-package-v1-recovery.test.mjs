@@ -29,6 +29,25 @@ function unresolvedLineage() {
   };
 }
 
+test('cold-start continuity accepts an exact version-stable Parent recovery boundary without loading historical ancestor bytes', () => {
+  const lineage = {
+    nodes: [{
+      id: 'route', path: 'work/.topics/handoffs/001.trace.md', trace: TARGET, hasContinuityContext: true, hasIntegrity: true,
+      record: { integrity: { entries: [
+        { method: 'sha256-base64url-c14n-v2', towards: TARGET, value: 'parent-integrity' },
+        { method: 'sha256-base64url-c14n-v2', towards: 'self', value: 'self-integrity' }
+      ] } }
+    }],
+    edges: [{ kind: 'parent', from: '', to: 'route', status: 'missing', target: TARGET }],
+    findings: [{ code: 'lineage.parent.exactTargetNotLoaded', severity: 'warning', nodeId: 'route', target: TARGET, message: 'not loaded' }]
+  };
+  const result = projectColdStartContinuity({ mode: 'routed-handoff-package', lineage, routeRecordIds: new Set(['route']), authority: continuityAuthority() });
+  assert.equal(result.state, 'qualified');
+  assert.equal(result.recovery.state, 'not-required');
+  assert.equal(result.proof.recoveryBoundaryRoots.length, 1);
+  assert.equal(result.blockingIssues.length, 0);
+});
+
 test('Package V1 grounding exposes exact manual-input recovery when no repository reader is available', () => {
   const result = projectColdStartContinuity({
     mode: 'routed-handoff-package',
@@ -85,7 +104,7 @@ test('read-only recovery receipt can be fed back to Tooling and remains exact pi
         files: [{
           path: request.path,
           content: '# Exact recovered process\n',
-          source: { repository: request.repository, ref: request.ref, commit: request.ref, path: request.path, authority: 'remote-repository-unverified' }
+          source: { repository: request.repository, ref: request.ref, commit: request.ref, path: request.path, permalink: TARGET, authority: 'remote-repository-unverified' }
         }]
       }
     }]
@@ -99,6 +118,7 @@ test('read-only recovery receipt can be fed back to Tooling and remains exact pi
   assert.equal(file.source.commit, COMMIT);
   assert.equal(file.source.receiptQualification, 'accepted-host-repository-read');
   assert.equal(file.source.provenanceQualification, 'accepted-host-repository-pinned');
+  assert.equal(file.source.permalink, TARGET);
 });
 
 test('LLM entrypoint never advertises remote write as a grounding recovery capability', () => {

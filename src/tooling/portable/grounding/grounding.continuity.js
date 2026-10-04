@@ -1,4 +1,7 @@
 import { relevantLineageIssues } from './grounding.readiness.support.js';
+import { parentIntegrityExpectationsForTarget, selfIntegrityValuesForNode } from '../../../lineage/lineage.integrity.js';
+import { githubFileIdentityFromUrl } from '../../../lineage/lineage.targetKeys.js';
+import { declaredParentBindingTargetValuesForNode } from '../../../lineage/lineage.parentBinding.js';
 
 const MAX_ITEMS = 12;
 
@@ -14,13 +17,16 @@ export function projectColdStartContinuity({ mode = '', lineage = {}, routeRecor
   const ancestorIds = ancestorLineageCone(lineage, routeRecordIds);
   const nodeById = new Map((lineage.nodes || []).map((node) => [node.id, node]));
   const parentEdges = (lineage.edges || []).filter((edge) => edge.kind === 'parent' && ancestorIds.has(edge.to));
-  const issues = relevantLineageIssues(lineage, ancestorIds);
   const rootNodes = [...ancestorIds]
     .map((id) => nodeById.get(id))
     .filter(Boolean)
     .filter((node) => !hasResolvedParent(parentEdges, node.id));
-  const qualifiedRoots = rootNodes.filter(isQualifiedSemanticRoot);
-  const apparentRoots = rootNodes.filter((node) => !isQualifiedSemanticRoot(node));
+  const recoveryBoundaryRoots = rootNodes.filter(isQualifiedRecoverableParentBoundary);
+  const recoveryBoundaryIds = new Set(recoveryBoundaryRoots.map((node) => node.id));
+  const issues = relevantLineageIssues(lineage, ancestorIds)
+    .filter((issue) => !isRecoverableBoundaryIssue(issue, recoveryBoundaryIds));
+  const qualifiedRoots = rootNodes.filter((node) => isQualifiedSemanticRoot(node) || recoveryBoundaryIds.has(node.id));
+  const apparentRoots = rootNodes.filter((node) => !isQualifiedSemanticRoot(node) && !recoveryBoundaryIds.has(node.id));
   const rootIssues = apparentRoots.map((node) => Object.freeze({
     code: 'continuity.root.unqualified',
     severity: 'warning',
@@ -41,12 +47,13 @@ export function projectColdStartContinuity({ mode = '', lineage = {}, routeRecor
     proof: Object.freeze({
       schema: 'tiinex.portable.cold-start-continuity-proof.v1',
       state: qualified ? 'qualified' : 'unproven',
-      basis: 'declared-parent-only + loaded edge qualification + qualified semantic root',
+      basis: 'declared-parent-only + loaded edge qualification + qualified semantic root or exact version-stable Parent recovery boundary',
       routeRecordIds: Object.freeze([...routeRecordIds].slice(0, MAX_ITEMS)),
       ancestorRecordsChecked: ancestorIds.size,
       parentEdgesChecked: parentEdges.length,
       roots: Object.freeze(rootNodes.slice(0, MAX_ITEMS).map(rootSummary)),
       qualifiedRoots: Object.freeze(qualifiedRoots.slice(0, MAX_ITEMS).map(rootSummary)),
+      recoveryBoundaryRoots: Object.freeze(recoveryBoundaryRoots.slice(0, MAX_ITEMS).map(rootSummary)),
       bodiesProjected: 0,
       compactReceiptOnly: true,
       filenameDimensionsUsed: false,
@@ -125,6 +132,28 @@ function hasResolvedParent(edges = [], nodeId = '') {
 
 function isQualifiedSemanticRoot(node = {}) {
   return Boolean(node && !String(node.trace || '').trim() && node.hasContinuityContext && node.hasIntegrity);
+}
+
+function isQualifiedRecoverableParentBoundary(node = {}) {
+  const trace = String(node?.trace || '').trim();
+  if (!trace || !node?.hasContinuityContext || !selfIntegrityValuesForNode(node).length) return false;
+  if (!parentIntegrityExpectationsForTarget(node, trace).length) return false;
+  const bindings = [
+    Object.freeze({ raw: trace }),
+    ...declaredParentBindingTargetValuesForNode(node, trace)
+  ];
+  return bindings.some((binding) => {
+    const identity = githubFileIdentityFromUrl(binding?.raw || '');
+    return Boolean(identity.repo && identity.path && /^[0-9a-f]{40}$/i.test(String(identity.ref || '')));
+  });
+}
+
+function isRecoverableBoundaryIssue(issue = {}, boundaryIds = new Set()) {
+  if (!boundaryIds.has(String(issue?.nodeId || ''))) return false;
+  return [
+    'lineage.parent.exactTargetNotLoaded',
+    'lineage.parent.missing'
+  ].includes(String(issue?.code || ''));
 }
 
 function rootSummary(node = {}) {
@@ -271,7 +300,7 @@ function emptyProof() {
 }
 
 function continuityBoundary() {
-  return 'Cold-start continuity is proven only through declared Parent topology and qualified loaded evidence. Apparent roots with an unavailable declared Parent are not closure; full ancestor bodies are not projected by this proof; fetched/recovered representations remain candidate material until independently qualified.';
+  return 'Cold-start continuity is proven through declared Parent topology and qualified loaded evidence. An exact version-stable Parent recovery locator may form a compact boundary only when the loaded child is self-sealed and carries a Parent-integrity expectation for that same Parent. Mutable or integrity-free missing Parents remain blockers. Full ancestor bodies are not projected by this proof; fetched/recovered representations remain candidate material until independently qualified.';
 }
 
 function dedupe(items = []) {

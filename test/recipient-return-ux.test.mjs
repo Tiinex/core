@@ -1,16 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runPrepareReturnCli } from '../src/tooling/portable/adapters/cli/cli.prepare-return.js';
 import { runQualifyReturnCli } from '../src/tooling/portable/adapters/cli/cli.qualify-return.js';
 import { runCommonAuthorCli } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
+import { initializePortableNodeRuntime } from '../src/tooling/portable/adapters/node/portableRuntime.initialize.js';
+import { portableCanonicalBootstrapRuntime } from '../src/tooling/portable/schema/bootstrap/canonical.pack.js';
+import { fileURLToPath } from 'node:url';
 
 const anchorRef='https://github.com/Tiinex/business/blob/a66906eef7f0033eb12893f92910336f82d01afa/.topics/roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md';
 const sigmaRef='https://github.com/Tiinex/business/blob/a66906eef7f0033eb12893f92910336f82d01afa/.topics/roles/001-4-1-sigma-canonical-holder-cutover-role.trace.md';
-const exactRuntime=Object.freeze({commandInvocation:Object.freeze({executable:'/usr/bin/node',entrypoint:'/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs'})});
+const nativeRoot=path.resolve(String(process.env.TIINEX_TEST_NATIVE_ROOT || path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..','..','native')));
+const nativeAvailable=existsSync(path.join(nativeRoot,'package.json')) && existsSync(path.join(nativeRoot,'.topics','.schemas','coordination','handoff','tiinex.handoff.v1.schema.js'));
+const initializedRuntime=nativeAvailable
+  ? await initializePortableNodeRuntime({ runtimeRoot:path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'), contentRoots:[nativeRoot], discoverBundled:false, discoverInstalled:false })
+  : Object.freeze({status:'native-test-source-unavailable',contentSources:Object.freeze([])});
+if (nativeAvailable && (initializedRuntime.status === 'blocked' || initializedRuntime.status === 'no-schema-content-source')) throw new Error(`recipient-return fixture schema runtime unavailable:${initializedRuntime.status}`);
+const exactRuntime=Object.freeze({ ...portableCanonicalBootstrapRuntime, contentSources: initializedRuntime.contentSources || Object.freeze([]), runtimeInitialization: initializedRuntime, commandInvocation:Object.freeze({executable:'/usr/bin/node',entrypoint:'/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs'})});
+const integrationTest=nativeAvailable ? test : test.skip;
 
 function incomingHandoff(){
   const unsigned=`# Continuity Context
@@ -96,7 +107,7 @@ async function fixture(){
   return {root,incoming};
 }
 
-test('prepare-return fails closed until a separate exact-result return transition is qualified',async()=>{
+integrationTest('prepare-return fails closed until a separate exact-result return transition is qualified',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-gate-'));
   await mkdir(path.join(root,'.tiinex'),{recursive:true});
   await mkdir(path.join(root,'.topics','handoffs'),{recursive:true});
@@ -117,7 +128,38 @@ test('prepare-return fails closed until a separate exact-result return transitio
   assert.equal(prepared.returnTransition.state,'qualified');
 });
 
-test('qualify-return rejects mismatched result bytes and prepare-return rejects a stale qualified result',async()=>{
+integrationTest('qualify-return and prepare-return preserve an intentionally omitted optional Return To Reference',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-no-reference-'));
+  await mkdir(path.join(root,'.tiinex'),{recursive:true});
+  await mkdir(path.join(root,'.topics','handoffs'),{recursive:true});
+  const incoming='.topics/handoffs/002-anchor-to-anchor.trace.md';
+  const unsigned=incomingHandoff().replace(`- Return To Reference: [Sigma Role](${sigmaRef})\n`,'');
+  const withoutSelf=unsigned.replace(/(- Towards: self\n\s+- Value:)\s+[^\n]*/,'$1 pending');
+  const sealed=sealC14nV2Self(withoutSelf);
+  assert.equal(sealed.state,'sealed');
+  await writeFile(path.join(root,incoming),`${sealed.markdown}\n`,'utf8');
+  await writeFile(path.join(root,'.tiinex','continuation.json'),JSON.stringify({schema:'tiinex.portable.ground-continuation-state.v1',version:1,selectedHandoffPath:incoming,selectedRouteId:'fixture-route',roleLabel:'Anchor'},null,2));
+  await writeFile(path.join(root,'result.txt'),'bounded-result\n','utf8');
+  await writeFile(path.join(root,'expected.txt'),'bounded-result\n','utf8');
+
+  const qualified=await runQualifyReturnCli({positionals:[root],flags:{result:'result.txt',expected:'expected.txt'}},exactRuntime);
+  assert.equal(qualified.status,'qualified');
+  assert.equal(qualified.transition.returnProtocol.returnTo,'Sigma');
+  assert.equal(qualified.transition.returnProtocol.returnToReference,'');
+
+  const prepared=await runPrepareReturnCli({positionals:[root],flags:{}},exactRuntime);
+  assert.equal(prepared.authority.to,'Sigma');
+  assert.equal(prepared.authority.toKind,'unknown');
+  assert.equal(prepared.authority.toSourceReference,'');
+  assert.equal(prepared.authority.toReference,'');
+  const body=await readFile(prepared.scaffold.path,'utf8');
+  assert.match(body,/^- To: Sigma$/m);
+  assert.match(body,/^- Return To: Sigma$/m);
+  assert.doesNotMatch(body,/^- To Reference:/m);
+  assert.doesNotMatch(body,/^- Return To Reference:/m);
+});
+
+integrationTest('qualify-return rejects mismatched result bytes and prepare-return rejects a stale qualified result',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-stale-'));
   await mkdir(path.join(root,'.tiinex'),{recursive:true});
   await mkdir(path.join(root,'.topics','handoffs'),{recursive:true});
@@ -133,7 +175,7 @@ test('qualify-return rejects mismatched result bytes and prepare-return rejects 
   await assert.rejects(runPrepareReturnCli({positionals:[root],flags:{}}),/return-transition\.result-stale/);
 });
 
-test('prepare-return derives exact return endpoints and writes only an incomplete runtime scaffold',async()=>{
+integrationTest('prepare-return derives exact return endpoints and writes only an incomplete runtime scaffold',async()=>{
   const {root}=await fixture();
   const result=await runPrepareReturnCli({positionals:[root],flags:{}},exactRuntime);
   assert.equal(result.status,'ready');
@@ -178,7 +220,7 @@ test('prepare-return derives exact return endpoints and writes only an incomplet
 
 
 
-test('prepare-return rebases selected-Handoff workspace-relative endpoint Role references to the return authoring directory without changing semantic targets',async()=>{
+integrationTest('prepare-return rebases selected-Handoff workspace-relative endpoint Role references to the return authoring directory without changing semantic targets',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-rebase-'));
   await mkdir(path.join(root,'.tiinex'),{recursive:true});
   await mkdir(path.join(root,'.topics','processes','gpt','grounding'),{recursive:true});
@@ -208,13 +250,13 @@ test('prepare-return rebases selected-Handoff workspace-relative endpoint Role r
   assert.equal(result.authority.currentWorkControlReference,'../processes/gpt/grounding/015-selected.trace.md');
   assert.equal(result.authority.referenceProjection.state,'semantic-target-preserved-for-authored-location');
   const body=await readFile(result.scaffold.path,'utf8');
-  assert.match(body,/From Reference: \[Anchor Role\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
-  assert.match(body,/To Reference: \[Anchor Role\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
-  assert.match(body,/Return To Reference: \[Anchor Role\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
+  assert.match(body,/From Reference: \[Anchor endpoint\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
+  assert.match(body,/To Reference: \[Anchor endpoint\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
+  assert.match(body,/Return To Reference: \[Anchor endpoint\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
   assert.match(body,/Controlling Artifact: \[selected source Handoff\]\(\.\.\/processes\/gpt\/grounding\/015-selected\.trace\.md\)/);
 });
 
-test('common author refuses an unfilled prepare-return scaffold before schema or integrity work',async()=>{
+integrationTest('common author refuses an unfilled prepare-return scaffold before schema or integrity work',async()=>{
   const {root}=await fixture();
   const prepared=await runPrepareReturnCli({positionals:[root],flags:{}});
   await assert.rejects(
@@ -225,7 +267,7 @@ test('common author refuses an unfilled prepare-return scaffold before schema or
 
 
 
-test('prepared return authority-lock fails closed when recipient edits mechanical return endpoints before preflight',async()=>{
+integrationTest('prepared return authority-lock fails closed when recipient edits mechanical return endpoints before preflight',async()=>{
   const {root}=await fixture();
   await writeFile(path.join(root,'review.md'),'# Review\n\nBounded result.\n','utf8');
   const prepared=await runPrepareReturnCli({positionals:[root],flags:{}});
@@ -269,15 +311,15 @@ test('prepared return authority-lock fails closed when recipient edits mechanica
 
 
 
-test('all prepared-return mechanical endpoint coordinates are authority-locked independently',async(t)=>{
+integrationTest('all prepared-return mechanical endpoint coordinates are authority-locked independently',async(t)=>{
   const cases=[
     ['from', (body)=>body.replace(/^- From: Anchor$/m,'- From: Sigma')],
-    ['fromReference', (body)=>body.replace(`- From Reference: [Anchor Role](${anchorRef})`,`- From Reference: [Anchor Role](https://example.invalid/wrong-anchor)`)],
+    ['fromReference', (body)=>body.replace(`- From Reference: [Anchor endpoint](${anchorRef})`,`- From Reference: [Anchor endpoint](https://example.invalid/wrong-anchor)`)],
     ['to', (body)=>body.replace(/^- To: Sigma$/m,'- To: Anchor')],
-    ['toReference', (body)=>body.replace(`- To Reference: [Sigma Role](${sigmaRef})`,`- To Reference: [Sigma Role](https://example.invalid/wrong-sigma)`)],
+    ['toReference', (body)=>body.replace(`- To Reference: [Sigma endpoint](${sigmaRef})`,`- To Reference: [Sigma endpoint](https://example.invalid/wrong-sigma)`)],
     ['currentWorkControlReference', (body)=>body.replace('Controlling Artifact: [selected source Handoff](002-anchor-to-anchor.trace.md)','Controlling Artifact: [selected source Handoff](../wrong.trace.md)')],
     ['returnTo', (body)=>body.replace(/^- Return To: Sigma$/m,'- Return To: Anchor')],
-    ['returnToReference', (body)=>body.replace(`- Return To Reference: [Sigma Role](${sigmaRef})`,`- Return To Reference: [Sigma Role](https://example.invalid/wrong-sigma-return)`) ],
+    ['returnToReference', (body)=>body.replace(`- Return To Reference: [Sigma endpoint](${sigmaRef})`,`- Return To Reference: [Sigma endpoint](https://example.invalid/wrong-sigma-return)`) ],
     ['returnedMaterialReference', (body)=>body.replace('Material Reference: [returned work](../../result.txt)','Material Reference: [returned work](../../wrong.txt)')]
   ];
   for(const [field,mutate] of cases){
@@ -298,7 +340,7 @@ test('all prepared-return mechanical endpoint coordinates are authority-locked i
   }
 });
 
-test('prepared return preflight rejects out-of-domain enum values without durable artifact or continuation mutation',async()=>{
+integrationTest('prepared return preflight rejects out-of-domain enum values without durable artifact or continuation mutation',async()=>{
   const {root}=await fixture();
   await writeFile(path.join(root,'review.md'),'# Review\n\nBounded result.\n','utf8');
   const prepared=await runPrepareReturnCli({positionals:[root],flags:{}});
@@ -333,7 +375,7 @@ test('prepared return preflight rejects out-of-domain enum values without durabl
   assert.deepEqual(entries,['002-anchor-to-anchor.trace.md']);
 });
 
-test('filled prepare-return scaffold can be preflighted through exact author qualification without retaining candidate or mutating continuation state',async()=>{
+integrationTest('filled prepare-return scaffold can be preflighted through exact author qualification without retaining candidate or mutating continuation state',async()=>{
   const {root}=await fixture();
   await writeFile(path.join(root,'review.md'),'# Review\n\nBounded result.\n','utf8');
   const prepared=await runPrepareReturnCli({positionals:[root],flags:{}});

@@ -2,7 +2,7 @@ import { auditPortableRecord } from '../audit/audit.capability.js';
 import { C14N_V2_METHOD_ID, canonicalC14nV2SelfState, sealC14nV2Self } from '../../../integrity/integrity.c14nV2.js';
 import { parsePortableSchemaDocument } from '../schema/schema.contract.js';
 import { compilePortableSchemaContractChain } from '../schema/contract.compile.js';
-import { nativeSchemaMarkdown } from '../../../schemas/generated/native.schema.pack.js';
+import { schemaMarkdown as nativeSchemaMarkdown } from '../../../schemas/registry.js';
 import { sha256Hex } from '../../../export/package.bytes.js';
 import { integrityMethodReferenceAuthorityForCreation } from '../../../integrity/integrity.methodReference.js';
 import { inspectPortableLineageIntegrity } from '../lineage/lineage.integrity.plan.js';

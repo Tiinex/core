@@ -6,6 +6,7 @@ import { renderArtifactCreationDraftMarkdown } from '../../../../schemas/creatio
 import { canonicalC14nV2SelfState } from '../../../../integrity/integrity.c14nV2.js';
 import { sha256Hex, utf8Bytes } from '../../../../export/package.bytes.js';
 import { resolveSchemaModule } from '../../../../schemas/resolver.js';
+import { projectPortableSchemaRegistryMaterial } from '../../schema/registry.material.js';
 import { loadNodePortableInput } from '../../input/node.input.js';
 import { runPortableOperation } from '../../operation.catalog.js';
 import { markPortableBootstrapCanonicalSource } from '../../providers/schema.bootstrap.provenance.js';
@@ -330,7 +331,7 @@ export async function recoverQualifiedRuntimeSchemaReferenceAuthority(schemaId, 
   if (Number(materialIdentity.bytes || 0) > 0 && observedBytes !== Number(materialIdentity.bytes)) return null;
   if (!exactRuntimeSchemaSourceIdentity(runtimeMaterial.source || {}, materialIdentity)) return null;
 
-  const preferredTarget = durableRuntimeSchemaTarget(runtimeMaterial.source || {}, materialIdentity, runtime.defaultSchemaSource || {});
+  const preferredTarget = durableRuntimeSchemaTarget(runtimeMaterial.source || {}, materialIdentity, runtime.defaultSchemaSource || {}, module.binding || {});
   if (!preferredTarget) return null;
   return Object.freeze({
     schemaId,
@@ -358,16 +359,20 @@ export async function recoverQualifiedRuntimeSchemaReferenceAuthority(schemaId, 
 
 async function loadQualifiedRuntimeSchemaMaterial(schemaId, runtime = {}) {
   const targets = normalizeRuntimePaths(runtime.defaultSchemaMaterialPaths);
-  if (!targets.length) return null;
-  const loaded = await loadNodePortableInput(targets);
-  if ((loaded.findings || []).some((finding) => finding?.severity === 'error')) return null;
-  const decorated = decorateRuntimeSchemaMaterial(loaded, runtime.defaultSchemaSource || {});
-  const resolved = await runPortableOperation('resolve-schema-material', { ...decorated, schemaId }, {});
+  let material;
+  if (targets.length) {
+    const loaded = await loadNodePortableInput(targets);
+    if ((loaded.findings || []).some((finding) => finding?.severity === 'error')) return null;
+    material = decorateRuntimeSchemaMaterial(loaded, runtime.defaultSchemaSource || {});
+  } else {
+    material = projectPortableSchemaRegistryMaterial();
+  }
+  const resolved = await runPortableOperation('resolve-schema-material', { ...material, schemaId }, {});
   if (resolved?.status !== 'resolved' || !resolved?.material) return null;
-  const material = resolved.material;
-  if (String(material.schemaId || '') !== schemaId) return null;
-  if (material.qualification?.sourceQualified !== true || material.qualification?.representationIntegrity !== 'verified') return null;
-  return material;
+  const selected = resolved.material;
+  if (String(selected.schemaId || '') !== schemaId) return null;
+  if (selected.qualification?.sourceQualified !== true || selected.qualification?.representationIntegrity !== 'verified') return null;
+  return selected;
 }
 
 function decorateRuntimeSchemaMaterial(material = {}, source = {}) {
@@ -410,11 +415,16 @@ function exactRuntimeSchemaSourceIdentity(source = {}, materialIdentity = {}) {
   return expected.repository === observed.repository && expected.commit === observed.commit && normalizeWorkspaceRelativePath(expected.path) === normalizeWorkspaceRelativePath(observed.path);
 }
 
-function durableRuntimeSchemaTarget(source = {}, materialIdentity = {}, runtimeSource = {}) {
+function durableRuntimeSchemaTarget(source = {}, materialIdentity = {}, runtimeSource = {}, binding = {}) {
   const explicitTarget = String(runtimeSource.referenceTarget || '').trim();
   if (explicitTarget) return explicitTarget;
-  const workspaceId = String(runtimeSource.workspaceId || '').trim();
+  const permalink = String(binding.permalink || '').trim();
+  if (permalink) return permalink;
+  const repository = String(materialIdentity.sourceRepository || source.repository || '').trim();
+  const commit = String(materialIdentity.sourceCommit || source.commit || source.ref || '').trim();
   const sourcePath = normalizeWorkspaceRelativePath(materialIdentity.sourcePath || source.path || '');
+  if (repository && commit && sourcePath && /^[0-9a-f]{40}$/i.test(commit)) return `https://github.com/${repository}/blob/${commit}/${sourcePath}`;
+  const workspaceId = String(runtimeSource.workspaceId || '').trim();
   if (workspaceId && /^[A-Za-z0-9._-]+$/.test(workspaceId) && sourcePath) return `${workspaceId}::${sourcePath}`;
   return '';
 }

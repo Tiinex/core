@@ -19,7 +19,7 @@ export async function runQualifyReturnCli(parsed = {}, runtime = {}) {
   const signalKind = field(completion, 'Signal Kind');
   const returnTo = field(completion, 'Return To');
   const returnToReference = referenceTarget(completion, 'Return To Reference');
-  if (!signalKind || !returnTo || !returnToReference) throw new Error('portable.cli.qualify-return.return-protocol.required');
+  if (!signalKind || !returnTo) throw new Error('portable.cli.qualify-return.return-protocol.required');
 
   const resultRelativePath = normalizeWorkspaceRelativePath(flags.result || '');
   const expectedRelativePath = normalizeWorkspaceRelativePath(flags.expected || flags['expected-file'] || '');

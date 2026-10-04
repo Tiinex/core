@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { projectWorkspaceCarrierEntry } from '../src/tooling/portable/handoff/workspaceEntryProjection.js';
-import { nativeEntryMarkdown } from '../src/tooling/portable/entry/native.entry.generated.js';
+import { nativeEntryByName, nativeEntryContentSource } from './helpers/native-entry-fixtures.mjs';
 import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodReference.js';
@@ -16,7 +16,7 @@ function roleFixture(label) {
 }
 
 function sessionEntryFixture() {
-  const source = nativeEntryMarkdown.find(([path]) => path.endsWith('start-entry.trace.md'))?.[1];
+  const source = nativeEntryByName('start');
   assert.ok(source);
   let markdown = source
     .replace('- Name: Start\n', '- Name: Grounded Session\n')
@@ -28,14 +28,16 @@ function sessionEntryFixture() {
   assert.equal(sealed.state, 'sealed');
   return `${sealed.markdown}\n`;
 }
+const reusableEntrySources = Object.freeze([nativeEntryContentSource()]);
+
 // These assertions exercise the pure text/intent projection boundary without
 // weakening package inspection; integration coverage supplies a qualified
 // pointerless carrier to the public operation.
-test('Guided Entry mode catalog is Core-owned and transport-only', () => {
-  const result = projectWorkspaceCarrierEntry({ inspection: { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] } });
+test('Guided Entry mode catalog uses reusable content sources and remains transport-only', () => {
+  const result = projectWorkspaceCarrierEntry({ inspection: { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] }, contentSources: reusableEntrySources });
   assert.equal(result.state, 'catalog');
   assert.deepEqual(result.modes.map((mode) => mode.label), ['Explore', 'Resume', 'Start', 'Custom']);
-  assert.deepEqual(result.modes.map((mode) => mode.sourceKind), ['native', 'native', 'native', 'runtime']);
+  assert.deepEqual(result.modes.map((mode) => mode.sourceKind), ['content-source', 'content-source', 'content-source', 'runtime']);
   assert.match(result.boundary, /does not alter the carrier/i);
 });
 
@@ -67,7 +69,8 @@ test('Core renders Session Entry grounding obligations without VS Code semantics
 test('EXPLORE requires current cross-Workspace grounding before participant-facing directions', () => {
   const result = projectWorkspaceCarrierEntry({
     inspection: { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] },
-    mode: 'EXPLORE'
+    mode: 'EXPLORE',
+    contentSources: reusableEntrySources
   });
   assert.equal(result.status, 'ready');
   assert.match(result.transportText, /most current truthful multi-Workspace grounding reasonably available/);
@@ -94,6 +97,7 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
       findings: []
     },
     mode: 'RESUME',
+    contentSources: reusableEntrySources,
     primaryRole: { label: 'Anchor', reference: 'https://github.com/Tiinex/business/blob/' + 'a'.repeat(40) + '/' + anchorPath, workspaceId: 'business', path: anchorPath },
     participants: [{ label: 'Sigma', reference: 'https://github.com/Tiinex/business/blob/' + 'b'.repeat(40) + '/' + sigmaPath, workspaceId: 'business', path: sigmaPath }]
   });
@@ -113,7 +117,7 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
 test('Guided Entry rejects duplicate Primary Role participant and missing CUSTOM instruction', () => {
   const inspection = { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] };
   assert.equal(projectWorkspaceCarrierEntry({ inspection, mode: 'CUSTOM' }).reasonCode, 'custom-instruction-required');
-  assert.equal(projectWorkspaceCarrierEntry({ inspection, mode: 'RESUME', primaryRole: { label: 'Anchor', reference: 'r' }, participants: [{ label: 'Anchor', reference: 'r' }] }).reasonCode, 'primary-role-duplicate-participant');
+  assert.equal(projectWorkspaceCarrierEntry({ inspection, mode: 'RESUME', contentSources: reusableEntrySources, primaryRole: { label: 'Anchor', reference: 'r' }, participants: [{ label: 'Anchor', reference: 'r' }] }).reasonCode, 'primary-role-duplicate-participant');
 });
 
 
@@ -122,6 +126,7 @@ test('Guided Entry uses a commit-pinned external Role reference only when the Ro
   const pinned = projectWorkspaceCarrierEntry({
     inspection,
     mode: 'START',
+    contentSources: reusableEntrySources,
     primaryRole: {
       label: 'Anchor',
       workspaceId: 'business',
@@ -136,6 +141,7 @@ test('Guided Entry uses a commit-pinned external Role reference only when the Ro
   const floating = projectWorkspaceCarrierEntry({
     inspection,
     mode: 'START',
+    contentSources: reusableEntrySources,
     primaryRole: {
       label: 'Anchor',
       workspaceId: 'business',
@@ -152,6 +158,7 @@ test('Guided Entry deduplicates Roles by exact identity rather than human label 
   const result = projectWorkspaceCarrierEntry({
     inspection,
     mode: 'START',
+    contentSources: reusableEntrySources,
     primaryRole: { label: 'Anchor', workspaceId: 'core', path: '.topics/roles/anchor.trace.md', reference: `https://github.com/Tiinex/core/blob/${'a'.repeat(40)}/.topics/roles/anchor.trace.md` },
     participants: [{ label: 'Anchor', workspaceId: 'business', path: '.topics/roles/anchor.trace.md', reference: `https://github.com/Tiinex/business/blob/${'b'.repeat(40)}/.topics/roles/anchor.trace.md` }]
   });

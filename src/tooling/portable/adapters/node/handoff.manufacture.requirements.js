@@ -4,7 +4,7 @@ import path from 'node:path';
 import { packageFileBytes, sha256Hex } from '../../../../export/package.bytes.js';
 import { parseArtifactMarkdown } from '../../../../artifacts/artifact.parse.js';
 import { validatedC14nV2PrimarySelfDigest } from '../../../../integrity/integrity.c14nV2.js';
-import { taskValidate } from '../../../../schemas/core/task/tiinex.task.v1.validate.js';
+import { validateWithRegisteredSchema } from '../../../../schemas/runtime.validation.js';
 import { projectHandoffMaterialRequirements, projectParticipantRoleRequirements } from '../../handoff/materialClosure.requirements.js';
 import { explicitTaskParticipantDeclarations } from '../../grounding/grounding.participantArtifactAuthority.js';
 import { parseRoleMaterial } from '../../handoff/coldStartQualification.materials.js';
@@ -249,7 +249,7 @@ function resolveNearestQualifiedTaskRecord({ workspaceId, path: sourcePath, work
     }
     if (schemaId === 'tiinex.task.v1') {
       const self = validatedC14nV2PrimarySelfDigest(markdown);
-      const validationFindings = taskValidate(parsed);
+      const validationFindings = validateWithRegisteredSchema('tiinex.task.v1', parsed, { unavailableCode: 'portable.handoff-manufacture.task-validator-unavailable' });
       const taskErrors = validationFindings.filter((item) => String(item?.severity || '') === 'error');
       const reasons = [];
       if (!parsed.hasContinuityContext) reasons.push('task-continuity-context-missing');
@@ -592,6 +592,192 @@ function resolveCarriedAdapterReference(target = '', workspaceRuntimeById = new 
     candidates.push(Object.freeze({ workspaceId: String(workspaceId || ''), path: normalizeRelativePath(parsed.sourcePath) }));
   }
   return candidates.length === 1 ? candidates[0] : null;
+}
+
+
+export function resolveContentSourceRequirementMaterials(requirements = {}, contentSources = []) {
+  const out = [];
+  const allRequirements = [
+    ...(requirements.required || []),
+    ...(requirements.reference || []),
+    ...(requirements.endpointRoles || []),
+    ...(requirements.participantRoles || []),
+    ...(requirements.dependencies || [])
+  ];
+  for (const requirement of allRequirements) {
+    const target = String(requirement.reference?.target || requirement.referenceTarget || '').trim();
+    const qualified = parseWorkspaceQualifiedReference(target);
+    if (!qualified) continue;
+    for (const source of contentSources || []) {
+      if (String(source?.status || '') !== 'ready') continue;
+      const workspaceIds = new Set((source?.source?.capabilities?.workspaceIds || []).map((value) => String(value || '').trim()).filter(Boolean));
+      if (!workspaceIds.has(qualified.workspaceId)) continue;
+      const matches = (source.entries || []).filter((entry) => normalizeRelativePath(entry?.sourcePath || '') === qualified.path);
+      for (const entry of matches) {
+        out.push(Object.freeze({
+          requirementId: requirement.id,
+          referenceTarget: target,
+          path: qualified.path,
+          data: entry.data,
+          bytes: Number(entry.bytes || entry.data?.byteLength || 0),
+          sha256: String(entry.sha256 || ''),
+          mediaType: mediaTypeForPath(qualified.path),
+          providerId: `content-source:${String(source.source?.id || '')}`,
+          providerKind: 'qualified-content-source',
+          provenance: Object.freeze({
+            workspaceId: qualified.workspaceId,
+            path: qualified.path,
+            boundary: 'registered-content-source-surface',
+            contentSourceId: String(source.source?.id || ''),
+            contentSourceKind: String(source.source?.kind || ''),
+            packageName: String(source.source?.package?.name || ''),
+            packageVersion: String(source.source?.package?.version || ''),
+            surface: String(entry.surface || ''),
+            surfaceRoot: String(entry.surfaceRoot || ''),
+            sourceRepresentationSha256: String(source.representationSha256 || '')
+          }),
+          authority: Object.freeze({
+            localIdentityQualified: true,
+            contentSourceQualified: true,
+            workspaceCoordinateDeclaredByContentSource: true,
+            sourceRepresentationSha256: String(source.representationSha256 || '')
+          })
+        }));
+      }
+    }
+  }
+  return Object.freeze(out);
+}
+
+function mediaTypeForPath(value = '') {
+  const lower = String(value || '').toLowerCase();
+  if (lower.endsWith('.md')) return 'text/markdown';
+  if (lower.endsWith('.json')) return 'application/json';
+  if (/\.(?:m?js|cjs)$/u.test(lower)) return 'text/javascript';
+  if (lower.endsWith('.txt')) return 'text/plain';
+  return 'application/octet-stream';
+}
+
+
+export function expandContentSourceParentBoundaryClosure(input = {}) {
+  let requirements = input.requirements || {};
+  const dependencies = [...(requirements.dependencies || [])];
+  const materials = [...(input.materials || [])];
+  const contentSources = input.contentSources || [];
+  const seen = new Set(dependencies.map((item) => String(item.id || '')));
+  const queued = [...materials];
+  const visited = new Set();
+  const maxDependencies = 128;
+
+  for (let cursor = 0; cursor < queued.length; cursor += 1) {
+    const material = queued[cursor];
+    if (String(material?.providerKind || '') !== 'qualified-content-source') continue;
+    const sourceWorkspaceId = String(material?.provenance?.workspaceId || '').trim();
+    const sourcePath = normalizeRelativePath(material?.provenance?.path || material?.path || '');
+    const sourceId = String(material?.provenance?.contentSourceId || '').trim();
+    const visitKey = `${sourceId}\0${sourceWorkspaceId}\0${sourcePath}`;
+    if (!sourceWorkspaceId || !sourcePath || !sourceId || visited.has(visitKey)) continue;
+    visited.add(visitKey);
+    const markdown = decodeUtf8(material.data);
+    if (!markdown || !/\.md$/iu.test(sourcePath)) continue;
+    let parent;
+    try { parent = parseArtifactMarkdown(markdown).envelope?.parent || {}; } catch { continue; }
+    const reference = String(parent.trace || (parent.originEntries || []).find((item) => String(item?.label || '').trim() === 'relative')?.target || '').trim();
+    if (!reference || isExternalReference(reference) || reference.startsWith('#')) continue;
+
+    let targetWorkspaceId = sourceWorkspaceId;
+    let targetPath = '';
+    const qualified = parseWorkspaceQualifiedReference(reference);
+    if (qualified) {
+      targetWorkspaceId = qualified.workspaceId;
+      targetPath = normalizeRelativePath(qualified.path);
+    } else {
+      targetPath = resolveRelativeWorkspaceTarget(sourcePath, reference);
+    }
+    if (!targetWorkspaceId || !targetPath) continue;
+
+    const match = findContentSourceEntry(contentSources, { sourceId: qualified ? '' : sourceId, workspaceId: targetWorkspaceId, path: targetPath });
+    if (!match) continue; // The artifact's own qualified recovery contract remains authoritative when the selected content set does not carry the Parent.
+    if (dependencies.length >= maxDependencies) throw new Error('portable.handoff-manufacture.content-source-parent.limit-exceeded');
+    const id = `content-source-parent:${safeWorkspaceToken(targetWorkspaceId)}:${sha256Text(`${sourceId}\0${sourcePath}\0${targetWorkspaceId}\0${targetPath}`).slice(0, 20)}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const sourceRequirement = findRequirement(requirements, material.requirementId, dependencies);
+    const requirement = Object.freeze({
+      id,
+      name: `Content-source Parent boundary for ${sourceWorkspaceId}:${sourcePath}`,
+      classification: 'parent-boundary',
+      material: 'exact detached Parent recovery dependency',
+      purpose: 'preserve reusable content Parent continuity without requiring complete source Workspace carriage',
+      availability: 'declared',
+      materialReference: reference,
+      reference: Object.freeze({ form: qualified ? 'parent-workspace-qualified-target' : 'parent-relative-target', raw: reference, label: '', target: reference, exactTargetDeclared: true }),
+      routeWorkspaceId: String(sourceRequirement?.routeWorkspaceId || ''),
+      routePath: String(sourceRequirement?.routePath || ''),
+      sourceWorkspaceId,
+      sourcePath,
+      targetWorkspaceId,
+      targetPath,
+      sourceRequirementId: String(material.requirementId || ''),
+      fields: Object.freeze({ SourceWorkspace: sourceWorkspaceId, SourcePath: sourcePath, TargetWorkspace: targetWorkspaceId, TargetPath: targetPath, Reference: reference })
+    });
+    dependencies.push(requirement);
+    const candidate = contentSourceCandidateForEntry(requirement, match.source, match.entry, targetWorkspaceId, targetPath);
+    materials.push(candidate);
+    queued.push(candidate);
+  }
+
+  requirements = Object.freeze({
+    ...requirements,
+    dependencies: Object.freeze(dependencies),
+    counts: Object.freeze({ ...(requirements.counts || {}), dependencies: dependencies.length })
+  });
+  return Object.freeze({ requirements, materials: Object.freeze(materials) });
+}
+
+function findContentSourceEntry(contentSources = [], { sourceId = '', workspaceId = '', path: targetPath = '' } = {}) {
+  const normalizedPath = normalizeRelativePath(targetPath);
+  const matches = [];
+  for (const source of contentSources || []) {
+    if (String(source?.status || '') !== 'ready') continue;
+    if (sourceId && String(source?.source?.id || '') !== sourceId) continue;
+    const workspaceIds = new Set((source?.source?.capabilities?.workspaceIds || []).map((value) => String(value || '').trim()).filter(Boolean));
+    if (!workspaceIds.has(workspaceId)) continue;
+    for (const entry of source.entries || []) if (normalizeRelativePath(entry?.sourcePath || '') === normalizedPath) matches.push({ source, entry });
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function contentSourceCandidateForEntry(requirement, source, entry, workspaceId, targetPath) {
+  return Object.freeze({
+    requirementId: requirement.id,
+    referenceTarget: String(requirement.reference?.target || ''),
+    path: targetPath,
+    data: entry.data,
+    bytes: Number(entry.bytes || entry.data?.byteLength || 0),
+    sha256: String(entry.sha256 || ''),
+    mediaType: mediaTypeForPath(targetPath),
+    providerId: `content-source:${String(source.source?.id || '')}`,
+    providerKind: 'qualified-content-source',
+    provenance: Object.freeze({
+      workspaceId,
+      path: targetPath,
+      boundary: 'registered-content-source-parent-closure',
+      contentSourceId: String(source.source?.id || ''),
+      contentSourceKind: String(source.source?.kind || ''),
+      packageName: String(source.source?.package?.name || ''),
+      packageVersion: String(source.source?.package?.version || ''),
+      surface: String(entry.surface || ''),
+      surfaceRoot: String(entry.surfaceRoot || ''),
+      sourceRepresentationSha256: String(source.representationSha256 || '')
+    }),
+    authority: Object.freeze({
+      localIdentityQualified: true,
+      contentSourceQualified: true,
+      workspaceCoordinateDeclaredByContentSource: true,
+      sourceRepresentationSha256: String(source.representationSha256 || '')
+    })
+  });
 }
 
 export async function expandPointerDependencyClosure(input = {}) {

@@ -2,7 +2,7 @@ import { parseArtifactMarkdown } from '../artifacts/artifact.parse.js';
 import { normalizeArtifact } from '../artifacts/artifact.normalize.js';
 import { resolveSchemaModule } from '../schemas/resolver.js';
 import { schemaRegistry } from '../schemas/registry.js';
-import { rootValidate, rootProspectiveValidate, rootFallbackFinding } from '../schemas/tiinex.root.v1.validate.js';
+import { runtimeRootValidate, runtimeRootProspectiveValidate, runtimeRootFallbackFinding } from '../schemas/root.runtime.js';
 import { validateIntegrity } from '../integrity/integrity.validate.js';
 import { validatePortableContractInstance } from '../tooling/portable/schema/contract.validate.js';
 import { parseSchemaReferenceValue, qualifySchemaReferenceValue, qualifiedExactSchemaReferenceTarget, schemaReferenceAuthorityFromBinding, schemaReferenceAuthorityWithEquivalentResolvedTarget, schemaReferenceResolutionForTarget } from '../schemas/schema.reference.js';
@@ -16,8 +16,8 @@ export function validateArtifact(input = {}, options = {}) {
   const parsed = input.parsed || parseArtifactMarkdown(markdown);
   const schemaId = parsed?.envelope?.current?.schema?.id || input.schemaId || input.record?.schemaId || input.record?.currentSchemaId || '';
   const resolution = input.resolution || resolveSchemaModule({ schemaId, checksum: input.checksum });
-  const rootFindings = normalizeFindings(rootValidate(parsed), { schemaId: 'tiinex.root.v1', qualification: 'readability-root-diagnostic' });
-  const prospectiveRootFindings = normalizeFindings(rootProspectiveValidate(parsed, input.schemaReferenceContext || 'historical'), { schemaId: 'tiinex.root.v1', qualification: 'candidate-parent-recovery' });
+  const rootFindings = normalizeFindings(runtimeRootValidate(parsed), { schemaId: 'tiinex.root.v1', qualification: 'readability-root-diagnostic' });
+  const prospectiveRootFindings = normalizeFindings(runtimeRootProspectiveValidate(parsed, input.schemaReferenceContext || 'historical'), { schemaId: 'tiinex.root.v1', qualification: 'candidate-parent-recovery' });
   const schemaValidationAuthority = input.schemaValidationAuthority || null;
   const machineContract = runMachineContractValidation({ markdown: markdown || parsed?.markdown || '', schemaId, resolution, validationContractOverride: input.validationContractOverride || null, schemaValidationAuthority });
   const contractFindings = normalizeFindings(machineContract.findings, { schemaId: machineContract.schemaId || schemaId, qualification: 'machine-contract' });
@@ -226,7 +226,7 @@ function fallbackFindingsFor({ schemaId, resolution, childFindings = [], childVa
   const moduleId = resolution?.module?.id || '';
   const exactRoot = !resolution?.fallbackUsed && (moduleId === 'tiinex.root.v1' || schemaId === 'tiinex.root.v1');
   if (resolution?.fallbackUsed) return [
-    normalizeFinding({ ...rootFallbackFinding(schemaId), params: { field: 'Current Schema' } }, { schemaId: 'tiinex.root.v1', qualification: 'fallback' }),
+    normalizeFinding({ ...runtimeRootFallbackFinding(schemaId), params: { field: 'Current Schema' } }, { schemaId: 'tiinex.root.v1', qualification: 'fallback' }),
     normalizeFinding({ severity: 'warning', code: 'audit.validator.unavailable', message: `${schemaId || 'schema'} has no exact schema-specific validator; Root v1 validation was run instead.`, source: 'tiinex.audit.v1', qualification: 'validator-unavailable', params: { field: 'Current Schema' } })
   ];
   if (!exactRoot && !childValidatorRan && !machineContract?.available && machineContract?.reason !== 'schema-authority-unqualified') return [normalizeFinding({ severity: 'warning', code: 'audit.validator.unavailable', message: `${moduleId || schemaId || 'schema'} has no schema-specific validator and no qualified compiled machine contract; Root v1 validation was run instead.`, source: 'tiinex.audit.v1', qualification: 'validator-unavailable', params: { field: 'Current Schema' } })];

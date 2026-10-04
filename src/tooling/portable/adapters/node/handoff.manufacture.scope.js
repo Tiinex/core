@@ -30,6 +30,23 @@ export function normalizeWorkspaceTargetBindings(input = {}) {
     for (const [workspaceId, value] of Object.entries(explicit)) push(workspaceId, typeof value === 'string' ? value : value?.path || value?.workspaceTargetPath || value?.workspaceArtifactPath, 'explicit-workspace-target-binding');
   }
   for (const descriptor of input.additionalWorkspaceDescriptors || []) push(descriptor.id || descriptor.workspaceId, descriptor.workspaceTargetPath || descriptor.workspaceArtifactPath || descriptor.targetPath || '', 'additional-workspace-target');
+  for (const materialization of input.workspaceMaterializations || []) {
+    const workspaceId = safeWorkspaceToken(materialization?.id || materialization?.workspaceId || '');
+    if (!workspaceId || byWorkspace.has(workspaceId)) continue;
+    const candidates = [];
+    for (const entry of materialization?.entries || []) {
+      const relativePath = normalizeRelativePath(entry?.path || '');
+      if (!relativePath || !relativePath.startsWith('.topics/.workspaces/') || !/\.workspace\.md$/i.test(relativePath)) continue;
+      const markdown = decodeUtf8(entry?.data);
+      if (!markdown) continue;
+      try {
+        const parsed = parseArtifactMarkdown(markdown);
+        if (String(parsed?.envelope?.current?.schema?.id || '') === 'tiinex.workspace.v1') candidates.push(relativePath);
+      } catch {}
+    }
+    const unique = [...new Set(candidates)];
+    if (unique.length === 1) push(workspaceId, unique[0], 'qualified-workspace-artifact-discovery');
+  }
   return Object.freeze([...byWorkspace.values()].flat());
 }
 

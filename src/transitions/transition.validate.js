@@ -1,12 +1,12 @@
 import { parseArtifactMarkdown } from '../artifacts/artifact.parse.js';
-import { rootValidate } from '../schemas/tiinex.root.v1.validate.js';
+import { runtimeRootValidate } from '../schemas/root.runtime.js';
 
 export const TRANSITION_VALIDATION_SCHEMA_ID = 'tiinex.transition.validation.v1';
 
 export function validateTransitionDraft(draft = {}, parentRecord = {}) {
   const parsed = parseArtifactMarkdown(draft.markdown || '');
   const findings = [];
-  for (const finding of rootValidate(parsed)) {
+  for (const finding of runtimeRootValidate(parsed)) {
     findings.push(normalizeFinding(finding));
   }
 

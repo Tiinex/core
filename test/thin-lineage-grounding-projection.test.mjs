@@ -364,6 +364,34 @@ test('guidance authority projects only forward-selected Relation/Decision/materi
   assert.match(relationItem.stepSelection.boundary,/does not evaluate/);
 });
 
+test('standalone multi-target Relation binds exact selected guidance set to current work without Parent authority', () => {
+  const taskPath='core/.topics/work/current-task.trace.md';
+  const relationPath='core/.topics/work/guidance-applicability.trace.md';
+  const portablePath='native/.topics/processes/session-grounding.trace.md';
+  const profilePath='business/.topics/processes/session-profile.trace.md';
+  const hostPath='interop-openai/.topics/processes/chatgpt.trace.md';
+  const task=participantTaskRecord('Independent bounded work.',taskPath);
+  const guidance=(path,title)=>({id:path,path,schemaId:'tiinex.topic.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Current\n  - Current Schema: tiinex.topic.v1\n\n---\n\n# ${title}\n\n## Purpose\n\nGround the bounded session.\n\n# Continuity Integrity\n`});
+  const portable=guidance(portablePath,'Portable Session Process');
+  const profile=guidance(profilePath,'Tiinex Session Profile');
+  const host=guidance(hostPath,'ChatGPT Host Process');
+  const relation={id:relationPath,path:relationPath,schemaId:'tiinex.relation.v1',hasContinuityContext:true,hasIntegrity:true,markdown:`# Continuity Context\n\n- Current\n  - Current Schema: tiinex.relation.v1\n\n---\n\n# Guidance Applicability\n\n## Relation Declaration\n\n- Relation Type: session grounding applicability bundle\n- Relation Direction: selected guidance set -> bounded current work\n- Relation Scope: acceptance replay\n\n## Relation Target\n\n- Target: [Current Task](current-task.trace.md)\n  - Relation Type: applicability target\n  - Relation Direction: guidance -> task\n  - Relation Scope: current work\n- Target: [Portable](native::.topics/processes/session-grounding.trace.md)\n  - Relation Type: portable guidance member\n  - Relation Direction: bundle -> guidance\n  - Relation Scope: portable\n- Target: [Profile](business::.topics/processes/session-profile.trace.md)\n  - Relation Type: organization guidance member\n  - Relation Direction: bundle -> guidance\n  - Relation Scope: organization\n- Target: [Host](interop-openai::.topics/processes/chatgpt.trace.md)\n  - Relation Type: host guidance member\n  - Relation Direction: bundle -> guidance\n  - Relation Scope: host\n\n## Relation Boundary\n\n- This is not Parent ancestry.\n\n# Continuity Integrity\n`};
+  const selected=[
+    {requirementId:'required:relation',name:'grounding-guidance-applicability',material:'guidance applicability Relation',purpose:'explicit applicability authority',state:'qualified',workspaceId:'core',innerPath:'.topics/work/guidance-applicability.trace.md'},
+    {requirementId:'required:portable',name:'portable-session-grounding-process',material:'Portable Session Process',purpose:'portable process guidance',state:'qualified',workspaceId:'native',innerPath:'.topics/processes/session-grounding.trace.md'},
+    {requirementId:'required:profile',name:'tiinex-session-grounding-profile',material:'Tiinex Session Profile',purpose:'Tiinex process guidance',state:'qualified',workspaceId:'business',innerPath:'.topics/processes/session-profile.trace.md'},
+    {requirementId:'required:host',name:'chatgpt-host-adaptation',material:'ChatGPT Host Process',purpose:'host process adaptation',state:'qualified',workspaceId:'interop-openai',innerPath:'.topics/processes/chatgpt.trace.md'}
+  ];
+  const projected=projectGroundingGuidanceAuthority({requiredContext:selected,records:[task,relation,portable,profile,host],topology:{currentFrontier:[{id:taskPath,path:taskPath}]}});
+  assert.equal(projected.state,'qualified-forward-selected-guidance-authority');
+  const item=projected.items.find((entry)=>entry.relation);
+  assert.equal(item.dimensions.applicability.state,'qualified-relation-binding');
+  assert.equal(item.relation.resolvedTarget,taskPath);
+  assert.deepEqual(item.linkedSelectedAuthority.map((entry)=>entry.path),[portablePath,profilePath,hostPath]);
+  assert.equal(item.authorityArtifact.path,relationPath);
+  assert.equal(item.unresolved.length,0);
+});
+
 test('forward-selected guidance authority resolves exact GitHub permalink to selected cache-backed record without workspace pseudo-reference', () => {
   const taskPath='coldstart/.topics/tasks/001-task.trace.md';
   const decisionPath='coldstart/.topics/decisions/001-guidance-selection.trace.md';
@@ -478,6 +506,28 @@ test('process applicability stays unresolved without upstream-qualified explicit
   assert.equal(explicit.state, 'explicit-qualified-authority');
   assert.deepEqual(explicit.facts, [{ processId: 'p1', applicability: 'upstream-declared' }]);
   assert.equal(explicit.provenance.source, 'qualified-semantic-projection');
+});
+
+test('process applicability accepts exact qualified forward-selected guidance Relation binding without inferring from carriage', () => {
+  const projected = projectGroundingProcessApplicability({}, {
+    state: 'qualified-forward-selected-guidance-authority',
+    selectedRelationCount: 1,
+    items: [{
+      relation: { sourceArtifact: { workspaceId: 'core', path: 'core/.topics/work/applicability-relation.trace.md', sha256: 'a'.repeat(64), schemaId: 'tiinex.relation.v1' }, resolvedTarget: 'core/.topics/work/current-task.trace.md' },
+      authorityArtifact: { workspaceId: 'core', path: 'core/.topics/work/acceptance-handoff.trace.md', sha256: 'b'.repeat(64), schemaId: 'tiinex.handoff.v1' },
+      linkedSelectedAuthority: [
+        { workspaceId: 'native', path: 'native/.topics/processes/session-grounding.trace.md', sha256: 'c'.repeat(64), schemaId: 'tiinex.topic.v1' },
+        { workspaceId: 'interop-openai', path: 'interop-openai/.topics/processes/chatgpt.trace.md', sha256: 'd'.repeat(64), schemaId: 'tiinex.topic.v1' }
+      ],
+      dimensions: { applicability: { state: 'qualified-relation-binding', target: 'core/.topics/work/current-task.trace.md' } }
+    }]
+  });
+  assert.equal(projected.state, 'explicit-qualified-authority');
+  assert.equal(projected.facts.length, 1);
+  assert.equal(projected.facts[0].applicability, 'qualified-relation-binding');
+  assert.deepEqual(projected.facts[0].selectedGuidance.map((item) => item.workspaceId), ['native', 'interop-openai']);
+  assert.equal(projected.provenance.source, 'core/.topics/work/applicability-relation.trace.md');
+  assert.match(projected.provenance.boundary, /does not interpret Relation Type prose/);
 });
 
 test('ground authority explains exact selected route and Handoff transfers without widening authority', () => {

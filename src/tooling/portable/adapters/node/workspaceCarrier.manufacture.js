@@ -56,7 +56,13 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
     delivery: input.toolingBootstrap || input.bootstrapDelivery || 'embedded',
     runtimeRoot: input.runtimeRoot || options.runtimeRoot,
     expected: input.expectedToolingBootstrap || null,
-    maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
+    maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles,
+    contentSources: [
+      ...(Array.isArray(input.contentSources) ? input.contentSources : []),
+      ...enumerations.map(({ id, root }) => Object.freeze({ id, root, kind: 'local-workspace' }))
+    ],
+    compositionRoot: input.compositionRoot || options.compositionRoot,
+    discoverInstalledContentSources: input.discoverInstalledContentSources === true || options.discoverInstalledContentSources === true
   });
   const runtimeSourceAlignment = await qualifyToolingRuntimeSourceAlignment({
     runtimeIdentity: toolingBootstrap.runtimeIdentity,

@@ -17,6 +17,7 @@ export function normalizeRepositoryFiles(normalized, findings, request = {}) {
       content: file.content,
       sourceMode: 'portable-host-repository',
       source: Object.freeze({
+        adapterId: String(source.adapterId || source.adapter || ''),
         repository: String(source.repository || ''),
         ref: String(source.ref || ''),
         commit: String(source.commit || ''),

@@ -1,17 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-import { nativeEntryMarkdown } from '../src/tooling/portable/entry/native.entry.generated.js';
+import { nativeEntryMarkdown, nativeEntryByName, nativeEntryContentSource } from './helpers/native-entry-fixtures.mjs';
 import { nativeSchemaMarkdown } from '../src/schemas/generated/native.schema.pack.js';
 import { projectPortableEntryCatalog } from '../src/tooling/portable/entry/entry.catalog.js';
 import { canonicalC14nV2SelfState, sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function carriedEntryFixture({ name = 'Team Start', canonicalIdentifier = 'example.entry.team-start.v1', version = '1', parentTrace = '' } = {}) {
-  const source = nativeEntryMarkdown.find(([path]) => path.endsWith('start-entry.trace.md'))?.[1];
+  const source = nativeEntryByName('start');
   assert.ok(source);
   let markdown = source
     .replace('# Start\n', `# ${name}\n`)
@@ -28,7 +24,7 @@ function carriedEntryFixture({ name = 'Team Start', canonicalIdentifier = 'examp
 }
 
 function sessionEntryWithGrounding({ schemaId = 'tiinex.entry.session.v1', canonicalIdentifier = 'example.entry.session-grounding.v1' } = {}) {
-  const source = nativeEntryMarkdown.find(([path]) => path.endsWith('start-entry.trace.md'))?.[1];
+  const source = nativeEntryByName('start');
   assert.ok(source);
   let markdown = source
     .replace('  - Current Schema: tiinex.entry.session.v1\n', `  - Current Schema: ${schemaId}\n`)
@@ -47,8 +43,8 @@ function customEntryChildSchema() {
   return `# Continuity Context\n\n- Envelope Schema: tiinex.root.v1\n- Parent\n  - Parent Schema: tiinex.entry.session.v1\n  - Created At: 2026-10-01 00:00:00\n  - Trace: tiinex.entry.session.v1.schema.md\n  - Origin:\n    - relative\n- Current\n  - Current Schema: example.entry.session.review.v1\n  - Created At: 2026-10-01 00:00:00\n  - Summary: Example carried Session Entry specialization.\n\n---\n\n# Review Session Entry\n\n## Schema Validation Contract\n\n### Review Session Entry Scope\n\nApplies To\n\n- artifacts whose Current Schema is example.entry.session.review.v1\n\nRules\n\n- This child preserves inherited Session Entry grounding semantics.\n\n---\n\n# Continuity Integrity\n\n- sha256-base64url-c14n-v2\n  - Towards: self\n  - Value:\n`;
 }
 
-test('Core-native Entry artifacts are qualified through the generic Entry contract', () => {
-  const catalog = projectPortableEntryCatalog({ includeNative: true });
+test('content-source Entry artifacts are qualified through the generic Entry contract', () => {
+  const catalog = projectPortableEntryCatalog({ contentSources: [nativeEntryContentSource()] });
   assert.equal(catalog.status, 'ready');
   assert.deepEqual(catalog.entries.map((entry) => entry.canonicalIdentifier).sort(), [
     'tiinex.core.entry.explore.v1',
@@ -59,7 +55,7 @@ test('Core-native Entry artifacts are qualified through the generic Entry contra
   assert.equal(catalog.contractAuthority?.publicationState, 'published-immutable-canonical');
   assert.ok(catalog.entrySchemaIds.includes('tiinex.entry.session.v1'));
   for (const entry of catalog.entries) {
-    assert.equal(entry.sourceKind, 'native');
+    assert.equal(entry.sourceKind, 'content-source');
     assert.equal(entry.schemaId, 'tiinex.entry.session.v1');
     assert.deepEqual(entry.schemaLineage, ['tiinex.root.v1', 'tiinex.entry.v1', 'tiinex.entry.session.v1']);
     assert.equal(entry.representationQualification, 'valid');
@@ -67,11 +63,11 @@ test('Core-native Entry artifacts are qualified through the generic Entry contra
   }
 });
 
-test('carried Entry artifacts remain distinct from native entries and .schemas never leaks as an Entry instance', () => {
-  const carried = nativeEntryMarkdown.find(([path]) => path.endsWith('start-entry.trace.md'))?.[1];
+test('carried Entry artifacts remain distinct from reusable content-source entries and .schemas never leaks as an Entry instance', () => {
+  const carried = nativeEntryByName('start');
   assert.ok(carried);
   const catalog = projectPortableEntryCatalog({
-    includeNative: true,
+    contentSources: [nativeEntryContentSource()],
     inspection: {
       workspaces: [{
         workspaceId: 'business',
@@ -91,33 +87,10 @@ test('carried Entry artifacts remain distinct from native entries and .schemas n
   assert.ok(!catalog.entries.some((entry) => entry.artifactPath.includes('/.schemas/')));
 });
 
-test('Entry schema and native Entry artifacts carry valid self integrity', () => {
+test('Entry schema and reusable Entry fixtures carry valid self integrity', () => {
   assert.equal(canonicalC14nV2SelfState(nativeSchemaMarkdown('tiinex.entry.v1')).state, 'verified');
   assert.equal(canonicalC14nV2SelfState(nativeSchemaMarkdown('tiinex.entry.session.v1')).state, 'verified');
   for (const [, markdown] of nativeEntryMarkdown) assert.equal(canonicalC14nV2SelfState(markdown).state, 'verified');
-});
-
-test('authored Core-native Entry material cannot drift from its generated runtime projection', () => {
-  const check = spawnSync(process.execPath, ['tools/build-native-entries.mjs', '--check'], { cwd: root, encoding: 'utf8' });
-  assert.equal(check.status, 0, check.stderr || check.stdout);
-});
-
-
-test('Core-native authored source files carried inside the Core Workspace do not duplicate native Entry representations', () => {
-  const catalog = projectPortableEntryCatalog({
-    includeNative: true,
-    inspection: {
-      workspaces: [{
-        workspaceId: 'core',
-        archive: { entries: nativeEntryMarkdown.map(([artifactPath, markdown]) => ({
-          path: `src/schemas/${artifactPath}`,
-          data: new TextEncoder().encode(markdown)
-        })) }
-      }]
-    }
-  });
-  assert.equal(catalog.entries.length, 3);
-  assert.equal(catalog.entries.every((entry) => entry.sourceKind === 'native'), true);
 });
 
 test('carried Entry discovery projects only current semantic lineage leaves', () => {
@@ -126,7 +99,6 @@ test('carried Entry discovery projects only current semantic lineage leaves', ()
   const parent = carriedEntryFixture({ name: 'Team Start', version: '1' });
   const child = carriedEntryFixture({ name: 'Team Start', version: '2', parentTrace: '001-team-start.entry.md' });
   const catalog = projectPortableEntryCatalog({
-    includeNative: false,
     inspection: {
       workspaces: [{
         workspaceId: 'business',
@@ -144,10 +116,9 @@ test('carried Entry discovery projects only current semantic lineage leaves', ()
 });
 
 
-test('Session Entry grounding material is projected as required Core-owned grounding obligations', () => {
+test('Session Entry grounding material is projected as required grounding obligations', () => {
   const markdown = sessionEntryWithGrounding();
   const catalog = projectPortableEntryCatalog({
-    includeNative: false,
     inspection: {
       workspaces: [{
         workspaceId: 'business',
@@ -169,7 +140,6 @@ test('carried Entry descendant schemas participate in discovery without leaking 
   const schema = customEntryChildSchema();
   const markdown = sessionEntryWithGrounding({ schemaId: 'example.entry.session.review.v1', canonicalIdentifier: 'example.review.session.v1' });
   const catalog = projectPortableEntryCatalog({
-    includeNative: false,
     inspection: {
       workspaces: [{
         workspaceId: 'business',

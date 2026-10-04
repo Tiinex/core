@@ -316,6 +316,8 @@ function resolveTarget(target, index, declaringNode = null, options = {}) {
         const resolvedSuffix = resolveCandidateNodes(suffix, 'declared-parent-path-suffix', declaringNode);
         if (resolvedSuffix) return finalize(resolvedSuffix);
       }
+      const integrityQualifiedPinned = resolvePinnedRefPathByIntegrity(binding.filePath, index, constraint, expectedIntegrity, declaringNode);
+      if (integrityQualifiedPinned) return integrityQualifiedPinned;
       unresolvedExact ||= exactUnloadedParent(binding.raw || binding.filePath, 'declared-parent-path-unloaded');
     }
     return unresolvedExact;
@@ -383,6 +385,24 @@ function resolveTarget(target, index, declaringNode = null, options = {}) {
   return null;
 }
 
+
+
+function resolvePinnedRefPathByIntegrity(targetPath = '', index = {}, constraint = {}, expectedIntegrity = [], declaringNode = null) {
+  if (!constraint?.hasConstraint || !constraint.ref || !Array.isArray(expectedIntegrity) || !expectedIntegrity.length) return null;
+  const relaxed = {
+    ...constraint,
+    ref: '',
+    exactRef: false,
+    hasConstraint: Boolean(constraint.sourceId || constraint.repo || constraint.adapterId)
+  };
+  const candidates = exactPathMatches(targetPath, index, relaxed, Boolean(relaxed.hasConstraint));
+  const verified = candidates.filter((node) => {
+    const checked = withParentIntegrityStatus({ id: node.id, record: node.record, method: 'pinned-ref-integrity-qualified-path' }, expectedIntegrity);
+    return checked?.status === LineageResolutionStatus.verified;
+  });
+  const resolved = resolveCandidateNodes(verified, 'pinned-ref-integrity-qualified-path', declaringNode);
+  return resolved ? withParentIntegrityStatus(resolved, expectedIntegrity) : null;
+}
 
 function resolveIntegrityTarget(expectedIntegrityValues = [], index = {}, declaringNode = null) {
   const nodes = [];

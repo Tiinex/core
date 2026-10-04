@@ -21,7 +21,7 @@ export function projectGroundingGuidanceAuthority({ authority = null, requiredCo
   for (const selectedItem of selected) {
     const record = selectedItem.record;
     if (String(record.schemaId || '') !== 'tiinex.relation.v1') continue;
-    const relationItem = relationGuidanceItem(selectedItem, resolutionRecords, selectedPaths, currentTargets);
+    const relationItem = relationGuidanceItem(selectedItem, resolutionRecords, selected, currentTargets);
     if (!relationItem) continue;
     selectedRelationCount += 1;
     items.push(relationItem);
@@ -58,25 +58,55 @@ export function projectGroundingGuidanceAuthority({ authority = null, requiredCo
   });
 }
 
-function relationGuidanceItem(selectedItem, records, selectedPaths, currentTargets) {
+function relationGuidanceItem(selectedItem, records, selectedItems, currentTargets) {
   const record = selectedItem.record;
   const relation = parseRelation(record);
-  if (!relation.target) return null;
-  const resolvedTarget = resolveReference(relation.target, String(record.path || ''));
-  if (!resolvedTarget || (currentTargets.size && !currentTargets.has(resolvedTarget))) return null;
+  const selectedByPath = new Map(selectedItems.map((item) => [String(item.record?.path || ''), item]));
+  const resolvedTargets = relation.targets.map((target) => Object.freeze({
+    ...target,
+    resolvedTarget: resolveReference(target.target, String(record.path || ''))
+  })).filter((target) => target.resolvedTarget);
+  const currentMatches = resolvedTargets.filter((target) => currentTargets.has(target.resolvedTarget));
+  if (currentTargets.size && currentMatches.length !== 1) return null;
+  const currentBinding = currentMatches[0] || resolvedTargets[0] || null;
+  if (!currentBinding) return null;
+
+  const explicitGuidanceTargets = resolvedTargets.filter((target) => {
+    if (target.resolvedTarget === currentBinding.resolvedTarget) return false;
+    const candidate = selectedByPath.get(target.resolvedTarget) || null;
+    return Boolean(candidate && qualifiedRecord(candidate.record) && looksLikeGuidanceRequirement(candidate.requirement, candidate.record));
+  });
 
   const parentRef = parentTraceTarget(record.markdown || '');
   const parentPath = parentRef ? resolveReference(parentRef, String(record.path || '')) : '';
   const parentRecord = parentPath ? exactRecord(records, parentPath) : null;
   const parentQualified = qualifiedRecord(parentRecord);
   const itemUnresolved = [];
-  if (!parentRef) itemUnresolved.push(Object.freeze({ code: 'selected-guidance-relation-parent-authority-not-declared' }));
-  else if (!parentQualified) itemUnresolved.push(Object.freeze({ code: 'selected-guidance-relation-parent-authority-not-qualified', reference: parentRef, resolvedPath: parentPath }));
+  let linked = [];
+  let authority = null;
+  let applicabilityBasis = '';
 
-  const linked = parentQualified ? forwardLinkedSelectedAuthority(parentRecord, records, selectedPaths) : [];
+  if (explicitGuidanceTargets.length) {
+    linked = explicitGuidanceTargets.map((target) => {
+      const selected = selectedByPath.get(target.resolvedTarget);
+      return Object.freeze({
+        ...authorityArtifact(selected.record),
+        selectionBasis: 'exact-selected-required-context-plus-explicit-multi-target-relation'
+      });
+    });
+    authority = authorityArtifact(record);
+    applicabilityBasis = 'exact-qualified-multi-target-relation-binds-selected-guidance-to-current-work';
+  } else {
+    if (!parentRef) itemUnresolved.push(Object.freeze({ code: 'selected-guidance-relation-parent-authority-not-declared' }));
+    else if (!parentQualified) itemUnresolved.push(Object.freeze({ code: 'selected-guidance-relation-parent-authority-not-qualified', reference: parentRef, resolvedPath: parentPath }));
+    linked = parentQualified ? forwardLinkedSelectedAuthority(parentRecord, records, selectedItems) : [];
+    authority = parentQualified ? authorityArtifact(parentRecord) : null;
+    applicabilityBasis = itemUnresolved.length ? '' : 'exact-qualified-relation-targets-current-work';
+  }
+
   const processOwnedSections = linked.flatMap((item) => item.candidateSections || []);
-  const decisionSections = parentQualified ? candidateGuidanceSections(parentRecord.markdown || '') : [];
-  const candidateSections = processOwnedSections.length ? processOwnedSections : decisionSections;
+  const parentSections = authority ? candidateGuidanceSections(authorityRecordForSections(authority, record, parentRecord)) : [];
+  const candidateSections = processOwnedSections.length ? processOwnedSections : parentSections;
 
   return Object.freeze({
     state: itemUnresolved.length ? 'selected-relation-authority-incomplete' : 'qualified-forward-selected-relation-authority',
@@ -85,23 +115,26 @@ function relationGuidanceItem(selectedItem, records, selectedPaths, currentTarge
       relationType: relation.relationType,
       direction: relation.direction,
       scope: relation.scope,
-      target: relation.target,
-      resolvedTarget,
+      target: currentBinding.target,
+      resolvedTarget: currentBinding.resolvedTarget,
+      targets: Object.freeze(resolvedTargets),
       sourceArtifact: sourceArtifact(record)
     }),
-    authorityArtifact: parentQualified ? authorityArtifact(parentRecord) : null,
+    authorityArtifact: authority,
     linkedSelectedAuthority: Object.freeze(linked),
     dimensions: Object.freeze({
       availability: Object.freeze({ state: 'qualified', basis: 'exact-selected-required-context-relation-material', sourceArtifact: sourceArtifact(record) }),
       applicability: Object.freeze({
         state: itemUnresolved.length ? 'unresolved' : 'qualified-relation-binding',
-        basis: itemUnresolved.length ? '' : 'exact-qualified-relation-targets-current-work',
+        basis: itemUnresolved.length ? '' : applicabilityBasis,
         relationType: relation.relationType,
         direction: relation.direction,
         scope: relation.scope,
-        target: resolvedTarget,
-        provenance: parentQualified ? Object.freeze({ relation: sourceArtifact(record), authority: sourceArtifact(parentRecord) }) : null,
-        boundary: 'Tooling projects this exact local Relation instance and target match only. It does not normalize Relation Type text into a global process/policy predicate.'
+        target: currentBinding.resolvedTarget,
+        provenance: itemUnresolved.length ? null : Object.freeze({ relation: sourceArtifact(record), authority: authority ? sourceArtifactLike(authority) : sourceArtifact(record) }),
+        boundary: explicitGuidanceTargets.length
+          ? 'Tooling projects only exact target co-membership from this selected qualified multi-target Relation: one target must match current work and other targets must be exact selected guidance Required Context. Relation Type prose is preserved but not normalized into global semantics.'
+          : 'Tooling projects this exact local Relation instance and target match only. It does not normalize Relation Type text into a global process/policy predicate.'
       }),
       requiredness: unresolvedDimension('No independent qualified obligation/requiredness declaration was projected from this Relation alone.'),
       activeExecution: unresolvedDimension('Applicability does not establish that a process execution/step is currently active.'),
@@ -116,6 +149,13 @@ function relationGuidanceItem(selectedItem, records, selectedPaths, currentTarge
     unresolved: Object.freeze(itemUnresolved)
   });
 }
+
+function authorityRecordForSections(authority, relationRecord, parentRecord) {
+  if (parentRecord && String(authority?.path || '') === String(parentRecord.path || '')) return parentRecord.markdown || '';
+  if (String(authority?.path || '') === String(relationRecord.path || '')) return relationRecord.markdown || '';
+  return '';
+}
+function sourceArtifactLike(value = {}) { return Object.freeze({ workspaceId: String(value.workspaceId || ''), path: String(value.path || ''), sha256: String(value.sha256 || ''), schemaId: String(value.schemaId || '') }); }
 
 function materialOnlyGuidanceItem(selectedItem) {
   const record = selectedItem.record;
@@ -215,12 +255,16 @@ function relationParentPaths(selected = []) {
   return out;
 }
 
-function forwardLinkedSelectedAuthority(parentRecord, records, selectedPaths) {
+function forwardLinkedSelectedAuthority(parentRecord, records, selectedItems) {
+  const selectedPaths = new Set(selectedItems.map((item) => String(item.record?.path || '')));
+  const byPath = new Map(selectedItems.map((item) => [String(item.record?.path || ''), item]));
   const links = markdownLinkTargets(parentRecord.markdown || '');
   const out = [];
   for (const target of links) {
     const record = exactSelectedRecordForReference(target, String(parentRecord.path || ''), records, selectedPaths);
     if (!qualifiedRecord(record)) continue;
+    const selectedItem = byPath.get(String(record.path || '')) || null;
+    if (!selectedItem || !looksLikeGuidanceRequirement(selectedItem.requirement, record)) continue;
     out.push(Object.freeze({
       ...authorityArtifact(record),
       selectionBasis: 'exact-parent-authority-forward-link-plus-selected-required-context'
@@ -281,12 +325,32 @@ function parseRelation(record = {}) {
   const markdown = String(record.markdown || '');
   const declaration = section(markdown, 'Relation Declaration');
   const targetSection = section(markdown, 'Relation Target');
-  return Object.freeze({
-    relationType: field(declaration, 'Relation Type'),
-    direction: field(declaration, 'Relation Direction'),
-    scope: field(declaration, 'Relation Scope'),
-    target: markdownLinkTarget(fieldRaw(targetSection, 'Target')) || field(targetSection, 'Target')
-  });
+  const relationType = field(declaration, 'Relation Type');
+  const direction = field(declaration, 'Relation Direction');
+  const scope = field(declaration, 'Relation Scope');
+  const targets = parseRelationTargets(targetSection, { relationType, direction, scope });
+  return Object.freeze({ relationType, direction, scope, target: targets[0]?.target || '', targets: Object.freeze(targets) });
+}
+
+function parseRelationTargets(markdown = '', defaults = {}) {
+  const text = String(markdown || '');
+  const starts = [...text.matchAll(/^\s*-\s+Target:\s*(.+)$/gmu)];
+  if (!starts.length) return Object.freeze([]);
+  const out = [];
+  for (let index = 0; index < starts.length; index += 1) {
+    const start = starts[index];
+    const begin = start.index || 0;
+    const end = index + 1 < starts.length ? starts[index + 1].index : text.length;
+    const block = text.slice(begin, end);
+    const rawTarget = String(start[1] || '').trim();
+    out.push(Object.freeze({
+      target: markdownLinkTarget(rawTarget) || stripMarkdown(rawTarget),
+      relationType: field(block, 'Relation Type') || defaults.relationType || '',
+      direction: field(block, 'Relation Direction') || defaults.direction || '',
+      scope: field(block, 'Relation Scope') || defaults.scope || ''
+    }));
+  }
+  return Object.freeze(out);
 }
 
 function candidateGuidanceSections(markdown = '') {

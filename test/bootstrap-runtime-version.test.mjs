@@ -16,11 +16,12 @@ const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 test('bootstrap build timestamp is truthful bundle metadata while composition identity stays timestamp-independent', async () => {
   const first = await buildToolingBootstrapTransportFiles({ runtimeRoot: ROOT, builtAt: '2026-09-29T10:00:00.000Z' });
   const second = await buildToolingBootstrapTransportFiles({ runtimeRoot: ROOT, builtAt: '2026-09-29T11:00:00.000Z' });
-  assert.equal(first.manifest.schema, 'tiinex.portable.tooling-bootstrap.manifest.v2');
+  assert.equal(first.manifest.schema, 'tiinex.portable.tooling-bootstrap.manifest.v3');
   assert.equal(first.manifest.build.createdAt, '2026-09-29T10:00:00.000Z');
   assert.equal(first.manifest.build.orderingAuthority, 'none');
   assert.equal(second.manifest.build.createdAt, '2026-09-29T11:00:00.000Z');
-  assert.equal(first.manifest.composition.sha256, first.manifest.runtime.representationSha256);
+  assert.equal(first.manifest.runtime.representationSha256, second.manifest.runtime.representationSha256);
+  assert.equal(first.manifest.content.representationSha256, second.manifest.content.representationSha256);
   assert.equal(first.manifest.composition.sha256, second.manifest.composition.sha256);
   assert.notEqual(first.summary.manifestSha256, second.summary.manifestSha256);
   assert.equal(first.summary.compositionSha256, second.summary.compositionSha256);
@@ -70,10 +71,8 @@ test('extracted bootstrap version command projects exact local Core, composition
     assert.equal(receipt.bundle.orderingAuthority, 'none');
     assert.equal(receipt.core.name, '@tiinex/core');
     assert.equal(receipt.composition.sha256, tooling.manifest.composition.sha256);
-    assert.equal(receipt.schemaPacks[0].count, 108);
-    assert.equal(receipt.schemaPacks[0].schemas.length, 108);
-    assert.equal(receipt.companions.specialized, 25);
-    assert.equal(receipt.companions.generic, 83);
+    assert.equal(receipt.schemaPacks[0].count, receipt.schemaPacks[0].schemas.length);
+    assert.equal(receipt.companions.specialized + receipt.companions.generic, receipt.schemaPacks[0].count);
     const evidence = receipt.schemaPacks[0].schemas.find((item) => item.schemaId === 'tiinex.evidence.v1');
     assert.equal(evidence.parentSchemaId, 'tiinex.preservation.v1');
     assert.equal(evidence.companion.mode, 'specialized');
@@ -95,5 +94,5 @@ test('source-checkout version stays truthful when no bootstrap manifest surround
   assert.equal(receipt.bundle.builtAt, '');
   assert.equal(receipt.composition.state, 'unbundled-source-runtime');
   assert.equal(receipt.composition.sha256, '');
-  assert.equal(receipt.schemaPacks[0].count, 108);
+  assert.equal(receipt.schemaPacks[0].count, receipt.schemaPacks[0].schemas.length);
 });

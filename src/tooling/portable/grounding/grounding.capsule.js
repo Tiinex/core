@@ -24,8 +24,8 @@ export function projectGroundingCapsule({ authority = null, continuation = null,
   const sourceEvidence = projectGroundingSourceEvidence({ records, contextAudit, continuation, requiredContext });
   const delegationArtifactAuthority = projectGroundingDelegationArtifactAuthority({ authority, records, topology, sourceEvidence, requiredContext });
   const effectiveAuthority = mergeArtifactDelegationAuthority(authority, delegationArtifactAuthority);
-  const processApplicability = projectGroundingProcessApplicability(effectiveAuthority);
   const guidanceAuthority = projectGroundingGuidanceAuthority({ authority: effectiveAuthority, requiredContext, records, topology });
+  const processApplicability = projectGroundingProcessApplicability(effectiveAuthority, guidanceAuthority);
   const implementationSourceAuthority = projectGroundingImplementationSourceAuthority({ authority: effectiveAuthority, records, contextAudit, requiredContext });
   const delegationReadiness = projectGroundingDelegationReadiness({ authority: effectiveAuthority, processApplicability, implementationSourceAuthority });
   return Object.freeze({

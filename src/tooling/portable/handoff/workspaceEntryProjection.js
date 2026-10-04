@@ -20,7 +20,7 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   const projection = inspection.carrierProjection || {};
   if (projection.mode !== 'workspace' || (projection.routes || []).length !== 0) return blocked('pointerless-workspace-carrier-required', inspection.findings || []);
 
-  const entryCatalog = projectPortableEntryCatalog({ inspection, includeNative: true });
+  const entryCatalog = projectPortableEntryCatalog({ inspection, contentSources: input.contentSources || input.sources || [] });
   if (entryCatalog.status !== 'ready') return blocked(entryCatalog.reasonCode || 'entry-catalog-unavailable', [...(inspection.findings || []), ...(entryCatalog.findings || [])]);
   const modes = Object.freeze([
     ...(entryCatalog.entries || []).map(entryChoice),
@@ -124,9 +124,9 @@ function resolveRequestedEntry(entries, requested) {
 function entryGuidanceLines(entry) {
   const lines = [];
   lines.push(`Qualified Entry: ${entry.canonicalIdentifier || entry.label}`);
-  lines.push(entry.sourceKind === 'carried'
-    ? `Entry material: carried in this package at \`${entry.workspaceId}::${entry.artifactPath}\``
-    : `Entry material: qualified Core-native Entry \`${entry.artifactPath}\``);
+  if (entry.sourceKind === 'carried') lines.push(`Entry material: carried in this package at \`${entry.workspaceId}::${entry.artifactPath}\``);
+  else if (entry.sourceKind === 'content-source') lines.push(`Entry material: qualified reusable content source \`${entry.sourceId || ''}::${entry.artifactPath}\``);
+  else lines.push(`Entry material: qualified reusable Entry \`${entry.artifactPath}\``);
   const schemaId = String(entry.schemaId || '').trim();
   const lineage = Array.isArray(entry.schemaLineage) ? entry.schemaLineage.map((item) => String(item || '').trim()).filter(Boolean) : [];
   if (schemaId) lines.push(`Entry schema: ${schemaId}${lineage.length > 1 ? ` (${lineage.join(' -> ')})` : ''}`);

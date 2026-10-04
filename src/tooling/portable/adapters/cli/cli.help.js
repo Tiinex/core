@@ -10,6 +10,7 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     '',
     'Common path (same command for humans and LLMs):',
     `${command} version [--tree|--json]`,
+    `${command} catalog [--json]`,
     `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>] [--holder-assignment-mode <mode>] [--recipient]`,
     `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> [--holder-assignment-mode <mode>] --recipient --continue <workspace-dir>`,
     `${command} qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>`,
@@ -17,9 +18,9 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
     `${command} project-transition-catalog [<workspace-or-material-root> ...] [--output-schema <schema-id>] [--input-schema <schema-id>]`,
     `${command} project-transition-neighborhood [<workspace-or-material-root> ...] --output-schema <schema-id> [--input-schema <schema-id>]`,
-    `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas sync <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas check <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     `${command} handoff <workspace-dir>`,
     `${command} handoff <workspace-dir> --carrier-mode workspace (--package-parent <intended-predecessor-carrier.zip> | --new-root) [--output-dir <dir>]`,
     `${command} compare --left-kind <kind> --left <path> --right-kind <kind> --right <path> [side selectors]`,
@@ -40,6 +41,16 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
 }
 
 function commonCommandHelp(command, surfaceCommand) {
+  if (surfaceCommand === 'catalog') return [
+    'Tiinex portable tooling — reusable content catalog',
+    '',
+    `${command} catalog`,
+    `${command} catalog --json`,
+    '',
+    'Reads only exact manifest-declared content bundled with the active bootstrap and projects available reusable Entries, offered Process guidance, and Scaffolds. Registered discovery-surface membership is availability only; it does not establish applicability, occurrence, work/Role authority, target binding, acceptance, or mutation authority.',
+    'No ZIP archaeology, package-name special casing, network lookup, or repository crawl is performed.',
+    ''
+  ];
   if (surfaceCommand === 'version') return [
     'Tiinex portable tooling — bootstrap/runtime version and composition',
     '',
@@ -78,9 +89,9 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'schemas') return [
     'Tiinex portable tooling — native schema source lifecycle',
     '',
-    `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas sync <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas check <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     '',
     'Uses only local Workspace bytes. Sync deterministically projects canonical Docs schemas into the Core Schema Pack, generated catalog, exact source bindings, and specialized runtime projections. Check is read-only and fails on generated drift or stale local schema Markdown copies.',
     'Without `--published`, source content remains local-qualified and no immutable remote publication authority is claimed. `--published` requires one exact `--docs-commit`; Tooling does not fetch or verify that remote commit and therefore expects the caller to supply already-qualified publication metadata.',
@@ -152,9 +163,9 @@ function commonCommandHelp(command, surfaceCommand) {
     'Tiinex portable tooling — author',
     '',
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
-    `${command} schemas status <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas sync <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas check <core-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
     '',
     'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted. Supply `--path` for an exact requested coordinate or `--directory` to let Tooling allocate inside that directory-local filename namespace. For a Workspace-qualified Parent such as `business::.topics/...`, also supply `--parent-source` for the exact Parent bytes and `--parent-reference` with the commit-pinned browse+git permalink. The `workspace::path` value remains an internal selector only and is never serialized as durable cross-Workspace recovery authority. Authoring seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. `--preflight` uses that exact qualification path but removes the candidate and leaves continuation state unchanged; use it before the durable author step when validating a filled runtime scaffold. Invalid output is not retained.',
     '',

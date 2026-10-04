@@ -60,6 +60,35 @@ test('commit-pinned GitHub parent identity does not collapse to current same-pat
   assert.equal(withoutHistorical.edges.some((item) => item.kind === 'parent' && item.to === childPath && item.from === 'current-root'), false);
   assert.ok(withoutHistorical.findings.some((item) => item.code === 'lineage.parent.exactTargetNotLoaded' && item.nodeId === childPath));
 
+  const carriedHistoricalBytes = record(historicalMarkdown, ROOT_PATH, {
+    id: 'carried-historical-bytes',
+    source: { id: 'carried-docs', adapterId: 'github', repository: 'Tiinex/docs', ref: 'master' }
+  });
+  const withCarriedHistoricalBytes = resolveLineage([carriedHistoricalBytes, child]);
+  const carriedEdge = withCarriedHistoricalBytes.edges.find((item) => item.kind === 'parent' && item.to === childPath);
+  assert.ok(carriedEdge);
+  assert.equal(carriedEdge.from, 'carried-historical-bytes');
+  assert.equal(carriedEdge.status, 'verified');
+  assert.equal(carriedEdge.method, 'pinned-ref-integrity-qualified-path');
+  assert.equal(withCarriedHistoricalBytes.findings.some((item) => item.code === 'lineage.parent.exactTargetNotLoaded' && item.nodeId === childPath), false);
+
+  const recoveredWithoutAdapter = record(historicalMarkdown, ROOT_PATH, {
+    id: 'recovered-with-permalink',
+    source: {
+      repository: 'Tiinex/docs',
+      ref: HISTORICAL_REF,
+      commit: HISTORICAL_REF,
+      path: ROOT_PATH,
+      permalink: ROOT_URL,
+      receiptQualification: 'accepted-host-repository-read'
+    }
+  });
+  const withRecoveredPermalink = resolveLineage([recoveredWithoutAdapter, child]);
+  const recoveredEdge = withRecoveredPermalink.edges.find((item) => item.kind === 'parent' && item.to === childPath);
+  assert.ok(recoveredEdge);
+  assert.equal(recoveredEdge.from, 'recovered-with-permalink');
+  assert.equal(recoveredEdge.status, 'verified');
+
   const historical = record(historicalMarkdown, ROOT_PATH, {
     id: 'historical-root',
     recoveredFromUrl: ROOT_URL,

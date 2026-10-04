@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { inferWorkspaceTitle, normalizeAdditionalWorkspaceDescriptors, normalizeTransportRoute, safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
 import { buildToolingBootstrapTransportFiles, PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID } from './handoff.manufacture.bootstrap.js';
+import { resolveSelectedTiinexContentSources } from './contentSource.discovery.js';
 import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runtimeSource.js';
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
@@ -13,11 +14,13 @@ import { projectPortableManufactureSchemaReferenceAuthorities, qualifyPortableMa
 import { qualifyDelegationReturnReservation } from '../../handoff/delegationReturnReservation.js';
 import {
   assertInside,
+  expandContentSourceParentBoundaryClosure,
   expandPointerDependencyClosure,
   normalizeRelativePath,
   projectManufacturingRequirements,
   projectSemanticParticipantManufacturingRequirements,
-  resolveWorkspaceRequirementMaterials
+  resolveWorkspaceRequirementMaterials,
+  resolveContentSourceRequirementMaterials
 } from './handoff.manufacture.requirements.js';
 import {
   expandBoundedParentBoundaryClosure,
@@ -150,7 +153,8 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     primaryWorkspaceId: workspaceId,
     primaryTargetPath: input.workspaceTargetPath || input.workspaceArtifactPath || '',
     explicitBindings: input.workspaceTargets || input.workspaceTargetBindings || [],
-    additionalWorkspaceDescriptors
+    additionalWorkspaceDescriptors,
+    workspaceMaterializations
   }), packageParentReuse.workspaceTargets || []);
   const workspaceTargetById = new Map(workspaceTargets.map((item) => [String(item.workspaceId || ''), normalizeRelativePath(item.path || '')]));
   for (const [id, runtime] of workspaceRuntimeById.entries()) {
@@ -174,11 +178,21 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     requiredWorkspaceIds: hasReconciliationProof || input.requireReconciliationProof === true ? [workspaceId] : []
   });
 
+  const reusableContentSelection = await resolveSelectedTiinexContentSources({
+    contentSources: Array.isArray(input.contentSources) ? input.contentSources : [],
+    compositionRoot: input.compositionRoot || options.compositionRoot,
+    discoverInstalledContentSources: input.discoverInstalledContentSources === true || options.discoverInstalledContentSources === true,
+    includeDevContentDependencies: input.includeDevContentDependencies,
+    maxContentPackages: input.maxContentPackages || options.maxContentPackages
+  });
+  const reusableContentSources = reusableContentSelection.sources || [];
+
   const routeSpecs = transportRoutes.length ? transportRoutes : Object.freeze([{ workspaceId, path: handoffPath }]);
   let requirements = await projectManufacturingRequirements({ handoff, workspaceId, handoffPath, routeSpecs, workspaceRuntimeById });
   requirements = rebindPackageParentEndpointRoleRequirements(requirements, packageParentExactMaterialProvider);
   let materials = await resolveWorkspaceRequirementMaterials(requirements, workspaceRuntimeById, input.materialBindings || {});
   materials = appendMissingRequirementMaterials(materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
+  materials = appendContentSourceRequirementMaterials(materials, resolveContentSourceRequirementMaterials(requirements, reusableContentSources));
   const semanticParticipantProjection = projectSemanticParticipantManufacturingRequirements({ requirements, materials, routeSpecs, workspaceRuntimeById });
   requirements = semanticParticipantProjection.requirements;
   const semanticParticipantRoutesByKey = new Map((semanticParticipantProjection.semanticRoutes || []).map((item) => [`${String(item.routeWorkspaceId || '')}\u0000${normalizeRelativePath(item.routePath || '')}`, item]));
@@ -188,10 +202,15 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
   }));
   materials = appendMissingRequirementMaterials(materials, await resolveWorkspaceRequirementMaterials(requirements, workspaceRuntimeById, input.materialBindings || {}));
   materials = appendMissingRequirementMaterials(materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
+  materials = appendContentSourceRequirementMaterials(materials, resolveContentSourceRequirementMaterials(requirements, reusableContentSources));
   const packageParentMaterialClosurePreflight = projectPackageParentMaterialClosurePreflight(requirements, packageParentExactMaterialProvider);
   const dependencyClosure = await expandPointerDependencyClosure({ requirements, materials, workspaceRuntimeById, bindings: input.materialBindings || {} });
   requirements = dependencyClosure.requirements;
   materials = appendMissingRequirementMaterials(dependencyClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
+  materials = appendContentSourceRequirementMaterials(materials, resolveContentSourceRequirementMaterials(requirements, reusableContentSources));
+  const contentSourceParentBoundaryClosure = expandContentSourceParentBoundaryClosure({ requirements, materials, contentSources: reusableContentSources });
+  requirements = contentSourceParentBoundaryClosure.requirements;
+  materials = contentSourceParentBoundaryClosure.materials;
   const routeParentBoundaryClosure = expandRouteParentBoundaryClosure({ requirements, materials, workspaceMaterializations, workspaceRuntimeById, routeSpecs, exactMaterialProvider: packageParentExactMaterialProvider });
   requirements = routeParentBoundaryClosure.requirements;
   materials = appendMissingRequirementMaterials(routeParentBoundaryClosure.materials, resolvePackageParentRequirementMaterials(requirements, packageParentExactMaterialProvider));
@@ -225,7 +244,13 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
       delivery: input.toolingBootstrap || input.bootstrapDelivery || 'embedded',
       runtimeRoot: input.runtimeRoot || options.runtimeRoot,
       expected: input.expectedToolingBootstrap || null,
-      maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
+      maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles,
+      contentSources: [
+        ...reusableContentSources,
+        Object.freeze({ id: workspaceId, root: workspaceRoot, kind: 'local-workspace', workspaceIds: [workspaceId] }),
+        ...additionalEnumerations.map(({ id, root }) => Object.freeze({ id, root, kind: 'local-workspace', workspaceIds: [id] }))
+      ],
+      discoverInstalledContentSources: false
     });
     runtimeSourceAlignment = await qualifyToolingRuntimeSourceAlignment({
       runtimeIdentity: toolingBootstrap.runtimeIdentity,
@@ -299,6 +324,20 @@ function appendMissingRequirementMaterials(existing = [], additional = []) {
   return Object.freeze(out);
 }
 
+
+function appendContentSourceRequirementMaterials(existing = [], additional = []) {
+  const out = [...(existing || [])];
+  const alreadyBound = new Set(out.map((item) => String(item.requirementId || '')).filter(Boolean));
+  const grouped = new Map();
+  for (const item of additional || []) {
+    const id = String(item.requirementId || '');
+    if (!id || alreadyBound.has(id)) continue;
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id).push(item);
+  }
+  for (const candidates of grouped.values()) out.push(...candidates);
+  return Object.freeze(out);
+}
 
 function mergeWorkspaceTargetBindings(explicit = [], inherited = []) {
   const out = [];

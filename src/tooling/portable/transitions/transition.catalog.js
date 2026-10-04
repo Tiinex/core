@@ -1,5 +1,4 @@
-import { nativeSchemaMarkdown, nativeSchemaPackManifest } from '../../../schemas/generated/native.schema.pack.js';
-import { nativeHandoffTransitionMarkdown } from './native.handoff.generated.js';
+import { schemaMarkdown as nativeSchemaMarkdown, schemaPackManifest, schemaCompanionTextEntries } from '../../../schemas/registry.js';
 import { sha256Hex, utf8Bytes } from '../../../export/package.bytes.js';
 import { portableFinding } from '../findings.js';
 import { portableInputFiles } from '../input/portable.input.js';
@@ -199,12 +198,12 @@ function transitionMaterialInputs(input = {}) {
   // The canonical Handoff schema is projected from the existing native pack, never copied.
   const native = input.includeNative === true ? [
     { path: 'coordination/handoff/tiinex.handoff.v1.schema.md', content: nativeSchemaMarkdown('tiinex.handoff.v1') },
-    ...nativeHandoffTransitionMarkdown.map(([path, content]) => ({ path, content }))
+    ...schemaCompanionTextEntries().filter(([path]) => /(?:^|\/)coordination\/handoff\/.*\.trace\.md$/i.test(path)).map(([path, content]) => ({ path, content }))
   ].map((file, index) => Object.freeze({
     ...file,
-    representationKey: `core-native:handoff:${index}`,
-    sourceMode: 'portable-core-native',
-    source: Object.freeze({ provider: 'core-native', sourceMode: 'portable-core-native' })
+    representationKey: `composed-native:handoff:${index}`,
+    sourceMode: 'portable-composed-schema-content',
+    source: Object.freeze({ provider: 'composed-schema-content', sourceMode: 'portable-composed-schema-content' })
   })) : [];
   return [...native, ...portableInputFiles(input)]
     .filter((file) => typeof file?.content === 'string' || typeof file?.markdown === 'string' || typeof file?.text === 'string')
@@ -308,7 +307,7 @@ function catalogResult(definitions, findings, input = {}, options = {}) {
     if (inputSchemaId && !definition.inputSchemaIds.includes(inputSchemaId)) return false;
     return true;
   });
-  const schemaEntry = (nativeSchemaPackManifest.schemas || []).find((entry) => entry.schemaId === TRANSITION_DEFINITION_SCHEMA_ID) || null;
+  const schemaEntry = (schemaPackManifest().schemas || []).find((entry) => entry.schemaId === TRANSITION_DEFINITION_SCHEMA_ID) || null;
   return Object.freeze({
     schema: PORTABLE_TRANSITION_CATALOG_SCHEMA_ID,
     definitions: Object.freeze(definitions),
@@ -317,8 +316,8 @@ function catalogResult(definitions, findings, input = {}, options = {}) {
     request: Object.freeze({ outputSchemaId, inputSchemaId }),
     contractAuthority: schemaEntry ? Object.freeze({
       schemaId: TRANSITION_DEFINITION_SCHEMA_ID,
-      repository: nativeSchemaPackManifest.source?.repository || '',
-      commit: nativeSchemaPackManifest.source?.commit || '',
+      repository: schemaPackManifest().source?.repository || '',
+      commit: schemaPackManifest().source?.commit || '',
       sourcePath: schemaEntry.sourcePath || '',
       sha256: schemaEntry.sha256 || ''
     }) : null,

@@ -2,6 +2,7 @@ import { posix } from 'node:path';
 import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
 import { inspectStoredWorkspaceArchive } from '../handoff/workspaceByteProvider.js';
 import { decodeUtf8, findFile } from '../handoff/coldStartQualification.shared.js';
+import { parseWorkspaceEntrypoints } from '../handoff/workspaceSourceIdentity.js';
 
 const CURRENT_TASK_SCHEMA = 'tiinex.task.v1';
 const HANDOFF_PACKAGE_V1_START_PATH_RE = /^\d{3}(?:-\d+)*-1-READ-BEFORE-PROCEEDING\.trace\.md$/;
@@ -35,6 +36,7 @@ export function materializeQualifiedWorkspaceSnapshot(bundle, contextAudit, opti
       findings.push(finding('error', 'portable.grounding.workspace-snapshot.invalid', 'A carried Workspace snapshot archive is not qualified readable material.', { workspaceId, archivePath }));
       continue;
     }
+    const workspaceSource = qualifiedWorkspaceSnapshotSource(archive, workspace, workspaceId);
     for (const entry of archive.entries || []) {
       const innerPath = String(entry.path || '').replace(/\\/g, '/');
       if (!isGroundingArtifactPath(innerPath)) continue;
@@ -45,11 +47,36 @@ export function materializeQualifiedWorkspaceSnapshot(bundle, contextAudit, opti
         path: `${workspaceId}/${innerPath}`,
         content,
         size: Number(entry.size || (entry.data?.byteLength || 0)),
-        sourceMode: 'portable-handoff-workspace-snapshot'
+        sourceMode: 'portable-handoff-workspace-snapshot',
+        ...(workspaceSource ? { source: Object.freeze({ ...workspaceSource, path: innerPath }) } : {})
       }));
     }
   }
   return Object.freeze({ files: Object.freeze(files), findings: Object.freeze(findings) });
+}
+
+
+function qualifiedWorkspaceSnapshotSource(archive = {}, workspace = {}, workspaceId = '') {
+  const workspacePath = String(workspace.sourceWorkspaceTargetInnerPath || '').replace(/^\/+/, '').replace(/\\/g, '/');
+  if (!workspacePath) return null;
+  const matches = (archive.entries || []).filter((entry) => String(entry.path || '').replace(/\\/g, '/') === workspacePath);
+  if (matches.length !== 1) return null;
+  const markdown = decodeUtf8(matches[0].data || new Uint8Array());
+  if (!markdown) return null;
+  const githubSources = parseWorkspaceEntrypoints(markdown).filter((entry) => String(entry.sourceKind || '').trim().toLowerCase() === 'github-tree' && String(entry.repository || '').trim());
+  if (githubSources.length !== 1) return null;
+  const source = githubSources[0];
+  return Object.freeze({
+    id: `carried-workspace:${String(workspaceId || '').trim()}`,
+    adapterId: 'github',
+    repository: String(source.repository || '').trim(),
+    ref: String(source.ref || '').trim(),
+    authority: 'qualified-carried-workspace-snapshot',
+    remoteFetch: false,
+    workspaceId: String(workspaceId || '').trim(),
+    workspaceArtifactPath: workspacePath,
+    carriageQualification: String(workspace.qualification || '')
+  });
 }
 
 export function materializeQualifiedDetachedLineage(bundle, contextAudit, options = {}) {

@@ -442,10 +442,24 @@ function pointerTargetForRequirement(requirement, materialIndex, carriedIndex, c
   const material=materialForRequirement(materialIndex,requirement); if(!material){findings.push(finding('error','portable.handoff-package-v1.manufacture.pointer-material-missing','Pointer requirement has no exact qualified material.',{requirementId:requirement.id||''}));return null;}
   const workspaceId=String(material.provenance?.workspaceId||material.workspaceId||''); const sourcePath=normalizePath(material.provenance?.path||material.path||''); const carried=carriedEntry(carriedIndex,workspaceId,sourcePath);
   if(carried) return {targetCarrierKind:'workspace-archive-entry',targetWorkspaceId:workspaceId,archivePath:carried.archivePath,targetInnerPath:sourcePath,targetBytes:carried.bytes,targetSha256:carried.sha256};
-  const cached=cache?.materials?.find((m)=>String(m.requirementId||'')===String(requirement.id||'') || (m.referenceTarget&&m.referenceTarget===String(requirement.reference?.target||'')));
+  const cachedResolution=resolveHandoffPackageV1CachePointerMaterial(cache,requirement);
+  const cached=cachedResolution.material;
   if(cached) return {targetCarrierKind:'bounded-cache-entry',targetWorkspaceId:'',archivePath:cache.archivePath,targetArchiveEntry:cached.archiveEntry,targetBytes:cached.bytes,targetSha256:cached.sha256};
+  if(cachedResolution.state==='ambiguous'){findings.push(finding('error','portable.handoff-package-v1.manufacture.pointer-cache-reference-ambiguous','Pointer cache fallback matched multiple materials with the same reference target; exact requirement identity is required.',{requirementId:requirement.id||'',referenceTarget:cachedResolution.referenceTarget,matches:cachedResolution.matches}));return null;}
   findings.push(finding('error','portable.handoff-package-v1.manufacture.pointer-target-unresolved','Pointer requirement is neither carried nor cached in the owning route Workspace branch.',{requirementId:requirement.id||'',routeWorkspaceId:String(requirement.routeWorkspaceId||'')}));return null;
 }
+
+export function resolveHandoffPackageV1CachePointerMaterial(cache = null, requirement = {}) {
+  const exactRequirementId=String(requirement.id||'');
+  const exact=(cache?.materials||[]).find((item)=>exactRequirementId&&String(item.requirementId||'')===exactRequirementId) || null;
+  if(exact) return Object.freeze({state:'qualified-exact-requirement',material:exact,referenceTarget:String(requirement.reference?.target||''),matches:1});
+  const referenceTarget=String(requirement.reference?.target||'');
+  const matches=referenceTarget ? (cache?.materials||[]).filter((item)=>String(item.referenceTarget||'')===referenceTarget) : [];
+  if(matches.length===1) return Object.freeze({state:'qualified-unique-reference-fallback',material:matches[0],referenceTarget,matches:1});
+  if(matches.length>1) return Object.freeze({state:'ambiguous',material:null,referenceTarget,matches:matches.length});
+  return Object.freeze({state:'unresolved',material:null,referenceTarget,matches:0});
+}
+
 function projectCacheIdentity(item) {
   return projectHandoffPackageV1CacheIdentity({
     referenceTarget:item.referenceTarget,

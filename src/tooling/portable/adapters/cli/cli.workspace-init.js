@@ -2,7 +2,7 @@ import path from 'node:path';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { preparePortableWorkspaceInitialization } from '../../workspace/workspace.initialize.js';
 import { inspectNodeWorkspaceSourceIdentity } from '../node/workspace.sourceSelection.js';
-import { nativeSchemaMarkdownById } from '../../../../schemas/generated/native.schema.pack.js';
+import { schemaMarkdown } from '../../../../schemas/registry.js';
 import { schemaReferenceAuthorityForRegisteredSchema } from '../../../../schemas/creation.schemaReferences.js';
 
 export async function runCommonWorkspaceInitCli(parsed = {}) {
@@ -11,7 +11,7 @@ export async function runCommonWorkspaceInitCli(parsed = {}) {
   const schemaMaterialPath = String(flags['schema-material'] || '').trim();
   const explicitSchemaTarget = String(flags['schema-target'] || '').trim();
   const bundledWorkspaceSchema = !schemaMaterialPath && !explicitSchemaTarget
-    ? String(nativeSchemaMarkdownById['tiinex.workspace.v1'] || '')
+    ? String(schemaMarkdown('tiinex.workspace.v1') || '')
     : '';
   const schemaMarkdown = schemaMaterialPath ? await readFile(path.resolve(schemaMaterialPath), 'utf8') : bundledWorkspaceSchema;
   const schemaTarget = explicitSchemaTarget || (!schemaMaterialPath ? String(schemaReferenceAuthorityForRegisteredSchema('tiinex.workspace.v1')?.preferredTarget || '').trim() : '');

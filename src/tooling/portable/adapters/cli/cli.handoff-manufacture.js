@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { prepareNodeHandoffManufacturingInput } from '../node/handoff.manufacture.js';
 import { prepareNodeWorkspaceCarrierManufacturingInput } from '../node/workspaceCarrier.manufacture.js';
@@ -70,6 +70,7 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
   const reconciliationProof = await readOptionalJson(flags['reconciliation-proof']);
   const requireReconciliationProof = Boolean(flags['require-reconciliation-proof']);
   const packageParentWorkspaceIds = splitFlag(flags['package-parent-workspaces']);
+  if (!packageParentWorkspaceIds.length && flags['package-major'] && String(flags['package-parent'] || '').trim()) packageParentWorkspaceIds.push('all');
   const packageParentWorkspaceAliases = await readOptionalJson(flags['package-parent-workspace-aliases']);
   const operatorCarrierProfile = await readOptionalJson(flags['carrier-profile']);
   const carrierExistingNamesValue = await readOptionalJson(flags['carrier-existing-filenames'] || flags['carrier-existing']);
@@ -186,6 +187,8 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     inherited: inheritedCarrierProfile,
     runtime: runtime.defaultCarrierProfile || null
   });
+  const explicitContentRoots = splitFlag(flags['content-sources'] || flags['content-roots']);
+  const discoverInstalledContentSources = await hasPackageJson(workspaceRoot);
   const input = await prepareNodeHandoffManufacturingInput({
     workspaceRoot,
     handoffPath,
@@ -196,6 +199,9 @@ export async function prepareHandoffManufactureCliCommand(parsed = {}, runtime =
     workspaceTargetPath: flags['workspace-target'] || flags['workspace-artifact'] || '',
     workspaceTargets: workspaceTargetValue,
     workspaceScopes: descriptorArray(workspaceScopeValue, 'scopes').length ? descriptorArray(workspaceScopeValue, 'scopes') : workspaceScopeValue,
+    contentSources: [...(runtime.contentSources || []), ...explicitContentRoots],
+    compositionRoot: discoverInstalledContentSources ? path.resolve(workspaceRoot) : '',
+    discoverInstalledContentSources,
     toolingBootstrap: flags['tooling-bootstrap'] || 'embedded',
     expectedToolingBootstrap,
     materialBindings,
@@ -513,6 +519,11 @@ function defaultSidecarPath(packageTarget) {
 }
 async function readOptionalJson(file = '') { if (!file) return {}; return JSON.parse(await readFile(file, 'utf8')); }
 function descriptorArray(value, key) { if (Array.isArray(value)) return value; if (Array.isArray(value?.[key])) return value[key]; return []; }
+async function hasPackageJson(root = '.') {
+  try { await access(path.join(path.resolve(String(root || '.')), 'package.json')); return true; }
+  catch { return false; }
+}
+
 function splitFlag(value) { if (!value || value === true) return []; return String(value).split(',').map((item) => item.trim()).filter(Boolean); }
 
 

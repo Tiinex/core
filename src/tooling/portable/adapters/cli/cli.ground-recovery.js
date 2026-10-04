@@ -50,6 +50,7 @@ export async function acceptGroundHostResult(result = {}, input = {}, flags = {}
         path: String(request.path || ''),
         content,
         source: Object.freeze({
+          adapterId: 'github',
           repository: String(request.repository || ''),
           ref: String(request.ref || ''),
           commit: String(request.ref || ''),

@@ -1,4 +1,5 @@
 import { markPortableBootstrapCanonicalSource } from '../../providers/schema.bootstrap.provenance.js';
+import { projectPortableSchemaRegistryMaterial } from '../../schema/registry.material.js';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loadNodePortableInput } from '../../input/node.input.js';
@@ -215,12 +216,14 @@ export async function commandInput(parsed, runtime = {}) {
 
   const explicitTargets = parsed.positionals.length ? parsed.positionals : flags.input ? [flags.input] : [];
   const schemaAwareOperations = new Set(['resolve-schema-material', 'resolve-schema-chain-material', 'describe-schema-chain', 'make-writer-brief', 'schema-guide', 'read-schema-section', 'plan-artifact', 'prepare-materialization', 'create-local-artifact-set', 'create-local-draft', 'update-local-draft', 'validate-draft', 'stage-draft', 'materialize-durable-findings', 'process-live-turn', 'export-live-lineage']);
-  const defaultSchemaTargets = schemaAwareOperations.has(parsed.command) ? normalizeRuntimePaths(runtime.defaultSchemaMaterialPaths) : [];
+  const schemaAware = schemaAwareOperations.has(parsed.command);
+  const defaultSchemaTargets = schemaAware ? normalizeRuntimePaths(runtime.defaultSchemaMaterialPaths) : [];
   const schemaTargets = defaultSchemaTargets.filter((target) => !explicitTargets.includes(target));
-  if (!explicitTargets.length && !schemaTargets.length && !OPERATIONS_WITHOUT_EXPLICIT_MATERIAL.has(parsed.command)) throw new Error('portable.cli.input.required');
+  const registrySchemaMaterial = schemaAware ? projectPortableSchemaRegistryMaterial() : emptyMaterial();
+  if (!explicitTargets.length && !schemaTargets.length && !(registrySchemaMaterial.files || []).length && !OPERATIONS_WITHOUT_EXPLICIT_MATERIAL.has(parsed.command)) throw new Error('portable.cli.input.required');
   const loadOptions = { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] };
   const explicitMaterial = explicitTargets.length ? await loadCliExplicitMaterial(explicitTargets, parsed.command, flags, loadOptions) : emptyMaterial();
-  const defaultSchemaMaterial = schemaTargets.length ? decorateDefaultSchemaMaterial(await loadNodePortableInput(schemaTargets, loadOptions), runtime.defaultSchemaSource) : emptyMaterial();
+  const defaultSchemaMaterial = schemaTargets.length ? decorateDefaultSchemaMaterial(await loadNodePortableInput(schemaTargets, loadOptions), runtime.defaultSchemaSource) : registrySchemaMaterial;
   const material = mergeLoadedMaterial(explicitMaterial, defaultSchemaMaterial);
   if (parsed.command === 'project-transition-catalog' || parsed.command === 'project-transition-neighborhood') return {
     input: {
@@ -471,7 +474,7 @@ async function loadCliMaterial(targets = [], runtime = {}, flags = {}) {
   const schemaTargets = normalizeRuntimePaths(runtime.defaultSchemaMaterialPaths).filter((target) => !explicitTargets.includes(target));
   const loadOptions = { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] };
   const explicitMaterial = explicitTargets.length ? await loadNodePortableInput(explicitTargets, loadOptions) : emptyMaterial();
-  const defaultSchemaMaterial = schemaTargets.length ? decorateDefaultSchemaMaterial(await loadNodePortableInput(schemaTargets, loadOptions), runtime.defaultSchemaSource) : emptyMaterial();
+  const defaultSchemaMaterial = schemaTargets.length ? decorateDefaultSchemaMaterial(await loadNodePortableInput(schemaTargets, loadOptions), runtime.defaultSchemaSource) : projectPortableSchemaRegistryMaterial();
   return mergeLoadedMaterial(explicitMaterial, defaultSchemaMaterial);
 }
 

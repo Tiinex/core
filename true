@@ -1,0 +1,9 @@
+Handoff package attached.
+
+Cold start: read Start directly; do not enumerate or broadly extract this package. Follow only Start's qualified bootstrap extraction instruction.
+
+Start:
+001-1-READ-BEFORE-PROCEEDING.trace.md
+
+Continue from (do not read native; pass to Tiinex after bootstrap):
+001-3-1-1-1-1-1-1-1-handoff-pointer.trace.md

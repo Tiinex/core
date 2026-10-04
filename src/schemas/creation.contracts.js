@@ -1,5 +1,5 @@
 import { parseArtifactMarkdown } from '../artifacts/artifact.parse.js';
-import { rootValidate } from './tiinex.root.v1.validate.js';
+import { runtimeRootValidate } from './root.runtime.js';
 import { resolveSchemaCapabilities, CapabilityStatus } from './capability.registry.js';
 import { schemaRegistry } from './registry.js';
 import { resolveSchemaModule as resolveRegisteredSchemaModule } from './resolver.js';
@@ -379,12 +379,12 @@ function validateTargetSchema(parsed = {}, contract = {}) {
   const findings = [];
   if (resolution?.fallbackUsed) {
     findings.push(error('creation.validator.root-fallback', `Cannot validate ${targetSchemaId || 'unknown schema'} with a target module; root fallback would be used.`));
-    return findings.concat(rootValidate(parsed).map(normalizeFinding));
+    return findings.concat(runtimeRootValidate(parsed).map(normalizeFinding));
   }
   if (typeof module?.validate === 'function') return module.validate(parsed).map(normalizeFinding);
   if (hasQualifiedCompiledValidation(module)) return [];
   findings.push(error('creation.validator.unavailable', `${targetSchemaId || 'target schema'} has neither a schema-specific validator nor a qualified compiled validation contract.`));
-  return findings.concat(rootValidate(parsed).map(normalizeFinding));
+  return findings.concat(runtimeRootValidate(parsed).map(normalizeFinding));
 }
 
 function hasQualifiedCompiledValidation(module = {}) {

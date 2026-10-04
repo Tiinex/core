@@ -47,6 +47,7 @@ export function sourceConstraintFromTarget(value = '') {
 }
 
 function sourceIdentityFromRecord(record = {}) {
+  const source = record.source || {};
   const sourceTarget = record.sourceTarget || {};
   const snapshot = record.snapshot || {};
   const target = snapshot.target || {};
@@ -55,6 +56,8 @@ function sourceIdentityFromRecord(record = {}) {
     record.sourceOrigin,
     record.rawUrl,
     record.browseUrl,
+    source.permalink,
+    source.durableLocator,
     sourceTarget.inputTarget,
     sourceTarget.rawUrl,
     sourceTarget.browseUrl,

@@ -7,7 +7,10 @@ export async function prepareNodeBootstrapCarrierManufacturingInput(input = {}, 
     delivery: input.toolingBootstrap || input.bootstrapDelivery || 'embedded',
     runtimeRoot: input.runtimeRoot || options.runtimeRoot,
     expected: input.expectedToolingBootstrap || null,
-    maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles
+    maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles,
+    contentSources: Array.isArray(input.contentSources) ? input.contentSources : [],
+    compositionRoot: input.compositionRoot || options.compositionRoot,
+    discoverInstalledContentSources: input.discoverInstalledContentSources === true || options.discoverInstalledContentSources === true
   });
   return Object.freeze({
     carrierMode: 'bootstrap', createdAt: String(input.createdAt || ''), workspaceMaterializations: Object.freeze([]), workspaceTargets: Object.freeze([]),

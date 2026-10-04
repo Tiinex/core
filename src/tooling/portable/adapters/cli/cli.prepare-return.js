@@ -15,12 +15,12 @@ export async function runPrepareReturnCli(parsed = {}, runtime = {}) {
   if (String(state.schema || '') !== 'tiinex.portable.ground-continuation-state.v1') throw new Error('portable.cli.prepare-return.continuation-state.required');
   const returnTransition = await readQualifiedReturnTransition(workspaceRoot, state);
   const authority = await projectPreparedReturnAuthority(workspaceRoot, state, returnTransition);
-  const { incomingRelativePath, from, fromReference, to, toReference, currentWorkControlReference, returnedMaterialReference } = authority;
+  const { incomingRelativePath, from, fromKind, fromReference, to, toKind, toReference, currentWorkControlReference, returnedMaterialReference } = authority;
 
   const scaffoldRelativePath = SCAFFOLD_RELATIVE_PATH;
   const scaffoldPath = safeWorkspaceTarget(workspaceRoot, scaffoldRelativePath);
   const fieldDomains = returnHandoffFieldDomains();
-  const scaffold = returnHandoffScaffold({ from, fromReference, to, toReference, currentWorkControlReference, returnedMaterialReference, fieldDomains });
+  const scaffold = returnHandoffScaffold({ from, fromKind, fromReference, to, toKind, toReference, currentWorkControlReference, returnedMaterialReference, fieldDomains });
   if (flags['no-write'] !== true) {
     await mkdir(path.dirname(scaffoldPath), { recursive: true });
     await writeFile(scaffoldPath, scaffold, 'utf8');
@@ -81,8 +81,10 @@ export async function validatePreparedReturnBodyAuthority({ workspaceRoot = '.',
   const completion = section(bodyMarkdown, 'Completion Expectation');
   const observed = Object.freeze({
     from: field(parties, 'From'),
+    fromKind: field(parties, 'From Kind'),
     fromReference: referenceTarget(parties, 'From Reference'),
     to: field(parties, 'To'),
+    toKind: field(parties, 'To Kind'),
     toReference: referenceTarget(parties, 'To Reference'),
     currentWorkControlReference: nestedReferenceTarget(transfers, 'Controlling Artifact'),
     returnTo: field(completion, 'Return To'),
@@ -91,8 +93,10 @@ export async function validatePreparedReturnBodyAuthority({ workspaceRoot = '.',
   });
   const expected = Object.freeze({
     from: authority.from,
+    fromKind: authority.fromKind,
     fromReference: authority.fromReference,
     to: authority.to,
+    toKind: authority.toKind,
     toReference: authority.toReference,
     currentWorkControlReference: authority.currentWorkControlReference,
     returnTo: authority.to,
@@ -120,16 +124,24 @@ async function projectPreparedReturnAuthority(workspaceRoot, state = {}, returnT
   const incomingMarkdown = await readFile(incomingPath, 'utf8');
   const parties = section(incomingMarkdown, 'Handoff Parties');
   const completion = section(incomingMarkdown, 'Completion Expectation');
+  const incomingFrom = field(parties, 'From');
+  const incomingFromKind = endpointKind(field(parties, 'From Kind'));
+  const incomingFromReference = referenceTarget(parties, 'From Reference');
   const incomingTo = field(parties, 'To');
+  const incomingToKind = endpointKind(field(parties, 'To Kind'));
   const incomingToReference = referenceTarget(parties, 'To Reference');
   const from = String(state.roleLabel || incomingTo || '').trim();
-  const fromSourceReference = normalizeComparable(from) === normalizeComparable(incomingTo) ? incomingToReference : '';
+  const fromMatchesIncomingTo = normalizeComparable(from) === normalizeComparable(incomingTo);
+  const fromKind = fromMatchesIncomingTo ? incomingToKind : 'unknown';
+  const fromSourceReference = fromMatchesIncomingTo ? incomingToReference : '';
   const to = field(completion, 'Return To');
   const toSourceReference = referenceTarget(completion, 'Return To Reference');
+  const returnMatchesIncomingFrom = normalizeComparable(to) === normalizeComparable(incomingFrom);
+  const returnReferenceCompatible = !toSourceReference || !incomingFromReference || toSourceReference === incomingFromReference;
+  const toKind = returnMatchesIncomingFrom && returnReferenceCompatible ? incomingFromKind : 'unknown';
   if (!from || !to) throw new Error('portable.cli.prepare-return.endpoint.required');
-  if (!fromSourceReference || !toSourceReference) throw new Error('portable.cli.prepare-return.endpoint-reference.required');
-  const fromReference = rebaseReferenceForReturnAuthoring(fromSourceReference, incomingRelativePath);
-  const toReference = rebaseReferenceForReturnAuthoring(toSourceReference, incomingRelativePath);
+  const fromReference = fromSourceReference ? rebaseReferenceForReturnAuthoring(fromSourceReference, incomingRelativePath) : '';
+  const toReference = toSourceReference ? rebaseReferenceForReturnAuthoring(toSourceReference, incomingRelativePath) : '';
   const currentWorkControlReference = rebaseWorkspaceArtifactForReturnAuthoring(incomingRelativePath);
   const returnedMaterialReference = returnTransitionResultReference(returnTransition?.result?.path || '');
   if (!returnedMaterialReference) throw new Error('portable.cli.prepare-return.return-transition.result-reference.required');
@@ -138,9 +150,11 @@ async function projectPreparedReturnAuthority(workspaceRoot, state = {}, returnT
     sourceHandoff: incomingRelativePath,
     authoredDirectory: RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH,
     from,
+    fromKind,
     fromReference,
     fromSourceReference,
     to,
+    toKind,
     toReference,
     toSourceReference,
     currentWorkControlReference,
@@ -149,9 +163,9 @@ async function projectPreparedReturnAuthority(workspaceRoot, state = {}, returnT
     currentWorkControl: Object.freeze({ state: 'selected-source-handoff-preserved', sourceHandoff: incomingRelativePath, authoredReference: currentWorkControlReference, boundary: 'The canonical return Handoff explicitly controls the exact selected source Handoff so successor current-work selection does not fall back to unrelated historical Task ancestry.' }),
     referenceProjection: Object.freeze({
       state: 'semantic-target-preserved-for-authored-location',
-      boundary: 'Workspace-relative endpoint Role references are resolved against the exact selected source Handoff and rebased to the fixed return-Handoff authoring directory. Adapter-native/absolute references remain unchanged; endpoint authority is not weakened or retargeted.'
+      boundary: 'Optional Workspace-relative endpoint references, when present, are resolved against the exact selected source Handoff and rebased to the fixed return-Handoff authoring directory. Missing optional references remain missing; Tooling does not invent endpoint identity or Role references. Adapter-native/absolute references remain unchanged.'
     }),
-    basis: 'exact-selected-handoff recipient Role plus exact Completion Expectation Return To authority, with location-safe reference rebasing for the authored return Handoff'
+    basis: 'exact selected-Handoff recipient endpoint plus exact Completion Expectation Return To authority, preserving optional references only when supplied and preserving endpoint kind only when the source Handoff itself classifies the same endpoint'
   });
 }
 
@@ -187,19 +201,20 @@ function isNonRelativeReference(reference = '') {
     || value.startsWith('#');
 }
 
-function returnHandoffScaffold({ from, fromReference, to, toReference, currentWorkControlReference, returnedMaterialReference = '', fieldDomains = {} } = {}) {
+function returnHandoffScaffold({ from, fromKind = 'unknown', fromReference = '', to, toKind = 'unknown', toReference = '', currentWorkControlReference, returnedMaterialReference = '', fieldDomains = {} } = {}) {
+  const fromReferenceLine = fromReference ? `- From Reference: [${from} endpoint](${fromReference})\n` : '';
+  const toReferenceLine = toReference ? `- To Reference: [${to} endpoint](${toReference})\n` : '';
+  const returnToReferenceLine = toReference ? `- Return To Reference: [${to} endpoint](${toReference})\n` : '';
   return `# ${from} To ${to} — Return
 
 ## Handoff Parties
 
 - Purpose: <<TIINEX_REQUIRED:RETURN_PURPOSE>>
 - From: ${from}
-- From Kind: role
-- From Reference: [${from} Role](${fromReference})
-- To: ${to}
-- To Kind: role
-- To Reference: [${to} Role](${toReference})
-
+- From Kind: ${fromKind}
+${fromReferenceLine}- To: ${to}
+- To Kind: ${toKind}
+${toReferenceLine}
 ## Transfers
 
 - return-work
@@ -242,8 +257,7 @@ function returnHandoffScaffold({ from, fromReference, to, toReference, currentWo
 - Signal Kind: <<TIINEX_REQUIRED:SIGNAL_KIND>>
 - Signal Meaning: <<TIINEX_REQUIRED:SIGNAL_MEANING>>
 - Return To: ${to}
-- Return To Reference: [${to} Role](${toReference})
-
+${returnToReferenceLine}
 ## Interpretation Limits
 
 - Does Not Mean: <<TIINEX_REQUIRED:DOES_NOT_MEAN>>
@@ -289,6 +303,7 @@ function nestedReferenceTarget(text = '', name = '') {
   const target = /\]\(([^)]+)\)/.exec(value);
   return target ? String(target[1] || '').trim() : '';
 }
+function endpointKind(value = '') { const normalized = String(value || '').trim().toLowerCase(); return ['party','role','unknown'].includes(normalized) ? normalized : 'unknown'; }
 function normalizeComparable(value = '') { return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ''); }
 function escapeRe(value = '') { return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function normalizeWorkspaceRelativePath(value = '') {

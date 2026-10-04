@@ -4,7 +4,7 @@ import { sealC14nV2Self, canonicalC14nV2SelfState } from '../../../integrity/int
 import { integrityMethodReferenceAuthorityForCreation, C14N_V2_METHOD_ID } from '../../../integrity/integrity.methodReference.js';
 import { schemaReferenceAuthorityForRegisteredSchema } from '../../../schemas/creation.schemaReferences.js';
 import { compilePortableSchemaContract } from '../schema/contract.compile.js';
-import { workspaceValidate } from '../../../schemas/workspace/tiinex.workspace.v1.validate.js';
+import { validateWithRegisteredSchema } from '../../../schemas/runtime.validation.js';
 
 export const PORTABLE_WORKSPACE_INITIALIZATION_SCHEMA_ID = 'tiinex.portable.workspace-initialization.v1';
 export const WORKSPACE_SCHEMA_RESOLUTION_REQUEST = Object.freeze({
@@ -55,7 +55,7 @@ export function preparePortableWorkspaceInitialization(input = {}) {
   const sealed = sealC14nV2Self(unsigned);
   if (sealed.state !== 'sealed') return blocked([finding('error', 'workspace.initialize.integrity-seal.failed', 'Core could not seal Workspace c14n-v2 self integrity.', { reason: sealed.reason || sealed.state })]);
   const parsed = parseArtifactMarkdown(sealed.markdown);
-  for (const item of workspaceValidate(parsed) || []) if (item?.severity === 'error') findings.push(finding('error', item.code || 'workspace.initialize.workspace-validation', item.message || 'Workspace validation failed.'));
+  for (const item of validateWithRegisteredSchema('tiinex.workspace.v1', parsed, { unavailableCode: 'workspace.initialize.workspace-validator-unavailable' }) || []) if (item?.severity === 'error') findings.push(finding('error', item.code || 'workspace.initialize.workspace-validation', item.message || 'Workspace validation failed.'));
   const integrity = canonicalC14nV2SelfState(sealed.markdown);
   if (integrity.state !== 'verified') findings.push(finding('error', 'workspace.initialize.integrity-verification.failed', 'Generated Workspace self integrity did not verify.', { reason: integrity.reason || integrity.state }));
   if (String(parsed?.envelope?.current?.schema?.id || '') !== 'tiinex.workspace.v1') findings.push(finding('error', 'workspace.initialize.current-schema.mismatch', 'Generated Workspace Current Schema identity is not tiinex.workspace.v1.'));

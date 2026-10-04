@@ -95,14 +95,14 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   const topology = projectRelevantTopology(lineage, relevantIds, overview.frontierCandidates || [], routeRecordIds);
   const currentWorkAuthority = projectSelectedHandoffCurrentWork(authority, records, topology);
   const effectiveTopology = Object.freeze({ ...topology, currentFrontier: currentWorkAuthority.frontier });
-  const lineageIssues = relevantLineageIssues(lineage, relevantIds);
-  const routeBlockingLineageIssues = relevantLineageIssues(lineage, routeRecordIds);
   const continuity = projectColdStartContinuity({ mode, lineage, routeRecordIds, authority, material });
-  const combinedFindings = dedupeFindings([
+  const lineageIssues = filterQualifiedRecoveryBoundaryIssues(relevantLineageIssues(lineage, relevantIds), continuity);
+  const routeBlockingLineageIssues = filterQualifiedRecoveryBoundaryIssues(relevantLineageIssues(lineage, routeRecordIds), continuity);
+  const combinedFindings = projectGroundingFindings(dedupeFindings([
     ...findings,
     ...filterFindingsForIds(lineage.findings || [], relevantIds),
     ...(overview.findings || [])
-  ]);
+  ]), continuity);
 
   const missingEvidence = [];
   const reasons = [];
@@ -154,10 +154,17 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
     else known.push(evidence('required-context-closure', 'qualified', `${required.length} item(s)`));
     if (String(continuation?.state || '') !== 'ready') missing(missingEvidence, unresolved, 'continuation-not-ready', 'The grounded continuation is not ready for substantive work.');
     const returnPackage = continuation?.returnPackage || {};
-    if (returnPackage.expected && !String(returnPackage.returnToReference || '').trim()) {
-      missing(missingEvidence, unresolved, 'return-endpoint-reference-unqualified', `Completion Expectation declares Return To ${String(returnPackage.returnTo || '').trim() || 'an endpoint'}, but no explicit Return To Reference is qualified. Canonical return authoring must not infer the return endpoint from Handoff parties, labels, participant presence, or transport context.`);
-    } else if (returnPackage.expected) {
-      known.push(evidence('return-endpoint-reference', 'qualified', String(returnPackage.returnToReference || '')));
+    if (returnPackage.expected) {
+      const returnTo = String(returnPackage.returnTo || '').trim();
+      const returnToReference = String(returnPackage.returnToReference || '').trim();
+      if (returnToReference) {
+        known.push(evidence('return-endpoint-reference', 'qualified', returnToReference));
+      } else if (returnTo) {
+        known.push(evidence('return-endpoint-readable', 'declared', returnTo));
+        unresolved.push(evidence('return-endpoint-reference', 'not-supplied-nonblocking', 'Return To Reference is an optional resolution aid. Exact canonical return authoring may require additional endpoint resolution later, but its absence does not block unrelated bounded work from becoming act-ready.'));
+      } else {
+        missing(missingEvidence, unresolved, 'return-endpoint-unqualified', 'Completion Expectation requires a return-facing endpoint, but no readable Return To target is available.');
+      }
     }
     const workspaceCoverage = projectWorkspaceActionCoverage(contextAudit);
     if (!workspaceCoverage.qualified) missing(missingEvidence, unresolved, 'workspace-snapshot-coverage-unqualified', workspaceCoverage.message);
@@ -193,8 +200,8 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   }
 
   if (handoffMode) {
-    if (continuity.state === 'qualified') known.push(evidence('cold-start-root-continuity', 'qualified', `${continuity.proof.qualifiedRoots.length} qualified semantic root(s); ${continuity.proof.ancestorRecordsChecked} ancestor record(s) checked without projecting ancestor bodies.`));
-    else missing(missingEvidence, unresolved, 'cold-start-root-continuity-unproven', `Cold-start continuity to a qualified semantic root is unproven; ${continuity.blockingIssues.length} blocking Parent/root issue(s) remain.`);
+    if (continuity.state === 'qualified') known.push(evidence('cold-start-root-continuity', 'qualified', `${continuity.proof.qualifiedRoots.length} qualified root/recovery boundary item(s); ${continuity.proof.ancestorRecordsChecked} ancestor record(s) checked without projecting ancestor bodies.`));
+    else missing(missingEvidence, unresolved, 'cold-start-root-continuity-unproven', `Cold-start continuity to a qualified root or exact recovery boundary is unproven; ${continuity.blockingIssues.length} blocking Parent/root issue(s) remain.`);
   }
 
   if (topology.currentTasks.length) known.push(evidence('declared-current-work-candidates', 'qualified-candidates', `${topology.currentTasks.length} exact-qualified nonterminal Task candidate(s) are present on the selected route lineage; candidate presence alone does not establish selected-Handoff currentness.`));
@@ -223,7 +230,7 @@ export function composeGroundingReadiness({ mode = 'loaded-material', authority 
   let state = 'grounded-to-act';
   if (missingEvidence.length) state = 'insufficient-grounding';
   else if (!handoffMode || !holderBindingActReady || !currentWorkAuthority.actReady || humanOnly.length) state = 'grounded-to-discuss';
-  if (state === 'grounded-to-act') reasons.push(reason('bounded-act-ready', 'Selected Handoff authority, explicit consuming-session holder Role binding, exact qualified holder-assignment authorization where the recipient is a Role, exact Required Context, qualified carried Workspace coverage (complete or bounded as declared), cold-start continuity to a qualified semantic root, the selected-route Parent-lineage leaf, and selected-Handoff current-work control are all resolved enough for the next bounded action.'));
+  if (state === 'grounded-to-act') reasons.push(reason('bounded-act-ready', 'Selected Handoff authority, explicit consuming-session holder Role binding, exact qualified holder-assignment authorization where the recipient is a Role, exact Required Context, qualified carried Workspace coverage (complete or bounded as declared), cold-start continuity to a qualified root or exact recovery boundary, the selected-route Parent-lineage leaf, and selected-Handoff current-work control are all resolved enough for the next bounded action.'));
   const orchestrationReadiness = projectGroundingOrchestrationReadiness({ readinessState: state, participantContext: capsule.participantContext, guidanceAuthority: capsule.guidanceAuthority, sourceEvidence: capsule.sourceEvidence, topology: effectiveTopology, currentWorkAuthority });
 
   return Object.freeze({
@@ -470,7 +477,7 @@ function nextActionFor(state, topology, currentWorkAuthority = {}, continuity = 
   if (continuity?.state === 'unproven') return Object.freeze({
     kind: continuity.recovery?.state === 'host-action-available' ? 'recover-required-parent-with-host-action' : 'request-exact-required-parent-material',
     target: continuity.recovery?.target || '',
-    basis: 'cold-start continuity to a qualified semantic root is required before substantive work',
+    basis: 'cold-start continuity to a qualified root or exact recovery boundary is required before substantive work',
     recovery: continuity.recovery || null
   });
   const missingContext = (capsule?.sourceEvidence?.blockers || []).find((item) => item.code === 'authoritative-material-unavailable' && String(item.referenceTarget || '').trim());
@@ -492,6 +499,25 @@ function nodeSummary(node = {}) { return Object.freeze({ id: node.id || '', path
 function evidence(code, state, detail) { return Object.freeze({ code, state, detail: compactText(detail, 280) }); }
 function reason(code, message) { return Object.freeze({ code, message }); }
 function missing(list, unresolved, code, message) { const item = reason(code, message); list.push(item); unresolved.push(evidence(code, 'unresolved', message)); }
+function filterQualifiedRecoveryBoundaryIssues(items = [], continuity = {}) {
+  const ids = new Set((continuity?.proof?.recoveryBoundaryRoots || []).map((item) => String(item?.id || '')));
+  if (!ids.size) return items;
+  return items.filter((item) => !(ids.has(String(item?.nodeId || '')) && ['lineage.parent.exactTargetNotLoaded', 'lineage.parent.missing'].includes(String(item?.code || ''))));
+}
+
+function projectGroundingFindings(items = [], continuity = {}) {
+  const ids = new Set((continuity?.proof?.recoveryBoundaryRoots || []).map((item) => String(item?.id || '')));
+  if (!ids.size) return items;
+  return items.map((item) => {
+    if (!ids.has(String(item?.nodeId || '')) || String(item?.code || '') !== 'lineage.parent.exactTargetNotLoaded') return item;
+    return Object.freeze({
+      ...item,
+      severity: 'info',
+      message: 'Historical Parent bytes are not loaded because this artifact qualifies an exact version-stable Parent recovery boundary; fetch is not required for the current bounded grounding.'
+    });
+  });
+}
+
 function finding(severity, code, message, params = {}) { return Object.freeze({ severity, code, message, source: PORTABLE_GROUNDING_READINESS_SCHEMA_ID, params }); }
 function compactText(value = '', limit = 240) { const text = String(value || '').replace(/\s+/g, ' ').trim(); return text.length > limit ? `${text.slice(0, Math.max(0, limit - 1))}…` : text; }
 function filterFindingsForIds(items = [], ids = new Set()) { return items.filter((item) => !item?.nodeId || ids.has(item.nodeId)); }
