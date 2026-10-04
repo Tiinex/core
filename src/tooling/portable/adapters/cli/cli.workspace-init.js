@@ -13,7 +13,7 @@ export async function runCommonWorkspaceInitCli(parsed = {}) {
   const bundledWorkspaceSchema = !schemaMaterialPath && !explicitSchemaTarget
     ? String(schemaMarkdown('tiinex.workspace.v1') || '')
     : '';
-  const schemaMarkdown = schemaMaterialPath ? await readFile(path.resolve(schemaMaterialPath), 'utf8') : bundledWorkspaceSchema;
+  const workspaceSchemaMarkdown = schemaMaterialPath ? await readFile(path.resolve(schemaMaterialPath), 'utf8') : bundledWorkspaceSchema;
   const schemaTarget = explicitSchemaTarget || (!schemaMaterialPath ? String(schemaReferenceAuthorityForRegisteredSchema('tiinex.workspace.v1')?.preferredTarget || '').trim() : '');
   const explicitRepository = String(flags.repository || '').trim();
   const source = explicitRepository
@@ -29,7 +29,7 @@ export async function runCommonWorkspaceInitCli(parsed = {}) {
     rootPath: String(flags['root-path'] || source.rootPath || '.').trim(),
     authors: String(flags.authors || '').trim(),
     schemaTarget,
-    schemaMarkdown,
+    schemaMarkdown: workspaceSchemaMarkdown,
     sameRepositorySchema: flags['same-repository-schema'] === true
   });
   if (result.status !== 'ready') return Object.freeze({ ...result, root, sourceDetection: source });
