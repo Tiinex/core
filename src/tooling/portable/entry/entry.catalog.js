@@ -55,8 +55,22 @@ export function projectPortableEntryCatalog(input = {}) {
   }
 
   const leaves = currentLeafKeys(projected);
-  const entries = projected
-    .filter((entry) => entry.readQualified && (entry.sourceKind === 'content-source' || leaves.has(entry.id)))
+  const materialById = new Map(representations.map((material) => [material.id, material]));
+  const qualified = projected
+    .filter((entry) => entry.readQualified && (entry.sourceKind === 'content-source' || leaves.has(entry.id)));
+  const byExactBytes = new Map();
+  for (const entry of qualified) {
+    const bytes = String(materialById.get(entry.id)?.markdown || '');
+    const key = bytes || `id:${entry.id}`;
+    byExactBytes.set(key, [...(byExactBytes.get(key) || []), entry]);
+  }
+  const selectedIds = new Set();
+  for (const group of byExactBytes.values()) {
+    const embedded = group.find((entry) => entry.sourceKind === 'carried');
+    selectedIds.add((embedded || group[0]).id);
+  }
+  const entries = qualified
+    .filter((entry) => selectedIds.has(entry.id))
     .map((entry) => Object.freeze({ ...entry, currentLeaf: true }))
     .sort((a, b) => a.label.localeCompare(b.label) || a.sourceKind.localeCompare(b.sourceKind) || a.id.localeCompare(b.id));
   return Object.freeze({
