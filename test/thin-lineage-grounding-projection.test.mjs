@@ -495,7 +495,7 @@ test('process applicability stays unresolved without upstream-qualified explicit
   assert.equal(absent.state, 'not-established');
   assert.deepEqual(absent.facts, []);
   assert.equal(absent.unresolved[0].code, 'process-applicability-semantic-authority-not-established');
-  assert.match(absent.unresolved[0].detail, /do not infer applicability from carried Roles/);
+  assert.match(absent.unresolved[0].detail, /do not infer applicability from carried Roles/i);
 
   const explicit = projectGroundingProcessApplicability({ processApplicability: {
     explicit: true,

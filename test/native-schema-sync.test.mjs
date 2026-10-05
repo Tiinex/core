@@ -53,7 +53,7 @@ test('schema sync/check materializes canonical schema authority into the selecte
   assert.equal(check.generated.staleCanonicalSchemaCopies, 0);
 
   const source = await discoverLocalTiinexContentSource({ root: contentRoot });
-  const runtime = await initializePortableNodeRuntime({ contentSources: [source], discoverBundled: false, discoverInstalled: false });
+  const runtime = await initializePortableNodeRuntime({ contentSources: [source], discoverBundled: false, discoverInstalled: false, environmentContentRoots: '' });
   assert.equal(runtime.status, 'ready');
   assert.equal(runtime.schemaRuntime.schemas.total, 2);
   assert.equal(runtime.schemaRuntime.registry.source, 'portable-content-source-composition');

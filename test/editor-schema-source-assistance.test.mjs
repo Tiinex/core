@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
-import { nativeSchemaMarkdown } from '../src/schemas/generated/native.schema.pack.js';
+import { currentSchemaMarkdown } from './helpers/current-schema-targets.mjs';
 import { canonicalC14nV2SelfState } from '../src/integrity/integrity.c14nV2.js';
 
 const ROOT_PATH = '.topics/.schemas/tiinex.root.v1.schema.md';
@@ -9,7 +9,7 @@ const ENTRY_PATH = '.topics/.schemas/entry/tiinex.entry.v1.schema.md';
 const EVIDENCE_PATH = '.topics/.schemas/core/evidence/tiinex.evidence.v1.schema.md';
 
 function record(path, schemaId) {
-  const markdown = nativeSchemaMarkdown(schemaId);
+  const markdown = currentSchemaMarkdown(schemaId);
   assert.ok(markdown, `native schema ${schemaId} must be available`);
   return { path, markdown };
 }

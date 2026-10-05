@@ -1,15 +1,21 @@
-const DOCS_COMMIT='3988951208eb9a8926e84ab42625d4b42fa00c2d';
-const PATHS=Object.freeze({
-  'tiinex.root.v1':'.topics/.schemas/tiinex.root.v1.schema.md',
-  'tiinex.workspace.v1':'.topics/.schemas/workspace/tiinex.workspace.v1.schema.md',
-  'tiinex.task.v1':'.topics/.schemas/core/task/tiinex.task.v1.schema.md',
-  'tiinex.handoff.v1':'.topics/.schemas/coordination/handoff/tiinex.handoff.v1.schema.md',
-  'tiinex.party.role.v1':'.topics/.schemas/party/role/tiinex.party.role.v1.schema.md',
-  'tiinex.evidence.v1':'.topics/.schemas/core/evidence/tiinex.evidence.v1.schema.md'
-});
+import { schemaMarkdown, schemaRegistry } from '../../src/schemas/registry.js';
 
 export function currentSchemaTarget(schemaId) {
-  const path=PATHS[String(schemaId||'')];
-  if(!path) throw new Error(`No explicit test-fixture schema permalink for ${schemaId}.`);
-  return `https://github.com/Tiinex/docs/blob/${DOCS_COMMIT}/${path}`;
+  const module = schemaRegistry.byId?.get(String(schemaId || '')) || null;
+  const target = String(module?.binding?.permalink || '').trim();
+  if (!target) throw new Error(`No qualified test-runtime schema permalink for ${schemaId}. Did the Core test runtime bootstrap select Native content?`);
+  return target;
+}
+
+export function currentSchemaMarkdown(schemaId) {
+  const markdown = String(schemaMarkdown(String(schemaId || '')) || '');
+  if (!markdown) throw new Error(`No qualified test-runtime schema bytes for ${schemaId}. Did the Core test runtime bootstrap select Native content?`);
+  return markdown;
+}
+
+export function currentSchemaSourcePath(schemaId) {
+  const module = schemaRegistry.byId?.get(String(schemaId || '')) || null;
+  const sourcePath = String(module?.binding?.sourcePath || '').trim();
+  if (!sourcePath) throw new Error(`No qualified test-runtime schema source path for ${schemaId}.`);
+  return sourcePath;
 }

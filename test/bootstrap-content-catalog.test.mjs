@@ -33,7 +33,7 @@ test('embedded bootstrap catalog exposes Process and Scaffold content and keeps 
     await writeBootstrap(extractionRoot, bootstrap);
 
     const entrypoint = path.join(extractionRoot, 'tiinex.bootstrap', 'runtime', 'tools', 'tiinex-portable.mjs');
-    const run = spawnSync(process.execPath, [entrypoint, 'catalog', '--json'], { encoding: 'utf8', timeout: 30_000 });
+    const run = spawnSync(process.execPath, [entrypoint, 'catalog', '--json'], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, TIINEX_CONTENT_ROOTS: '' } });
     assert.equal(run.status, 0, run.stderr || run.stdout);
     const catalog = JSON.parse(run.stdout);
     assert.equal(catalog.status, 'ready');
@@ -67,7 +67,7 @@ test('embedded bootstrap catalog reports initialized Schema content without arch
     const bootstrap = await buildToolingBootstrapTransportFiles({ runtimeRoot: coreRoot, contentSources: [contentSource], builtAt: '2026-10-04T12:01:00.000Z' });
     await writeBootstrap(extractionRoot, bootstrap);
     const entrypoint = path.join(extractionRoot, 'tiinex.bootstrap', 'runtime', 'tools', 'tiinex-portable.mjs');
-    const run = spawnSync(process.execPath, [entrypoint, 'catalog', '--json'], { encoding: 'utf8', timeout: 30_000 });
+    const run = spawnSync(process.execPath, [entrypoint, 'catalog', '--json'], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, TIINEX_CONTENT_ROOTS: '' } });
     assert.equal(run.status, 0, run.stderr || run.stdout);
     const catalog = JSON.parse(run.stdout);
     assert.equal(catalog.status, 'ready');

@@ -7,7 +7,7 @@ import { prepareEpistemicMaterialization } from '../src/tooling/portable/materia
 import { createPortableLocalDraft } from '../src/tooling/portable/draft/draft.create.js';
 import { canonicalC14nV2SelfState, sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { locateFindingLine, projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
-import { nativeSchemaMarkdown } from '../src/schemas/generated/native.schema.pack.js';
+import { currentSchemaMarkdown } from './helpers/current-schema-targets.mjs';
 import { validateArtifact } from '../src/validation/validateArtifact.js';
 
 const TOPIC = 'tiinex.topic.v1';
@@ -412,7 +412,7 @@ test('editor assistance prefers same-Workspace relative schema source when local
   const degraded = sealC14nV2Self(canonical.replace(/^  - Current Schema: \[tiinex\.topic\.v1\]\([^)]+\)$/m, '  - Current Schema: tiinex.topic.v1'));
   assert.equal(degraded.state, 'sealed');
   const topicSourcePath = '.topics/.schemas/core/topic/tiinex.topic.v1.schema.md';
-  const localTopic = `${nativeSchemaMarkdown(TOPIC)}\n<!-- unpublished-local-schema-bytes -->`;
+  const localTopic = `${currentSchemaMarkdown(TOPIC)}\n<!-- unpublished-local-schema-bytes -->`;
   const records = [
     { path, markdown: degraded.markdown },
     { path: topicSourcePath, markdown: localTopic }

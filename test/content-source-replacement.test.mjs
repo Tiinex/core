@@ -19,7 +19,7 @@ const integrationTest=nativeAvailable ? test : test.skip;
 test('Core mechanics remain importable and explicit runtime initialization fails closed when no content source is selected',async()=>{
   const publicCore=await import('../src/public/index.js');
   assert.ok(publicCore);
-  const runtime=await initializePortableNodeRuntime({runtimeRoot:ROOT,contentSources:[],discoverBundled:false,discoverInstalled:false});
+  const runtime=await initializePortableNodeRuntime({runtimeRoot:ROOT,contentSources:[],discoverBundled:false,discoverInstalled:false,environmentContentRoots:''});
   assert.equal(runtime.status,'no-schema-content-source');
   assert.equal(runtime.contentSources.length,0);
   assert.equal(runtime.schemaRuntime,null);
@@ -28,7 +28,7 @@ test('Core mechanics remain importable and explicit runtime initialization fails
 integrationTest('Native can be selected normally and replaced by a differently named package carrying the same registered surfaces',async(t)=>{
   const native=await discoverLocalTiinexContentSource({root:nativeRoot});
   assert.equal(native.status,'ready');
-  const nativeRuntime=await initializePortableNodeRuntime({runtimeRoot:ROOT,contentSources:[native],discoverBundled:false,discoverInstalled:false});
+  const nativeRuntime=await initializePortableNodeRuntime({runtimeRoot:ROOT,contentSources:[native],discoverBundled:false,discoverInstalled:false,environmentContentRoots:''});
   assert.equal(nativeRuntime.status,'ready');
   assert.equal(nativeRuntime.schemaRuntime.schemas.total,109);
   assert.ok(nativeRuntime.schemaRuntime.schemas.specialized>0);
@@ -49,7 +49,7 @@ integrationTest('Native can be selected normally and replaced by a differently n
   assert.equal(custom.status,'ready');
   assert.equal(custom.source.id,'@example/custom-defaults');
   assert.ok((custom.source.capabilities.workspaceIds||[]).includes('custom'));
-  const customRuntime=await initializePortableNodeRuntime({runtimeRoot:ROOT,contentSources:[custom],discoverBundled:false,discoverInstalled:false});
+  const customRuntime=await initializePortableNodeRuntime({runtimeRoot:ROOT,contentSources:[custom],discoverBundled:false,discoverInstalled:false,environmentContentRoots:''});
   assert.equal(customRuntime.status,'ready');
   assert.equal(customRuntime.schemaRuntime.schemas.total,nativeRuntime.schemaRuntime.schemas.total);
   assert.equal(customRuntime.schemaRuntime.schemas.specialized,nativeRuntime.schemaRuntime.schemas.specialized);

@@ -151,7 +151,7 @@
     "NOTICE"
   ],
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node --import ./test/helpers/runtime-content.bootstrap.mjs --test test/*.test.mjs",
     "test:portable": "node test/portable-smoke.mjs",
     "pack:check": "npm pack --dry-run",
     "test:bootstrap": "node tools/check-bootstrap.mjs",

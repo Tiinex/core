@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { nativeSchemaMarkdown } from '../src/schemas/generated/native.schema.pack.js';
+import { currentSchemaMarkdown } from './helpers/current-schema-targets.mjs';
 import { projectPortableTransitionCatalog, projectPortableTransitionNeighborhood } from '../src/tooling/portable/transitions/transition.catalog.js';
 import { runPortableOperation } from '../src/tooling/portable/operation.catalog.js';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
@@ -27,7 +27,7 @@ function packageFixture(root = '/repo-a', { attach = true } = {}) {
   const companion = `# Continuity Context\n\n- Envelope Schema: tiinex.root.v1\n- Current\n  - Current Schema: tiinex.schema.transition.companion.v1\n  - Created At: 2026-09-30 00:00:00\n  - Summary: Test Task Transition companion.\n\n---\n\n# Task Transition Companion\n\n## Schema Binding\n\n- Schema Reference: [tiinex.task.v1](tiinex.task.v1.schema.md)\n\n## Transition Attachments\n\n${attach ? '- topic-to-task\n  - Transition Reference: [Topic to Task](.transitions/topic-to-task-transition-definition.trace.md)' : '- none'}\n\n## Interpretation Limits\n\n- Does Not Mean: applicability\n- Must Not Be Used To Claim: execution\n${integrity}`;
   return [
     material('pkg/task-semantic-package.trace.md', manifest, root),
-    material('pkg/tiinex.task.v1.schema.md', nativeSchemaMarkdown('tiinex.task.v1'), root),
+    material('pkg/tiinex.task.v1.schema.md', currentSchemaMarkdown('tiinex.task.v1'), root),
     material('pkg/tiinex.task.v1-transitions.trace.md', companion, root),
     material('pkg/.transitions/create-task-transition-definition.trace.md', createTask, root),
     material('pkg/.transitions/topic-to-task-transition-definition.trace.md', topicToTask, root)

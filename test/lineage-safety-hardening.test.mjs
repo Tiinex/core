@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { buildArtifactCreationContract } from '../src/schemas/creation.contracts.js';
 import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.renderer.js';
-import { rootValidate } from '../src/schemas/tiinex.root.v1.validate.js';
+import { schemaRegistry } from '../src/schemas/registry.js';
+const rootValidate = (...args) => schemaRegistry.byId.get('tiinex.root.v1').validate(...args);
 import { parentRecoveryMode, recoverQualifiedRuntimeSchemaReferenceAuthority } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
 import { deriveHandoffConsolidationAllocation, deriveHandoffSiblingAllocation, reserveHandoffSiblingIndex } from '../src/tooling/portable/adapters/cli/cli.handoff-sibling-allocation.js';
 import { advanceHandoffCarrierMajor, continueHandoffCarrierLineage } from '../src/tooling/portable/handoff/carrierLineage.js';
@@ -14,7 +15,7 @@ import { sealC14nV2Self, validatedC14nV2PrimarySelfDigest } from '../src/integri
 import { sha256Hex } from '../src/export/package.bytes.js';
 import { portableCanonicalBootstrapRuntime } from '../src/tooling/portable/schema/bootstrap/canonical.pack.js';
 import { projectPortableEditorAssistance } from '../src/tooling/portable/editor/editor.assistance.js';
-import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
+import { currentSchemaMarkdown, currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
 const encoder = new TextEncoder();
 const ROOT_SCHEMA_TARGET = currentSchemaTarget('tiinex.root.v1');
@@ -107,34 +108,46 @@ test('current published Evidence uses exact schema authority while historical ba
   assert.ok(mixedAssistance.documents[0].diagnostics.some((item) => item.code === 'schema.reference.exact-target-omitted' && item.severity === 'warning' && item.line === 3));
 });
 
-test('common author recovers Parent schema authority only from exact qualified runtime schema material', async () => {
+test('common author recovers Parent schema authority from the selected qualified content-source runtime', async () => {
   const authority = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.validation.report.v1', portableCanonicalBootstrapRuntime);
-  assert.equal(authority, null);
+  assert.equal(authority?.resolutionState, 'qualified');
+  assert.equal(authority?.preferredTarget, currentSchemaTarget('tiinex.validation.report.v1'));
 
   const currentRole = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.party.role.v1', portableCanonicalBootstrapRuntime);
-  assert.equal(currentRole, null);
+  assert.equal(currentRole?.resolutionState, 'qualified');
+  assert.equal(currentRole?.preferredTarget, currentSchemaTarget('tiinex.party.role.v1'));
 });
 
 test('runtime Parent schema recovery fails closed on ambiguous qualified representations and writes no Workspace schema copy', async () => {
-  const canonicalRoot = portableCanonicalBootstrapRuntime.defaultSchemaMaterialPaths[0];
-  const sourceRelative = 'validation/report/tiinex.validation.report.v1.schema.md';
-  const exact = await readFile(path.join(canonicalRoot, sourceRelative), 'utf8');
+  const canonicalRoot = await mkdtemp(path.join(os.tmpdir(), 'tiinex-schema-runtime-exact-'));
   const alternateRoot = await mkdtemp(path.join(os.tmpdir(), 'tiinex-schema-runtime-alt-'));
+  const sourceRelative = 'validation/report/tiinex.validation.report.v1.schema.md';
+  const exact = currentSchemaMarkdown('tiinex.validation.report.v1');
+  const exactPath = path.join(canonicalRoot, sourceRelative);
   const alternatePath = path.join(alternateRoot, sourceRelative);
+  await mkdir(path.dirname(exactPath), { recursive: true });
   await mkdir(path.dirname(alternatePath), { recursive: true });
+  await writeFile(exactPath, exact, 'utf8');
   const mutated = sealC14nV2Self(exact.replace('# Validation Report', '# Validation Report Alternate'));
   assert.equal(mutated.state, 'sealed');
   await writeFile(alternatePath, mutated.markdown, 'utf8');
 
   const childWorkspace = await mkdtemp(path.join(os.tmpdir(), 'tiinex-author-child-'));
   const before = await readdir(childWorkspace);
+  const module = schemaRegistry.byId.get('tiinex.validation.report.v1');
   const authority = await recoverQualifiedRuntimeSchemaReferenceAuthority('tiinex.validation.report.v1', {
-    ...portableCanonicalBootstrapRuntime,
-    defaultSchemaMaterialPaths: [canonicalRoot, alternateRoot]
+    defaultSchemaMaterialPaths: [canonicalRoot, alternateRoot],
+    defaultSchemaSource: {
+      repository: module.binding.sourceRepository,
+      commit: module.binding.sourceCommit,
+      sourcePathPrefix: '.topics/.schemas'
+    }
   });
   const after = await readdir(childWorkspace);
   assert.equal(authority, null);
   assert.deepEqual(after, before, 'schema authority recovery must not copy canonical schema material into the child Workspace');
+  await rm(canonicalRoot, { recursive: true, force: true });
+  await rm(alternateRoot, { recursive: true, force: true });
 });
 
 test('Root validation rejects malformed mixed Workspace-qualified Parent recovery locators', () => {

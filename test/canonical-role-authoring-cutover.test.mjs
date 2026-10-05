@@ -10,8 +10,8 @@ import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.ren
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { validateArtifact } from '../src/validation/validateArtifact.js';
 import { runCommonAuthorCli } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
-import binding from '../src/schemas/party/role/tiinex.party.role.v1.schema.json' with { type: 'json' };
-import runtimeProjection from '../src/schemas/party/role/tiinex.party.role.v1.schema.runtime.json' with { type: 'json' };
+const binding = JSON.parse(await readFile(new URL('../../native/.topics/.schemas/party/role/tiinex.party.role.v1.schema.json', import.meta.url), 'utf8'));
+const runtimeProjection = JSON.parse(await readFile(new URL('../../native/.topics/.schemas/party/role/tiinex.party.role.v1.schema.runtime.json', import.meta.url), 'utf8'));
 
 const ROLE_SCHEMA_SHA = '2887aef16cf827b78fe38c1a2ba97cb5820d79049729d2cf8696ecf1de828871';
 const EXACT_PRE_MIGRATION_AXIOM_SHA = 'f17e74db07c6a2d1288119c330a20b3b19cd0eb01f6a2c9f207d21102d9488d5';
@@ -83,7 +83,7 @@ test('bundled Role schema material is the Axiom-amended Assignment Modes revisio
   assert.ok(runtimeProjection.creation.requiredInputs.includes('Assignment Modes'));
   const holder = runtimeProjection.validationContract.validation.ordinaryGroups.find((group) => group.group === 'Holder Relationship');
   assert.deepEqual(holder.requiredFields, ['Holder State', 'Assignment Modes']);
-  const snapshot = await readFile(new URL('../src/tooling/portable/schema/bootstrap/schema-pack/schemas/party/role/tiinex.party.role.v1.schema.md', import.meta.url), 'utf8');
+  const snapshot = await readFile(new URL('../../native/.topics/.schemas/party/role/tiinex.party.role.v1.schema.md', import.meta.url), 'utf8');
   assert.match(snapshot, /- Assignment Modes$/m);
 });
 

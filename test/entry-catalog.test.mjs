@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { nativeEntryMarkdown, nativeEntryByName, nativeEntryContentSource } from './helpers/native-entry-fixtures.mjs';
-import { nativeSchemaMarkdown } from '../src/schemas/generated/native.schema.pack.js';
+import { currentSchemaMarkdown } from './helpers/current-schema-targets.mjs';
 import { projectPortableEntryCatalog } from '../src/tooling/portable/entry/entry.catalog.js';
 import { canonicalC14nV2SelfState, sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 
@@ -63,7 +63,7 @@ test('content-source Entry artifacts are qualified through the generic Entry con
   }
 });
 
-test('carried Entry artifacts remain distinct from reusable content-source entries and .schemas never leaks as an Entry instance', () => {
+test('carried Entry artifacts win exact-byte duplicates from reusable content sources and .schemas never leaks as an Entry instance', () => {
   const carried = nativeEntryByName('start');
   assert.ok(carried);
   const catalog = projectPortableEntryCatalog({
@@ -73,7 +73,7 @@ test('carried Entry artifacts remain distinct from reusable content-source entri
         workspaceId: 'business',
         archive: { entries: [
           { path: '.topics/entries/team-start.trace.md', data: new TextEncoder().encode(carried) },
-          { path: '.topics/.schemas/entry/tiinex.entry.v1.schema.md', data: new TextEncoder().encode(nativeSchemaMarkdown('tiinex.entry.v1')) }
+          { path: '.topics/.schemas/entry/tiinex.entry.v1.schema.md', data: new TextEncoder().encode(currentSchemaMarkdown('tiinex.entry.v1')) }
         ] }
       }]
     }
@@ -83,13 +83,13 @@ test('carried Entry artifacts remain distinct from reusable content-source entri
   assert.equal(carriedEntries[0].workspaceId, 'business');
   assert.equal(carriedEntries[0].artifactPath, '.topics/entries/team-start.trace.md');
   assert.equal(carriedEntries[0].canonicalIdentifier, 'tiinex.core.entry.start.v1');
-  assert.equal(catalog.entries.filter((entry) => entry.canonicalIdentifier === 'tiinex.core.entry.start.v1').length, 2);
+  assert.equal(catalog.entries.filter((entry) => entry.canonicalIdentifier === 'tiinex.core.entry.start.v1').length, 1);
   assert.ok(!catalog.entries.some((entry) => entry.artifactPath.includes('/.schemas/')));
 });
 
 test('Entry schema and reusable Entry fixtures carry valid self integrity', () => {
-  assert.equal(canonicalC14nV2SelfState(nativeSchemaMarkdown('tiinex.entry.v1')).state, 'verified');
-  assert.equal(canonicalC14nV2SelfState(nativeSchemaMarkdown('tiinex.entry.session.v1')).state, 'verified');
+  assert.equal(canonicalC14nV2SelfState(currentSchemaMarkdown('tiinex.entry.v1')).state, 'verified');
+  assert.equal(canonicalC14nV2SelfState(currentSchemaMarkdown('tiinex.entry.session.v1')).state, 'verified');
   for (const [, markdown] of nativeEntryMarkdown) assert.equal(canonicalC14nV2SelfState(markdown).state, 'verified');
 });
 
