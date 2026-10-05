@@ -7,6 +7,7 @@ import { projectPortableContractInstance } from '../schema/contract.project.js';
 import { decodePortableContentText, portableContentSourceEntries } from '../content/contentSource.records.js';
 
 export const ENTRY_SCHEMA_ID = 'tiinex.entry.v1';
+export const TARGET_ENTRY_SCHEMA_ID = 'tiinex.entry.target.v1';
 export const PORTABLE_ENTRY_CATALOG_SCHEMA_ID = 'tiinex.portable.entry-catalog.v1';
 const ROOT_SCHEMA_ID = 'tiinex.root.v1';
 const ACCEPTED_VALIDATION_STATES = new Set(['valid', 'valid-with-preserved-unknowns']);
@@ -330,9 +331,14 @@ function projectEntry(material, projection, validation, schemaResolution = {}) {
   const presentation = ordinaryValues(projection, 'Presentation And Interaction');
   const limits = ordinaryValues(projection, 'Interpretation Limits');
   const portability = ordinaryValues(projection, 'Portability Notes');
+  const targetIdentity = ordinaryValues(projection, 'Target Identity');
+  const targetCapabilities = ordinaryValues(projection, 'Target Capabilities');
+  const targetCompatibility = ordinaryValues(projection, 'Target Compatibility');
   const label = String(identity['Human Label'] || identity.Name || '').trim();
   const rootDeclarations = rootDeclarationGroupNames();
   const declarations = declarationGroups(projection).filter((group) => !rootDeclarations.has(group.group));
+  const schemaLineage = Object.freeze([...(schemaResolution.schemaLineage || [])]);
+  const entryKind = schemaLineage.includes(TARGET_ENTRY_SCHEMA_ID) ? 'target' : 'purpose';
   const groundingMaterial = declarations
     .filter((group) => group.group === 'Grounding Material' || group.entries.some((entry) => entry.heading === '## Grounding Material'))
     .flatMap((group) => group.entries)
@@ -344,11 +350,22 @@ function projectEntry(material, projection, validation, schemaResolution = {}) {
       qualificationNotes: String(entry.fields['Qualification Notes'] || '').trim(),
       requiredForEntryGrounding: true
     }));
+  const targetMaterial = declarations
+    .filter((group) => group.group === 'Target Material' || group.entries.some((entry) => entry.heading === '## Target Material'))
+    .flatMap((group) => group.entries)
+    .map((entry) => Object.freeze({
+      name: entry.name,
+      reference: String(entry.fields.Reference || '').trim(),
+      purpose: String(entry.fields.Purpose || '').trim(),
+      label: String(entry.fields.Label || '').trim(),
+      qualificationNotes: String(entry.fields['Qualification Notes'] || '').trim()
+    }));
   return Object.freeze({
     id: material.id,
     schemaId: material.schemaId || ENTRY_SCHEMA_ID,
     entryBaseSchemaId: ENTRY_SCHEMA_ID,
-    schemaLineage: Object.freeze([...(schemaResolution.schemaLineage || [])]),
+    schemaLineage,
+    entryKind,
     sourceKind: material.sourceKind,
     sourceMode: material.sourceMode,
     sourceId: String(material.sourceId || ''),
@@ -373,8 +390,27 @@ function projectEntry(material, projection, validation, schemaResolution = {}) {
     specializationGroups: Object.freeze(specializationGroups(projection)),
     declarations: Object.freeze(declarations),
     groundingMaterial: Object.freeze(groundingMaterial),
+    target: entryKind === 'target' ? Object.freeze({
+      handle: String(targetIdentity['Target Handle'] || '').trim(),
+      kind: String(targetIdentity['Target Kind'] || '').trim(),
+      canonicalIdentifier: String(targetIdentity['Canonical Target Identifier'] || '').trim(),
+      provider: String(targetIdentity.Provider || '').trim(),
+      host: String(targetIdentity.Host || '').trim(),
+      humanLabel: String(targetIdentity['Human Label'] || label || '').trim(),
+      provides: Object.freeze(splitList(targetCapabilities.Provides)),
+      limitations: Object.freeze(splitList(targetCapabilities.Limitations)),
+      compatibleEntryFamilies: Object.freeze(splitList(targetCompatibility['Compatible Entry Families'])),
+      requiredEntryCapabilities: Object.freeze(splitList(targetCompatibility['Required Entry Capabilities'])),
+      compatibilityNotes: String(targetCompatibility['Compatibility Notes'] || '').trim(),
+      material: Object.freeze(targetMaterial)
+    }) : null,
     lineageRecord: material.lineageRecord
   });
+}
+
+function splitList(value) {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return values.flatMap((item) => String(item || '').split(',')).map((item) => item.trim()).filter(Boolean);
 }
 
 function ordinaryValues(projection, groupName) {
@@ -466,7 +502,12 @@ function currentLeafKeys(entries) {
 function eligibleEntryPath(value = '') {
   const path = normalizePath(value);
   if (!path || !/\.md$/i.test(path) || /\.schema\.md$/i.test(path)) return false;
-  return !path.split('/').filter(Boolean).includes('.schemas');
+  const segments = path.split('/').filter(Boolean);
+  if (segments.includes('.schemas')) return false;
+  const topicsIndex = segments.indexOf('.topics');
+  if (topicsIndex < 0) return false;
+  const surface = String(segments[topicsIndex + 1] || '');
+  return surface === '.entries' || surface === 'entries';
 }
 
 function normalizePath(value = '') { return String(value || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, ''); }

@@ -89,7 +89,7 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
   }),
   'project-workspace-carrier-entry': operation({
     name: 'project-workspace-carrier-entry',
-    description: 'Project qualified reusable Entries plus Custom and render exact cold-start Guided Entry transport text for a qualified pointerless Workspace carrier or qualified routed Handoff carrier.',
+    description: 'Project qualified reusable WHAT Entries, discovered WHERE Target Entries plus Custom, and render exact cold-start Entry/Target composition transport text for a qualified pointerless Workspace carrier or qualified routed Handoff carrier.',
     safety: 'planning-only-read-only',
     inputSchema: 'tiinex.portable.workspace-entry-projection.request.v1',
     handler: (input = {}) => wrapPortableResult('project-workspace-carrier-entry', projectWorkspaceCarrierEntry(input))

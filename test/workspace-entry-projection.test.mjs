@@ -15,6 +15,24 @@ function roleFixture(label) {
   return `${sealed.markdown}\n`;
 }
 
+function targetEntryFixture({ label = 'Example Web', canonicalIdentifier = 'example.entry.target.web.v1' } = {}) {
+  const source = nativeEntryByName('start');
+  assert.ok(source);
+  let markdown = source
+    .replace(/  - Current Schema: \[tiinex\.entry\.session\.v1\]\([^\n]+\)\n/, '  - Current Schema: [tiinex.entry.target.v1](tiinex.entry.target.v1.schema.md)\n')
+    .replace('# Start\n', `# ${label}\n`)
+    .replace('- Name: Start\n', `- Name: ${label}\n`)
+    .replace('- Canonical Identifier: tiinex.core.entry.start.v1\n', `- Canonical Identifier: ${canonicalIdentifier}\n`)
+    .replace('- Entry Family: tiinex.guided-entry.native.v1\n', '- Entry Family: example.target-entry.v1\n')
+    .replace('- Human Label: Start\n', `- Human Label: ${label}\n`)
+    .replace('- Purpose: Establish an initial qualified working orientation from the available carried material before substantive work begins.\n', '- Purpose: Augment a purpose Entry with one example web execution environment.\n')
+    .replace('\n## Interpretation Limits\n', `\n## Target Identity\n\n- Target Handle: example-web\n- Target Kind: interactive-web-host\n- Canonical Target Identifier: example.web\n- Provider: Example\n- Host: Example Web\n- Human Label: ${label}\n\n## Target Capabilities\n\n- Provides: file upload, conversation branching\n- Limitations: finite context\n\n## Target Compatibility\n\n- Compatible Entry Families: tiinex.guided-entry.native.v1\n- Compatibility Notes: Compatible with the first-party purpose Entry family.\n\n## Target Material\n\n- Example host process\n  - Reference: https://example.invalid/process\n  - Purpose: Supply host-specific continuity guidance.\n\n## Interpretation Limits\n`)
+    .replace(/  - Value:[^\n]*/, '  - Value: ');
+  const sealed = sealC14nV2Self(markdown);
+  assert.equal(sealed.state, 'sealed');
+  return `${sealed.markdown}\n`;
+}
+
 function sessionEntryFixture() {
   const source = nativeEntryByName('start');
   assert.ok(source);
@@ -39,6 +57,41 @@ test('Guided Entry mode catalog uses reusable content sources and remains transp
   assert.deepEqual(result.modes.map((mode) => mode.label), ['Explore', 'Resume', 'Start', 'Custom']);
   assert.deepEqual(result.modes.map((mode) => mode.sourceKind), ['content-source', 'content-source', 'content-source', 'runtime']);
   assert.match(result.boundary, /does not alter the carrier/i);
+});
+
+test('Guided Entry catalog separates WHAT purpose Entries from WHERE Target Entries and composes a selected target', () => {
+  const targetPath = '.topics/.entries/where/example-web/001-example-web-target-entry.trace.md';
+  const inspection = {
+    status: 'valid',
+    carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+    workspaces: [{ workspaceId: 'interop-example', archive: { state: 'qualified', entries: [
+      { path: targetPath, data: new TextEncoder().encode(targetEntryFixture()) }
+    ] } }],
+    findings: []
+  };
+  const catalog = projectWorkspaceCarrierEntry({ inspection, contentSources: reusableEntrySources });
+  assert.equal(catalog.state, 'catalog');
+  assert.deepEqual(catalog.modes.map((mode) => mode.label), ['Explore', 'Resume', 'Start', 'Custom']);
+  assert.deepEqual(catalog.targets.map((target) => target.label), ['Generic / no target', 'Example Web']);
+  assert.equal(catalog.targetEntries.length, 1);
+  assert.equal(catalog.targetEntries[0].entryKind, 'target');
+  assert.ok(!catalog.modes.some((mode) => mode.label === 'Example Web'));
+
+  const rendered = projectWorkspaceCarrierEntry({
+    inspection,
+    contentSources: reusableEntrySources,
+    mode: 'EXPLORE',
+    target: 'Example Web'
+  });
+  assert.equal(rendered.status, 'ready');
+  assert.equal(rendered.targetOption.label, 'Example Web');
+  assert.deepEqual(rendered.targetOptions.map((target) => target.label), ['Generic / no target', 'Example Web']);
+  assert.match(rendered.transportText, /Entry intent: Explore/);
+  assert.match(rendered.transportText, /Target intent: Example Web/);
+  assert.match(rendered.transportText, /Qualified Target Entry: example\.entry\.target\.web\.v1/);
+  assert.match(rendered.transportText, /Canonical target: example\.web/);
+  assert.match(rendered.transportText, /Provides: file upload; conversation branching/);
+  assert.match(rendered.transportText, /Target Entry boundary: target selection augments environment knowledge and adaptation only/);
 });
 
 test('Core renders Session Entry grounding obligations without VS Code semantics', () => {

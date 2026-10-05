@@ -196,7 +196,8 @@ export async function commandInput(parsed, runtime = {}) {
     return { input: {
       bundle: material,
       packageSourcePath: packagePath,
-      mode: flags.mode || '',
+      mode: flags.mode || flags.entry || flags['entry-id'] || '',
+      targetEntryId: flags.target || flags.where || flags['target-entry'] || flags['target-entry-id'] || '',
       route: flags.route || flags.pointer || '',
       customInstruction: flags['custom-instruction'] || flags.instruction || '',
       primaryRole: primaryRole.primaryRole || primaryRole.role || primaryRole || null,

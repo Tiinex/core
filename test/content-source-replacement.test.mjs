@@ -30,7 +30,7 @@ integrationTest('Native can be selected normally and replaced by a differently n
   assert.equal(native.status,'ready');
   const nativeRuntime=await initializePortableNodeRuntime({runtimeRoot:ROOT,contentSources:[native],discoverBundled:false,discoverInstalled:false,environmentContentRoots:''});
   assert.equal(nativeRuntime.status,'ready');
-  assert.equal(nativeRuntime.schemaRuntime.schemas.total,109);
+  assert.equal(nativeRuntime.schemaRuntime.schemas.total,110);
   assert.ok(nativeRuntime.schemaRuntime.schemas.specialized>0);
 
   const customRoot=await mkdtemp(path.join(os.tmpdir(),'tiinex-custom-content-'));

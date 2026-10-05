@@ -39,6 +39,24 @@ function sessionEntryWithGrounding({ schemaId = 'tiinex.entry.session.v1', canon
   return `${sealed.markdown}\n`;
 }
 
+function targetEntryFixture({ label = 'Example Web', canonicalIdentifier = 'example.entry.target.web.v1', targetIdentifier = 'example.web' } = {}) {
+  const source = nativeEntryByName('start');
+  assert.ok(source);
+  let markdown = source
+    .replace(/  - Current Schema: \[tiinex\.entry\.session\.v1\]\([^\n]+\)\n/, '  - Current Schema: [tiinex.entry.target.v1](tiinex.entry.target.v1.schema.md)\n')
+    .replace('# Start\n', `# ${label}\n`)
+    .replace('- Name: Start\n', `- Name: ${label}\n`)
+    .replace('- Canonical Identifier: tiinex.core.entry.start.v1\n', `- Canonical Identifier: ${canonicalIdentifier}\n`)
+    .replace('- Entry Family: tiinex.guided-entry.native.v1\n', '- Entry Family: example.target-entry.v1\n')
+    .replace('- Human Label: Start\n', `- Human Label: ${label}\n`)
+    .replace('- Purpose: Establish an initial qualified working orientation from the available carried material before substantive work begins.\n', '- Purpose: Augment a purpose Entry with one example web execution environment.\n')
+    .replace('\n## Interpretation Limits\n', `\n## Target Identity\n\n- Target Handle: example-web\n- Target Kind: interactive-web-host\n- Canonical Target Identifier: ${targetIdentifier}\n- Provider: Example\n- Host: Example Web\n- Human Label: ${label}\n\n## Target Capabilities\n\n- Provides: file upload, conversation branching\n- Limitations: finite context, host-local state\n\n## Target Compatibility\n\n- Compatible Entry Families: tiinex.guided-entry.native.v1\n- Compatibility Notes: Example compatibility restriction for discovery tests.\n\n## Target Material\n\n- Example host guidance\n  - Reference: https://example.invalid/process\n  - Purpose: Supply host-specific continuity guidance.\n\n## Interpretation Limits\n`)
+    .replace(/  - Value:[^\n]*/, '  - Value: ');
+  const sealed = sealC14nV2Self(markdown);
+  assert.equal(sealed.state, 'sealed');
+  return `${sealed.markdown}\n`;
+}
+
 function customEntryChildSchema() {
   return `# Continuity Context\n\n- Envelope Schema: tiinex.root.v1\n- Parent\n  - Parent Schema: tiinex.entry.session.v1\n  - Created At: 2026-10-01 00:00:00\n  - Trace: tiinex.entry.session.v1.schema.md\n  - Origin:\n    - relative\n- Current\n  - Current Schema: example.entry.session.review.v1\n  - Created At: 2026-10-01 00:00:00\n  - Summary: Example carried Session Entry specialization.\n\n---\n\n# Review Session Entry\n\n## Schema Validation Contract\n\n### Review Session Entry Scope\n\nApplies To\n\n- artifacts whose Current Schema is example.entry.session.review.v1\n\nRules\n\n- This child preserves inherited Session Entry grounding semantics.\n\n---\n\n# Continuity Integrity\n\n- sha256-base64url-c14n-v2\n  - Towards: self\n  - Value:\n`;
 }
@@ -61,6 +79,51 @@ test('content-source Entry artifacts are qualified through the generic Entry con
     assert.equal(entry.representationQualification, 'valid');
     assert.equal(entry.readQualified, true);
   }
+});
+
+test('Target Entry descendants are discovered as WHERE entries with qualified target metadata', () => {
+  const target = targetEntryFixture();
+  const catalog = projectPortableEntryCatalog({
+    contentSources: [nativeEntryContentSource()],
+    inspection: {
+      workspaces: [{
+        workspaceId: 'interop-example',
+        archive: { entries: [{ path: '.topics/.entries/where/example-web/001-example-web-target-entry.trace.md', data: new TextEncoder().encode(target) }] }
+      }]
+    }
+  });
+  assert.equal(catalog.status, 'ready');
+  const projected = catalog.entries.find((entry) => entry.canonicalIdentifier === 'example.entry.target.web.v1');
+  assert.ok(projected);
+  assert.equal(projected.entryKind, 'target');
+  assert.equal(projected.schemaId, 'tiinex.entry.target.v1');
+  assert.ok(projected.schemaLineage.includes('tiinex.entry.target.v1'));
+  assert.equal(projected.target.handle, 'example-web');
+  assert.equal(projected.target.kind, 'interactive-web-host');
+  assert.equal(projected.target.canonicalIdentifier, 'example.web');
+  assert.deepEqual(projected.target.provides, ['file upload', 'conversation branching']);
+  assert.deepEqual(projected.target.compatibleEntryFamilies, ['tiinex.guided-entry.native.v1']);
+  assert.equal(projected.target.material.length, 1);
+  assert.equal(projected.target.material[0].reference, 'https://example.invalid/process');
+  assert.ok(catalog.entries.filter((entry) => entry.entryKind === 'purpose').length >= 3);
+});
+
+test('schema-valid Entry artifacts outside declared Entry surfaces do not shadow reusable content-source Entries', () => {
+  const fixture = nativeEntryByName('start');
+  assert.ok(fixture);
+  const catalog = projectPortableEntryCatalog({
+    contentSources: [nativeEntryContentSource()],
+    inspection: {
+      workspaces: [{
+        workspaceId: 'core',
+        archive: { entries: [{ path: 'test/fixtures/native-entries/start-entry.trace.md', data: new TextEncoder().encode(fixture) }] }
+      }]
+    }
+  });
+  const starts = catalog.entries.filter((entry) => entry.canonicalIdentifier === 'tiinex.core.entry.start.v1');
+  assert.equal(starts.length, 1);
+  assert.equal(starts[0].sourceKind, 'content-source');
+  assert.notEqual(starts[0].artifactPath, 'test/fixtures/native-entries/start-entry.trace.md');
 });
 
 test('carried Entry artifacts win exact-byte duplicates from reusable content sources and .schemas never leaks as an Entry instance', () => {
