@@ -197,6 +197,7 @@ export async function commandInput(parsed, runtime = {}) {
       bundle: material,
       packageSourcePath: packagePath,
       mode: flags.mode || '',
+      route: flags.route || flags.pointer || '',
       customInstruction: flags['custom-instruction'] || flags.instruction || '',
       primaryRole: primaryRole.primaryRole || primaryRole.role || primaryRole || null,
       participants: participants.participants || (Array.isArray(participants) ? participants : [])

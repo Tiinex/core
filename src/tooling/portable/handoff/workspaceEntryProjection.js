@@ -1,6 +1,7 @@
 import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { projectPortableEntryCatalog } from '../entry/entry.catalog.js';
+import { projectHandoffHumanOutput } from './carrierProjection.js';
 
 export const WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID = 'tiinex.portable.workspace-entry-projection.v1';
 
@@ -12,13 +13,16 @@ const CUSTOM_ENTRY = Object.freeze({
   sourceKind: 'runtime'
 });
 
-const CANONICAL_SHELL = (startPath) => `Handoff package attached.\n\nCold start: read Start directly; do not enumerate or broadly extract this package. Follow only Start's qualified bootstrap extraction instruction.\n\nStart:\n${startPath}\n\nThis is a pointerless Workspace carrier. After bootstrap, pass the package to Tiinex orientation/material projection. No Handoff Continue From route, recipient, or work transfer is declared or implied.`;
+const POINTERLESS_CANONICAL_SHELL = (startPath) => `Handoff package attached.\n\nCold start: read Start directly; do not enumerate or broadly extract this package. Follow only Start's qualified bootstrap extraction instruction.\n\nStart:\n${startPath}\n\nThis is a pointerless Workspace carrier. After bootstrap, pass the package to Tiinex orientation/material projection. No Handoff Continue From route, recipient, or work transfer is declared or implied.`;
 
 export function projectWorkspaceCarrierEntry(input = {}) {
   const inspection = input.inspection || inspectHandoffPackageV1(input.bundle || input.package || input);
   if (inspection.status !== 'valid') return blocked('carrier-invalid', inspection.findings || []);
   const projection = inspection.carrierProjection || {};
-  if (projection.mode !== 'workspace' || (projection.routes || []).length !== 0) return blocked('pointerless-workspace-carrier-required', inspection.findings || []);
+  const qualifiedRoutes = (projection.routes || []).filter((route) => String(route?.state || '') === 'qualified');
+  const pointerlessWorkspace = projection.mode === 'workspace' && qualifiedRoutes.length === 0;
+  const routedHandoff = projection.mode === 'handoff' && qualifiedRoutes.length > 0;
+  if (!pointerlessWorkspace && !routedHandoff) return blocked('workspace-or-routed-handoff-carrier-required', inspection.findings || []);
 
   const entryCatalog = projectPortableEntryCatalog({ inspection, contentSources: input.contentSources || input.sources || [] });
   if (entryCatalog.status !== 'ready') return blocked(entryCatalog.reasonCode || 'entry-catalog-unavailable', [...(inspection.findings || []), ...(entryCatalog.findings || [])]);
@@ -32,10 +36,21 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     schema: WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID,
     status: 'ready',
     state: 'catalog',
+    carrierKind: pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff',
     modes,
     entries: Object.freeze(entryCatalog.entries || []),
+    routes: Object.freeze(qualifiedRoutes.map((route) => Object.freeze({
+      routeId: String(route.id || route.routeId || ''),
+      pointerPath: String(route.pointerPath || ''),
+      workspaceId: String(route.workspaceId || ''),
+      handoffPath: String(route.workspaceRelativeHandoffPath || route.workspaceRelativePath || ''),
+      from: String(route.from || route.parties?.from || ''),
+      to: String(route.to || route.parties?.to || '')
+    }))),
     startPath: String(projection.startPath || '001-1-READ-BEFORE-PROCEEDING.trace.md'),
-    boundary: 'Guided Entry exposes qualified reusable Entry definitions plus an explicit Custom runtime path. Entry selection describes recipient-session intent for a pointerless Workspace carrier; it does not alter the carrier or establish Handoff routing, recipient authority, Role-holder state, participant authority, acceptance, work transfer, or completion.'
+    boundary: pointerlessWorkspace
+      ? 'Guided Entry exposes qualified reusable Entry definitions plus an explicit Custom runtime path. Entry selection describes recipient-session intent for a pointerless Workspace carrier; it does not alter the carrier or establish Handoff routing, recipient authority, Role-holder state, participant authority, acceptance, work transfer, or completion.'
+      : 'Guided Entry exposes qualified reusable Entry definitions above an already-qualified routed Handoff carrier. Entry selection does not choose or alter Handoff authority: exact route selection remains qualified from the carried Handoff Pointer, and Entry/Role/participant/session choices cannot manufacture routing, recipient authority, acceptance, work transfer, or completion.'
   });
 
   const customRequested = requested.toLocaleUpperCase() === 'CUSTOM';
@@ -59,7 +74,19 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   if (resolvedParticipants.some((item) => !item)) return blocked('participant-role-material-unresolved', inspection.findings || [], modes);
 
   const startPath = String(projection.startPath || '001-1-READ-BEFORE-PROCEEDING.trace.md');
-  const lines = [CANONICAL_SHELL(startPath), ''];
+  let routeId = '';
+  let continueFrom = '';
+  let shell = POINTERLESS_CANONICAL_SHELL(startPath);
+  if (routedHandoff) {
+    const routeSelector = String(input.route || input.routeId || input.pointer || '').trim();
+    const routed = projectHandoffHumanOutput({ projection, route: routeSelector });
+    if (routed.status === 'selection-required') return blocked('handoff-route-required', inspection.findings || [], modes);
+    if (routed.status !== 'ready' || !routed.normalInlineRouting?.content || !routed.selectedRoute) return blocked(`handoff-route-${routed.status || 'unavailable'}`, inspection.findings || [], modes);
+    routeId = String(routed.selectedRoute.id || routed.normalInlineRouting.routeId || '');
+    continueFrom = String(routed.normalInlineRouting.continueFrom || qualifiedRoutes.find((route) => String(route.id || route.routeId || '') === routeId)?.pointerPath || '');
+    shell = String(routed.normalInlineRouting.content || '').trimEnd();
+  }
+  const lines = [shell, ''];
   if (customRequested) {
     lines.push('Entry intent: Custom', '', 'After bootstrap, treat the following operator instruction as session intent. Ground it against the available qualified Workspace material before acting.', '', 'Operator instruction:', customInstruction);
   } else {
@@ -90,11 +117,16 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     entryId: customRequested ? '' : definition.id,
     modeDefinition: customRequested ? CUSTOM_ENTRY : entryChoice(definition),
     entryDefinition: customRequested ? null : definition,
+    carrierKind: pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff',
     startPath,
+    routeId,
+    continueFrom,
     primaryRole: resolvedPrimaryRole ? { label: resolvedPrimaryRole.label, reference: resolvedPrimaryRole.reference } : null,
     participants: Object.freeze(resolvedParticipants.map((item) => ({ label: item.label, reference: item.reference }))),
     transportText: `${lines.join('\n')}\n`,
-    boundary: 'Guided Entry is a transport/invocation projection over an unchanged pointerless Workspace carrier. Entry, Role, participant, and operator-instruction selection do not mutate the carrier or its semantic lineage and do not independently create authority, routing, acceptance, continuation, work transfer, or completion.'
+    boundary: pointerlessWorkspace
+      ? 'Guided Entry is a transport/invocation projection over an unchanged pointerless Workspace carrier. Entry, Role, participant, and operator-instruction selection do not mutate the carrier or its semantic lineage and do not independently create authority, routing, acceptance, continuation, work transfer, or completion.'
+      : 'Guided Entry is a transport/invocation projection over an unchanged routed Handoff carrier. The exact qualified Handoff transport shell remains authoritative and unchanged; Entry, Role, participant, and operator-instruction selection only adds recipient-session intent and does not create or alter routing, recipient authority, semantic Parent, acceptance, work transfer, or completion.'
   });
 }
 
