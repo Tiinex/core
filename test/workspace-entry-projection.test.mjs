@@ -89,9 +89,10 @@ test('Guided Entry catalog separates WHAT purpose Entries from WHERE Target Entr
   assert.match(rendered.transportText, /Entry intent: Explore/);
   assert.match(rendered.transportText, /Target intent: Example Web/);
   assert.match(rendered.transportText, /Qualified Target Entry: example\.entry\.target\.web\.v1/);
-  assert.match(rendered.transportText, /Canonical target: example\.web/);
-  assert.match(rendered.transportText, /Provides: file upload; conversation branching/);
-  assert.match(rendered.transportText, /Target Entry boundary: target selection augments environment knowledge and adaptation only/);
+  assert.match(rendered.transportText, /qualify and compose that exact Target material as environment adaptation/);
+  assert.doesNotMatch(rendered.transportText, /Provides: file upload; conversation branching/);
+  assert.equal(rendered.targetDefinition.target.canonicalIdentifier, 'example.web');
+  assert.deepEqual(rendered.targetDefinition.target.provides, ['file upload', 'conversation branching']);
 });
 
 test('Core renders Session Entry grounding obligations without VS Code semantics', () => {
@@ -110,11 +111,13 @@ test('Core renders Session Entry grounding obligations without VS Code semantics
   assert.equal(carried.schemaId, 'tiinex.entry.session.v1');
   const rendered = projectWorkspaceCarrierEntry({ inspection, entryId: carried.id });
   assert.equal(rendered.status, 'ready');
-  assert.match(rendered.transportText, /Entry schema: tiinex\.entry\.session\.v1/);
-  assert.match(rendered.transportText, /Grounding material \(required before this Entry is fully grounded\)/);
-  assert.match(rendered.transportText, /Reference: https:\/\/example\.invalid\/ownership/);
-  assert.match(rendered.transportText, /Purpose: Establish the ownership boundary/);
-  assert.match(rendered.transportText, /Qualify and interpret every declared Grounding Material reference/);
+  assert.match(rendered.transportText, /Qualified Entry: example\.grounded\.session\.v1/);
+  assert.match(rendered.transportText, /intentionally does not restate its procedure or declared grounding material/);
+  assert.doesNotMatch(rendered.transportText, /Grounding material \(required before this Entry is fully grounded\)/);
+  assert.equal(rendered.entryDefinition.schemaId, 'tiinex.entry.session.v1');
+  assert.equal(rendered.entryDefinition.groundingMaterial.length, 1);
+  assert.equal(rendered.entryDefinition.groundingMaterial[0].reference, 'https://example.invalid/ownership');
+  assert.match(rendered.entryDefinition.groundingMaterial[0].purpose, /Establish the ownership boundary/);
 });
 
 
@@ -126,13 +129,18 @@ test('EXPLORE requires current cross-Workspace grounding before participant-faci
     contentSources: reusableEntrySources
   });
   assert.equal(result.status, 'ready');
-  assert.match(result.transportText, /most current truthful multi-Workspace grounding reasonably available/);
-  assert.match(result.transportText, /do not stop at the Workspace containing the Role or at the first plausible active or ready artifact/);
-  assert.match(result.transportText, /reconcile lineage, supersession, returns, dependencies, implementation state, and ownership boundaries/);
-  assert.match(result.transportText, /duplicated responsibility, ownership drift, scope creep, and missing continuity/);
-  assert.match(result.transportText, /present the useful current picture, material seams or contradictions, and plausible directions/);
-  assert.match(result.transportText, /presentation or communication preferences from participating Role material/);
-  assert.match(result.transportText, /concise, scan-friendly, current-first presentation/);
+  assert.match(result.transportText, /Entry intent: Explore/);
+  assert.match(result.transportText, /Qualified Entry: tiinex\.core\.entry\.explore\.v1/);
+  assert.match(result.transportText, /intentionally does not restate its procedure/);
+  assert.doesNotMatch(result.transportText, /do not stop at the Workspace containing the Role or at the first plausible active or ready artifact/);
+  assert.match(result.entryDefinition.summary, /most current truthful multi-Workspace grounding reasonably available/);
+  assert.match(result.entryDefinition.preparation['Discovery Breadth'], /do not stop at the Workspace containing the Role or at the first plausible active or ready artifact/);
+  assert.match(result.entryDefinition.preparation['Reconciliation Policy'], /reconcile lineage, supersession, returns, dependencies, implementation state, and ownership boundaries/);
+  assert.match(result.entryDefinition.preparation['Currentness Policy'], /duplicated responsibility, ownership drift, scope creep, and missing continuity/);
+  assert.match(result.entryDefinition.method.Method, /present the useful current picture, material seams or contradictions, and plausible directions/);
+  assert.match(result.entryDefinition.presentation['Preference Sources'], /presentation or communication preferences from participating Role material/);
+  assert.match(result.entryDefinition.presentation['Presentation Guidance'], /concise, scan-friendly, current-first presentation/);
+  assert.ok(result.transportText.length < 1400, `expected reference-first transport, got ${result.transportText.length} chars`);
   assert.doesNotMatch(result.transportText, /TL;DR/i);
 });
 
@@ -155,16 +163,14 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
     participants: [{ label: 'Sigma', reference: 'https://github.com/Tiinex/business/blob/' + 'b'.repeat(40) + '/' + sigmaPath, workspaceId: 'business', path: sigmaPath }]
   });
   assert.equal(result.state, 'rendered');
-  assert.match(result.transportText, /Cold start: read Start directly; do not enumerate or broadly extract this package/);
-  assert.match(result.transportText, /This is a pointerless Workspace carrier/);
+  assert.match(result.transportText, /Cold start: read Start directly; follow only its qualified bootstrap extraction instruction/);
+  assert.match(result.transportText, /Pointerless Workspace carrier: after bootstrap, orient\/project the package/);
   assert.match(result.transportText, /Entry intent: Resume/);
   assert.match(result.transportText, /Session Role: Anchor/);
-  assert.match(result.transportText, /The receiving LLM session operates as the Session Role established above\./);
-  assert.match(result.transportText, /Role material: carried in this package at `business::\.topics\/roles\/anchor\.trace\.md`/);
-  assert.match(result.transportText, /Participants:\n- Sigma/);
-  assert.match(result.transportText, /Participants are other Roles participating in the same conversation\. They are not the Session Role\./);
-  assert.match(result.transportText, /Role material: carried in this package at `business::\.topics\/roles\/sigma\.trace\.md`/);
-  assert.match(result.transportText, /No Handoff Continue From route, recipient, or work transfer is declared or implied\./);
+  assert.match(result.transportText, /Session Role: Anchor — material carried in this package at `business::\.topics\/roles\/anchor\.trace\.md`/);
+  assert.match(result.transportText, /Participant: Sigma — material carried in this package at `business::\.topics\/roles\/sigma\.trace\.md`/);
+  assert.match(result.transportText, /Session selections do not establish semantic holder\/participant\/recipient authority, acceptance, or work transfer/);
+  assert.match(result.transportText, /No Handoff route, recipient, or work transfer is declared or implied\./);
 });
 
 test('Guided Entry rejects duplicate Primary Role participant and missing CUSTOM instruction', () => {
@@ -217,5 +223,5 @@ test('Guided Entry deduplicates Roles by exact identity rather than human label 
   });
   assert.equal(result.status, 'ready');
   assert.match(result.transportText, /Session Role: Anchor/);
-  assert.match(result.transportText, /Participants:\n- Anchor/);
+  assert.match(result.transportText, /Participant: Anchor/);
 });

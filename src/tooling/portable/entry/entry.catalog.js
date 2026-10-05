@@ -506,8 +506,7 @@ function eligibleEntryPath(value = '') {
   if (segments.includes('.schemas')) return false;
   const topicsIndex = segments.indexOf('.topics');
   if (topicsIndex < 0) return false;
-  const surface = String(segments[topicsIndex + 1] || '');
-  return surface === '.entries' || surface === 'entries';
+  return segments.slice(topicsIndex + 1).some((segment) => segment === '.entries' || segment === 'entries');
 }
 
 function normalizePath(value = '') { return String(value || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, ''); }

@@ -21,7 +21,7 @@ const NO_TARGET_OPTION = Object.freeze({
   summary: 'Apply no environment-specific Target Entry augmentation.'
 });
 
-const POINTERLESS_CANONICAL_SHELL = (startPath) => `Handoff package attached.\n\nCold start: read Start directly; do not enumerate or broadly extract this package. Follow only Start's qualified bootstrap extraction instruction.\n\nStart:\n${startPath}\n\nThis is a pointerless Workspace carrier. After bootstrap, pass the package to Tiinex orientation/material projection. No Handoff Continue From route, recipient, or work transfer is declared or implied.`;
+const POINTERLESS_CANONICAL_SHELL = (startPath) => `Handoff package attached.\n\nCold start: read Start directly; follow only its qualified bootstrap extraction instruction.\nStart: ${startPath}\n\nPointerless Workspace carrier: after bootstrap, orient/project the package. No Handoff route, recipient, or work transfer is declared or implied.`;
 
 export function projectWorkspaceCarrierEntry(input = {}) {
   const inspection = input.inspection || inspectHandoffPackageV1(input.bundle || input.package || input);
@@ -120,21 +120,10 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   if (targetDefinition) lines.push('', `Target intent: ${targetDefinition.label}`, '', ...targetGuidanceLines(targetDefinition));
   else lines.push('', 'Target intent: Generic / no target');
   if (resolvedPrimaryRole || resolvedParticipants.length) {
-    lines.push('', 'Session context (not package or transfer authority):');
-    if (resolvedPrimaryRole) {
-      lines.push(`Session Role: ${resolvedPrimaryRole.label}`);
-      lines.push('The receiving LLM session operates as the Session Role established above.');
-      lines.push(`Role material: ${resolvedPrimaryRole.materialDescription}`);
-    }
-    if (resolvedParticipants.length) {
-      lines.push('Participants:');
-      for (const participant of resolvedParticipants) {
-        lines.push(`- ${participant.label}`);
-        lines.push(`  Role material: ${participant.materialDescription}`);
-      }
-      lines.push('Participants are other Roles participating in the same conversation. They are not the Session Role.');
-    }
-    lines.push('These session selections do not establish semantic Role-holder state, participant authority, recipient authority, acceptance, or work transfer.');
+    lines.push('', 'Session context (conversation context only; not package/transfer authority):');
+    if (resolvedPrimaryRole) lines.push(`Session Role: ${resolvedPrimaryRole.label} — material ${resolvedPrimaryRole.materialDescription}`);
+    for (const participant of resolvedParticipants) lines.push(`Participant: ${participant.label} — material ${participant.materialDescription}`);
+    lines.push('Session selections do not establish semantic holder/participant/recipient authority, acceptance, or work transfer.');
   }
   return Object.freeze({
     schema: WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID,
@@ -211,30 +200,12 @@ function compatibleTargetEntries(targetEntries = [], entry = null) {
 }
 
 function targetGuidanceLines(entry) {
-  const target = entry?.target || {};
   const lines = [];
   lines.push(`Qualified Target Entry: ${entry.canonicalIdentifier || entry.label}`);
   if (entry.sourceKind === 'carried') lines.push(`Target material: carried in this package at \`${entry.workspaceId}::${entry.artifactPath}\``);
   else if (entry.sourceKind === 'content-source') lines.push(`Target material: qualified reusable content source \`${entry.sourceId || ''}::${entry.artifactPath}\``);
   else lines.push(`Target material: qualified reusable Target Entry \`${entry.artifactPath}\``);
-  if (entry.schemaId) lines.push(`Target schema: ${entry.schemaId}${(entry.schemaLineage || []).length > 1 ? ` (${entry.schemaLineage.join(' -> ')})` : ''}`);
-  if (target.canonicalIdentifier) lines.push(`Canonical target: ${target.canonicalIdentifier}`);
-  if (target.kind) lines.push(`Target kind: ${target.kind}`);
-  if (target.provider) lines.push(`Provider: ${target.provider}`);
-  if (target.host) lines.push(`Host: ${target.host}`);
-  if ((target.provides || []).length) lines.push(`Provides: ${target.provides.join('; ')}`);
-  if ((target.limitations || []).length) lines.push(`Limitations: ${target.limitations.join('; ')}`);
-  if ((target.material || []).length) {
-    lines.push('', 'Target material references:');
-    for (const item of target.material) {
-      lines.push(`- ${item.name || item.label || 'Declared target material'}`);
-      if (item.reference) lines.push(`  - Reference: ${item.reference}`);
-      if (item.purpose) lines.push(`  - Purpose: ${item.purpose}`);
-      if (item.qualificationNotes) lines.push(`  - Qualification Notes: ${item.qualificationNotes}`);
-    }
-  }
-  if (target.compatibilityNotes) lines.push(`Compatibility notes: ${target.compatibilityNotes}`);
-  lines.push('', 'Target Entry boundary: target selection augments environment knowledge and adaptation only. It does not grant Role authority, establish Handoff routing or work transfer, make referenced Process material applicable by presence, authorize remote mutation, or override the selected purpose Entry.');
+  lines.push('After the purpose Entry is grounded, qualify and compose that exact Target material as environment adaptation. Do not infer Role/recipient authority, work transfer, Process applicability, or remote-mutation authority from Target selection.');
   return lines;
 }
 
@@ -251,35 +222,7 @@ function entryGuidanceLines(entry) {
   if (entry.sourceKind === 'carried') lines.push(`Entry material: carried in this package at \`${entry.workspaceId}::${entry.artifactPath}\``);
   else if (entry.sourceKind === 'content-source') lines.push(`Entry material: qualified reusable content source \`${entry.sourceId || ''}::${entry.artifactPath}\``);
   else lines.push(`Entry material: qualified reusable Entry \`${entry.artifactPath}\``);
-  const schemaId = String(entry.schemaId || '').trim();
-  const lineage = Array.isArray(entry.schemaLineage) ? entry.schemaLineage.map((item) => String(item || '').trim()).filter(Boolean) : [];
-  if (schemaId) lines.push(`Entry schema: ${schemaId}${lineage.length > 1 ? ` (${lineage.join(' -> ')})` : ''}`);
-  if (entry.summary) lines.push(`Purpose: ${entry.summary}`);
-  lines.push('', 'After bootstrap, apply the qualified Entry below within the carrier and session authority boundaries.');
-  pushGuidance(lines, 'Preparation', entry.preparation, [
-    'Preparation Method', 'Reconciliation Policy', 'Discovery Breadth', 'Currentness Policy', 'Uncertainty Policy'
-  ]);
-  if ((entry.groundingMaterial || []).length) {
-    lines.push('', 'Grounding material (required before this Entry is fully grounded):');
-    for (const item of entry.groundingMaterial) {
-      lines.push(`- ${item.name || item.label || 'Declared material'}`);
-      lines.push(`  - Reference: ${item.reference}`);
-      lines.push(`  - Purpose: ${item.purpose}`);
-      if (item.qualificationNotes) lines.push(`  - Qualification Notes: ${item.qualificationNotes}`);
-    }
-    lines.push('Qualify and interpret every declared Grounding Material reference for its stated Purpose. The reference and Purpose do not override the target material\'s own schema semantics or authority; preserve unavailable, stale, conflicting, or unresolved material explicitly.');
-  }
-  pushGuidance(lines, 'Entry method', entry.method, [
-    'Method', 'Readiness Boundary', 'Stop Conditions', 'Escalation Conditions'
-  ]);
-  pushGuidance(lines, 'Presentation and interaction', entry.presentation, [
-    'Presentation Guidance', 'Preference Sources', 'Interaction Guidance', 'Diagnostic Detail Policy'
-  ]);
-  pushSpecializationGroups(lines, entry.specializationGroups || []);
-  pushDeclarationGroups(lines, (entry.declarations || []).filter((group) => String(group.group || '') !== 'Grounding Material Declaration'));
-  pushGuidance(lines, 'Interpretation limits', entry.interpretationLimits, [
-    'Does Not Establish', 'Must Not Be Inferred'
-  ]);
+  lines.push('After bootstrap, qualify and apply that exact Entry material within the carrier/session authority boundaries. This transport text intentionally does not restate its procedure or declared grounding material.');
   return lines;
 }
 
