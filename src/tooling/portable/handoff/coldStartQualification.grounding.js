@@ -157,6 +157,7 @@ function groundSenderRole(handoff, bundle, orientation, selectedRoute, materialC
     }),
     exactBoundaryLoaded: parsed.boundary,
     authorityBoundaryLoaded: parsed.authorityBoundary,
+    canonicalQualificationLoaded: parsed.canonicalQualification,
     holderRelationshipLoaded: parsed.holderRelationship,
     interpretationLimitsLoaded: parsed.interpretationLimits,
     boundary: 'Exact Handoff From Reference or exact selected-route From endpoint Role Pointer material only. Sender Role authority remains separate from Handoff transfer and is never inferred from endpoint naming or cache inventory.'
@@ -229,6 +230,7 @@ function groundRecipientRole(input, handoff, bundle, orientation, selectedRoute,
     compatibility,
     exactBoundaryLoaded: selected ? selected.boundary : null,
     authorityBoundaryLoaded: selected ? selected.authorityBoundary : null,
+    canonicalQualificationLoaded: selected ? selected.canonicalQualification : null,
     holderRelationshipLoaded: selected ? selected.holderRelationship : null,
     interpretationLimitsLoaded: selected ? selected.interpretationLimits : null,
     boundary: 'A Handoff `To Kind: role` endpoint remains bounded even when current Role material is missing. Exact Handoff Reference material, or one exact selected-route To endpoint Role Pointer when the Handoff omits a Reference, may qualify the loaded boundary; endpoint labels and nearby Role inventory never select the source. Qualification does not prove a human holder, consent, or authority beyond the Role artifact itself.'
@@ -459,6 +461,7 @@ function resolvePackageParticipantRoles(bundle = {}, orientation = null, selecte
       }),
       exactBoundaryLoaded: parsed.boundary,
       authorityBoundaryLoaded: parsed.authorityBoundary,
+      canonicalQualificationLoaded: parsed.canonicalQualification,
       holderRelationshipLoaded: parsed.holderRelationship,
       interpretationLimitsLoaded: parsed.interpretationLimits,
       pointerPath

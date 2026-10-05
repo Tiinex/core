@@ -830,24 +830,26 @@ test('holder-binding authorization consumes structured canonical modes while Hol
   };
   const authorized = projectHolderBindingAuthorization({
     ...baseRole,
+    canonicalQualificationLoaded: { state: 'qualified', schemaId: 'tiinex.party.role.v1', assignmentModes: ['explicit-session', 'handoff'], exactAssignmentModesValue: 'explicit-session, handoff', findings: [] },
     holderRelationshipLoaded: { holderState: 'arbitrary human-readable summary', assignmentModes: 'explicit-session, handoff' }
   });
   assert.equal(authorized.state, 'qualified');
   assert.equal(authorized.assignmentMode, 'explicit-session');
   assert.deepEqual(authorized.authorizedModes, ['explicit-session', 'handoff']);
   assert.equal(authorized.modeAuthority.provenance.field, 'Assignment Modes');
-  assert.equal(authorized.modeAuthority.provenance.basis, 'exact-qualified-role-assignment-modes');
+  assert.equal(authorized.modeAuthority.provenance.basis, 'canonical-role-schema-qualified-assignment-modes');
   assert.equal(authorized.holderState, 'arbitrary human-readable summary');
 
   const unknownToken = projectHolderBindingAuthorization({
     ...baseRole,
+    canonicalQualificationLoaded: { state: 'unresolved', schemaId: 'tiinex.party.role.v1', assignmentModes: [], exactAssignmentModesValue: 'explicit-session, future-magic-mode', findings: [{ severity: 'error', code: 'party.role.assignmentModes.invalid' }] },
     holderRelationshipLoaded: { holderState: 'contains session and handoff words', assignmentModes: 'explicit-session, future-magic-mode' }
   });
   assert.equal(unknownToken.state, 'unresolved');
-  assert.equal(unknownToken.reasonCode, 'holder-assignment-mode-authority-unknown-token');
+  assert.equal(unknownToken.reasonCode, 'holder-assignment-mode-canonical-qualification-unresolved');
 });
 
-const ACTIVE_CANONICAL_ROLE_MATRIX = [
+const STATIC_CANONICAL_ROLE_FIXTURE_MATRIX = [
   { label: 'Anchor', path: '.topics/roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md', sha256: '8302ced51dca642e4f2cc38e76344e0bc5583b988d17d472176d812813f917f3', modes: ['explicit-session', 'handoff'] },
   { label: 'Axiom', path: '.topics/roles/001-2-1-axiom-canonical-holder-cutover-role.trace.md', sha256: '97d00ef1b7263f47703ae2875aba4f58c2f236b32b3fc508d2f4528eefbb0d01', modes: ['explicit-session', 'handoff'] },
   { label: 'Loom', path: '.topics/roles/001-3-1-loom-canonical-holder-cutover-role.trace.md', sha256: 'b6206c9d450c13f2eac24895567255f0afadbd9dc71685b29c668201c78c88ad', modes: ['explicit-session', 'explicit-role-invocation', 'handoff'] },
@@ -870,12 +872,15 @@ const HISTORICAL_LEGACY_ROLES = [
   ['Prism', '.topics/roles/001-9-prism-role.trace.md', '2ad9a98d099428a771bc4740896386d02e620fb82a4ffd139a7f8794863171ad']
 ];
 
-function canonicalRoleFixture({ label, path, sha256, modes, state = 'qualified', materialState = 'qualified', holderState = 'diagnostic only' }) {
+function canonicalRoleFixture({ label, path, sha256, modes, state = 'qualified', materialState = 'qualified', holderState = 'diagnostic only', canonicalState = null }) {
+  const assignmentModes = modes.join(', ');
+  const qualificationState = canonicalState || (modes.length ? 'qualified' : 'unresolved');
   return {
     state,
     endpoint: { label, kind: 'role' },
     material: { state: materialState, artifact: { path: `001-3-business.workspace.zip::${path}`, sha256, schemaId: 'tiinex.party.role.v1', roleLabel: label } },
-    holderRelationshipLoaded: { holderState, assignmentModes: modes.join(', ') }
+    canonicalQualificationLoaded: { state: qualificationState, schemaId: 'tiinex.party.role.v1', assignmentModes: qualificationState === 'qualified' ? [...modes] : [], exactAssignmentModesValue: assignmentModes, findings: qualificationState === 'qualified' ? [] : [{ severity: 'error', code: 'party.role.assignmentModes.invalid' }] },
+    holderRelationshipLoaded: { holderState, assignmentModes }
   };
 }
 
@@ -888,42 +893,42 @@ test('historical pre-cutover Role artifacts no longer authorize current holder b
       holderRelationshipLoaded: { holderState: 'historical diagnostic prose', assignmentModes: '' }
     });
     assert.equal(projected.state, 'unresolved', label);
-    assert.equal(projected.reasonCode, 'holder-assignment-mode-authority-missing', label);
+    assert.equal(projected.reasonCode, 'holder-assignment-mode-canonical-qualification-unresolved', label);
     assert.deepEqual(projected.authorizedModes, [], label);
     assert.equal(projected.modeAuthority.provenance.decisionArtifact, null, label);
     assert.equal(projected.modeAuthority.provenance.exactRoleSourcePath, '', label);
   }
 });
 
-test('the exact eight active canonical Roles authorize only through direct structured Assignment Modes', () => {
-  for (const active of ACTIVE_CANONICAL_ROLE_MATRIX) {
+test('static canonical Role fixtures authorize only through canonical Assignment Modes projections', () => {
+  for (const active of STATIC_CANONICAL_ROLE_FIXTURE_MATRIX) {
     const role = canonicalRoleFixture(active);
     const primaryMode = active.modes[0];
     const projected = projectHolderBindingAuthorization(role, { assertionMode: primaryMode });
     assert.equal(projected.state, 'qualified', active.label);
     assert.equal(projected.assignmentMode, primaryMode, active.label);
     assert.deepEqual(projected.authorizedModes, active.modes, active.label);
-    assert.equal(projected.modeAuthority.source, 'qualified-recipient-role-structured-modes', active.label);
-    assert.equal(projected.modeAuthority.provenance.basis, 'exact-qualified-role-assignment-modes', active.label);
+    assert.equal(projected.modeAuthority.source, 'qualified-recipient-role-canonical-projection', active.label);
+    assert.equal(projected.modeAuthority.provenance.basis, 'canonical-role-schema-qualified-assignment-modes', active.label);
     assert.equal(projected.modeAuthority.provenance.roleArtifactSha256, active.sha256, active.label);
     assert.match(projected.modeAuthority.provenance.roleArtifactPath, new RegExp(active.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), active.label);
   }
 
-  const kodax = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Kodax');
+  const kodax = STATIC_CANONICAL_ROLE_FIXTURE_MATRIX.find((item) => item.label === 'Kodax');
   assert.equal(projectHolderBindingAuthorization(canonicalRoleFixture(kodax), { assertionMode: 'explicit-role-invocation' }).state, 'qualified');
-  const pilot = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Pilot');
+  const pilot = STATIC_CANONICAL_ROLE_FIXTURE_MATRIX.find((item) => item.label === 'Pilot');
   assert.equal(projectHolderBindingAuthorization(canonicalRoleFixture(pilot), { assertionMode: 'explicit-role-invocation' }).state, 'qualified');
-  const sigma = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Sigma');
+  const sigma = STATIC_CANONICAL_ROLE_FIXTURE_MATRIX.find((item) => item.label === 'Sigma');
   assert.equal(projectHolderBindingAuthorization(canonicalRoleFixture(sigma), { assertionMode: 'explicit-session' }).state, 'unresolved');
-  const glimmer = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Glimmer');
+  const glimmer = STATIC_CANONICAL_ROLE_FIXTURE_MATRIX.find((item) => item.label === 'Glimmer');
   assert.equal(projectHolderBindingAuthorization(canonicalRoleFixture(glimmer), { assertionMode: 'explicit-session' }).state, 'unresolved');
 });
 
 test('canonical holder authorization fails closed for missing modes and unqualified current Role material', () => {
-  const active = ACTIVE_CANONICAL_ROLE_MATRIX.find((item) => item.label === 'Loom');
+  const active = STATIC_CANONICAL_ROLE_FIXTURE_MATRIX.find((item) => item.label === 'Loom');
   const missing = canonicalRoleFixture({ ...active, modes: [] });
   assert.equal(projectHolderBindingAuthorization(missing).state, 'unresolved');
-  assert.equal(projectHolderBindingAuthorization(missing).reasonCode, 'holder-assignment-mode-authority-missing');
+  assert.equal(projectHolderBindingAuthorization(missing).reasonCode, 'holder-assignment-mode-canonical-qualification-unresolved');
 
   const unqualifiedRole = canonicalRoleFixture({ ...active, state: 'unresolved' });
   assert.equal(projectHolderBindingAuthorization(unqualifiedRole).state, 'unresolved');
@@ -939,11 +944,12 @@ test('unknown Holder State prose never self-authorizes without direct structured
     state: 'qualified',
     endpoint: { label: 'Unknown', kind: 'role' },
     material: { state: 'qualified', artifact: { path: '.topics/roles/unknown.trace.md', sha256: 'b'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Unknown' } },
+    canonicalQualificationLoaded: { state: 'unresolved', schemaId: 'tiinex.party.role.v1', assignmentModes: [], exactAssignmentModesValue: '', findings: [{ severity: 'error', code: 'party.role.assignmentModes.missing' }] },
     holderRelationshipLoaded: { holderState: 'explicit session, invocation, Handoff, participation all sound familiar', assignmentModes: '' }
   };
   const projected = projectHolderBindingAuthorization(baseRole);
   assert.equal(projected.state, 'unresolved');
-  assert.equal(projected.reasonCode, 'holder-assignment-mode-authority-missing');
+  assert.equal(projected.reasonCode, 'holder-assignment-mode-canonical-qualification-unresolved');
   assert.deepEqual(projected.authorizedModes, []);
 });
 
@@ -961,10 +967,11 @@ test('token substring punctuation and fuzzy Holder State variants cannot authori
       state: 'qualified',
       endpoint: { label: 'Unmapped', kind: 'role' },
       material: { state: 'qualified', artifact: { path: '.topics/roles/unmapped.trace.md', sha256: 'c'.repeat(64), schemaId: 'tiinex.party.role.v1', roleLabel: 'Unmapped' } },
+      canonicalQualificationLoaded: { state: 'unresolved', schemaId: 'tiinex.party.role.v1', assignmentModes: [], exactAssignmentModesValue: '', findings: [{ severity: 'error', code: 'party.role.assignmentModes.missing' }] },
       holderRelationshipLoaded: { holderState, assignmentModes: '' }
     });
     assert.equal(projected.state, 'unresolved', holderState);
-    assert.equal(projected.reasonCode, 'holder-assignment-mode-authority-missing', holderState);
+    assert.equal(projected.reasonCode, 'holder-assignment-mode-canonical-qualification-unresolved', holderState);
   }
 });
 

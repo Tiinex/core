@@ -1,4 +1,5 @@
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
+import { validateWithRegisteredSchema } from '../../../schemas/runtime.validation.js';
 import { packageFileBytes, sha256Hex } from '../../../export/package.bytes.js';
 import { portableFinding } from '../findings.js';
 import { inspectStoredWorkspaceArchive } from './workspaceByteProvider.js';
@@ -193,6 +194,12 @@ export function parseRoleMaterial(entry) {
     const holderSection = sectionText(parsed.body?.text || '', 'Holder Relationship');
     const limitsSection = sectionText(parsed.body?.text || '', 'Interpretation Limits');
     const label = sectionField(roleSection, 'Role Label');
+    const assignmentModesRaw = sectionField(holderSection, 'Assignment Modes');
+    const validationFindings = validateWithRegisteredSchema(schemaId, parsed, { unavailableCode: 'portable.cold-start.role-validator-unavailable' }) || [];
+    const validationErrors = validationFindings.filter((finding) => String(finding?.severity || '') === 'error');
+    const canonicalAssignmentModes = validationErrors.length || !assignmentModesRaw
+      ? []
+      : assignmentModesRaw.split(', ').map((item) => String(item || '').trim()).filter(Boolean);
     return deepFreeze({
       path: entry.path,
       explicit: Boolean(entry.explicit),
@@ -209,9 +216,16 @@ export function parseRoleMaterial(entry) {
         delegation: sectionField(authoritySection, 'Delegation'),
         reviewBoundary: sectionField(authoritySection, 'Review Boundary')
       }),
+      canonicalQualification: Object.freeze({
+        state: validationErrors.length ? 'unresolved' : 'qualified',
+        schemaId,
+        assignmentModes: Object.freeze(canonicalAssignmentModes),
+        exactAssignmentModesValue: assignmentModesRaw,
+        findings: Object.freeze(validationFindings)
+      }),
       holderRelationship: Object.freeze({
         holderState: sectionField(holderSection, 'Holder State'),
-        assignmentModes: sectionField(holderSection, 'Assignment Modes'),
+        assignmentModes: assignmentModesRaw,
         currentHolder: sectionField(holderSection, 'Current Holder'),
         possibleHolder: sectionField(holderSection, 'Possible Holder'),
         unknownHolder: sectionField(holderSection, 'Unknown Holder'),

@@ -34,63 +34,41 @@ export function projectHolderAssignmentModeAuthority(role = {}) {
     basis: 'exact-qualified-role-assignment-mode-authority-not-established', field: 'Assignment Modes'
   });
 
-  const structured = parseStructuredModes(relationship.assignmentModes);
-  if (!structured.present) return unresolved(role, holderState, 'holder-assignment-mode-authority-missing', 'qualified-recipient-role-material', {
-    basis: 'canonical-assignment-modes-missing', field: 'Assignment Modes'
+  const qualification = role?.canonicalQualificationLoaded || role?.canonicalQualification || {};
+  if (String(qualification.state || '') !== 'qualified') return unresolved(role, holderState, 'holder-assignment-mode-canonical-qualification-unresolved', 'qualified-recipient-role-material', {
+    basis: 'canonical-role-schema-qualification-unresolved',
+    field: 'Assignment Modes',
+    exactValue: String(qualification.exactAssignmentModesValue || relationship.assignmentModes || ''),
+    qualificationFindings: (qualification.findings || []).map((finding) => String(finding?.code || '')).filter(Boolean)
   });
-  if (structured.unknown.length) return unresolved(role, holderState, 'holder-assignment-mode-authority-unknown-token', 'qualified-recipient-role-structured-modes', {
-    basis: 'exact-qualified-role-assignment-modes', field: 'Assignment Modes', exactValue: structured.raw, unknownModes: structured.unknown
+
+  const modes = [...(qualification.assignmentModes || [])].map((item) => String(item || '').trim()).filter(Boolean);
+  const unknown = modes.filter((mode) => !KNOWN_MODES.has(mode));
+  if (unknown.length) return unresolved(role, holderState, 'holder-assignment-mode-authority-unsupported-canonical-mode', 'qualified-recipient-role-canonical-projection', {
+    basis: 'canonical-role-schema-qualified-assignment-modes', field: 'Assignment Modes', exactValue: String(qualification.exactAssignmentModesValue || ''), unknownModes: unknown
   });
-  if (!structured.modes.length) return unresolved(role, holderState, 'holder-assignment-mode-authority-empty', 'qualified-recipient-role-structured-modes', {
-    basis: 'exact-qualified-role-assignment-modes', field: 'Assignment Modes', exactValue: structured.raw
+  if (!modes.length) return unresolved(role, holderState, 'holder-assignment-mode-authority-empty', 'qualified-recipient-role-canonical-projection', {
+    basis: 'canonical-role-schema-qualified-assignment-modes', field: 'Assignment Modes', exactValue: String(qualification.exactAssignmentModesValue || '')
   });
   return deepFreeze({
     state: 'qualified',
-    modes: deepFreeze(structured.modes),
+    modes: deepFreeze(modes),
     holderState,
-    source: 'qualified-recipient-role-structured-modes',
+    source: 'qualified-recipient-role-canonical-projection',
     reasonCode: 'holder-assignment-mode-authority-qualified',
     unknownModes: deepFreeze([]),
     provenance: baseProvenance(role, {
-      basis: 'exact-qualified-role-assignment-modes',
+      basis: 'canonical-role-schema-qualified-assignment-modes',
       field: 'Assignment Modes',
-      exactValue: structured.raw,
-      boundary: 'Positive mode authority comes only from the exact structured Assignment Modes field on the qualified current Role. Holder State is diagnostic-only; historical compatibility material does not authorize current holder binding.'
+      exactValue: String(qualification.exactAssignmentModesValue || ''),
+      boundary: 'Positive mode authority is consumed only from the canonical Role schema qualification of the exact qualified current Role material. Grounding does not independently reinterpret raw Assignment Modes serialization.'
     }),
-    boundary: 'Exact structured canonical assignment modes authorize only their named bounded mechanisms; they do not establish a holder, durable identity, participation, delegation, process, source, or acceptance authority.'
+    boundary: 'Canonical Role schema qualification is the single truth for Assignment Modes serialization and membership; Core only consumes the qualified projection for bounded holder authorization.'
   });
 }
 
 export function isCanonicalHolderAssignmentMode(value = '') {
   return KNOWN_MODES.has(String(value || '').trim());
-}
-
-function parseStructuredModes(value) {
-  if (Array.isArray(value)) {
-    const raw = value.map((item) => String(item || '').trim()).filter(Boolean);
-    const tokens = raw.map(stripCode).filter(Boolean);
-    return classifyStructured(tokens, raw.join(', '), true);
-  }
-  const raw = String(value || '').trim();
-  if (!raw) return { present: false, raw: '', modes: [], unknown: [] };
-  const tokens = raw.split(',').map((item) => stripCode(item.trim())).filter(Boolean);
-  return classifyStructured(tokens, raw, true);
-}
-
-function classifyStructured(tokens, raw, present) {
-  const modes = [];
-  const unknown = [];
-  for (const token of tokens) {
-    if (KNOWN_MODES.has(token)) {
-      if (!modes.includes(token)) modes.push(token);
-    } else if (!unknown.includes(token)) unknown.push(token);
-  }
-  return { present, raw, modes, unknown };
-}
-
-function stripCode(value) {
-  const text = String(value || '').trim();
-  return /^`[^`]+`$/.test(text) ? text.slice(1, -1).trim() : text;
 }
 
 function unresolved(role, holderState, reasonCode, source, details = {}) {

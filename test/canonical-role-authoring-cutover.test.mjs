@@ -10,7 +10,10 @@ import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.ren
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { validateArtifact } from '../src/validation/validateArtifact.js';
 import { runCommonAuthorCli } from '../src/tooling/portable/adapters/cli/cli.common-author.js';
+import { parseRoleMaterial } from '../src/tooling/portable/handoff/coldStartQualification.materials.js';
+import { projectHolderBindingAuthorization } from '../src/tooling/portable/grounding/grounding.holderBindingAuthorization.js';
 const NATIVE_ROOT = path.resolve(process.env.TIINEX_TEST_NATIVE_ROOT || fileURLToPath(new URL('../../native', import.meta.url)));
+const BUSINESS_ROOT = path.resolve(process.env.TIINEX_TEST_BUSINESS_ROOT || fileURLToPath(new URL('../../business', import.meta.url)));
 const binding = JSON.parse(await readFile(path.join(NATIVE_ROOT, '.topics', '.schemas', 'party', 'role', 'tiinex.party.role.v1.schema.json'), 'utf8'));
 const runtimeProjection = JSON.parse(await readFile(path.join(NATIVE_ROOT, '.topics', '.schemas', 'party', 'role', 'tiinex.party.role.v1.schema.runtime.json'), 'utf8'));
 
@@ -100,6 +103,31 @@ test('Role Assignment Modes validator accepts only exact canonical serialization
 });
 
 
+
+test('current Business Sigma Role authority is consumed from canonical schema qualification, not raw Assignment Modes parsing', async () => {
+  const legacyPath = path.join(BUSINESS_ROOT, '.topics', 'roles', '001-4-1-sigma-canonical-holder-cutover-role.trace.md');
+  const currentPath = path.join(BUSINESS_ROOT, '.topics', 'roles', '001-4-1-1-sigma-role-canonical-assignment-modes-qualification-continuation.trace.md');
+  const legacy = parseRoleMaterial({ path: legacyPath, markdown: await readFile(legacyPath, 'utf8') });
+  const current = parseRoleMaterial({ path: currentPath, markdown: await readFile(currentPath, 'utf8') });
+  assert.equal(legacy?.canonicalQualification?.state, 'unresolved');
+  assert.ok((legacy?.canonicalQualification?.findings || []).some((finding) => finding.code === 'party.role.assignmentModes.invalid'));
+  assert.equal(current?.canonicalQualification?.state, 'qualified');
+  assert.deepEqual(current.canonicalQualification.assignmentModes, ['handoff', 'explicit-participation']);
+
+  const role = {
+    state: 'qualified',
+    endpoint: { label: current.label, kind: 'role' },
+    material: { state: 'qualified', artifact: { path: current.path, sha256: current.sha256, schemaId: current.schemaId, roleLabel: current.label, roleKind: current.roleKind } },
+    canonicalQualificationLoaded: current.canonicalQualification,
+    holderRelationshipLoaded: current.holderRelationship
+  };
+  const handoff = projectHolderBindingAuthorization(role, { assertionMode: 'handoff' });
+  const participation = projectHolderBindingAuthorization(role, { assertionMode: 'explicit-participation' });
+  assert.equal(handoff.state, 'qualified');
+  assert.equal(participation.state, 'qualified');
+  assert.deepEqual(handoff.authorizedModes, ['handoff', 'explicit-participation']);
+  assert.equal(handoff.modeAuthority.provenance.basis, 'canonical-role-schema-qualified-assignment-modes');
+});
 
 test('Role section parsing treats end-of-input structurally and does not truncate on the letter z inside Holder Relationship prose', () => {
   const contract = buildArtifactCreationContract({ schemaId: 'tiinex.party.role.v1', transitionType: 'create-artifact' });

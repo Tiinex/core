@@ -162,7 +162,8 @@ function qualifiedPackageGroundingRole(entry = {}) {
       roleKind: String(artifact.roleKind || ''),
       reference,
       sha256,
-      holderRelationship: entry.holderRelationshipLoaded || null
+      holderRelationship: entry.holderRelationshipLoaded || null,
+      canonicalQualification: entry.canonicalQualificationLoaded || null
     }))
   });
 }
@@ -191,7 +192,8 @@ function qualifiedRequiredContextRole(entry = {}) {
       roleKind: parsed.roleKind,
       reference,
       sha256: expectedSha,
-      holderRelationship: parsed.holderRelationship
+      holderRelationship: parsed.holderRelationship,
+      canonicalQualification: parsed.canonicalQualification
     }))
   });
 }
@@ -229,7 +231,7 @@ function participantProjection(declaration, role) {
   });
 }
 
-function roleProjection({ label = '', roleKind = '', reference = '', sha256 = '', holderRelationship = null } = {}) {
+function roleProjection({ label = '', roleKind = '', reference = '', sha256 = '', holderRelationship = null, canonicalQualification = null } = {}) {
   return Object.freeze({
     state: 'qualified',
     endpoint: Object.freeze({ label, kind: 'role', bounded: true }),
@@ -237,6 +239,7 @@ function roleProjection({ label = '', roleKind = '', reference = '', sha256 = ''
       state: 'qualified',
       artifact: Object.freeze({ path: reference, reference, sha256, schemaId: ROLE_SCHEMA, roleLabel: label, roleKind })
     }),
+    canonicalQualificationLoaded: canonicalQualification || Object.freeze({ state: 'unresolved', assignmentModes: Object.freeze([]), findings: Object.freeze([]) }),
     holderRelationshipLoaded: holderRelationship || Object.freeze({}),
     boundary: 'Synthetic projection of one exact already-qualified Role artifact for assignment-mode qualification only.'
   });
