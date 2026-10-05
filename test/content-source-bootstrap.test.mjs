@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { discoverInstalledTiinexContentSources, discoverLocalTiinexContentSource } from '../src/tooling/portable/adapters/node/contentSource.discovery.js';
+import { prepareNodeWorkspaceCarrierManufacturingInput } from '../src/tooling/portable/adapters/node/workspaceCarrier.manufacture.js';
 import { buildToolingBootstrapTransportFiles } from '../src/tooling/portable/adapters/node/handoff.manufacture.bootstrap.js';
 import { resolveContentSourceRequirementMaterials, expandContentSourceParentBoundaryClosure } from '../src/tooling/portable/adapters/node/handoff.manufacture.requirements.js';
 import { inspectPortableToolingBootstrap } from '../src/tooling/portable/handoff/toolingBootstrap.js';
@@ -33,6 +34,7 @@ test('registered content surfaces are recursive and unknown dot directories are 
 
     const source = await discoverLocalTiinexContentSource({ root });
     assert.equal(source.status, 'ready');
+    assert.equal(source.source.capabilities.declaredContentSource, false);
     assert.deepEqual(source.surfaces.map((item) => item.path), [
       '.topics/.entries',
       '.topics/.workspaces',
@@ -72,9 +74,9 @@ test('installed Tiinex content sources follow declared dependencies of discovere
     await write(path.join(root, 'package.json'), JSON.stringify({ name: 'host', version: '1.0.0', dependencies: { '@example/a': '1.0.0' } }));
     const a = path.join(root, 'node_modules', '@example', 'a');
     const b = path.join(root, 'node_modules', '@example', 'b');
-    await write(path.join(a, 'package.json'), JSON.stringify({ name: '@example/a', version: '1.0.0', dependencies: { '@example/b': '1.0.0' } }));
+    await write(path.join(a, 'package.json'), JSON.stringify({ name: '@example/a', version: '1.0.0', dependencies: { '@example/b': '1.0.0' }, tiinex: { contentSource: {} } }));
     await write(path.join(a, '.topics', 'module', '.processes', 'a.trace.md'), 'a');
-    await write(path.join(b, 'package.json'), JSON.stringify({ name: '@example/b', version: '1.0.0' }));
+    await write(path.join(b, 'package.json'), JSON.stringify({ name: '@example/b', version: '1.0.0', tiinex: { contentSource: {} } }));
     await write(path.join(b, '.topics', '.entries', 'b.trace.md'), 'b');
 
     const installed = await discoverInstalledTiinexContentSources({ compositionRoot: root });
@@ -97,10 +99,52 @@ test('installed content discovery traverses non-content aggregation packages to 
     const interop = path.join(root, 'node_modules', '@example', 'interop');
     const defaults = path.join(root, 'node_modules', '@example', 'defaults');
     await write(path.join(interop, 'package.json'), JSON.stringify({ name: '@example/interop', version: '1.0.0', optionalDependencies: { '@example/defaults': '1.0.0' } }));
-    await write(path.join(defaults, 'package.json'), JSON.stringify({ name: '@example/defaults', version: '1.0.0' }));
+    await write(path.join(interop, '.topics', '.schemas', 'transport-only.schema.md'), 'must not auto-select undeclared aggregation package content');
+    await write(path.join(defaults, 'package.json'), JSON.stringify({ name: '@example/defaults', version: '1.0.0', tiinex: { contentSource: {} } }));
     await write(path.join(defaults, '.topics', '.processes', 'portable.trace.md'), 'portable');
     const installed = await discoverInstalledTiinexContentSources({ compositionRoot: root });
     assert.deepEqual(installed.sources.map((item) => item.source.id), ['@example/defaults']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+
+test('carried Workspaces are not implicitly active content sources unless their package declares tiinex.contentSource', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-carried-content-selection-'));
+  try {
+    const docs = path.join(root, 'docs-like');
+    const native = path.join(root, 'native-like');
+    await write(path.join(docs, 'package.json'), JSON.stringify({ name: '@example/docs-like', version: '1.0.0' }));
+    await write(path.join(docs, '.topics', '.schemas', 'docs.schema.md'), 'docs schema');
+    await write(path.join(native, 'package.json'), JSON.stringify({ name: '@example/native-like', version: '1.0.0', tiinex: { contentSource: { registeredSurfaces: 'recursive', workspaceIds: ['native-like'] } } }));
+    await write(path.join(native, '.topics', '.schemas', 'native.schema.md'), 'native schema');
+
+    const auto = await prepareNodeWorkspaceCarrierManufacturingInput({
+      workspaceRoot: docs,
+      workspaceId: 'docs-like',
+      additionalWorkspaces: [{ id: 'native-like', root: native }],
+      runtimeRoot: ROOT,
+      verifyRoundtrip: false
+    });
+    assert.equal(auto.toolingBootstrap.contentSources, 1);
+    const manifestFile = auto.additionalTransportFiles.find((file) => file.path === 'tiinex.bootstrap/manifest.json');
+    assert.ok(manifestFile);
+    const manifest = JSON.parse(new TextDecoder().decode(manifestFile.data));
+    assert.deepEqual(manifest.content.sourceRecords.map((item) => item.id), ['@example/native-like']);
+    assert.deepEqual(manifest.content.entries.map((item) => item.sourcePath), ['.topics/.schemas/native.schema.md']);
+
+    const explicit = await prepareNodeWorkspaceCarrierManufacturingInput({
+      workspaceRoot: docs,
+      workspaceId: 'docs-like',
+      additionalWorkspaces: [{ id: 'native-like', root: native }],
+      contentSources: [{ id: 'docs-explicit', root: docs, workspaceIds: ['docs-like'] }],
+      runtimeRoot: ROOT,
+      verifyRoundtrip: false
+    });
+    const explicitManifestFile = explicit.additionalTransportFiles.find((file) => file.path === 'tiinex.bootstrap/manifest.json');
+    const explicitManifest = JSON.parse(new TextDecoder().decode(explicitManifestFile.data));
+    assert.deepEqual(explicitManifest.content.sourceRecords.map((item) => item.id), ['@example/native-like', 'docs-explicit']);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

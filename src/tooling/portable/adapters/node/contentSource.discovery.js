@@ -22,6 +22,14 @@ const REGISTERED_SURFACE_SET = new Set(REGISTERED_TIIINEX_DISCOVERY_SURFACES);
 const COMPOSABLE_SURFACE_SET = new Set(COMPOSABLE_TIIINEX_CONTENT_SURFACES);
 const HARD_BOUNDARY_DIRS = new Set(['.git', 'node_modules']);
 
+export function packageDeclaresTiinexContentSource(packageRecord = {}) {
+  const tiinex = packageRecord && typeof packageRecord === 'object' ? packageRecord.tiinex : null;
+  if (!tiinex || typeof tiinex !== 'object' || Array.isArray(tiinex)) return false;
+  if (!Object.prototype.hasOwnProperty.call(tiinex, 'contentSource')) return false;
+  const declaration = tiinex.contentSource;
+  return Boolean(declaration && typeof declaration === 'object' && !Array.isArray(declaration));
+}
+
 export async function discoverLocalTiinexContentSource(input = {}) {
   const root = path.resolve(String(input.root || input.packageRoot || input.workspaceRoot || ''));
   if (!root) throw new Error('portable.content-source.root.required');
@@ -71,6 +79,19 @@ export async function discoverLocalTiinexContentSource(input = {}) {
     representationSha256,
     findings
   });
+}
+
+export async function discoverDeclaredLocalTiinexContentSource(input = {}) {
+  const root = path.resolve(String(input.root || input.packageRoot || input.workspaceRoot || ''));
+  if (!root) throw new Error('portable.content-source.root.required');
+  const packageRecord = await readOptionalPackage(root);
+  if (!packageDeclaresTiinexContentSource(packageRecord || {})) return freeze({
+    schema: PORTABLE_CONTENT_SOURCE_DISCOVERY_SCHEMA_ID,
+    status: 'not-declared-content-source',
+    source: sourceProjection({ sourceId: String(input.id || input.sourceId || packageRecord?.name || path.basename(root)).trim(), packageRecord, kind: input.kind || 'local-root', workspaceIds: input.workspaceIds || input.workspaceAliases || [] }),
+    surfaces: [], entries: [], totalBytes: 0, representationSha256: sha256Text('[]'), findings: []
+  });
+  return discoverLocalTiinexContentSource({ ...input, root });
 }
 
 export async function resolveSelectedTiinexContentSources(input = {}) {
@@ -127,8 +148,10 @@ export async function discoverInstalledTiinexContentSources(input = {}) {
     if (seenRoots.has(exactRoot)) continue;
     seenRoots.add(exactRoot);
     const childPackage = await readOptionalPackage(exactRoot);
-    const discovered = await discoverLocalTiinexContentSource({ root: exactRoot, id: candidate.name, kind: 'installed-package' });
-    if (discovered.status === 'ready') sources.push(discovered);
+    if (packageDeclaresTiinexContentSource(childPackage || {})) {
+      const discovered = await discoverLocalTiinexContentSource({ root: exactRoot, id: candidate.name, kind: 'installed-package' });
+      if (discovered.status === 'ready') sources.push(discovered);
+    }
     // Dependency traversal is package-graph discovery, not content-surface qualification.
     // An aggregation/Interop package may intentionally expose no reusable .topics surface of its own
     // while depending on packages that do. Follow declared dependencies regardless of whether the
@@ -225,6 +248,7 @@ function sourceProjection({ sourceId, packageRecord, kind, workspaceIds = [] }) 
     kind: String(kind || 'local-root'),
     package: freeze({ name: String(packageRecord?.name || ''), version: String(packageRecord?.version || '') }),
     capabilities: freeze({
+      declaredContentSource: packageDeclaresTiinexContentSource(packageRecord || {}),
       registeredSurfaces: String(contentSource?.registeredSurfaces || ''),
       executableSchemaCompanions: contentSource?.executableSchemaCompanions === true,
       workspaceIds: declaredWorkspaceIds

@@ -1,9 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { portableCliHelpText } from '../src/tooling/portable/adapters/cli/cli.help.js';
+import { portableCliRuntimeContentRoots } from '../src/tooling/portable/adapters/cli/cli.run.js';
 import { portableCliRuntimeProjection, projectPortableCliOperation } from '../src/tooling/portable/adapters/cli/cli.invocation.js';
 import { prepareHandoffManufactureCliCommand } from '../src/tooling/portable/adapters/cli/cli.handoff-manufacture.js';
+import { describeSchemaCapabilities } from '../src/schemas/capability.registry.js';
 
 const runtime = Object.freeze({
   commandInvocation: Object.freeze({
@@ -64,4 +71,60 @@ test('Transition discovery help makes workspace-contributed capability discovera
   assert.match(help, /regardless of their workspace-local directory/i);
   assert.match(help, /Independent supplied representations stay independent/i);
   assert.match(help, /do not imply .*applicability.*execution/i);
+});
+
+
+test('schema capability description fails closed instead of throwing when no schema module is composed', () => {
+  const descriptor = describeSchemaCapabilities(null, { unresolvedSchemaId: 'tiinex.handoff.v1' });
+  assert.equal(descriptor.moduleId, '');
+  assert.equal(descriptor.resolution, null);
+  assert.equal(descriptor.availability, 'invalid');
+  assert.equal(descriptor.actions.create.status, 'unavailable');
+});
+
+test('source CLI authoring without schema content fails closed with an explicit content-source requirement', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-author-no-content-'));
+  try {
+    const body = path.join(root, 'body.md');
+    await writeFile(body, '# No Content Authoring Probe\n', 'utf8');
+    const entrypoint = fileURLToPath(new URL('../tools/tiinex-portable.mjs', import.meta.url));
+    const env = { ...process.env };
+    delete env.TIINEX_CONTENT_ROOTS;
+    const result = spawnSync(process.execPath, [entrypoint, 'author', root, '--schema', 'tiinex.topic.v1', '--path', '001-no-content-probe.trace.md', '--body', body, '--preflight', '--compact'], {
+      cwd: fileURLToPath(new URL('..', import.meta.url)),
+      env,
+      encoding: 'utf8'
+    });
+    assert.equal(result.status, 1);
+    const error = JSON.parse(result.stderr);
+    assert.equal(error.schema, 'tiinex.portable.cli.error.v1');
+    assert.match(error.error, /^portable\.cli\.author\.schema-content-source\.required:tiinex\.topic\.v1:/);
+    assert.match(error.error, /qualified \.schemas content source/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+
+
+test('explicit CLI content-source flags initialize source runtime composition before command execution', () => {
+  const coreRoot = fileURLToPath(new URL('..', import.meta.url));
+  const nativeRoot = process.env.TIINEX_TEST_NATIVE_ROOT || path.resolve(coreRoot, '..', 'native');
+  assert.deepEqual(portableCliRuntimeContentRoots(['handoff', '/tmp/workspace', '--content-sources', `${nativeRoot},/tmp/other-content`]), [nativeRoot, '/tmp/other-content']);
+  assert.deepEqual(portableCliRuntimeContentRoots(['catalog', '--content-roots', nativeRoot]), [nativeRoot]);
+
+  const entrypoint = fileURLToPath(new URL('../tools/tiinex-portable.mjs', import.meta.url));
+  const env = { ...process.env, TIINEX_CONTENT_ROOTS: '' };
+  const result = spawnSync(process.execPath, [entrypoint, 'catalog', '--json', '--content-sources', nativeRoot], {
+    cwd: coreRoot,
+    env,
+    encoding: 'utf8'
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const receipt = JSON.parse(result.stdout);
+  assert.equal(receipt.status, 'ready');
+  assert.ok((receipt.sources || []).some((source) => source.id === '@tiinex/native'));
+  assert.equal(receipt.schemas.state, 'ready');
+  assert.ok(receipt.schemas.total > 0);
+  assert.equal(receipt.schemas.registrySource, 'portable-content-source-composition');
 });

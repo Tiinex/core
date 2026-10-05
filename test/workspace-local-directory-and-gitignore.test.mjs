@@ -14,7 +14,8 @@ import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
 const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const WORKSPACE_SCHEMA = path.join(path.resolve(ROOT, '..', 'native'), '.topics', '.schemas', 'workspace', 'tiinex.workspace.v1.schema.md');
+const NATIVE_ROOT = path.resolve(process.env.TIINEX_TEST_NATIVE_ROOT || path.resolve(ROOT, '..', 'native'));
+const WORKSPACE_SCHEMA = path.join(NATIVE_ROOT, '.topics', '.schemas', 'workspace', 'tiinex.workspace.v1.schema.md');
 const WORKSPACE_SCHEMA_TARGET = currentSchemaTarget('tiinex.workspace.v1');
 
 async function git(root, ...args) { return (await run('git', args, { cwd: root })).stdout; }

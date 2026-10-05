@@ -50,6 +50,7 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   const parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentReference, { workspaceRoot, childRelativePath: artifactRelativePath, runtime, publishedReference: parentPublishedReference }) : {};
   const transitionType = String(flags.transition || defaultTransition(schemaId, Boolean(parentPath))).trim();
   const contract = buildArtifactCreationContract({ schemaId, transitionType });
+  assertAuthorCreationContractReady(contract, runtime, schemaId);
   const summary = String(flags.summary || title).trim();
   const authors = String(flags.authors || state?.roleLabel || '').trim();
   const why = Object.prototype.hasOwnProperty.call(flags, 'why') ? String(flags.why || '').trim() : '';
@@ -214,6 +215,17 @@ function historicalParentSchemaValidationAuthority(parentRecord = {}) {
     compiledContract: null,
     boundary: 'Historical Parent validation still runs Root readability, exact declared schema-identifier/reference-shape checks, recovery and integrity. Identifier-only authority never becomes exact historical schema-revision authority; current schema-specific machine/companion validation is applied only when the Parent and current creation contract share exact qualified schema-revision authority.'
   });
+}
+
+
+function assertAuthorCreationContractReady(contract = {}, runtime = {}, schemaId = '') {
+  if (contract?.status === 'ready') return;
+  const runtimeStatus = String(runtime?.runtimeInitialization?.status || '').trim();
+  if (runtimeStatus === 'no-schema-content-source') {
+    throw new Error(`portable.cli.author.schema-content-source.required:${schemaId || 'unknown-schema'}: schema-aware authoring requires a qualified .schemas content source. Select one explicitly (for example TIINEX_CONTENT_ROOTS) or use a bootstrap runtime that carries the required schema content.`);
+  }
+  const codes = (contract?.findings || []).map((item) => String(item?.code || '').trim()).filter(Boolean);
+  throw new Error(`portable.cli.author.creation-contract.blocked:${schemaId || 'unknown-schema'}:${codes.join(',') || 'creation-contract-not-ready'}`);
 }
 
 function mergeAuthorAuditResults(candidateAudit = {}, parentAudit = null) {

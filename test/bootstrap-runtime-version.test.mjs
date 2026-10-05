@@ -13,6 +13,17 @@ import { packageFileBytes } from '../src/export/package.bytes.js';
 const run = promisify(execFile);
 const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 
+test('bootstrap embeds the exact Core portable CLI bytes instead of maintaining a parallel CLI implementation', async () => {
+  const tooling = await buildToolingBootstrapTransportFiles({ runtimeRoot: ROOT, builtAt: '2026-09-29T09:00:00.000Z' });
+  const embedded = tooling.files.find((file) => file.path === 'tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
+  assert.ok(embedded);
+  const source = await readFile(path.join(ROOT, 'tools', 'tiinex-portable.mjs'));
+  assert.deepEqual(Buffer.from(packageFileBytes(embedded)), source);
+  const declared = tooling.manifest.runtime.entries.find((entry) => entry.path === 'runtime/tools/tiinex-portable.mjs');
+  assert.ok(declared);
+  assert.equal(declared.sha256, tooling.runtimeIdentity.entrypointSha256);
+});
+
 test('bootstrap build timestamp is truthful bundle metadata while composition identity stays timestamp-independent', async () => {
   const first = await buildToolingBootstrapTransportFiles({ runtimeRoot: ROOT, builtAt: '2026-09-29T10:00:00.000Z' });
   const second = await buildToolingBootstrapTransportFiles({ runtimeRoot: ROOT, builtAt: '2026-09-29T11:00:00.000Z' });

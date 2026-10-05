@@ -43,3 +43,19 @@ test('workspace-qualified references are retargeted only when their target Works
  const plan=projectScaffoldArtifactRelocation({materials:[{workspaceId:'fixture',path:'.topics/example.trace.md',markdown:resealed}],relocations:[{workspaceId:'site',from:'.topics/viewer',to:'.topics/work/viewer'}]});
  assert.equal(plan.status,'ready');assert.match(plan.outputs[0].markdown,/site::\.topics\/work\/viewer\/example\.trace\.md/);assert.equal(plan.summary.byteChanged,1);
 });
+
+test('unaffected local Parent chains do not require representable Parent-integrity entries',()=>{
+ const stableParent=parentArtifact('Stable Parent');
+ const stableChild=sealC14nV2Self(`# Continuity Context\n\n- Parent\n  - Parent Schema: tiinex.task.v1\n  - Trace: [parent.trace.md](parent.trace.md)\n  - Origin:\n    - [relative](parent.trace.md)\n- Current\n  - Current Schema: tiinex.task.v1\n\n---\n\n# Stable Child\n\n## Objective\n\nUnchanged local Parent relationship without a Parent-integrity entry.\n\n---\n\n# Continuity Integrity\n\n- ${method}\n  - Towards: self\n  - Value: `).markdown+'\n';
+ const moved=parentArtifact('Moved');
+ const plan=projectScaffoldArtifactRelocation({materials:[
+  {workspaceId:'fixture',path:'.topics/stable/parent.trace.md',markdown:stableParent},
+  {workspaceId:'fixture',path:'.topics/stable/child.trace.md',markdown:stableChild},
+  {workspaceId:'fixture',path:'.topics/move/moved.trace.md',markdown:moved}
+ ],relocations:[{workspaceId:'fixture',from:'.topics/move',to:'.topics/moved'}]});
+ assert.equal(plan.status,'ready',JSON.stringify(plan.findings));
+ const stable=plan.outputs.find((item)=>item.toPath==='.topics/stable/child.trace.md');
+ assert.equal(stable.markdown,stableChild);
+ assert.equal(plan.summary.parentIntegrityUpdates,0);
+ assert.ok(plan.outputs.some((item)=>item.toPath==='.topics/moved/moved.trace.md'));
+});

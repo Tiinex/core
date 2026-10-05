@@ -158,6 +158,7 @@ function projectGroundDefault(result = {}, parsed = {}, runtime = {}) {
     recipientContract: projectRecipientContract({ result, required, currentWork, continuity, parsed, runtime }),
     orchestrationReadiness: compactOrchestrationReadiness(result.orchestrationReadiness),
     delegationReadiness: compactDelegationReadinessSummary(result.delegationReadiness),
+    runtimeContext: projectGroundRuntimeContext(runtime),
     groundingBasis: Object.freeze({
       qualifiedOrKnown: Object.freeze((evidence.known || []).map(compactGroundEvidence)),
       boundedInference: Object.freeze((evidence.inferred || []).map(compactGroundEvidence)),
@@ -204,6 +205,33 @@ function projectGroundDefault(result = {}, parsed = {}, runtime = {}) {
     actionableFindingsOmitted: Math.max(0, actionableFindings.length - 20),
     detail: detailReceipt(parsed),
     boundary: result.boundary || 'Decision-oriented common default grounding projection. Full qualified receipt remains available with --full.'
+  });
+}
+
+function projectGroundRuntimeContext(runtime = {}) {
+  const initialization = runtime?.runtimeInitialization || {};
+  const sources = Array.isArray(runtime?.contentSources) && runtime.contentSources.length
+    ? runtime.contentSources
+    : Array.isArray(initialization?.contentSources) ? initialization.contentSources : [];
+  const contentSources = sources
+    .map((source) => Object.freeze({
+      id: String(source?.source?.id || ''),
+      kind: String(source?.source?.kind || ''),
+      package: Object.freeze({
+        name: String(source?.source?.package?.name || ''),
+        version: String(source?.source?.package?.version || '')
+      }),
+      representationSha256: String(source?.representationSha256 || '')
+    }))
+    .filter((source) => source.id)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return Object.freeze({
+    state: contentSources.length ? 'content-composed' : 'mechanics-only',
+    initializationStatus: String(initialization?.status || ''),
+    discoveryBasis: String(initialization?.discoveryBasis || 'none'),
+    sourceCount: contentSources.length,
+    contentSources: Object.freeze(contentSources),
+    boundary: 'Grounding output depends on both the portable Core mechanics and the qualified runtime content composition. Different discovery basis alone is not semantic drift when exact content-source representations are equal; missing or different content representations are materially different grounding inputs.'
   });
 }
 

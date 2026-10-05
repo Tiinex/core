@@ -593,11 +593,21 @@ test('common ground projection separates epistemic basis, semantic participants,
     deeper: { requiredContextBodies: { flag: '--include-required-context all' }, currentWorkBody: { flag: '--include-current-work' } },
     findingSummary: { counts: { error: 0, warning: 0 } }, actionableFindings: [], boundary: 'bounded'
   }, { command: 'project-grounding-readiness', positionals: ['carrier.zip'], flags: { route: '001-handoff-pointer.trace.md', 'holder-role': 'Anchor', recipient: true } }, {
-    commandInvocation: { executable: '/usr/bin/node', entrypoint: '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs' }
+    commandInvocation: { executable: '/usr/bin/node', entrypoint: '/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs' },
+    runtimeInitialization: { status: 'ready', discoveryBasis: 'bootstrap-manifest' },
+    contentSources: [{
+      status: 'ready',
+      source: { id: '@tiinex/native', kind: 'bootstrap-content', package: { name: '@tiinex/native', version: '0.1.0' } },
+      representationSha256: 'abc123'
+    }]
   });
   assert.equal(output.readiness.state, 'grounded-to-act');
   assert.equal(output.authority.state, 'qualified');
   assert.equal(output.orchestrationReadiness.participantMap, 'explicit-bounded-map');
+  assert.equal(output.runtimeContext.state, 'content-composed');
+  assert.equal(output.runtimeContext.discoveryBasis, 'bootstrap-manifest');
+  assert.equal(output.runtimeContext.sourceCount, 1);
+  assert.deepEqual(output.runtimeContext.contentSources, [{ id: '@tiinex/native', kind: 'bootstrap-content', package: { name: '@tiinex/native', version: '0.1.0' }, representationSha256: 'abc123' }]);
   assert.equal(output.requiredContext.items[0].purpose, 'read-only semantic boundary');
   assert.equal(output.requiredContext.items[0].provenance.basis, 'selected-handoff-required-context-declaration');
   assert.equal(output.groundingBasis.qualifiedOrKnown[0].code, 'qualified-handoff-route');

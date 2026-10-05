@@ -9,7 +9,7 @@ import { discoverLocalTiinexContentSource } from '../src/tooling/portable/adapte
 import { schemaCompanionTextEntries } from '../src/schemas/registry.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const nativeRoot = resolve(root, '..', 'native');
+const nativeRoot = resolve(process.env.TIINEX_TEST_NATIVE_ROOT || resolve(root, '..', 'native'));
 const ids = [
   'tiinex.core.handoff.discuss-review.v1',
   'tiinex.core.handoff.open-bounded-conversation.v1',

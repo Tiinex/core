@@ -240,6 +240,20 @@ export async function commandInput(parsed, runtime = {}) {
     options: {}
   };
   if(parsed.command==='project-workspace-landing')return land(flags,material,readOptionalJson,splitFlag);
+  if (parsed.command === 'project-lineage-maintenance') {
+    const request = await readOptionalJson(flags.request || flags.plan);
+    const operation = request.operation || {
+      kind: flags.kind || flags.operation || '',
+      workspaceId: flags['workspace-id'] || '',
+      selectedPaths: splitFlag(flags.selected || flags['selected-paths']),
+      targetDirectory: flags['target-directory'] || flags.directory || '',
+      orderedPaths: splitFlag(flags.ordered || flags['insert-paths']),
+      targetPath: flags['target-path'] || ''
+    };
+    return { input: { ...material, ...request, operation }, options: {} };
+  }
+  if (parsed.command === 'qualify-lineage-directory') return { input: { ...material, workspaceId: flags['workspace-id'] || '', directory: flags.directory || flags['target-directory'] || '' }, options: {} };
+  if (parsed.command === 'qualify-lineage-workspace') return { input: { ...material, workspaceId: flags['workspace-id'] || '' }, options: {} };
   if (parsed.command === 'project-authoring-parent') return { input: { ...material, reference: flags.reference || '', publishedReference: flags['published-reference'] || flags['parent-reference'] || '' }, options: {} };
   const operatorBridgeInput = await prepareOperatorBridgeCliInput(parsed.command, material, flags, readOptionalJson);
   if (operatorBridgeInput) return operatorBridgeInput;

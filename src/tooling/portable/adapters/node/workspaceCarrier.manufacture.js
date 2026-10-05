@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { enumerateNodeWorkspace } from './handoff.manufacture.enumeration.js';
 import { buildToolingBootstrapTransportFiles } from './handoff.manufacture.bootstrap.js';
+import { discoverDeclaredLocalTiinexContentSource } from './contentSource.discovery.js';
 import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runtimeSource.js';
 import { inferWorkspaceTitle, normalizeAdditionalWorkspaceDescriptors, safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
 import { normalizeWorkspaceScopes, normalizeWorkspaceTargetBindings, projectBoundedWorkspaceMaterialization } from './handoff.manufacture.scope.js';
@@ -52,6 +53,13 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
     if (targets.length !== 1) throw new Error(`portable.workspace-carrier.workspace-scope.target-${targets.length ? 'ambiguous' : 'required'}:${materialization.id}`);
     return projectBoundedWorkspaceMaterialization(materialization, scope, targets[0].path);
   });
+  const automaticWorkspaceContentSources = [];
+  for (let index = 0; index < enumerations.length; index += 1) {
+    const item = enumerations[index];
+    const id = String(materializations[index]?.id || item.materialization?.id || item.descriptor?.id || '').trim();
+    const source = await discoverDeclaredLocalTiinexContentSource({ root: item.root, kind: 'carried-workspace-declared-content-source', workspaceIds: id ? [id] : [] });
+    if (source.status === 'ready') automaticWorkspaceContentSources.push(source);
+  }
   const toolingBootstrap = await buildToolingBootstrapTransportFiles({
     delivery: input.toolingBootstrap || input.bootstrapDelivery || 'embedded',
     runtimeRoot: input.runtimeRoot || options.runtimeRoot,
@@ -59,7 +67,7 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
     maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles,
     contentSources: [
       ...(Array.isArray(input.contentSources) ? input.contentSources : []),
-      ...enumerations.map(({ id, root }) => Object.freeze({ id, root, kind: 'local-workspace' }))
+      ...automaticWorkspaceContentSources
     ],
     compositionRoot: input.compositionRoot || options.compositionRoot,
     discoverInstalledContentSources: input.discoverInstalledContentSources === true || options.discoverInstalledContentSources === true

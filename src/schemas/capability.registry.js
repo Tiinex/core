@@ -55,6 +55,7 @@ export function resolveSchemaCapabilities(input = {}, options = {}) {
 }
 
 export function describeSchemaCapabilities(module = {}, context = {}) {
+  module = module && typeof module === 'object' ? module : {};
   const capabilityInput = module.capabilities || {};
   const surfaces = makeSurfaceCapabilityMap(module, capabilityInput);
   const generation = qualifyArtifactCreationCapability(module, 'create-artifact');

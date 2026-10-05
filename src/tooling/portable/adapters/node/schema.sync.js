@@ -177,10 +177,11 @@ export async function buildNativeSchemaSyncPlan(options = {}) {
     }
   }
 
-  const preservedSnapshotCommit = published && publishedSnapshotMatchesEntries(existingCatalog, sortedEntries, repository)
+  const preservedSnapshotCommit = publishedSnapshotMatchesEntries(existingCatalog, sortedEntries, repository)
     ? String(existingCatalog?.source?.commit || '')
     : '';
-  const manifest = buildPackManifest({ repository, sourceCommit: published ? (preservedSnapshotCommit || sourceCommit) : '', published, entries: sortedEntries, catalogEntries });
+  const manifestPublished = published || Boolean(preservedSnapshotCommit);
+  const manifest = buildPackManifest({ repository, sourceCommit: preservedSnapshotCommit || (published ? sourceCommit : ''), published: manifestPublished, entries: sortedEntries, catalogEntries });
   outputs.push(jsonOutput(path.join(schemaSurfaceRoot, '.generated', 'native.schema.catalog.json'), Object.freeze({
     schema: 'tiinex.native.schema.catalog.v1',
     source: manifest.source,

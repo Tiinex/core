@@ -87,6 +87,14 @@ test('published sync preserves exact immutable bindings for unchanged schema byt
   const first = await synchronizeNativeSchemas({ contentRoot, docsRoot, sourceCommit: firstCommit, repository: 'Tiinex/docs', published: true });
   assert.equal(first.status, 'ready');
 
+  const localPlan = await buildNativeSchemaSyncPlan({ contentRoot, docsRoot, repository: 'Tiinex/docs', published: false });
+  assert.equal(localPlan.status, 'ready');
+  const localCatalogOutput = localPlan.outputs.find((item) => item.path.endsWith(path.join('.generated', 'native.schema.catalog.json')));
+  const localCatalog = JSON.parse(localCatalogOutput.bytes.toString('utf8'));
+  assert.equal(localCatalog.source.commit, firstCommit);
+  assert.equal(localCatalog.source.publicationState, 'published-immutable-canonical');
+  assert.equal(localCatalog.source.snapshotCompleteness, 'exact-canonical-docs-snapshot');
+
   const unchangedPlan = await buildNativeSchemaSyncPlan({ contentRoot, docsRoot, sourceCommit: nextCommit, repository: 'Tiinex/docs', published: true });
   assert.equal(unchangedPlan.status, 'ready');
   const unchangedCatalogOutput = unchangedPlan.outputs.find((item) => item.path.endsWith(path.join('.generated', 'native.schema.catalog.json')));

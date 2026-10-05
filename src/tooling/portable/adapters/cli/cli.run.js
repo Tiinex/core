@@ -16,6 +16,13 @@ import { projectCommonCliDefaultOutput } from './cli.common-output.js';
 import { runSchemasCli } from './cli.schemas.js';
 import { runVersionCli, formatVersionHuman } from './cli.version.js';
 import { runCatalogCli, formatCatalogHuman } from './cli.catalog.js';
+import { runLineageMaintenanceApplyCli } from './cli.lineage-maintenance.js';
+
+export function portableCliRuntimeContentRoots(argv = process.argv.slice(2)) {
+  const parsed = parseArgs(argv);
+  const value = parsed.flags['content-sources'] || parsed.flags['content-roots'] || '';
+  return Object.freeze(String(value || '').split(',').map((item) => item.trim()).filter(Boolean));
+}
 
 export async function runPortableCli(argv = process.argv.slice(2), io = console, runtime = {}) {
   const parsed = parseArgs(argv);
@@ -38,6 +45,7 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
       return 1;
     }
   }
+  if (parsed.command === 'apply-lineage-maintenance') return runLineageMaintenanceApplyCli(parsed, io);
   if (parsed.command === 'catalog') {
     try {
       const result = await runCatalogCli(parsed, runtime);

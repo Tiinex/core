@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { inferWorkspaceTitle, normalizeAdditionalWorkspaceDescriptors, normalizeTransportRoute, safeWorkspaceToken } from './handoff.manufacture.multiRoot.js';
 import { buildToolingBootstrapTransportFiles, PORTABLE_TOOLING_BOOTSTRAP_MANIFEST_SCHEMA_ID } from './handoff.manufacture.bootstrap.js';
-import { resolveSelectedTiinexContentSources } from './contentSource.discovery.js';
+import { discoverDeclaredLocalTiinexContentSource, resolveSelectedTiinexContentSources } from './contentSource.discovery.js';
 import { qualifyToolingRuntimeSourceAlignment } from './handoff.manufacture.runtimeSource.js';
 import { normalizeHandoffCarrierLineage } from '../../handoff/carrierLineage.js';
 import { normalizeHandoffCarrierProfile } from '../../handoff/carrierProfile.js';
@@ -178,8 +178,16 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
     requiredWorkspaceIds: hasReconciliationProof || input.requireReconciliationProof === true ? [workspaceId] : []
   });
 
+  const automaticWorkspaceContentSources = [];
+  for (const local of [
+    Object.freeze({ id: workspaceId, root: workspaceRoot }),
+    ...additionalEnumerations.map(({ id, root }) => Object.freeze({ id, root }))
+  ]) {
+    const source = await discoverDeclaredLocalTiinexContentSource({ root: local.root, kind: 'carried-workspace-declared-content-source', workspaceIds: [local.id] });
+    if (source.status === 'ready') automaticWorkspaceContentSources.push(source);
+  }
   const reusableContentSelection = await resolveSelectedTiinexContentSources({
-    contentSources: Array.isArray(input.contentSources) ? input.contentSources : [],
+    contentSources: [...(Array.isArray(input.contentSources) ? input.contentSources : []), ...automaticWorkspaceContentSources],
     compositionRoot: input.compositionRoot || options.compositionRoot,
     discoverInstalledContentSources: input.discoverInstalledContentSources === true || options.discoverInstalledContentSources === true,
     includeDevContentDependencies: input.includeDevContentDependencies,
@@ -245,11 +253,7 @@ export async function prepareNodeHandoffManufacturingInput(input = {}, options =
       runtimeRoot: input.runtimeRoot || options.runtimeRoot,
       expected: input.expectedToolingBootstrap || null,
       maxFiles: input.bootstrapMaxFiles || options.bootstrapMaxFiles,
-      contentSources: [
-        ...reusableContentSources,
-        Object.freeze({ id: workspaceId, root: workspaceRoot, kind: 'local-workspace', workspaceIds: [workspaceId] }),
-        ...additionalEnumerations.map(({ id, root }) => Object.freeze({ id, root, kind: 'local-workspace', workspaceIds: [id] }))
-      ],
+      contentSources: reusableContentSources,
       discoverInstalledContentSources: false
     });
     runtimeSourceAlignment = await qualifyToolingRuntimeSourceAlignment({

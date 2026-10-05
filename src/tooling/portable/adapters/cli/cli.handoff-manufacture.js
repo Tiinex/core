@@ -364,6 +364,7 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   }
   const carrierProfile = selectCarrierProfile({ operator: operatorCarrierProfile, inherited: inheritedCarrierProfile, runtime: runtime.defaultCarrierProfile || null });
   const projectedFilename = String(flags['projected-filename'] || flags.projectedFilename || '').trim();
+  const explicitContentRoots = splitFlag(flags['content-sources'] || flags['content-roots']);
   const input = await prepareNodeWorkspaceCarrierManufacturingInput({
     workspaceRoot,
     additionalWorkspaces,
@@ -373,6 +374,7 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
     workspaceTargets: workspaceTargetValue,
     workspaceScopes: descriptorArray(workspaceScopeValue, 'scopes').length ? descriptorArray(workspaceScopeValue, 'scopes') : workspaceScopeValue,
     materialRepresentationWorkspaceIds: splitFlag(flags['material-representation-workspaces'] || flags['generic-material-workspaces']),
+    contentSources: [...(runtime.contentSources || []), ...explicitContentRoots],
     toolingBootstrap: flags['tooling-bootstrap'] || 'embedded',
     expectedToolingBootstrap,
     maxFiles: flags['max-files'],

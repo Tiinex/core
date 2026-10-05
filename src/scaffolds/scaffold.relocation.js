@@ -51,7 +51,7 @@ export function projectScaffoldArtifactRelocation(input = {}) {
     const parentKey=parentByKey.get(k);
     if(parentKey){
       const parent=finalize(parentKey);
-      if(parent){
+      if(parent?.contentChanged){
         const state=canonicalC14nV2SelfState(parent.markdown);
         if(state.state!=='verified')findings.push(finding('error','scaffold.relocation.parent-self-unqualified',`Relocated Parent ${parentKey} is not self-qualified before child reseal.`,{parentKey,state:state.state}));
         else {
