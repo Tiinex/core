@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
+import { hasTiinexEnvelopeFirstLine, parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { projectPortableEditorAssistance } from './editor.assistance.js';
 import { auditPortableRecord } from '../audit/audit.capability.js';
 
@@ -79,10 +79,7 @@ function normalizeRecords(input = {}) {
   if (Array.isArray(input.records)) return input.records.map((record) => freeze({ ...record, path: norm(record.path || record.id || ''), markdown: String(record.markdown || record.content || '') }));
   return (Array.isArray(input.files) ? input.files : []).filter((item) => typeof item?.content === 'string').map((item) => freeze({ id: norm(item.path || ''), path: norm(item.path || ''), markdown: String(item.content || ''), sourceMode: item.sourceMode || '' }));
 }
-function isTiinexArtifact(markdown = '') {
-  try { return Boolean(String(parseArtifactMarkdown(markdown)?.envelope?.current?.schema?.id || '').trim()); }
-  catch { return false; }
-}
+function isTiinexArtifact(markdown = '') { return hasTiinexEnvelopeFirstLine(markdown); }
 function localParentPath(childPath = '', markdown = '') {
   try {
     const trace = String(parseArtifactMarkdown(markdown)?.envelope?.parent?.trace || '').trim();

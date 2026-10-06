@@ -170,6 +170,8 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
   assert.match(result.transportText, /Session Role: Anchor — material carried in this package at `business::\.topics\/roles\/anchor\.trace\.md`/);
   assert.match(result.transportText, /Participant: Sigma — material carried in this package at `business::\.topics\/roles\/sigma\.trace\.md`/);
   assert.match(result.transportText, /Session selections do not establish semantic holder\/participant\/recipient authority, acceptance, or work transfer/);
+  assert.match(result.transportText, /qualify these exact Role materials and apply declared presentation\/communication preferences as presentation only/);
+  assert.doesNotMatch(result.transportText, /TL;DR/i);
   assert.match(result.transportText, /No Handoff route, recipient, or work transfer is declared or implied\./);
 });
 

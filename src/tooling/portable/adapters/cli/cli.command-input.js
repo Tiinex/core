@@ -251,10 +251,10 @@ export async function commandInput(parsed, runtime = {}) {
       orderedPaths: splitFlag(flags.ordered || flags['insert-paths']),
       targetPath: flags['target-path'] || ''
     };
-    return { input: { ...material, ...request, operation }, options: {} };
+    return { input: { ...material, ...request, representationCoverage: request.representationCoverage || request.coverage || flags.coverage || 'unknown', operation }, options: {} };
   }
-  if (parsed.command === 'qualify-lineage-directory') return { input: { ...material, workspaceId: flags['workspace-id'] || '', directory: flags.directory || flags['target-directory'] || '' }, options: {} };
-  if (parsed.command === 'qualify-lineage-workspace') return { input: { ...material, workspaceId: flags['workspace-id'] || '' }, options: {} };
+  if (parsed.command === 'qualify-lineage-directory') return { input: { ...material, workspaceId: flags['workspace-id'] || '', directory: flags.directory || flags['target-directory'] || '', representationCoverage: flags.coverage || 'unknown' }, options: {} };
+  if (parsed.command === 'qualify-lineage-workspace') return { input: { ...material, workspaceId: flags['workspace-id'] || '', representationCoverage: flags.coverage || 'unknown' }, options: {} };
   if (parsed.command === 'project-authoring-parent') return { input: { ...material, reference: flags.reference || '', publishedReference: flags['published-reference'] || flags['parent-reference'] || '' }, options: {} };
   const operatorBridgeInput = await prepareOperatorBridgeCliInput(parsed.command, material, flags, readOptionalJson);
   if (operatorBridgeInput) return operatorBridgeInput;

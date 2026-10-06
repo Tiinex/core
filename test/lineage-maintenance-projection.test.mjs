@@ -32,7 +32,7 @@ test('Move relocates a whole coordinate lineage into an empty directory and pres
   const a=artifact({path:'.topics/a/001-root.trace.md',title:'Root'});
   const b=artifact({path:'.topics/a/001-1-child.trace.md',title:'Child',parent:a});
   const c=artifact({path:'.topics/a/001-1-1-leaf.trace.md',title:'Leaf',parent:b});
-  const plan=projectPortableLineageMaintenance({materials:[a,b,c],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path,b.path,c.path],targetDirectory:'.topics/b'}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[a,b,c],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path,b.path,c.path],targetDirectory:'.topics/b'}});
   assert.equal(plan.status,'ready');
   const byFrom=new Map(plan.changes.map(x=>[x.fromPath,x]));
   assert.equal(byFrom.get(a.path).toPath,'.topics/b/001-root.trace.md');
@@ -46,7 +46,7 @@ test('Move middle segment compacts source coordinate tree without manufacturing 
   const b=artifact({path:'.topics/a/001-1-middle.trace.md',title:'Middle',parent:a});
   const c=artifact({path:'.topics/a/001-1-1-middle-two.trace.md',title:'Middle Two',parent:b});
   const d=artifact({path:'.topics/a/001-1-1-1-survivor.trace.md',title:'Survivor',parent:c});
-  const plan=projectPortableLineageMaintenance({materials:[a,b,c,d],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[b.path,c.path],targetDirectory:'.topics/b'}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[a,b,c,d],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[b.path,c.path],targetDirectory:'.topics/b'}});
   assert.equal(plan.status,'ready');
   const byFrom=new Map(plan.changes.map(x=>[x.fromPath,x]));
   assert.equal(byFrom.get(a.path).toPath,'.topics/a/001-root.trace.md');
@@ -61,7 +61,7 @@ test('Move middle segment compacts source coordinate tree without manufacturing 
 test('Move into a non-empty target namespace deterministically compacts target roots before moved roots',()=>{
   const existing=artifact({path:'.topics/b/004-existing.trace.md',title:'Existing'});
   const a=artifact({path:'.topics/a/009-moved.trace.md',title:'Moved'});
-  const plan=projectPortableLineageMaintenance({materials:[existing,a],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path],targetDirectory:'.topics/b'}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[existing,a],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path],targetDirectory:'.topics/b'}});
   assert.equal(plan.status,'ready');
   const byFrom=new Map(plan.changes.map(x=>[x.fromPath,x]));
   assert.equal(byFrom.get(existing.path).toPath,'.topics/b/001-existing.trace.md');
@@ -72,7 +72,7 @@ test('Prepend before a semantic root rewires only the insertion chain and shifts
   const insert=artifact({path:'.topics/a/009-new-ancestor.trace.md',title:'Ancestor'});
   const target=artifact({path:'.topics/a/001-target.trace.md',title:'Target'});
   const child=artifact({path:'.topics/a/001-1-child.trace.md',title:'Child',parent:target});
-  const plan=projectPortableLineageMaintenance({materials:[target,child,insert],operation:{kind:'prepend',workspaceId:'fixture',orderedPaths:[insert.path],targetPath:target.path}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[target,child,insert],operation:{kind:'prepend',workspaceId:'fixture',orderedPaths:[insert.path],targetPath:target.path}});
   assert.equal(plan.status,'ready',JSON.stringify(plan.findings));
   const byFrom=new Map(plan.changes.map(x=>[x.fromPath,x]));
   assert.equal(byFrom.get(insert.path).toPath,'.topics/a/001-new-ancestor.trace.md');
@@ -88,7 +88,7 @@ test('Prepend supports an ordered multi-artifact chain on an existing Parent edg
   const target=artifact({path:'.topics/a/001-1-target.trace.md',title:'Target',parent:root});
   const x=artifact({path:'.topics/a/008-x.trace.md',title:'X'});
   const y=artifact({path:'.topics/a/009-y.trace.md',title:'Y'});
-  const plan=projectPortableLineageMaintenance({materials:[root,target,x,y],operation:{kind:'prepend',workspaceId:'fixture',orderedPaths:[x.path,y.path],targetPath:target.path}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[root,target,x,y],operation:{kind:'prepend',workspaceId:'fixture',orderedPaths:[x.path,y.path],targetPath:target.path}});
   assert.equal(plan.status,'ready',JSON.stringify(plan.findings));
   const byFrom=new Map(plan.changes.map(x=>[x.fromPath,x]));
   const xr=createRecordFromMarkdown(byFrom.get(x.path).markdown,{path:byFrom.get(x.path).toPath});
@@ -104,12 +104,12 @@ test('Prepend supports an ordered multi-artifact chain on an existing Parent edg
 test('Directory namespace qualification reports drift and projects the normalize-directory recovery without changing semantic Parent',()=>{
   const root=artifact({path:'.topics/processes/example/004-root.trace.md',title:'Root'});
   const child=artifact({path:'.topics/processes/example/004-1-child.trace.md',title:'Child',parent:root});
-  const qualified=qualifyPortableLineageDirectoryNamespace({materials:[root,child],workspaceId:'fixture',directory:'.topics/processes/example'});
+  const qualified=qualifyPortableLineageDirectoryNamespace({representationCoverage:'complete',materials:[root,child],workspaceId:'fixture',directory:'.topics/processes/example'});
   assert.equal(qualified.status,'ready');
   assert.equal(qualified.qualification,'drifted');
   assert.equal(qualified.summary.drifted,2);
-  assert.deepEqual(qualified.recommendation,{operation:'project-lineage-maintenance',kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/processes/example'});
-  const plan=projectPortableLineageMaintenance({materials:[root,child],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/processes/example'}});
+  assert.deepEqual(qualified.recommendation,{operation:'project-lineage-maintenance',kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/processes/example',representationCoverage:'complete'});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[root,child],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/processes/example'}});
   assert.equal(plan.status,'ready',JSON.stringify(plan.findings));
   assert.equal(plan.summary.pathChanges,2);
   assert.equal(plan.summary.semanticParentChanges,0);
@@ -121,11 +121,11 @@ test('Directory namespace qualification reports drift and projects the normalize
 test('Normalize Directory is an explicit no-op for an already compact namespace',()=>{
   const root=artifact({path:'.topics/processes/example/001-root.trace.md',title:'Root'});
   const child=artifact({path:'.topics/processes/example/001-1-child.trace.md',title:'Child',parent:root});
-  const qualified=qualifyPortableLineageDirectoryNamespace({materials:[root,child],workspaceId:'fixture',directory:'.topics/processes/example'});
+  const qualified=qualifyPortableLineageDirectoryNamespace({representationCoverage:'complete',materials:[root,child],workspaceId:'fixture',directory:'.topics/processes/example'});
   assert.equal(qualified.status,'ready');
   assert.equal(qualified.qualification,'compact');
   assert.equal(qualified.recommendation,null);
-  const plan=projectPortableLineageMaintenance({materials:[root,child],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/processes/example'}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[root,child],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/processes/example'}});
   assert.equal(plan.status,'ready',JSON.stringify(plan.findings));
   assert.equal(plan.summary.pathChanges,0);
   assert.equal(plan.summary.byteChanges,0);
@@ -137,7 +137,7 @@ test('Unrelated unqualified Tiinex material does not block a directory-local nor
   const unrelated=artifact({path:'.topics/b/001-unrelated.trace.md',title:'Unrelated'});
   const broken={...unrelated,markdown:unrelated.markdown.replace(/(\n  - Towards: self\n  - Value:)[^\n]+/,'$1broken')};
   assert.notEqual(canonicalC14nV2SelfState(broken.markdown).state,'verified');
-  const plan=projectPortableLineageMaintenance({materials:[drifted,broken],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/a'}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[drifted,broken],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/a'}});
   assert.equal(plan.status,'ready',JSON.stringify(plan.findings));
   assert.equal(plan.summary.pathChanges,1);
   assert.equal(plan.changes.find((item)=>item.fromPath===broken.path).bytesChanged,false);
@@ -147,7 +147,7 @@ test('Affected unqualified Tiinex material blocks lineage maintenance fail-close
   const drifted=artifact({path:'.topics/a/004-root.trace.md',title:'Drifted'});
   const broken={...drifted,markdown:drifted.markdown.replace(/(\n  - Towards: self\n  - Value:)[^\n]+/,'$1broken')};
   assert.notEqual(canonicalC14nV2SelfState(broken.markdown).state,'verified');
-  const plan=projectPortableLineageMaintenance({materials:[broken],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/a'}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[broken],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/a'}});
   assert.equal(plan.status,'blocked');
   assert.equal(plan.executable,false);
   assert.ok(plan.findings.some((item)=>item.code==='lineage-maintenance.self-unqualified'&&item.params?.path===broken.path));
@@ -158,7 +158,7 @@ test('Workspace namespace qualification discovers compact and drifted numeric di
   const drifted=artifact({path:'.topics/reductions/workspace/010-reduction.trace.md',title:'Drifted'});
   const mixedNumeric=artifact({path:'.topics/native/001-catalog.trace.md',title:'Catalog'});
   const mixedNamed=artifact({path:'.topics/native/resume-entry.trace.md',title:'Named'});
-  const result=qualifyPortableLineageWorkspaceNamespaces({materials:[compact,drifted,mixedNumeric,mixedNamed],workspaceId:'fixture'});
+  const result=qualifyPortableLineageWorkspaceNamespaces({representationCoverage:'complete',materials:[compact,drifted,mixedNumeric,mixedNamed],workspaceId:'fixture'});
   assert.equal(result.status,'ready',JSON.stringify(result.findings));
   assert.equal(result.qualification,'drifted');
   assert.deepEqual(result.summary,{directories:2,compact:1,drifted:1,blocked:0,skippedMixed:1,artifacts:4});
@@ -166,13 +166,13 @@ test('Workspace namespace qualification discovers compact and drifted numeric di
   assert.equal(result.namespaces.find((item)=>item.directory==='.topics/reductions/workspace').qualification,'drifted');
   assert.equal(result.skipped[0].directory,'.topics/native');
   assert.equal(result.skipped[0].state,'not-applicable-mixed');
-  assert.deepEqual(result.recommendations,[{operation:'project-lineage-maintenance',kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/reductions/workspace'}]);
+  assert.deepEqual(result.recommendations,[{operation:'project-lineage-maintenance',kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/reductions/workspace',representationCoverage:'complete'}]);
 });
 
 test('Workspace namespace qualification reports an unqualified numeric namespace as blocked without rewriting it',()=>{
   const drifted=artifact({path:'.topics/a/004-root.trace.md',title:'Drifted'});
   const broken={...drifted,markdown:drifted.markdown.replace(/(\n  - Towards: self\n  - Value:)[^\n]+/,'$1broken')};
-  const result=qualifyPortableLineageWorkspaceNamespaces({materials:[broken],workspaceId:'fixture'});
+  const result=qualifyPortableLineageWorkspaceNamespaces({representationCoverage:'complete',materials:[broken],workspaceId:'fixture'});
   assert.equal(result.status,'blocked');
   assert.equal(result.qualification,'blocked');
   assert.equal(result.summary.blocked,1);
@@ -180,9 +180,28 @@ test('Workspace namespace qualification reports an unqualified numeric namespace
   assert.equal(result.namespaces[0].status,'blocked');
 });
 
+test('Bounded Workspace Representation keeps lineage qualification scope-limited and suppresses Normalize recommendations',()=>{
+  const drifted=artifact({path:'.topics/a/004-root.trace.md',title:'Drifted'});
+  const result=qualifyPortableLineageWorkspaceNamespaces({representationCoverage:'bounded',materials:[drifted],workspaceId:'fixture'});
+  assert.equal(result.status,'ready');
+  assert.equal(result.scopeLimited,true);
+  assert.equal(result.qualification,'scope-limited');
+  assert.equal(result.observedQualification,'drifted');
+  assert.deepEqual(result.recommendations,[]);
+  assert.match(result.boundary,/Omitted entries are outside the representation, not absent from the Workspace/);
+});
+
+test('Lineage maintenance blocks mutation-ready projection unless Workspace Representation is explicitly complete',()=>{
+  const drifted=artifact({path:'.topics/a/004-root.trace.md',title:'Drifted'});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'bounded',materials:[drifted],operation:{kind:'normalize-directory',workspaceId:'fixture',targetDirectory:'.topics/a'}});
+  assert.equal(plan.status,'blocked');
+  assert.equal(plan.executable,false);
+  assert.ok(plan.findings.some((item)=>item.code==='lineage-maintenance.workspace-representation-complete-required'));
+});
+
 test('Unsupported arbitrary lineage reorder remains fail-closed and non-executable',()=>{
   const root=artifact({path:'.topics/a/001-root.trace.md',title:'Root'});
-  const plan=projectPortableLineageMaintenance({materials:[root],operation:{kind:'reorder',workspaceId:'fixture',selectedPaths:[root.path]}});
+  const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[root],operation:{kind:'reorder',workspaceId:'fixture',selectedPaths:[root.path]}});
   assert.equal(plan.status,'blocked');
   assert.equal(plan.executable,false);
   assert.ok(plan.findings.some((item)=>item.code==='lineage-maintenance.operation-unsupported'));
@@ -200,7 +219,7 @@ test('CLI workspace lineage qualification discovers namespace drift without call
     }
     const output = []; const errors = [];
     const code = await runPortableCli([
-      'qualify-lineage-workspace', root, '--workspace-id', 'fixture', '--json', '--compact'
+      'qualify-lineage-workspace', root, '--workspace-id', 'fixture', '--coverage', 'complete', '--json', '--compact'
     ], { log: (value) => output.push(String(value)), error: (value) => errors.push(String(value)) });
     assert.equal(code, 0, errors.join('\n'));
     const result = JSON.parse(output.at(-1));
@@ -226,7 +245,7 @@ test('CLI lineage qualification binds loaded Workspace files to the explicit wor
       'qualify-lineage-directory', root,
       '--workspace-id', 'fixture',
       '--directory', '.topics/processes/example',
-      '--json', '--compact'
+      '--coverage', 'complete', '--json', '--compact'
     ], { log: (value) => output.push(String(value)), error: (value) => errors.push(String(value)) });
     assert.equal(code, 0, errors.join('\n'));
     const result = JSON.parse(output.at(-1));
@@ -255,7 +274,7 @@ test('CLI lineage maintenance projection uses the same loaded Workspace file bin
       '--kind', 'normalize-directory',
       '--workspace-id', 'fixture',
       '--directory', '.topics/processes/example',
-      '--json', '--compact'
+      '--coverage', 'complete', '--json', '--compact'
     ], { log: (value) => output.push(String(value)), error: (value) => errors.push(String(value)) });
     assert.equal(code, 0, errors.join('\n'));
     const result = JSON.parse(output.at(-1));

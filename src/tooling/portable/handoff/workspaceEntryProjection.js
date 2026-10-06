@@ -124,6 +124,9 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     if (resolvedPrimaryRole) lines.push(`Session Role: ${resolvedPrimaryRole.label} — material ${resolvedPrimaryRole.materialDescription}`);
     for (const participant of resolvedParticipants) lines.push(`Participant: ${participant.label} — material ${participant.materialDescription}`);
     lines.push('Session selections do not establish semantic holder/participant/recipient authority, acceptance, or work transfer.');
+    if (!customRequested && String(definition?.presentation?.['Preference Sources'] || '').trim()) {
+      lines.push('After bootstrap, qualify these exact Role materials and apply declared presentation/communication preferences as presentation only; do not treat them as semantic holder/participant/recipient authority.');
+    }
   }
   return Object.freeze({
     schema: WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID,

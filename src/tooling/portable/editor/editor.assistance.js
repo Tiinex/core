@@ -8,15 +8,17 @@ import { integrityMethodReferenceAuthorityForCreation } from '../../../integrity
 import { inspectPortableLineageIntegrity } from '../lineage/lineage.integrity.plan.js';
 import { portableFinding } from '../findings.js';
 import { qualifyTiinexRouteArtifact } from '../handoff/routeArtifactConformance.js';
+import { hasTiinexEnvelopeFirstLine } from '../../../artifacts/artifact.parse.js';
 
 export const PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID = 'tiinex.portable.editor-assistance.v1';
 
 export function projectPortableEditorAssistance(input = {}) {
   const records = normalizeRecords(input);
+  const tiinexRecords = records.filter((record) => hasTiinexEnvelopeFirstLine(record.markdown));
   const focusPath = norm(input.focusPath || input.focus || '');
-  const selectedRecords = focusPath ? records.filter((record) => norm(record.path || record.id || '') === focusPath) : records;
-  const lineageInspection = inspectPortableLineageIntegrity({ records });
-  const documents = selectedRecords.map((record) => projectDocument(record, records, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record)));
+  const selectedRecords = focusPath ? tiinexRecords.filter((record) => norm(record.path || record.id || '') === focusPath) : tiinexRecords;
+  const lineageInspection = inspectPortableLineageIntegrity({ records: tiinexRecords });
+  const documents = selectedRecords.map((record) => projectDocument(record, tiinexRecords, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record)));
   const diagnostics = documents.flatMap((item) => item.diagnostics);
   return freeze({
     schema: PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID,

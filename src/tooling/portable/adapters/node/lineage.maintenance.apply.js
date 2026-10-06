@@ -105,6 +105,7 @@ export async function applyPortableLineageMaintenancePlan(plan = {}, options = {
 
 function fingerprintPlan(plan) {
   return stableFingerprintBytes(utf8Bytes(JSON.stringify({
+    representationCoverage: plan.representationCoverage,
     operation: plan.operation,
     inputFingerprint: plan.inputFingerprint,
     outputs: (plan.changes || []).map(({ workspaceId, fromPath, toPath, afterFingerprint }) => ({ workspaceId, fromPath, toPath, afterFingerprint }))

@@ -23,7 +23,7 @@ test('local apply writes exact projected Move bytes and removes old paths',async
   try{
     const a=artifact({path:'.topics/a/001-root.trace.md',title:'Root'});const b=artifact({path:'.topics/a/001-1-child.trace.md',title:'Child',parent:a});
     await materialize(root,[a,b]);
-    const plan=projectPortableLineageMaintenance({materials:[a,b],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path,b.path],targetDirectory:'.topics/b'}});
+    const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[a,b],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path,b.path],targetDirectory:'.topics/b'}});
     const receipt=await applyPortableLineageMaintenancePlan(plan,{workspaceRoots:{fixture:root}});
     assert.equal(receipt.status,'ready',JSON.stringify(receipt.findings));assert.equal(receipt.applied,true);
     assert.equal(await exists(path.join(root,a.path)),false);assert.equal(await exists(path.join(root,b.path)),false);
@@ -35,7 +35,7 @@ test('local apply fails closed on input drift without mutating paths',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-lineage-drift-'));
   try{
     const a=artifact({path:'.topics/a/001-root.trace.md',title:'Root'});await materialize(root,[a]);
-    const plan=projectPortableLineageMaintenance({materials:[a],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path],targetDirectory:'.topics/b'}});
+    const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[a],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path],targetDirectory:'.topics/b'}});
     await writeFile(path.join(root,a.path),a.markdown+'drift\n','utf8');
     const receipt=await applyPortableLineageMaintenancePlan(plan,{workspaceRoots:{fixture:root}});
     assert.equal(receipt.status,'blocked');assert.equal(receipt.applied,false);assert.ok(receipt.findings.some(x=>x.code==='lineage-maintenance.apply.input-drift'));
@@ -47,7 +47,7 @@ test('local apply blocks an unplanned target collision',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-lineage-collision-'));
   try{
     const a=artifact({path:'.topics/a/001-root.trace.md',title:'Root'});await materialize(root,[a]);
-    const plan=projectPortableLineageMaintenance({materials:[a],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path],targetDirectory:'.topics/b'}});
+    const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[a],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path],targetDirectory:'.topics/b'}});
     const collision=path.join(root,'.topics/b/001-root.trace.md');await mkdir(path.dirname(collision),{recursive:true});await writeFile(collision,'unplanned','utf8');
     const receipt=await applyPortableLineageMaintenancePlan(plan,{workspaceRoots:{fixture:root}});
     assert.equal(receipt.status,'blocked');assert.ok(receipt.findings.some(x=>x.code==='lineage-maintenance.apply.target-collision'));assert.equal(await readFile(collision,'utf8'),'unplanned');
@@ -59,7 +59,7 @@ test('local apply rejects a tampered projected plan fingerprint before filesyste
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-lineage-tamper-'));
   try{
     const a=artifact({path:'.topics/a/001-root.trace.md',title:'Root'});await materialize(root,[a]);
-    const plan=projectPortableLineageMaintenance({materials:[a],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path],targetDirectory:'.topics/b'}});
+    const plan=projectPortableLineageMaintenance({representationCoverage:'complete',materials:[a],operation:{kind:'move',workspaceId:'fixture',selectedPaths:[a.path],targetDirectory:'.topics/b'}});
     const tampered={...plan,changes:plan.changes.map((item)=>({...item,toPath:'.topics/b/009-tampered.trace.md'}))};
     const receipt=await applyPortableLineageMaintenancePlan(tampered,{workspaceRoots:{fixture:root}});
     assert.equal(receipt.status,'blocked');assert.equal(receipt.applied,false);

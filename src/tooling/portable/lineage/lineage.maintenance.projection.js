@@ -12,6 +12,8 @@ export function projectPortableLineageMaintenance(input = {}) {
   const operation = normalizeOperation(input.operation || input);
   const materials = normalizeMaintenanceMaterials(input, operation.workspaceId);
   const findings = [];
+  const representationCoverage = normalizeRepresentationCoverage(input);
+  if (representationCoverage !== 'complete') findings.push(finding('error', 'lineage-maintenance.workspace-representation-complete-required', 'Lineage maintenance requires an explicitly complete Workspace Representation because directory-local re-dimensioning may depend on omitted siblings or references.', { coverage: representationCoverage }));
   if (!materials.length) findings.push(finding('error', 'lineage-maintenance.materials-required', 'Lineage maintenance requires exact loaded artifact materials.'));
   if (!operation.kind) findings.push(finding('error', 'lineage-maintenance.operation-required', 'Lineage maintenance requires an explicit operation kind.'));
   const duplicateKeys = duplicateMaterialKeys(materials);
@@ -64,11 +66,12 @@ export function projectPortableLineageMaintenance(input = {}) {
     return blockedPlan(operation, materials, findings, projected);
   }
   const inputFingerprint = fingerprintMaterials(materials);
-  const planFingerprint = stableFingerprintBytes(utf8Bytes(JSON.stringify({ operation, inputFingerprint, outputs: changes.map(({ workspaceId, fromPath, toPath, afterFingerprint }) => ({ workspaceId, fromPath, toPath, afterFingerprint })) })));
+  const planFingerprint = stableFingerprintBytes(utf8Bytes(JSON.stringify({ representationCoverage, operation, inputFingerprint, outputs: changes.map(({ workspaceId, fromPath, toPath, afterFingerprint }) => ({ workspaceId, fromPath, toPath, afterFingerprint })) })));
   return Object.freeze({
     schema: LINEAGE_MAINTENANCE_PLAN_SCHEMA_ID,
     status: 'ready',
     executable: true,
+    representationCoverage,
     operation,
     inputFingerprint,
     planFingerprint,
@@ -97,6 +100,8 @@ export function projectPortableLineageMaintenance(input = {}) {
       readOnlyProjection: true,
       selectionAuthority: 'exact Workspace/path identities only',
       filenameDimensionAuthority: 'directory-local coordinate projection only; never semantic Parent authority',
+      workspaceRepresentationCoverage: representationCoverage,
+      completeWorkspaceRepresentationRequired: true,
       moveParentSemantics: 'preserve',
       prependParentSemantics: 'explicitly mutate only the declared insertion chain',
       arbitrarySiblingMajorReorder: false,
@@ -110,11 +115,13 @@ export function qualifyPortableLineageDirectoryNamespace(input = {}) {
   const materials = normalizeMaintenanceMaterials(input, workspaceId);
   const directory = norm(input.directory || input.targetDirectory || '');
   const findings = [];
+  const representationCoverage = normalizeRepresentationCoverage(input);
+  const scopeLimited = representationCoverage !== 'complete';
   if (!workspaceId || !directory) findings.push(finding('error', 'lineage-namespace.input-incomplete', 'Directory namespace qualification requires workspaceId and directory.'));
   const entries = materials.filter((item) => item.workspaceId === workspaceId && path.posix.dirname(item.path) === directory).map((item) => inspectMaterial(item, findings));
   if (!entries.length) findings.push(finding('error', 'lineage-namespace.empty', `No artifact material is loaded for ${workspaceId}::${directory}.`));
   for (const item of entries) if (!item.coordinate) findings.push(finding('error', 'lineage-namespace.coordinate-unrepresentable', `Artifact filename has no directory-local numeric coordinate: ${item.path}`, { path: item.path }));
-  if (findings.some((item) => item.severity === 'error')) return Object.freeze({ schema: 'tiinex.portable.lineage-directory-namespace-qualification.v1', status: 'blocked', workspaceId, directory, drift: Object.freeze([]), findings: Object.freeze(findings), findingSummary: summarize(findings), boundary: 'Read-only directory-local filename namespace qualification. Numeric coordinates are never semantic Parent authority.' });
+  if (findings.some((item) => item.severity === 'error')) return Object.freeze({ schema: 'tiinex.portable.lineage-directory-namespace-qualification.v1', status: 'blocked', workspaceId, directory, representationCoverage, scopeLimited, drift: Object.freeze([]), findings: Object.freeze(findings), findingSummary: summarize(findings), boundary: 'Read-only directory-local filename namespace qualification. Numeric coordinates are never semantic Parent authority.' });
   const forest = entries.map((item) => ({ ...item, group: `stay:${directory}` }));
   const assigned = assignCoordinateForest(forest);
   const drift = entries.map((item) => {
@@ -125,13 +132,16 @@ export function qualifyPortableLineageDirectoryNamespace(input = {}) {
   const drifted = drift.filter((item) => item.drifted);
   return Object.freeze({
     schema: 'tiinex.portable.lineage-directory-namespace-qualification.v1',
-    status: 'ready', workspaceId, directory,
-    qualification: drifted.length ? 'drifted' : 'compact',
+    status: 'ready', workspaceId, directory, representationCoverage, scopeLimited,
+    qualification: scopeLimited ? 'scope-limited' : drifted.length ? 'drifted' : 'compact',
+    observedQualification: drifted.length ? 'drifted' : 'compact',
     drift: Object.freeze(drift),
     summary: Object.freeze({ artifacts: drift.length, drifted: drifted.length, compact: drift.length - drifted.length }),
-    recommendation: drifted.length ? Object.freeze({ operation: 'project-lineage-maintenance', kind: 'normalize-directory', workspaceId, targetDirectory: directory }) : null,
+    recommendation: !scopeLimited && drifted.length ? Object.freeze({ operation: 'project-lineage-maintenance', kind: 'normalize-directory', workspaceId, targetDirectory: directory, representationCoverage: 'complete' }) : null,
     findings: Object.freeze(findings), findingSummary: summarize(findings),
-    boundary: 'Read-only directory-local filename namespace qualification. It compares only explicit loaded artifact coordinates, never infers semantic Parent from filename ancestry, and performs no mutation.'
+    boundary: scopeLimited
+      ? 'Read-only scope-limited observation of explicit loaded directory-local filename coordinates. Omitted material is not absent from the Workspace, so no whole-namespace compactness or maintenance recommendation is established.'
+      : 'Read-only directory-local filename namespace qualification over an explicitly complete Workspace Representation. It compares explicit loaded artifact coordinates, never infers semantic Parent from filename ancestry, and performs no mutation.'
   });
 }
 
@@ -140,11 +150,13 @@ export function qualifyPortableLineageWorkspaceNamespaces(input = {}) {
   const workspaceId = String(input.workspaceId || '').trim();
   const materials = normalizeMaintenanceMaterials(input, workspaceId);
   const findings = [];
+  const representationCoverage = normalizeRepresentationCoverage(input);
+  const scopeLimited = representationCoverage !== 'complete';
   if (!workspaceId) findings.push(finding('error', 'lineage-workspace-namespace.workspace-id-required', 'Workspace namespace qualification requires an explicit workspaceId.'));
   const local = materials.filter((item) => item.workspaceId === workspaceId);
   if (!local.length) findings.push(finding('error', 'lineage-workspace-namespace.materials-required', `No Tiinex artifact material is loaded for ${workspaceId || 'the requested Workspace'}.`));
   if (findings.some((item) => item.severity === 'error')) return Object.freeze({
-    schema: 'tiinex.portable.lineage-workspace-namespace-qualification.v1', status: 'blocked', workspaceId,
+    schema: 'tiinex.portable.lineage-workspace-namespace-qualification.v1', status: 'blocked', workspaceId, representationCoverage, scopeLimited,
     qualification: 'blocked', namespaces: Object.freeze([]), skipped: Object.freeze([]), recommendations: Object.freeze([]),
     summary: Object.freeze({ directories: 0, compact: 0, drifted: 0, blocked: 0, skippedMixed: 0, artifacts: local.length }),
     findings: Object.freeze(findings), findingSummary: summarize(findings),
@@ -169,22 +181,25 @@ export function qualifyPortableLineageWorkspaceNamespaces(input = {}) {
       skipped.push(Object.freeze({ directory, state: 'not-applicable-mixed', numericArtifacts: numeric.length, nonNumericArtifacts: nonNumeric.length, nonNumericPaths: Object.freeze(nonNumeric.map((item) => item.path).sort()) }));
       continue;
     }
-    const qualification = qualifyPortableLineageDirectoryNamespace({ materials: entries, workspaceId, directory });
-    namespaces.push(Object.freeze({ directory, status: qualification.status, qualification: qualification.qualification || 'blocked', summary: qualification.summary || Object.freeze({ artifacts: entries.length, drifted: 0, compact: 0 }), drift: qualification.drift || Object.freeze([]), findings: qualification.findings || Object.freeze([]), findingSummary: qualification.findingSummary || summarize([]) }));
+    const qualification = qualifyPortableLineageDirectoryNamespace({ materials: entries, workspaceId, directory, representationCoverage });
+    namespaces.push(Object.freeze({ directory, status: qualification.status, qualification: qualification.qualification || 'blocked', observedQualification: qualification.observedQualification || qualification.qualification || 'blocked', scopeLimited: Boolean(qualification.scopeLimited), summary: qualification.summary || Object.freeze({ artifacts: entries.length, drifted: 0, compact: 0 }), drift: qualification.drift || Object.freeze([]), findings: qualification.findings || Object.freeze([]), findingSummary: qualification.findingSummary || summarize([]) }));
     if (qualification.status !== 'ready') findings.push(finding('error', 'lineage-workspace-namespace.directory-blocked', `Numeric filename namespace qualification is blocked for ${workspaceId}::${directory}.`, { workspaceId, directory }));
-    else if (qualification.qualification === 'drifted' && qualification.recommendation) recommendations.push(qualification.recommendation);
+    else if (!scopeLimited && qualification.qualification === 'drifted' && qualification.recommendation) recommendations.push(qualification.recommendation);
   }
   const blocked = namespaces.filter((item) => item.status !== 'ready').length;
-  const drifted = namespaces.filter((item) => item.status === 'ready' && item.qualification === 'drifted').length;
-  const compact = namespaces.filter((item) => item.status === 'ready' && item.qualification === 'compact').length;
+  const drifted = namespaces.filter((item) => item.status === 'ready' && item.observedQualification === 'drifted').length;
+  const compact = namespaces.filter((item) => item.status === 'ready' && item.observedQualification === 'compact').length;
   return Object.freeze({
     schema: 'tiinex.portable.lineage-workspace-namespace-qualification.v1',
-    status: blocked ? 'blocked' : 'ready', workspaceId,
-    qualification: blocked ? 'blocked' : drifted ? 'drifted' : 'compact',
+    status: blocked ? 'blocked' : 'ready', workspaceId, representationCoverage, scopeLimited,
+    qualification: blocked ? 'blocked' : scopeLimited ? 'scope-limited' : drifted ? 'drifted' : 'compact',
+    observedQualification: blocked ? 'blocked' : drifted ? 'drifted' : 'compact',
     namespaces: Object.freeze(namespaces), skipped: Object.freeze(skipped), recommendations: Object.freeze(recommendations),
     summary: Object.freeze({ directories: namespaces.length, compact, drifted, blocked, skippedMixed: skipped.length, artifacts: local.length }),
     findings: Object.freeze(findings), findingSummary: summarize(findings),
-    boundary: 'Read-only Workspace-wide discovery of homogeneous directory-local numeric Tiinex filename namespaces. Mixed/non-numeric Tiinex surfaces are reported as outside this namespace qualifier; filename ancestry is never semantic Parent authority and no mutation is performed.'
+    boundary: scopeLimited
+      ? 'Read-only scope-limited discovery over explicit loaded material. Omitted entries are outside the representation, not absent from the Workspace; no Workspace-wide compactness or Normalize recommendation is established.'
+      : 'Read-only Workspace-wide discovery over an explicitly complete Workspace Representation. Mixed/non-numeric Tiinex surfaces are reported as outside this namespace qualifier; filename ancestry is never semantic Parent authority and no mutation is performed.'
   });
 }
 
@@ -405,6 +420,13 @@ function inspectMaterial(material, findings, options = {}) {
   }
   return { ...material, parsed, coordinate: filenameCoordinate(material.path) };
 }
+function normalizeRepresentationCoverage(input = {}) {
+  const value = String(input.representationCoverage || input.coverage || input.workspaceCoverage || '').trim().toLowerCase();
+  if (!value) return 'unknown';
+  if (['complete', 'bounded', 'partial', 'unknown'].includes(value)) return value;
+  return 'unknown';
+}
+
 function normalizeMaintenanceMaterials(input = {}, fallbackWorkspaceId = '') {
   const workspaceId = String(fallbackWorkspaceId || input.workspaceId || input.operation?.workspaceId || '').trim();
   const explicit = Array.isArray(input.materials) && input.materials.length ? input.materials : Array.isArray(input.records) && input.records.length ? input.records : null;
@@ -432,7 +454,7 @@ function duplicateMaterialKeys(items) { const seen=new Set(),dup=[]; for(const i
 function detectOutputCollisions(changes){const seen=new Map(),out=[];for(const item of changes){const key=`${item.workspaceId}::${item.toPath}`;if(seen.has(key))out.push(key);else seen.set(key,item);}return [...new Set(out)];}
 function fingerprintMaterials(items) { return stableFingerprintBytes(utf8Bytes(JSON.stringify(items.map((item)=>({workspaceId:item.workspaceId,path:item.path,fingerprint:stableFingerprintBytes(utf8Bytes(item.markdown))}))))); }
 function comparePathCoordinate(a,b) { const aa=filenameCoordinate(a), bb=filenameCoordinate(b); if(aa&&bb){const d=compareDimension(aa.dimension,bb.dimension); if(d)return d;} return String(a).localeCompare(String(b)); }
-function blockedPlan(operation, materials, findings, projected = null) { return Object.freeze({ schema: LINEAGE_MAINTENANCE_PLAN_SCHEMA_ID, status: 'blocked', executable: false, operation, inputFingerprint: fingerprintMaterials(materials), planFingerprint: '', inputs: Object.freeze([]), changes: Object.freeze([]), summary: Object.freeze({ materials: materials.length, pathChanges: 0, byteChanges: 0, semanticParentChanges: 0, preservedSemanticParents: 0 }), findings: Object.freeze(findings), findingSummary: summarize(findings), applyContract: Object.freeze({ command: 'apply-lineage-maintenance', localOnly: true, exactReadyPlanRequired: true, remoteWrite: false, gitMutation: false }), boundary: Object.freeze({ readOnlyProjection: true, remoteWrite: false }) }); }
+function blockedPlan(operation, materials, findings, projected = null) { const representationCoverage = String(findings.find((item) => item.code === 'lineage-maintenance.workspace-representation-complete-required')?.params?.coverage || 'complete'); return Object.freeze({ schema: LINEAGE_MAINTENANCE_PLAN_SCHEMA_ID, status: 'blocked', executable: false, representationCoverage, operation, inputFingerprint: fingerprintMaterials(materials), planFingerprint: '', inputs: Object.freeze([]), changes: Object.freeze([]), summary: Object.freeze({ materials: materials.length, pathChanges: 0, byteChanges: 0, semanticParentChanges: 0, preservedSemanticParents: 0 }), findings: Object.freeze(findings), findingSummary: summarize(findings), applyContract: Object.freeze({ command: 'apply-lineage-maintenance', localOnly: true, exactReadyPlanRequired: true, remoteWrite: false, gitMutation: false }), boundary: Object.freeze({ readOnlyProjection: true, workspaceRepresentationCoverage: representationCoverage, completeWorkspaceRepresentationRequired: true, remoteWrite: false }) }); }
 function summarize(findings){return Object.freeze({error:findings.filter((x)=>x.severity==='error').length,warning:findings.filter((x)=>x.severity==='warning').length,info:findings.filter((x)=>x.severity==='info').length,total:findings.length});}
 function finding(severity,code,message,params={}){return Object.freeze({severity,code,message,params:Object.freeze({...params})});}
 function norm(value=''){const raw=String(value||'').replace(/\\/g,'/').replace(/^\.\//,'');if(!raw)return '';return path.posix.normalize(raw).replace(/^\/+/, '');}

@@ -1,3 +1,10 @@
+export const TIINEX_ENVELOPE_HEADING = '# Continuity Context';
+
+export function hasTiinexEnvelopeFirstLine(markdown = '') {
+  const firstLine = normalizeLineEndings(markdown).replace(/^\uFEFF/, '').split('\n', 1)[0].trim();
+  return firstLine === TIINEX_ENVELOPE_HEADING;
+}
+
 export function parseArtifactMarkdown(markdown = '') {
   const text = normalizeLineEndings(markdown);
   const envelopeBoundary = findFirstHorizontalRule(text);
