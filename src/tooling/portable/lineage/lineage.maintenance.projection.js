@@ -157,8 +157,8 @@ export function qualifyPortableLineageWorkspaceNamespaces(input = {}) {
   if (!local.length) findings.push(finding('error', 'lineage-workspace-namespace.materials-required', `No Tiinex artifact material is loaded for ${workspaceId || 'the requested Workspace'}.`));
   if (findings.some((item) => item.severity === 'error')) return Object.freeze({
     schema: 'tiinex.portable.lineage-workspace-namespace-qualification.v1', status: 'blocked', workspaceId, representationCoverage, scopeLimited,
-    qualification: 'blocked', namespaces: Object.freeze([]), skipped: Object.freeze([]), recommendations: Object.freeze([]),
-    summary: Object.freeze({ directories: 0, compact: 0, drifted: 0, blocked: 0, skippedMixed: 0, artifacts: local.length }),
+    qualification: 'blocked', surfaces: Object.freeze([]), namespaces: Object.freeze([]), skipped: Object.freeze([]), recommendations: Object.freeze([]),
+    summary: Object.freeze({ surfaces: 0, numericOnly: 0, nonNumericOnly: 0, mixed: 0, directories: 0, compact: 0, drifted: 0, blocked: 0, skippedMixed: 0, artifacts: local.length }),
     findings: Object.freeze(findings), findingSummary: summarize(findings),
     boundary: 'Read-only Workspace-wide discovery of homogeneous directory-local numeric Tiinex filename namespaces. Mixed/non-numeric Tiinex surfaces are reported as outside this namespace qualifier; filename ancestry is never semantic Parent authority.'
   });
@@ -169,14 +169,17 @@ export function qualifyPortableLineageWorkspaceNamespaces(input = {}) {
     if (!byDirectory.has(directory)) byDirectory.set(directory, []);
     byDirectory.get(directory).push(item);
   }
+  const surfaces = [];
   const namespaces = [];
   const skipped = [];
   const recommendations = [];
   for (const directory of [...byDirectory.keys()].sort()) {
     const entries = byDirectory.get(directory);
     const numeric = entries.filter((item) => filenameCoordinate(item.path));
-    if (!numeric.length) continue;
     const nonNumeric = entries.filter((item) => !filenameCoordinate(item.path));
+    const surfaceState = numeric.length && nonNumeric.length ? 'mixed' : numeric.length ? 'numeric-only' : 'non-numeric-only';
+    surfaces.push(Object.freeze({ directory, state: surfaceState, artifacts: entries.length, numericArtifacts: numeric.length, nonNumericArtifacts: nonNumeric.length }));
+    if (!numeric.length) continue;
     if (nonNumeric.length) {
       skipped.push(Object.freeze({ directory, state: 'not-applicable-mixed', numericArtifacts: numeric.length, nonNumericArtifacts: nonNumeric.length, nonNumericPaths: Object.freeze(nonNumeric.map((item) => item.path).sort()) }));
       continue;
@@ -189,17 +192,20 @@ export function qualifyPortableLineageWorkspaceNamespaces(input = {}) {
   const blocked = namespaces.filter((item) => item.status !== 'ready').length;
   const drifted = namespaces.filter((item) => item.status === 'ready' && item.observedQualification === 'drifted').length;
   const compact = namespaces.filter((item) => item.status === 'ready' && item.observedQualification === 'compact').length;
+  const numericOnly = surfaces.filter((item) => item.state === 'numeric-only').length;
+  const nonNumericOnly = surfaces.filter((item) => item.state === 'non-numeric-only').length;
+  const mixed = surfaces.filter((item) => item.state === 'mixed').length;
   return Object.freeze({
     schema: 'tiinex.portable.lineage-workspace-namespace-qualification.v1',
     status: blocked ? 'blocked' : 'ready', workspaceId, representationCoverage, scopeLimited,
     qualification: blocked ? 'blocked' : scopeLimited ? 'scope-limited' : drifted ? 'drifted' : 'compact',
     observedQualification: blocked ? 'blocked' : drifted ? 'drifted' : 'compact',
-    namespaces: Object.freeze(namespaces), skipped: Object.freeze(skipped), recommendations: Object.freeze(recommendations),
-    summary: Object.freeze({ directories: namespaces.length, compact, drifted, blocked, skippedMixed: skipped.length, artifacts: local.length }),
+    surfaces: Object.freeze(surfaces), namespaces: Object.freeze(namespaces), skipped: Object.freeze(skipped), recommendations: Object.freeze(recommendations),
+    summary: Object.freeze({ surfaces: surfaces.length, numericOnly, nonNumericOnly, mixed, directories: namespaces.length, compact, drifted, blocked, skippedMixed: skipped.length, artifacts: local.length }),
     findings: Object.freeze(findings), findingSummary: summarize(findings),
     boundary: scopeLimited
-      ? 'Read-only scope-limited discovery over explicit loaded material. Omitted entries are outside the representation, not absent from the Workspace; no Workspace-wide compactness or Normalize recommendation is established.'
-      : 'Read-only Workspace-wide discovery over an explicitly complete Workspace Representation. Mixed/non-numeric Tiinex surfaces are reported as outside this namespace qualifier; filename ancestry is never semantic Parent authority and no mutation is performed.'
+      ? 'Read-only scope-limited discovery over explicit loaded material. Numeric-only, non-numeric-only, and mixed directory surfaces are inventoried without treating omitted entries as absent; no Workspace-wide compactness or Normalize recommendation is established.'
+      : 'Read-only Workspace-wide discovery over an explicitly complete Workspace Representation. Numeric-only, non-numeric-only, and mixed directory surfaces are inventoried explicitly; only homogeneous numeric namespaces enter compactness/Normalize qualification, filename ancestry is never semantic Parent authority, and no mutation is performed.'
   });
 }
 

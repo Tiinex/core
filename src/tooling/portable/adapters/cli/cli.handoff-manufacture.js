@@ -4,7 +4,7 @@ import { prepareNodeHandoffManufacturingInput } from '../node/handoff.manufactur
 import { prepareNodeWorkspaceCarrierManufacturingInput } from '../node/workspaceCarrier.manufacture.js';
 import { prepareNodeBootstrapCarrierManufacturingInput } from '../node/bootstrapCarrier.manufacture.js';
 import { projectHandoffHumanOutput, projectWorkspaceCarrierHumanOutput, projectBootstrapCarrierHumanOutput } from '../../handoff/carrierProjection.js';
-import { writePortableRuntimePackageZip } from '../../output/node.zip.js';
+import { portableRuntimePackageZipBuffer } from '../../output/node.zip.js';
 import { handoffPackageV1ZipBytes } from '../../handoff/handoffPackageV1.zip.js';
 import { inspectHandoffPackageV1 } from '../../handoff/handoffPackageV1.inspect.js';
 import { allocateHandoffCarrierMajor, carrierLineageFromCliParent, initialHandoffCarrierLineage, normalizeHandoffCarrierLineage, normalizeHandoffCarrierPrefix, parentHandoffCarrierLineageFromBundle, parentHandoffCarrierProfileFromBundle } from '../../handoff/carrierLineage.js';
@@ -268,21 +268,12 @@ export async function materializeHandoffManufactureCliOutput(result = {}, flags 
   }
   const target = resolveHandoffOutputPath(flags, humanOutput.primary.filename);
   const writeBundle = result.bundle;
-  let writeReceipt;
-  if (String(writeBundle?.transportFormat || '') === 'tiinex-handoff-package-v1') {
-    const bytes = handoffPackageV1ZipBytes(writeBundle);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, bytes);
-    writeReceipt = Object.freeze({
-      schema: 'tiinex.portable.handoff-package-v1.zip-write.v1',
-      status: 'written',
-      path: target,
-      bytes: bytes.byteLength,
-      boundary: Object.freeze({ localFilesystemWrite: true, remoteWrite: false, sourceMutation: false })
-    });
-  } else {
-    writeReceipt = await writePortableRuntimePackageZip(writeBundle, target);
-  }
+  const packageV1 = String(writeBundle?.transportFormat || '') === 'tiinex-handoff-package-v1';
+  const bytes = packageV1 ? handoffPackageV1ZipBytes(writeBundle) : portableRuntimePackageZipBuffer(writeBundle);
+  const writeReceipt = await writeExactTransportBytes(target, bytes, {
+    schema: packageV1 ? 'tiinex.portable.handoff-package-v1.zip-write.v1' : 'tiinex.portable.runtime-package.zip-write.v1',
+    packageId: packageV1 ? '' : String(writeBundle?.packageId || '')
+  });
   const transportTextTarget = normalizeTransportTextFlag(flags['transport-text']);
   const transportTextReceipt = transportTextTarget ? await writeTransportTextSidecar(humanOutput, target, transportTextTarget) : null;
   return summarizeHandoffManufactureCliOutput(result, writeReceipt, humanOutput, transportTextReceipt);
@@ -543,10 +534,51 @@ async function writeTransportTextSidecar(humanOutput, packageTarget, flagValue) 
   const target = flagValue === true
     ? defaultSidecarPath(packageTarget)
     : path.resolve(String(flagValue));
-  await mkdir(path.dirname(target), { recursive: true });
   const content = String(humanOutput.fallbackTransportText?.content || '');
-  await writeFile(target, content, 'utf8');
-  return Object.freeze({ schema: 'tiinex.portable.handoff-transport-text-write.v1', status: 'written', path: target, bytes: Buffer.byteLength(content, 'utf8'), authority: 'none', normalEmission: false });
+  return writeExactTransportBytes(target, Buffer.from(content, 'utf8'), {
+    schema: 'tiinex.portable.handoff-transport-text-write.v1',
+    authority: 'none',
+    normalEmission: false
+  });
+}
+
+async function writeExactTransportBytes(target, bytesValue, metadata = {}) {
+  const bytes = Buffer.isBuffer(bytesValue)
+    ? bytesValue
+    : Buffer.from(bytesValue.buffer, bytesValue.byteOffset, bytesValue.byteLength);
+  await mkdir(path.dirname(target), { recursive: true });
+  try {
+    await writeFile(target, bytes, { flag: 'wx' });
+    return Object.freeze({
+      schema: String(metadata.schema || 'tiinex.portable.transport-write.v1'),
+      status: 'written',
+      path: target,
+      bytes: bytes.byteLength,
+      ...(metadata.packageId ? { packageId: String(metadata.packageId) } : {}),
+      ...(metadata.authority !== undefined ? { authority: metadata.authority } : {}),
+      ...(metadata.normalEmission !== undefined ? { normalEmission: metadata.normalEmission } : {}),
+      boundary: Object.freeze({ localFilesystemWrite: true, exactPathOverwrite: false, remoteWrite: false, sourceMutation: false })
+    });
+  } catch (error) {
+    if (String(error?.code || '') !== 'EEXIST') throw error;
+  }
+  const existing = await readFile(target);
+  if (existing.length === bytes.length && existing.equals(bytes)) {
+    return Object.freeze({
+      schema: String(metadata.schema || 'tiinex.portable.transport-write.v1'),
+      status: 'already-present-identical',
+      path: target,
+      bytes: bytes.byteLength,
+      ...(metadata.packageId ? { packageId: String(metadata.packageId) } : {}),
+      ...(metadata.authority !== undefined ? { authority: metadata.authority } : {}),
+      ...(metadata.normalEmission !== undefined ? { normalEmission: metadata.normalEmission } : {}),
+      boundary: Object.freeze({ localFilesystemWrite: false, exactPathOverwrite: false, idempotentExistingBytes: true, remoteWrite: false, sourceMutation: false })
+    });
+  }
+  const error = new Error('portable.cli.handoff-carrier.output-existing-divergent');
+  error.code = 'portable.cli.handoff-carrier.output-existing-divergent';
+  error.outputPath = target;
+  throw error;
 }
 function defaultSidecarPath(packageTarget) {
   const suffix = '.handoff-package.zip';

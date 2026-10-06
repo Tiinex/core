@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { enumerateNodeWorkspace } from '../src/tooling/portable/adapters/node/handoff.manufacture.enumeration.js';
+import { manufactureHandoffPackageV1Direct } from '../src/tooling/portable/handoff/handoffPackageV1.manufacture.js';
+import { finalizeFile } from '../src/export/package.fileMap.js';
 
 for (const excluded of ['.release/old.tgz', '.outgoing-handoff-packages/old.zip', '.vscode/link/state.json', 'tools/__pycache__/browser-smoke.cpython-313.pyc', 'tools/browser-smoke.pyc', 'tools/legacy.pyo']) {
   test(`manufacture excludes generated ${excluded} but preserves tasks and source`, async () => {
@@ -24,6 +26,51 @@ for (const excluded of ['.release/old.tgz', '.outgoing-handoff-packages/old.zip'
 }
 
 import { materializeHandoffManufactureCliOutput, recipientRouteSelectorForManufacture } from '../src/tooling/portable/adapters/cli/cli.handoff-manufacture.js';
+function bootstrapCarrierFixture(source = 'export {};\n') {
+  const bootstrapFile = finalizeFile({ path: 'runtime/tools/tiinex-portable.mjs', mediaType: 'text/javascript', content: source });
+  const result = manufactureHandoffPackageV1Direct({
+    carrierMode: 'bootstrap',
+    carrierLineage: { dimension: '001', checkpointKind: 'progression' },
+    workspaceMaterializations: [], workspaceTargets: [], additionalTransportFiles: [bootstrapFile], requirements: {}, handoffRoutes: []
+  });
+  assert.equal(result.status, 'ready');
+  return { ...result, carrierProjection: result.inspection.carrierProjection };
+}
+
+test('exact carrier output path is idempotent for byte-identical duplicate transport', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-carrier-idempotent-'));
+  const filename = 'tiinex-bootstrap-001.handoff-package.zip';
+  const target = path.join(root, filename);
+  try {
+    const result = bootstrapCarrierFixture();
+    const first = await materializeHandoffManufactureCliOutput(result, { output: target, 'projected-filename': filename });
+    const before = await readFile(target);
+    const second = await materializeHandoffManufactureCliOutput(result, { output: target, 'projected-filename': filename });
+    const after = await readFile(target);
+    assert.equal(first.writeReceipt.status, 'written');
+    assert.equal(second.writeReceipt.status, 'already-present-identical');
+    assert.deepEqual(after, before);
+    assert.equal(second.writeReceipt.boundary.exactPathOverwrite, false);
+    assert.equal(second.writeReceipt.boundary.idempotentExistingBytes, true);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('exact carrier output path fails closed and preserves divergent existing bytes', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'tiinex-carrier-divergent-'));
+  const filename = 'tiinex-bootstrap-001.handoff-package.zip';
+  const target = path.join(root, filename);
+  const existing = Buffer.from('pre-existing divergent carrier bytes');
+  try {
+    await writeFile(target, existing);
+    const result = bootstrapCarrierFixture();
+    await assert.rejects(
+      materializeHandoffManufactureCliOutput(result, { output: target, 'projected-filename': filename }),
+      /portable\.cli\.handoff-carrier\.output-existing-divergent/
+    );
+    assert.deepEqual(await readFile(target), existing);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('shared explicit Handoff routes keep --route as presentation selection instead of collapsing manufacture', () => {
   assert.equal(recipientRouteSelectorForManufacture('core:.topics/handoffs/one.trace.md', [{ path: 'one' }, { path: 'two' }]), '');
   assert.equal(recipientRouteSelectorForManufacture('core:.topics/handoffs/one.trace.md', [{ path: 'one' }]), 'core:.topics/handoffs/one.trace.md');

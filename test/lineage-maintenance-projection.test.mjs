@@ -161,7 +161,7 @@ test('Workspace namespace qualification discovers compact and drifted numeric di
   const result=qualifyPortableLineageWorkspaceNamespaces({representationCoverage:'complete',materials:[compact,drifted,mixedNumeric,mixedNamed],workspaceId:'fixture'});
   assert.equal(result.status,'ready',JSON.stringify(result.findings));
   assert.equal(result.qualification,'drifted');
-  assert.deepEqual(result.summary,{directories:2,compact:1,drifted:1,blocked:0,skippedMixed:1,artifacts:4});
+  assert.deepEqual(result.summary,{surfaces:3,numericOnly:2,nonNumericOnly:0,mixed:1,directories:2,compact:1,drifted:1,blocked:0,skippedMixed:1,artifacts:4});
   assert.equal(result.namespaces.find((item)=>item.directory==='.topics/processes/example').qualification,'compact');
   assert.equal(result.namespaces.find((item)=>item.directory==='.topics/reductions/workspace').qualification,'drifted');
   assert.equal(result.skipped[0].directory,'.topics/native');
@@ -180,6 +180,19 @@ test('Workspace namespace qualification reports an unqualified numeric namespace
   assert.equal(result.namespaces[0].status,'blocked');
 });
 
+test('Workspace namespace qualification inventories non-numeric Tiinex directory surfaces without recommending Normalize',()=>{
+  const numeric=artifact({path:'.topics/a/001-root.trace.md',title:'Numeric'});
+  const nonNumeric=artifact({path:'.topics/.entries/resume-entry.trace.md',title:'Resume'});
+  const result=qualifyPortableLineageWorkspaceNamespaces({representationCoverage:'complete',materials:[numeric,nonNumeric],workspaceId:'fixture'});
+  assert.equal(result.status,'ready');
+  assert.equal(result.summary.surfaces,2);
+  assert.equal(result.summary.numericOnly,1);
+  assert.equal(result.summary.nonNumericOnly,1);
+  assert.equal(result.summary.mixed,0);
+  assert.equal(result.surfaces.find((item)=>item.directory==='.topics/.entries')?.state,'non-numeric-only');
+  assert.equal(result.recommendations.some((item)=>item.targetDirectory==='.topics/.entries'),false);
+});
+
 test('Bounded Workspace Representation keeps lineage qualification scope-limited and suppresses Normalize recommendations',()=>{
   const drifted=artifact({path:'.topics/a/004-root.trace.md',title:'Drifted'});
   const result=qualifyPortableLineageWorkspaceNamespaces({representationCoverage:'bounded',materials:[drifted],workspaceId:'fixture'});
@@ -188,7 +201,7 @@ test('Bounded Workspace Representation keeps lineage qualification scope-limited
   assert.equal(result.qualification,'scope-limited');
   assert.equal(result.observedQualification,'drifted');
   assert.deepEqual(result.recommendations,[]);
-  assert.match(result.boundary,/Omitted entries are outside the representation, not absent from the Workspace/);
+  assert.match(result.boundary,/without treating omitted entries as absent/);
 });
 
 test('Lineage maintenance blocks mutation-ready projection unless Workspace Representation is explicitly complete',()=>{

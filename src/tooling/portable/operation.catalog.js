@@ -42,10 +42,18 @@ import { projectPortableGroundingReadiness } from './grounding/grounding.readine
 import { createPortablePackageOperationEntries } from './operation.catalog.package.js';
 import { compareOrReconcilePortableSourceFrontiers } from './comparison/sourceFrontierComparison.js';
 import { provePortableSourceReconciliation } from './comparison/sourceFrontierReconciliationProof.js';
+import { projectTiinexCommitProvenance } from './git/git.commitProvenance.js';
 
 export const PORTABLE_OPERATION_CATALOG_SCHEMA_ID = 'tiinex.portable.operation.catalog.v1';
 
 export const portableOperationCatalog = Object.freeze({
+  'project-git-commit-provenance': operation({
+    name: 'project-git-commit-provenance',
+    description: 'Project deterministic human-facing commit provenance from explicit staged-change facts without reading Git, mutating source, or creating currentness authority.',
+    safety: 'read-only-projection',
+    inputSchema: 'tiinex.git.commit-provenance.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-git-commit-provenance', projectTiinexCommitProvenance(input))
+  }),
   'prove-source-reconciliation': operation({
     name: 'prove-source-reconciliation',
     description: 'Fail closed unless qualified base/incoming/current source plus explicit conflict/deletion dispositions are preserved by one exact candidate reconciled frontier suitable for manufacture requalification.',

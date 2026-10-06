@@ -16,7 +16,8 @@ import { projectCommonCliDefaultOutput } from './cli.common-output.js';
 import { runSchemasCli } from './cli.schemas.js';
 import { runVersionCli, formatVersionHuman } from './cli.version.js';
 import { runCatalogCli, formatCatalogHuman } from './cli.catalog.js';
-import { runLineageMaintenanceApplyCli } from './cli.lineage-maintenance.js';
+import { runLineageMaintenanceApplyCli, runLineageMaintenanceRecoveryCli } from './cli.lineage-maintenance.js';
+import { runGitCommitProvenanceCli } from './cli.git-commit-provenance.js';
 
 export function portableCliRuntimeContentRoots(argv = process.argv.slice(2)) {
   const parsed = parseArgs(argv);
@@ -46,6 +47,8 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
     }
   }
   if (parsed.command === 'apply-lineage-maintenance') return runLineageMaintenanceApplyCli(parsed, io);
+  if (parsed.command === 'project-git-commit-provenance') return runGitCommitProvenanceCli(parsed, io);
+  if (parsed.command === 'recover-lineage-maintenance') return runLineageMaintenanceRecoveryCli(parsed, io);
   if (parsed.command === 'catalog') {
     try {
       const result = await runCatalogCli(parsed, runtime);

@@ -4,6 +4,7 @@ import { inspectPortableLineageIntegrity } from './lineage.integrity.plan.js';
 import { applyPortableLineageIntegrityRepair } from './lineage.integrity.apply.js';
 import { buildPortableLineageIntegrityRepairProjection } from './lineage.integrity.projection.js';
 import { projectPortableLineageOperativeState as projectPortableLineageOperativeStateProjection } from './lineage.operativeState.js';
+import { projectPortableLineageRelationNeighborhood as projectPortableLineageRelationNeighborhoodProjection } from './lineage.relationNeighborhood.js';
 import { projectPortableLineageMaintenance as projectPortableLineageMaintenanceProjection, qualifyPortableLineageDirectoryNamespace, qualifyPortableLineageWorkspaceNamespaces } from './lineage.maintenance.projection.js';
 
 export function planPortableLineageIntegrity(input = {}, options = {}) {
@@ -24,6 +25,11 @@ export function projectPortableLineageIntegrityRepair(input = {}, options = {}) 
 export function projectPortableLineageOperativeState(input = {}, options = {}) {
   const projection = projectPortableLineageOperativeStateProjection(input, options);
   return operationResult('project-lineage-operative-state', { status: projection.status, resultSchema: projection.schema, nodes: projection.nodes, summary: projection.summary, boundary: projection.boundary, findings: projection.findings || [] });
+}
+
+export function projectPortableLineageRelationNeighborhood(input = {}, options = {}) {
+  const projection = projectPortableLineageRelationNeighborhoodProjection(input, options);
+  return operationResult('project-lineage-relation-neighborhood', { status: projection.status, resultSchema: projection.schema, focus: projection.focus, nodes: projection.nodes, edges: projection.edges, categories: projection.categories, negativeEvidence: projection.negativeEvidence, summary: projection.summary, boundary: projection.boundary, findings: projection.findings || [] });
 }
 
 
@@ -48,6 +54,7 @@ export function searchPortableLineage(input = {}, options = {}) {
 }
 
 export const portableLineageOperationDescriptors = Object.freeze([
+  Object.freeze({ name: 'project-lineage-relation-neighborhood', description: 'Project an invocation-selected loaded relation neighborhood across explicit Parent, Relation target, Handoff controlling/context, Task dependency, and qualified supersession edges without choosing a governing continuation or semantic winner.', safety: 'read-only', inputSchema: 'tiinex.portable.lineage-relation-neighborhood.request.v1', sourceMutation: false, remoteWrite: false, handler: projectPortableLineageRelationNeighborhood }),
   Object.freeze({ name: 'project-lineage-operative-state', description: 'Compose loaded lineage topology, explicit qualified currentness facts, and existing project-lifecycle-readiness receipts into separate host-neutral operative-state axes without inferring completion, Reduction, or deletion authority.', safety: 'read-only', inputSchema: 'tiinex.portable.lineage-operative-state.request.v1', sourceMutation: false, remoteWrite: false, handler: projectPortableLineageOperativeState }),
   Object.freeze({ name: 'lineage-integrity-plan', description: 'Inspect loaded Parent/self/Parent-target integrity and produce a read-only cascade-aware repair plan without mutating lineage or publication state.', safety: 'planning-only-read-only', inputSchema: 'tiinex.portable.lineage-integrity-plan.request.v1', handler: planPortableLineageIntegrity }),
   Object.freeze({ name: 'lineage-integrity-project', description: 'Project shared lineage repair opportunities, compact human guidance, prepared local-only plan steps, capability boundaries, and export readiness without Viewer/VS Code policy forks or remote writes.', safety: 'planning-only-read-only', inputSchema: 'tiinex.portable.lineage-integrity-projection.request.v1', sourceMutation: false, remoteWrite: false, handler: projectPortableLineageIntegrityRepair }),

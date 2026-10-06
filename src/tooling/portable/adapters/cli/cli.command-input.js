@@ -3,6 +3,7 @@ import { projectPortableSchemaRegistryMaterial } from '../../schema/registry.mat
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loadNodePortableInput } from '../../input/node.input.js';
+import { normalizePortableInput } from '../../input/portable.input.js';
 import { prepareHandoffManufactureCliCommand } from './cli.handoff-manufacture.js';
 import { prepareEditorAssistanceCliInput } from './cli.editor-assistance.js';
 import { prepareOperatorBridgeCliInput } from './cli.operator-bridge.js';
@@ -187,6 +188,28 @@ export async function commandInput(parsed, runtime = {}) {
     return { input: { filename: flags.filename || flags.base || value.filename || '', existingFilenames: value.existingFilenames || value.names || (Array.isArray(value) ? value : []) }, options: {} };
   }
 
+  if (parsed.command === 'project-lineage-relation-neighborhood' && (flags['workspace-roots'] || flags.roots)) {
+    const rootsValue = await readOptionalJson(flags['workspace-roots'] || flags.roots);
+    const descriptors = normalizeWorkspaceRootDescriptors(rootsValue);
+    const records = [];
+    const findings = [];
+    for (const descriptor of descriptors) {
+      const loaded = await loadNodePortableInput([descriptor.root], { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] });
+      const normalized = normalizePortableInput(loaded);
+      records.push(...normalized.records.map((record) => ({ ...record, workspaceId: descriptor.id })));
+      findings.push(...(normalized.findings || []));
+    }
+    const currentnessValue = await readOptionalJson(flags.currentness || flags.facts);
+    return { input: {
+      records,
+      findings,
+      focus: splitFlag(flags.focus || flags.target || flags['controlling-artifact']),
+      representationCoverage: flags.coverage || 'unknown',
+      depth: flags.depth || 1,
+      currentness: currentnessValue.currentness || currentnessValue.facts?.currentness || (Array.isArray(currentnessValue) ? currentnessValue : [])
+    }, options: {} };
+  }
+
   if (parsed.command === 'project-workspace-carrier-entry') {
     const packagePath = String(flags.package || parsed.positionals[0] || '').trim();
     if (!packagePath) throw new Error('portable.cli.workspace-entry.package-required');
@@ -255,6 +278,16 @@ export async function commandInput(parsed, runtime = {}) {
   }
   if (parsed.command === 'qualify-lineage-directory') return { input: { ...material, workspaceId: flags['workspace-id'] || '', directory: flags.directory || flags['target-directory'] || '', representationCoverage: flags.coverage || 'unknown' }, options: {} };
   if (parsed.command === 'qualify-lineage-workspace') return { input: { ...material, workspaceId: flags['workspace-id'] || '', representationCoverage: flags.coverage || 'unknown' }, options: {} };
+  if (parsed.command === 'project-lineage-relation-neighborhood') {
+    const currentnessValue = await readOptionalJson(flags.currentness || flags.facts);
+    return { input: {
+      ...material,
+      focus: splitFlag(flags.focus || flags.target || flags['controlling-artifact']),
+      representationCoverage: flags.coverage || 'unknown',
+      depth: flags.depth || 1,
+      currentness: currentnessValue.currentness || currentnessValue.facts?.currentness || (Array.isArray(currentnessValue) ? currentnessValue : [])
+    }, options: {} };
+  }
   if (parsed.command === 'project-authoring-parent') return { input: { ...material, reference: flags.reference || '', publishedReference: flags['published-reference'] || flags['parent-reference'] || '' }, options: {} };
   const operatorBridgeInput = await prepareOperatorBridgeCliInput(parsed.command, material, flags, readOptionalJson);
   if (operatorBridgeInput) return operatorBridgeInput;
@@ -551,6 +584,14 @@ function holderBindingCliSource(flags = {}) {
   if (Object.prototype.hasOwnProperty.call(flags, 'holder-id')) fields.push('--holder-id');
   if (Object.prototype.hasOwnProperty.call(flags, 'holder-assignment-mode')) fields.push('--holder-assignment-mode');
   return fields.length ? `cli:${fields.join(',')}` : '';
+}
+
+
+function normalizeWorkspaceRootDescriptors(value = {}) {
+  const raw = value.workspaces || value.workspaceRoots || value.roots || value;
+  if (Array.isArray(raw)) return raw.map((item) => ({ id: String(item?.id || item?.workspaceId || '').trim(), root: String(item?.root || item?.path || '').trim() })).filter((item) => item.id && item.root);
+  if (!raw || typeof raw !== 'object') return [];
+  return Object.entries(raw).map(([id, root]) => ({ id: String(id || '').trim(), root: String(root?.root || root?.path || root || '').trim() })).filter((item) => item.id && item.root);
 }
 
 function splitFlag(value) { return !value || value === true ? [] : String(value).split(',').map((item) => item.trim()).filter(Boolean); }
