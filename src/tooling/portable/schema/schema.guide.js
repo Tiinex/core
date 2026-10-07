@@ -11,7 +11,9 @@ import {
   readPortableSchemaSections
 } from './schema.contract.js';
 import { resolvePortableLlmCompanion } from './llm.companion.js';
-import { compilePortableSchemaContract } from './contract.compile.js';
+import { compilePortableSchemaContract, compilePortableSchemaContractChain } from './contract.compile.js';
+import { projectCreationRuntime } from './runtime.project.js';
+import { findSchemaMaterial } from '../input/portable.input.js';
 
 export const PORTABLE_SCHEMA_GUIDE_SCHEMA_ID = 'tiinex.llm.schema-guide.v1';
 export const PORTABLE_SCHEMA_GUIDE_COMPILER_VERSION = '4';
@@ -50,10 +52,18 @@ export function buildPortableSchemaGuide(input = {}, options = {}) {
   const conditionalRequirements = document ? buildConditionalRequirements(document) : [];
   const rules = document ? contractRules(document.validation) : [];
   const creationRules = document ? contractRules(document.creation) : [];
+  const loadedLineageContract = creationRequested ? compileLoadedSchemaLineageContract(input.materials || input, schemaId) : null;
+  const loadedCreationProjection = loadedLineageContract ? projectCreationRuntime(loadedLineageContract) : null;
+  const creationBindings = Array.isArray(creationContract?.creation?.inputBindings) && creationContract.creation.inputBindings.length
+    ? creationContract.creation.inputBindings
+    : (Array.isArray(loadedCreationProjection?.inputBindings) && loadedCreationProjection.inputBindings.length
+      ? loadedCreationProjection.inputBindings
+      : (Array.isArray(resolution.descriptor?.factory?.creation?.inputBindings) ? resolution.descriptor.factory.creation.inputBindings : []));
+  const creationCoveredFields = creationRequested ? creationBoundFieldNames(creationBindings) : new Set();
   const requiredInputs = creationRequested ? uniqueStrings([
     ...(creationContract?.inputs?.required || []),
     ...(compiledContract ? compiledContract.creation.requiredInputs : []),
-    ...requiredFields
+    ...requiredFields.filter((field) => !creationCoveredFields.has(normalizeKey(field)))
   ]) : [];
   const optionalInputs = creationRequested && compiledContract ? [...compiledContract.creation.optionalInputs] : [];
   const toolingConfiguration = creationRequested && compiledContract ? [...compiledContract.creation.toolingConfigurationFields] : [];
@@ -96,6 +106,7 @@ export function buildPortableSchemaGuide(input = {}, options = {}) {
       runtimeFallbackUsed: Boolean(resolution.fallbackUsed)
     }),
     factoryDescriptor: resolution.descriptor?.factory || null,
+    creationBindings: Object.freeze(creationBindings.map((binding) => Object.freeze({ ...binding }))),
     requiredInputs: Object.freeze(limitList(requiredInputs, detail === 'compact' ? 18 : 80)),
     requiredStructure: Object.freeze(limitList(requiredSections, detail === 'compact' ? 14 : 80)),
     requiredFields: Object.freeze(limitList(requiredFields, detail === 'compact' ? 24 : 120)),
@@ -171,8 +182,13 @@ export function readPortableSchemaGuideSections(input = {}, options = {}) {
 export function planPortableArtifact(input = {}, options = {}) {
   const guideResult = buildPortableSchemaGuide({ ...input, task: input.task || 'create' }, options);
   const guide = guideResult.guide;
-  const provided = normalizeProvidedInputs(input.inputs || input.values || {});
-  const missingInputs = guide.requiredInputs.filter((name) => !provided.has(normalizeKey(name)));
+  const rawValues = input.inputs || input.values || {};
+  const creationBindings = Array.isArray(guide.creationBindings) ? guide.creationBindings : [];
+  const provided = normalizeProvidedInputs(rawValues, creationBindings);
+  const missingInputs = uniqueStrings([
+    ...guide.requiredInputs.filter((name) => !provided.has(normalizeKey(name))),
+    ...missingStructuredCreationInputs(rawValues, creationBindings)
+  ]);
   const plan = Object.freeze({
     schema: 'tiinex.llm.artifact-plan.v1',
     schemaId: guide.schemaId,
@@ -197,6 +213,33 @@ export function planPortableArtifact(input = {}, options = {}) {
   const findings = [...guideResult.findings];
   if (missingInputs.length) findings.push(portableFinding('warning', 'portable.artifact-plan.inputs.missing', 'Required authoring inputs are missing.', { schemaId: guide.schemaId, missingInputs }));
   return Object.freeze({ plan, guide, findings: Object.freeze(findings) });
+}
+
+function compileLoadedSchemaLineageContract(input = {}, schemaId = '') {
+  const wanted = String(schemaId || '').trim();
+  if (!wanted) return null;
+  const seen = new Set();
+  const documents = [];
+  let current = wanted;
+  while (current) {
+    if (seen.has(current)) return null;
+    seen.add(current);
+    const material = findSchemaMaterial(current, input);
+    if (!material?.markdown) return null;
+    let document;
+    try { document = parsePortableSchemaDocument(material.markdown); }
+    catch { return null; }
+    if (String(document?.schemaId || '').trim() !== current) return null;
+    documents.push(document);
+    const parent = String(document?.parentSchemaId || '').trim();
+    if (!parent) break;
+    current = parent;
+  }
+  documents.reverse();
+  let compiled;
+  try { compiled = compilePortableSchemaContractChain(documents); }
+  catch { return null; }
+  return compiled?.lineageQualification?.state === 'valid' ? compiled : null;
 }
 
 function validationPlan({ resolution = {}, document = null, task = 'read' }) {
@@ -280,7 +323,7 @@ function stableHash(value = '') {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-function normalizeProvidedInputs(values = {}) {
+function normalizeProvidedInputs(values = {}, bindings = []) {
   const map = new Map();
   if (Array.isArray(values)) {
     for (const value of values) {
@@ -290,10 +333,71 @@ function normalizeProvidedInputs(values = {}) {
     return map;
   }
   for (const [name, value] of Object.entries(values || {})) {
-    if (value === undefined || value === null || value === '') continue;
+    if (!creationValuePresent(value)) continue;
     map.set(normalizeKey(name), name);
+    const binding = bindings.find((candidate) => normalizeKey(candidate?.input) === normalizeKey(name));
+    if (!binding) continue;
+    if (binding.kind === 'ordinary-group' && value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [field, nested] of Object.entries(value)) {
+        if (!creationValuePresent(nested)) continue;
+        map.set(normalizeKey(`${name}.${field}`), `${name}.${field}`);
+      }
+    }
+    if (binding.kind === 'named-declaration-section' && Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        const fields = value[index]?.fields;
+        if (!fields || typeof fields !== 'object' || Array.isArray(fields)) continue;
+        for (const [field, nested] of Object.entries(fields)) {
+          if (!creationValuePresent(nested)) continue;
+          map.set(normalizeKey(`${name}[${index}].${field}`), `${name}[${index}].${field}`);
+        }
+      }
+    }
   }
   return map;
+}
+
+function missingStructuredCreationInputs(values = {}, bindings = []) {
+  if (!values || typeof values !== 'object' || Array.isArray(values)) return [];
+  const missing = [];
+  for (const binding of bindings || []) {
+    const input = String(binding?.input || '').trim();
+    if (!input || !Object.prototype.hasOwnProperty.call(values, input)) continue;
+    const value = values[input];
+    const requiredFields = uniqueStrings(binding?.requiredFields || []);
+    if (!requiredFields.length) continue;
+    if (binding.kind === 'ordinary-group') {
+      const object = value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+      for (const field of requiredFields) if (!object || !creationValuePresent(object[field])) missing.push(`${input}.${field}`);
+      continue;
+    }
+    if (binding.kind === 'named-declaration-section') {
+      if (typeof value === 'string' && String(value).trim().toLowerCase() === 'none' && binding.allowLiteralNone === true) continue;
+      if (!Array.isArray(value) || !value.length) continue;
+      for (let index = 0; index < value.length; index += 1) {
+        const fields = value[index]?.fields && typeof value[index].fields === 'object' && !Array.isArray(value[index].fields) ? value[index].fields : null;
+        for (const field of requiredFields) if (!fields || !creationValuePresent(fields[field])) missing.push(`${input}[${index}].${field}`);
+      }
+    }
+  }
+  return uniqueStrings(missing);
+}
+
+function creationBoundFieldNames(bindings = []) {
+  const fields = new Set();
+  for (const binding of bindings || []) {
+    if (binding?.kind === 'ordinary-field' && binding.field) fields.add(normalizeKey(binding.field));
+    for (const field of [...(binding?.requiredFields || []), ...(binding?.optionalFields || [])]) fields.add(normalizeKey(field));
+  }
+  return fields;
+}
+
+function creationValuePresent(value) {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return Object.keys(value).length > 0;
+  return true;
 }
 
 function capabilityForTask(task = 'read') {

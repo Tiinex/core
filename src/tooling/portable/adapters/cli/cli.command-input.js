@@ -509,7 +509,11 @@ async function loadCliExplicitMaterial(targets = [], command = '', flags = {}, l
 }
 
 function cliGroundingLoadOptions(target = '', command = '', flags = {}, loadOptions = {}) {
-  if (!LEGACY_TOPICS_GROUNDING_COMMANDS.has(String(command || ''))) return loadOptions;
+  const normalizedCommand = String(command || '');
+  if (['project-operator-context', 'project-handoff-endpoints', 'project-workspace-session-roles', 'project-workspace-package-sources'].includes(normalizedCommand)) {
+    return { ...loadOptions, includePathPrefixes: ['.topics'] };
+  }
+  if (!LEGACY_TOPICS_GROUNDING_COMMANDS.has(normalizedCommand)) return loadOptions;
   if (Boolean(flags['include-legacy-topics'])) return loadOptions;
   const normalized = path.resolve(String(target || '')).replace(/\\/g, '/');
   if (/\.zip$/i.test(normalized)) return loadOptions;

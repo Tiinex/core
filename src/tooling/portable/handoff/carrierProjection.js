@@ -158,7 +158,8 @@ export function projectBootstrapCarrierHumanOutput(input = {}) {
   const dimension = String(projection.lineage?.dimension || '001');
   const startPath = String(projection.startPath || `${HANDOFF_PACKAGE_V1_ARTIFACT_ROOT_DIMENSION}-1-READ-BEFORE-PROCEEDING.trace.md`);
   const filename = transportFilename(input.filename, `tiinex-${dimension}.handoff-package.zip`);
-  const content = ready ? routeLessTransportText(startPath, 'bootstrap') : '';
+  const replacement = input.replacement === true || String(input.intent || '').trim().toLowerCase() === 'replacement';
+  const content = ready ? routeLessTransportText(startPath, replacement ? 'bootstrap-replacement' : 'bootstrap') : '';
   return Object.freeze({
     schema: HANDOFF_HUMAN_OUTPUT_SCHEMA_ID,
     status: ready ? 'ready' : 'blocked',
@@ -166,12 +167,12 @@ export function projectBootstrapCarrierHumanOutput(input = {}) {
     routes: Object.freeze([]),
     normalInlineRouting: ready ? Object.freeze({ kind: 'transport-text', content, normalEmission: true, requiredForHumanCompletion: true, placement: 'adjacent-to-primary', authority: 'qualified-package-start-only' }) : null,
     sharedRouting: null,
-    presentation: Object.freeze({ kind: 'bootstrap-only-carrier', label: 'Bootstrap carrier', authority: 'none', recipientLabel: '', recipientProjectionAuthority: 'none' }),
+    presentation: Object.freeze({ kind: replacement ? 'bootstrap-replacement-carrier' : 'bootstrap-only-carrier', label: replacement ? 'Bootstrap replacement carrier' : 'Bootstrap carrier', authority: 'none', recipientLabel: '', recipientProjectionAuthority: 'none' }),
     normalEmissionBoundary: Object.freeze({ allowed: Object.freeze(['package-file', 'generic-start-transport-text']), forbidden: Object.freeze(['workspace-label', 'route-specific-continue-from', 'recipient-label', 'holder-label', 'current-work-label']) }),
     fallbackTransportText: ready ? Object.freeze({ supported: true, filename: filename.replace(/\.handoff-package\.zip$/i, '.transport.txt'), content, normalEmission: false, requiredForHumanCompletion: false, authority: 'qualified-package-start-only' }) : null,
     selectedRoute: null,
     findings: Object.freeze(projection.findings || []),
-    boundary: 'Bootstrap-only carrier output projection. Exact Start transport text only; no Workspace, Handoff route, recipient, holder, Role, or work projection exists.'
+    boundary: replacement ? 'Bootstrap-replacement carrier output projection. The requested operation is bounded to replacing the active bootstrap/runtime composition; no Workspace, Handoff route, recipient, holder, Role, current-work, or broader semantic supersession is projected.' : 'Bootstrap-only carrier output projection. Exact Start transport text only; no Workspace, Handoff route, recipient, holder, Role, or work projection exists.'
   });
 }
 
@@ -202,10 +203,14 @@ function routedTransportText(startPath = '', continueFrom = '') {
 }
 
 function routeLessTransportText(startPath = '', mode = 'workspace') {
-  const boundary = mode === 'bootstrap'
-    ? 'This is a bootstrap-only carrier. After bootstrap, pass the package to Tiinex orientation. No Workspace material, Handoff Continue From route, recipient, or work authority is declared or implied.'
-    : 'This is a pointerless Workspace carrier. After bootstrap, pass the package to Tiinex orientation/material projection. No Handoff Continue From route, recipient, or work transfer is declared or implied.';
-  const reuse = mode === 'bootstrap'
+  const bootstrap = mode === 'bootstrap' || mode === 'bootstrap-replacement';
+  const replacement = mode === 'bootstrap-replacement';
+  const boundary = replacement
+    ? 'This is a bootstrap-replacement carrier. Use it only to replace the active Tiinex bootstrap/runtime composition. After activating the declared bootstrap, resume the original work/package flow with that runtime. This carrier declares no Workspace material, Handoff Continue From route, recipient, Role, current-work, or other work authority, and bootstrap replacement must not be upgraded into broader semantic supersession.'
+    : bootstrap
+      ? 'This is a bootstrap-only carrier. After bootstrap, pass the package to Tiinex orientation. No Workspace material, Handoff Continue From route, recipient, or work authority is declared or implied.'
+      : 'This is a pointerless Workspace carrier. After bootstrap, pass the package to Tiinex orientation/material projection. No Handoff Continue From route, recipient, or work transfer is declared or implied.';
+  const reuse = bootstrap
     ? '\nRuntime reuse check: after extracting the declared bootstrap, run `node <extract-root>/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs version --json` before broad runtime/schema/companion re-reading. If `composition.sha256` equals the already-active Tiinex runtime, the manifest-declared runtime composition is byte-identical and prior interpretation may be reused. Different composition, later Build At, different Core version, different ZIP SHA, or later arrival does not by itself establish semantic supersession.'
     : '';
   return `${coldStartInstruction(startPath)}\n\n${boundary}${reuse}\n`;

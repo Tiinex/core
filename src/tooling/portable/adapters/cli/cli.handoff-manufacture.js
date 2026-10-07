@@ -248,7 +248,7 @@ export async function materializeHandoffManufactureCliOutput(result = {}, flags 
   const workspaceMode = carrierMode === 'workspace';
   const bootstrapMode = carrierMode === 'bootstrap';
   const projectedFilename = flags['projected-filename'] || flags.projectedFilename || result?.input?.projectedFilename || '';
-  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: projectedFilename, collisionInstance: flags['collision-instance'] || 1 }) : bootstrapMode ? projectBootstrapCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: projectedFilename }) : projectHandoffHumanOutput({
+  let humanOutput = workspaceMode ? projectWorkspaceCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: projectedFilename, collisionInstance: flags['collision-instance'] || 1 }) : bootstrapMode ? projectBootstrapCarrierHumanOutput({ projection: result.carrierProjection || {}, filename: projectedFilename, replacement: flags['bootstrap-replacement'] === true || String(flags['bootstrap-intent'] || '').trim().toLowerCase() === 'replacement' }) : projectHandoffHumanOutput({
     projection: result.carrierProjection || {},
     route: flags.route || '',
     filename: projectedFilename,

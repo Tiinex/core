@@ -6,6 +6,7 @@ import path from 'node:path';
 import { nextBootstrapCarrierFilename, buildBootstrapCarrier, formatBootstrapCarrierHuman } from '../tools/build-bootstrap-carrier.mjs';
 import { loadNodePortableInput } from '../src/tooling/portable/input/node.input.js';
 import { inspectHandoffPackageV1 } from '../src/tooling/portable/handoff/handoffPackageV1.inspect.js';
+import { projectBootstrapCarrierHumanOutput } from '../src/tooling/portable/handoff/carrierProjection.js';
 
 test('bootstrap carrier filename allocation starts at 001 and advances from the highest local carrier', () => {
   assert.equal(nextBootstrapCarrierFilename([]), 'bootstrap-001.handoff-package.zip');
@@ -72,4 +73,19 @@ test('bootstrap carrier human output exposes only output path and transport text
     'Cold start: read Start directly.'
   ].join('\n'));
   for (const hidden of ['sha256', 'bytes', 'findingSummary', 'packageInspection', 'roundtrip']) assert.equal(text.includes(hidden), false);
+});
+
+
+test('bootstrap replacement transport projection is Core-owned and remains bootstrap-only', () => {
+  const projection = { status: 'ready', mode: 'bootstrap', routes: [], workspaces: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md', lineage: { dimension: '001' } };
+  const normal = projectBootstrapCarrierHumanOutput({ projection, filename: 'bootstrap-001.handoff-package.zip' });
+  const replacement = projectBootstrapCarrierHumanOutput({ projection, filename: 'tiinex-bootstrap-replacement-001.handoff-package.zip', replacement: true });
+  assert.equal(normal.status, 'ready');
+  assert.equal(replacement.status, 'ready');
+  assert.equal(replacement.primary.filename, 'tiinex-bootstrap-replacement-001.handoff-package.zip');
+  assert.equal(replacement.presentation.kind, 'bootstrap-replacement-carrier');
+  assert.match(replacement.normalInlineRouting.content, /Use it only to replace the active Tiinex bootstrap\/runtime composition/);
+  assert.match(replacement.normalInlineRouting.content, /resume the original work\/package flow/);
+  assert.doesNotMatch(replacement.normalInlineRouting.content, /Continue from/);
+  assert.doesNotMatch(normal.normalInlineRouting.content, /bootstrap-replacement carrier/);
 });

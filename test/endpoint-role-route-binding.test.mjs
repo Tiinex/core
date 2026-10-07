@@ -189,6 +189,8 @@ test('Role endpoint projection exposes only current Role lineage leaves for sess
   assert.equal(projection.candidates.length, 2);
   assert.deepEqual(projection.currentRoleCandidates.map((item) => item.artifactPath), ['.topics/roles/001-1-anchor-current-role.trace.md']);
   assert.equal(projection.currentRoleCandidates[0].currentLeaf, true);
+  assert.deepEqual(projection.authoringReferenceCandidates.map((item) => item.artifactPath), ['.topics/roles/001-1-anchor-current-role.trace.md']);
+  assert.equal(projection.authoringReferenceCandidates[0].currentLeaf, true);
 });
 
 test('endpoint source eligibility is bounded by the explicitly selected qualified Workspace material root', () => {

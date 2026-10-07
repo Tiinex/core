@@ -32,6 +32,17 @@ test('Native-composed Handoff definitions qualify without App while remaining no
   }
 });
 
+test('Native zero-input Handoff authoring transitions remain available regardless of Parent schema', () => {
+  const neighborhood = projectPortableTransitionNeighborhood({
+    includeNative: true,
+    outputSchemaId: 'tiinex.handoff.v1',
+    inputSchemaId: 'tiinex.evidence.v1'
+  });
+  assert.deepEqual(neighborhood.candidates.map((entry) => entry.canonicalIdentifier), ids);
+  assert.equal(neighborhood.findings.filter((finding) => finding.severity === 'error').length, 0);
+  assert.equal(neighborhood.candidates.every((entry) => entry.zeroRequiredInputs === true), true);
+});
+
 test('external transitions remain separate and Native inclusion is explicit in the programmatic API', async () => {
   const fixture = await readFile(resolve(root, 'test/fixtures/transitions/create-task-transition-definition.trace.md'), 'utf8');
   const source = { files: [{ path: '.topics/processes/create-task.trace.md', content: fixture, sourceMode: 'portable-node-local', locator: { kind: 'node-file', localPath: '/org-repo/.topics/processes/create-task.trace.md' } }] };

@@ -14,6 +14,8 @@ export function projectPortableOperatorContext(input = {}) {
   const flattenedWorkspaces = [];
   const flattenedLeaves = [];
   const flattenedEndpoints = [];
+  const flattenedAuthoringEndpoints = [];
+  const flattenedAuthoringReferenceCandidates = [];
 
   if (!roots.length) {
     findings.push(finding('error', 'portable.operator-context.roots.required', 'Operator context requires explicit Workspace roots; repository basenames or ambient process paths are not semantic Workspace identity.'));
@@ -34,12 +36,18 @@ export function projectPortableOperatorContext(input = {}) {
         hostRoot: root.root,
         handoffLeaves: leaves.leaves || [],
         pointerless: leaves.pointerless,
-        endpoints: endpoints.candidates || []
+        endpoints: endpoints.candidates || [],
+        authoringEndpoints: endpoints.authoringCandidates || [],
+        currentRoleEndpoints: endpoints.currentRoleCandidates || [],
+        currentRoleAuthoringEndpoints: endpoints.currentRoleAuthoringCandidates || [],
+        authoringReferenceCandidates: endpoints.authoringReferenceCandidates || []
       });
       workspaces.push(workspace);
       flattenedWorkspaces.push(workspace);
       for (const leaf of workspace.handoffLeaves) flattenedLeaves.push(freeze({ ...leaf, workspaceId: candidate.workspaceId, hostRootId: root.id, hostRoot: root.root }));
       for (const endpoint of workspace.endpoints) flattenedEndpoints.push(freeze({ ...endpoint, hostRootId: root.id, hostRoot: root.root }));
+      for (const endpoint of workspace.authoringEndpoints) flattenedAuthoringEndpoints.push(freeze({ ...endpoint, hostRootId: root.id, hostRoot: root.root }));
+      for (const endpoint of workspace.authoringReferenceCandidates) flattenedAuthoringReferenceCandidates.push(freeze({ ...endpoint, hostRootId: root.id, hostRoot: root.root }));
     }
     findings.push(...(sources.findings || []).map((item) => finding(item.severity || 'warning', item.code || 'portable.operator-context.workspace-source', item.message || 'Workspace source projection finding.', { ...(item.context || {}), hostRootId: root.id, hostRoot: root.root })));
     projectedRoots.push(freeze({ id: root.id, root: root.root, repository: rootRepositories[0] || null, workspaces }));
@@ -67,11 +75,13 @@ export function projectPortableOperatorContext(input = {}) {
     workspaces: flattenedWorkspaces.sort((a, b) => a.workspaceId.localeCompare(b.workspaceId) || a.workspaceTargetPath.localeCompare(b.workspaceTargetPath)),
     handoffLeaves: flattenedLeaves.sort((a, b) => a.workspaceId.localeCompare(b.workspaceId) || a.path.localeCompare(b.path)),
     endpoints: dedupeEndpoints(flattenedEndpoints),
+    authoringEndpoints: dedupeEndpoints(flattenedAuthoringEndpoints),
+    authoringReferenceCandidates: dedupeEndpoints(flattenedAuthoringReferenceCandidates),
     participants: projectParticipantCandidatesFromEndpoints(flattenedEndpoints),
     pointerless,
     findings,
     operationBoundary: { sourceMutation: false, remoteWrite: false, manufacture: false, identityInference: false },
-    boundary: 'Projects one multi-root operator context from explicit host roots. Top-level Workspace candidates are limited to direct artifacts on each selected root\'s canonical .topics/.workspaces surface; nested independent .topics surfaces require their own explicit host root. Qualified Workspace artifact identity remains distinct from physical repository identity; Role/Party endpoints and Handoff leaves are shared-core projections, and No Handoff pointer remains explicit.'
+    boundary: 'Projects one multi-root operator context from explicit host roots. Top-level Workspace candidates are limited to direct artifacts on each selected root\'s canonical .topics/.workspaces surface; nested independent .topics surfaces require their own explicit host root. Qualified Workspace artifact identity remains distinct from physical repository identity; exact Role/Party endpoints, readable authoring-assist endpoints, Core-current Party-reference authoring candidates, and Handoff leaves are shared-core projections, and No Handoff pointer remains explicit.'
   });
 }
 

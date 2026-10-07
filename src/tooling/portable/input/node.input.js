@@ -129,6 +129,7 @@ async function walk(root, options = {}, findings = []) {
   const out = [];
   const excluded = new Set(options.excludeDirectories || DEFAULT_EXCLUDED_DIRECTORIES);
   const excludedPathPrefixes = normalizeExcludedPathPrefixes(options.excludePathPrefixes);
+  const includedPathPrefixes = normalizeIncludedPathPrefixes(options.includePathPrefixes);
   const excludedPathRefs = new Set();
   const queue = [root];
   const maxFiles = positiveInteger(options.maxFiles, DEFAULT_MAX_FILES);
@@ -145,6 +146,8 @@ async function walk(root, options = {}, findings = []) {
       if (excluded.has(entry.name)) continue;
       const absolute = path.join(current, entry.name);
       const relativePath = path.relative(root, absolute).replace(/\\/g, '/');
+      const included = includedPathPrefixes.length ? pathIncludedByPrefixes(relativePath, includedPathPrefixes, entry.isDirectory()) : true;
+      if (!included) continue;
       const excludedPrefix = excludedPathPrefixes.find((prefix) => relativePath === prefix.slice(0, -1) || relativePath.startsWith(prefix));
       if (excludedPrefix) {
         if (!excludedPathRefs.has(excludedPrefix)) {
@@ -171,6 +174,24 @@ function normalizeExcludedPathPrefixes(value) {
     .map((entry) => String(entry || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, ''))
     .filter(Boolean)
     .map((entry) => `${entry}/`);
+}
+
+function normalizeIncludedPathPrefixes(value) {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  return [...new Set(list
+    .map((entry) => String(entry || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, ''))
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function pathIncludedByPrefixes(relativePath = '', prefixes = [], directory = false) {
+  const value = String(relativePath || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!value) return true;
+  for (const prefix of prefixes) {
+    if (value === prefix || value.startsWith(`${prefix}/`)) return true;
+    if (directory && prefix.startsWith(`${value}/`)) return true;
+  }
+  return false;
 }
 
 function normalizeTargets(targets) {

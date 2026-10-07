@@ -304,7 +304,10 @@ function catalogResult(definitions, findings, input = {}, options = {}) {
   const qualified = definitions.filter((definition) => definition.canonicalReadQualified);
   const candidates = qualified.filter((definition) => {
     if (outputSchemaId && !definition.outputSchemaIds.includes(outputSchemaId)) return false;
-    if (inputSchemaId && !definition.inputSchemaIds.includes(inputSchemaId)) return false;
+    // A Transition with no declared artifact Input Roles is intentionally generic
+    // with respect to the current Parent/input artifact. Only definitions that
+    // actually declare input schema constraints are filtered by inputSchemaId.
+    if (inputSchemaId && definition.inputSchemaIds.length && !definition.inputSchemaIds.includes(inputSchemaId)) return false;
     return true;
   });
   const schemaEntry = (schemaPackManifest().schemas || []).find((entry) => entry.schemaId === TRANSITION_DEFINITION_SCHEMA_ID) || null;

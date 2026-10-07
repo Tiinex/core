@@ -116,7 +116,16 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     }
   }
   candidates.sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label) || a.target.localeCompare(b.target));
-  const currentRoleCandidates = projectCurrentRoleCandidates(records, candidates);
+  authoringCandidates.sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label) || a.target.localeCompare(b.target));
+  const currentRoleLeafPaths = projectCurrentRoleLeafPaths(records);
+  const currentRoleCandidates = projectCurrentRoleCandidates(candidates, currentRoleLeafPaths);
+  const currentRoleAuthoringCandidates = projectCurrentRoleCandidates(authoringCandidates, currentRoleLeafPaths);
+  const authoringReferenceCandidates = [
+    ...candidates.filter((candidate) => String(candidate.kind || '') !== 'role'),
+    ...currentRoleCandidates,
+    ...authoringCandidates.filter((candidate) => String(candidate.kind || '') !== 'role'),
+    ...currentRoleAuthoringCandidates
+  ].sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label) || a.target.localeCompare(b.target));
   return freeze({
     schema: PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID,
     status: 'ready',
@@ -125,16 +134,16 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     candidates,
     currentRoleCandidates,
     authoringCandidates,
+    currentRoleAuthoringCandidates,
+    authoringReferenceCandidates,
     findings,
     operationBoundary: { sourceMutation: false, remoteWrite: false, identityInference: false },
-    boundary: 'Projects only exactly qualified Role/Party artifacts from the bounded .topics material surface owned by one exact qualified requested Workspace artifact. target/workspaceCoordinate preserves explicit Workspace artifact identity; reference preserves an exact-qualified provider reference when supplied and otherwise remains absent; workspaceCoordinate alone carries the internal package-local Workspace/path identity; Role authoringLabel is the exact qualified Role Identity / Role Label semantic value while label remains presentation-only; nested fixture Workspaces, repository-wide scans, caches, chronology, filenames, holder labels, and repository basenames never infer endpoint identity.'
+    boundary: 'Projects only exactly qualified Role/Party artifacts from the bounded .topics material surface owned by one exact qualified requested Workspace artifact. target/workspaceCoordinate preserves explicit Workspace artifact identity; reference preserves an exact-qualified provider reference when supplied and otherwise remains absent; workspaceCoordinate alone carries the internal package-local Workspace/path identity; Role authoringLabel is the exact qualified Role Identity / Role Label semantic value while label remains presentation-only; authoringReferenceCandidates includes Party candidates plus only Core lineage-leaf Role candidates across exact and readable authoring-assist material; nested fixture Workspaces, repository-wide scans, caches, chronology, filenames, holder labels, and repository basenames never infer endpoint identity.'
   });
 }
 
 
-function projectCurrentRoleCandidates(records = [], candidates = []) {
-  const roleCandidates = candidates.filter((candidate) => String(candidate.kind || '') === 'role');
-  if (!roleCandidates.length) return [];
+function projectCurrentRoleLeafPaths(records = []) {
   const roleRecords = records.filter((record) => {
     if (isSchemaDefinitionRecord(record)) return false;
     const path = norm(record.path || record.id || '');
@@ -142,22 +151,28 @@ function projectCurrentRoleCandidates(records = [], candidates = []) {
     try { return schemaIdForRecord(record) === 'tiinex.party.role.v1'; }
     catch { return false; }
   });
-  if (!roleRecords.length) return [];
+  if (!roleRecords.length) return new Set();
   const resolved = resolveLineage(roleRecords, { depth: 'loaded-workspace' });
   const roleNodeIds = new Set(resolved.nodes.map((node) => String(node.id || '')));
-  const childRoleIds = new Set(
+  // resolveLineage parent edges are parent -> child. A current Role is therefore
+  // a loaded Role node that is never the `from` side of another loaded Role's
+  // parent edge. This remains a Core lineage projection, never chronology/filename inference.
+  const parentsWithRoleChildren = new Set(
     (resolved.edges || [])
       .filter((edge) => edge.kind === 'parent' && edge.status !== 'missing' && roleNodeIds.has(String(edge.to || '')) && roleNodeIds.has(String(edge.from || '')))
       .map((edge) => String(edge.from || ''))
   );
-  const leaves = new Set(
+  return new Set(
     resolved.nodes
-      .filter((node) => !childRoleIds.has(String(node.id || '')))
+      .filter((node) => !parentsWithRoleChildren.has(String(node.id || '')))
       .map((node) => norm(node.path || node.id || ''))
       .filter(Boolean)
   );
-  return roleCandidates
-    .filter((candidate) => leaves.has(norm(candidate.artifactPath || '')))
+}
+
+function projectCurrentRoleCandidates(candidates = [], leaves = new Set()) {
+  return candidates
+    .filter((candidate) => String(candidate.kind || '') === 'role' && leaves.has(norm(candidate.artifactPath || '')))
     .map((candidate) => ({ ...candidate, currentLeaf: true }))
     .sort((a, b) => a.label.localeCompare(b.label) || a.target.localeCompare(b.target));
 }
