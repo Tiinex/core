@@ -97,6 +97,20 @@ const material = {
 The entrypoint cannot enumerate ChatGPT attachments, project sources, IDE buffers, or host files by itself. The host or LLM must pass their readable contents explicitly. It can, however, classify descriptions of available host tools and return the equivalent capability route to use.
 
 
+## Bootstrap Runtime Versus Reusable Content
+
+Treat runtime mechanics and reusable Tiinex content as separate qualified capabilities. A bootstrap-only carrier may intentionally contain Core/runtime mechanics with `contentSources: 0`; it can still qualify for orientation, package inspection, and other mechanics-only operations. That state does **not** imply schema-aware `author`, reusable Process/Role discovery, Entry discovery, or companion-backed creation is available.
+
+Before a content-dependent operation, inspect the active composition with `version --json` and/or `catalog --json`. If no qualified content source/schema pack is present, do not reconstruct schema or companion behavior from memory. Use an explicitly selected content source or a bootstrap composition that carries the required reusable content. A content-composed bootstrap remains the same portable runtime model; the content composition changes capability availability, not semantic work authority.
+
+A different runtime/content composition, later `builtAt`, different Core version, or later carrier arrival does not by itself establish semantic supersession. Reuse byte-identical compositions where qualified, and re-inspect changed compositions only to establish the capabilities required by the current bounded work.
+
+## Artifact Parent And Filename Convention
+
+Semantic `Parent` and local filename coordinates are deliberately separate. For ordinary Tiinex first-party/LLM continuation authoring, prefer `author --directory <dir> --parent <parent>` and let Tooling allocate the conventional child coordinate. Example: a Parent named `001-1-1-parent.trace.md` normally yields `001-1-1-1-child.trace.md`, then `001-1-1-2-next-child.trace.md`. This is a navigation/readability best practice, not authority.
+
+Use `author --path <exact-path> --parent <parent>` only when an exact custom filename is intentionally desired. Tooling must preserve that explicit choice; neither a custom filename nor apparent numeric similarity changes semantic Parent ancestry, Process topology, other Relations, or carrier lineage.
+
 ## Start By Discovering Equivalent Host Tooling
 
 Do not depend on product-specific tool names such as `git clone`, `GitHub.fetch_file`, or `open_image`. Describe the available host tools and let portable tooling classify their capabilities:

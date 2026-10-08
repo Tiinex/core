@@ -211,7 +211,7 @@ function routeLessTransportText(startPath = '', mode = 'workspace') {
       ? 'This is a bootstrap-only carrier. After bootstrap, pass the package to Tiinex orientation. No Workspace material, Handoff Continue From route, recipient, or work authority is declared or implied.'
       : 'This is a pointerless Workspace carrier. After bootstrap, pass the package to Tiinex orientation/material projection. No Handoff Continue From route, recipient, or work transfer is declared or implied.';
   const reuse = bootstrap
-    ? '\nRuntime reuse check: after extracting the declared bootstrap, run `node <extract-root>/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs version --json` before broad runtime/schema/companion re-reading. If `composition.sha256` equals the already-active Tiinex runtime, the manifest-declared runtime composition is byte-identical and prior interpretation may be reused. Different composition, later Build At, different Core version, different ZIP SHA, or later arrival does not by itself establish semantic supersession.'
+    ? '\nRuntime reuse check: after extracting the declared bootstrap, run `node <extract-root>/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs version --json` before broad runtime/schema/companion re-reading. If `composition.sha256` equals the already-active Tiinex runtime, the manifest-declared runtime composition is byte-identical and prior interpretation may be reused. Different composition, later Build At, different Core version, different ZIP SHA, or later arrival does not by itself establish semantic supersession. If the next bounded operation needs schema-aware authoring or reusable Process/Role/Entry discovery, inspect `catalog --json`; zero qualified content sources/schemas is a valid mechanics-only bootstrap capability boundary, not permission to invent missing content.'
     : '';
   return `${coldStartInstruction(startPath)}\n\n${boundary}${reuse}\n`;
 }
@@ -274,8 +274,11 @@ function continuedTransportFilename(parentFilename = '', parsedParent = {}, ordi
   const match = remainder.match(/^((?:-\d+)*)(.*)$/u);
   if (!match) return '';
   const dimensionTail = String(match[1] || '');
-  const semanticSlug = String(match[2] || '');
-  return `${base}${dimensionTail}-${ordinal}${semanticSlug}${suffix}`;
+  // Semantic From→To filename text belongs to the Handoff pointer(s) carried by
+  // the child, not to transport lineage. A continuation therefore advances only
+  // the numeric transport dimension; the host/Core Handoff output projection
+  // adds the current route story when the child route is known.
+  return `${base}${dimensionTail}-${ordinal}${suffix}`;
 }
 
 function parseTransportMajor(filename = '') {

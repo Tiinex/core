@@ -65,15 +65,15 @@ test('transport filename continuation never reads or reproduces internal carrier
   assert.match(result.boundary, /independent from qualified carrier lineage/);
 });
 
-test('transport filename continuation advances the dimension before a semantic route slug', () => {
+test('transport filename continuation advances only the numeric dimension and never inherits a parent route slug', () => {
   const result = projectHandoffCarrierTransportName({
     mode: 'continuation',
     parentFilename: 'tiinex-018-1-1-1-anchor-to-sigma.handoff-package.zip',
     ordinal: 1
   });
   assert.equal(result.status, 'ready');
-  assert.equal(result.filename, 'tiinex-018-1-1-1-1-anchor-to-sigma.handoff-package.zip');
-  assert.doesNotMatch(result.filename, /anchor-to-sigma-1\.handoff-package\.zip$/);
+  assert.equal(result.filename, 'tiinex-018-1-1-1-1.handoff-package.zip');
+  assert.doesNotMatch(result.filename, /anchor-to-sigma/);
 });
 
 test('transport Major progression uses only transport filenames and host-observed names', () => {

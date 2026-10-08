@@ -13,7 +13,10 @@ const nativeRoot = resolve(process.env.TIINEX_TEST_NATIVE_ROOT || resolve(root, 
 const ids = [
   'tiinex.core.handoff.discuss-review.v1',
   'tiinex.core.handoff.open-bounded-conversation.v1',
-  'tiinex.core.handoff.perform-bounded-work.v1'
+  'tiinex.core.handoff.perform-bounded-work.v1',
+  'tiinex.core.handoff.report-blocker-request-continuation.v1',
+  'tiinex.core.handoff.return-bounded-result.v1',
+  'tiinex.core.handoff.return-review-disposition.v1'
 ];
 
 test('Native-composed Handoff definitions qualify without App while remaining non-executable/non-recommended', () => {
@@ -49,7 +52,7 @@ test('external transitions remain separate and Native inclusion is explicit in t
   const onlyExternal = projectPortableTransitionCatalog(source);
   assert.equal(onlyExternal.counts.discovered, 1);
   const both = projectPortableTransitionCatalog({ ...source, includeNative: true });
-  assert.equal(both.counts.discovered, 4);
+  assert.equal(both.counts.discovered, 7);
   assert.ok(both.definitions.some((entry) => entry.source?.locator?.localPath === '/org-repo/.topics/processes/create-task.trace.md'));
 });
 

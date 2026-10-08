@@ -15,6 +15,7 @@ import { classifyParentRecoveryReference, isQualifiedVersionStableParentRecovery
 import { creationSchemaReferenceValidationContext } from '../../draft/draft.validation-context.js';
 import { historicalDeclaredSchemaReferenceAuthority, isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority, qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority } from '../../../../schemas/schema.reference.js';
 import { validatePreparedReturnBodyAuthority } from './cli.prepare-return.js';
+import { qualifyLocalCreationReferences } from './cli.local-creation-references.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 
@@ -69,6 +70,13 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
     status,
     createdAt: flags['created-at'] || new Date()
   });
+  const referenceQualification = await qualifyLocalCreationReferences({ contract, markdown, workspaceRoot, artifactRelativePath });
+  if (referenceQualification.state !== 'qualified') {
+    // Fail before writing the candidate; preflight and normal author use this
+    // same source-boundary check. Do not keep an invalid local reference.
+    const failure = referenceQualification.findings[0];
+    throw new Error(`portable.cli.author.${failure.code}:${failure.field}:${failure.reference}`);
+  }
   const selfIntegrity = canonicalC14nV2SelfState(markdown);
   if (selfIntegrity.state !== 'verified') throw new Error(`portable.cli.author.integrity.${selfIntegrity.reason || selfIntegrity.state}`);
 

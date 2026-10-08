@@ -251,6 +251,25 @@ function composeCreationAuthority(module = null, authority = {}, localCreation =
 
   augmentQualifiedOptionalOrdinaryCreationBindings({ module, validationContract, bindingByInput, optionalInputSet, requiredInputSet, requiredHeadingSet });
 
+  // A schema lineage may bind a complete ordinary group and also expose one
+  // of that group's fields independently. The group already owns the exact
+  // representation of that field: requiring both would produce two authoring
+  // inputs for one Markdown line and an ambiguous creation renderer. Retain
+  // the structural group binding and its required fields, not the redundant
+  // scalar input. This is representation normalization, not schema weakening.
+  const groupBindings = [...bindingByInput.values()].filter((item) => item?.kind === 'ordinary-group');
+  for (const [input, item] of bindingByInput) {
+    if (item?.kind !== 'ordinary-field') continue;
+    const representedByGroup = groupBindings.some((group) =>
+      group.section === item.section && group.group === item.group
+      && [...(group.requiredFields || []), ...(group.optionalFields || [])].includes(item.field || input));
+    if (representedByGroup) {
+      bindingByInput.delete(input);
+      requiredInputSet.delete(input);
+      optionalInputSet.delete(input);
+    }
+  }
+
   const bindings = [];
   for (const item of bindingByInput.values()) if (!String(item?.section || '').trim()) bindings.push(item);
   for (const section of requiredHeadingOrder) {
@@ -301,6 +320,35 @@ function augmentQualifiedOptionalOrdinaryCreationBindings({ module = null, valid
       requirement: 'optional',
       authorityBasis: 'qualified-validation-optional-ordinary-field'
     }));
+  }
+  reorderHandoffPartyCreationBindings(bindingByInput, section);
+}
+
+function reorderHandoffPartyCreationBindings(bindingByInput = new Map(), section = '') {
+  const entries = [...bindingByInput.entries()];
+  const partyEntries = entries.filter(([, binding]) => String(binding?.section || '') === section);
+  if (!partyEntries.length) return;
+  const desired = ['Purpose', 'From', 'From Kind', 'From Reference', 'To', 'To Kind', 'To Reference'];
+  const byInput = new Map(partyEntries.map(([key, binding]) => [String(binding?.input || key), [key, binding]]));
+  const orderedParty = [];
+  for (const input of desired) {
+    const entry = byInput.get(input);
+    if (!entry) continue;
+    orderedParty.push(entry);
+    byInput.delete(input);
+  }
+  for (const entry of partyEntries) if (byInput.has(String(entry[1]?.input || entry[0]))) orderedParty.push(entry);
+  let emitted = false;
+  bindingByInput.clear();
+  for (const entry of entries) {
+    if (String(entry[1]?.section || '') === section) {
+      if (!emitted) {
+        for (const [key, binding] of orderedParty) bindingByInput.set(key, binding);
+        emitted = true;
+      }
+      continue;
+    }
+    bindingByInput.set(entry[0], entry[1]);
   }
 }
 

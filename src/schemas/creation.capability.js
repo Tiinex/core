@@ -128,7 +128,21 @@ function probeOrdinaryCreationExecution(module = {}, authority = {}, implementat
     const binding = inputBindings.find((item) => String(item?.input || '') === String(name || ''));
     return [name, representativeCreationValue(name, index, binding, authority?.compiledContract?.validationContract || null)];
   })));
-  const rawInput = Object.freeze({ values, createdAt: '2026-08-20T00:00:00.000Z' });
+  // Representative source contracts can contain a group and a required
+  // scalar field that shadows a member of the group. They describe one
+  // preserved Markdown value, so probe them with one identical sentinel.
+  const normalizedValues = { ...values };
+  for (const group of inputBindings.filter((binding) => binding?.kind === 'ordinary-group')) {
+    const fields = { ...(normalizedValues[group.input] || {}) };
+    for (const field of inputBindings.filter((binding) => binding?.kind === 'ordinary-field' && binding.section === group.section && binding.group === group.group)) {
+      const label = field.field || field.input;
+      if (Object.prototype.hasOwnProperty.call(fields, label) && Object.prototype.hasOwnProperty.call(normalizedValues, field.input)) {
+        fields[label] = normalizedValues[field.input];
+      }
+    }
+    normalizedValues[group.input] = Object.freeze(fields);
+  }
+  const rawInput = Object.freeze({ values: Object.freeze(normalizedValues), createdAt: '2026-08-20T00:00:00.000Z' });
   const snapshot = snapshotOrdinaryCreationExecutionInput(contract, rawInput);
   let output;
   try { output = implementation.execute(contract, snapshot.implementationInput); }

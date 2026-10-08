@@ -38,6 +38,8 @@ test('bootstrap carrier export reuses canonical Package V1 manufacture and carri
     ]);
     assert.match(result.transportText, /version --json/);
     assert.match(result.transportText, /composition\.sha256/);
+    assert.match(result.transportText, /catalog --json/);
+    assert.match(result.transportText, /mechanics-only bootstrap capability boundary/);
     assert.doesNotMatch(result.transportText, /Continue From:/);
     const descriptor = bundle.files.find((file) => file.path === '001-2-bootstrap.trace.md')?.content || '';
     assert.match(descriptor, /- Created At: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);

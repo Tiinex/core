@@ -3,7 +3,7 @@ import test from 'node:test';
 import path from 'node:path';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodReference.js';
-import { projectParticipantCandidatesFromEndpoints, projectPortableOperatorContext } from '../src/tooling/portable/handoff/operatorContextProjection.js';
+import { projectOperatorPartyScopes, projectParticipantCandidatesFromEndpoints, projectPortableOperatorContext } from '../src/tooling/portable/handoff/operatorContextProjection.js';
 import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 
 const ROOT_SCHEMA_TARGET = currentSchemaTarget('tiinex.root.v1');
@@ -65,4 +65,43 @@ test('operator context participant projection keeps only exact Role candidates w
     { label: 'Loom duplicate', target: 'business::.topics/roles/loom.trace.md' }
   ]);
   assert.equal(participants.every((item) => item.kind === 'role'), true);
+});
+
+
+test('operator Party scope expands explicit same-Workspace Organization membership for recipient presentation only', () => {
+  const candidates = [
+    { kind: 'role', label: 'Sigma Role', authoringLabel: 'Sigma', organizationLabel: 'Tiinex', workspaceId: 'business', target: 'business::.topics/roles/sigma.trace.md', artifactPath: '.topics/roles/sigma.trace.md', schemaId: 'tiinex.party.role.v1', qualification: 'qualified-exact' },
+    { kind: 'role', label: 'Anchor Role', authoringLabel: 'Anchor', organizationLabel: 'Tiinex', workspaceId: 'business', target: 'business::.topics/roles/anchor.trace.md', artifactPath: '.topics/roles/anchor.trace.md', schemaId: 'tiinex.party.role.v1', qualification: 'authoring-assist' },
+    { kind: 'party', label: 'Tiinex', authoringLabel: 'Tiinex', workspaceId: 'business', target: 'business::.topics/tiinex.trace.md', artifactPath: '.topics/tiinex.trace.md', schemaId: 'tiinex.party.organization.v1', qualification: 'authoring-assist' },
+    { kind: 'role', label: 'Other Sigma', authoringLabel: 'Sigma', organizationLabel: 'Tiinex', workspaceId: 'other', target: 'other::.topics/roles/sigma.trace.md', artifactPath: '.topics/roles/sigma.trace.md', schemaId: 'tiinex.party.role.v1', qualification: 'qualified-exact' }
+  ];
+  const scopes = projectOperatorPartyScopes(candidates);
+  const sigma = scopes.find((item) => item.target === 'business::.topics/roles/sigma.trace.md');
+  assert.deepEqual(sigma.recipientLabels, ['Tiinex']);
+  assert.deepEqual(sigma.recipientLabelAmbiguities, ['Sigma']);
+  assert.equal(sigma.expansionState, 'organization-expanded');
+  const organization = scopes.find((item) => item.target === 'business::.topics/tiinex.trace.md');
+  assert.deepEqual(organization.recipientLabels, ['Anchor', 'Tiinex']);
+  assert.deepEqual(organization.recipientLabelAmbiguities, ['Sigma']);
+  assert.equal(organization.recipientLabels.includes('Other Sigma'), false);
+  assert.match(organization.boundary, /does not grant representation/);
+});
+
+
+test('operator Party Organization expansion fails closed when same-Workspace Organization label is ambiguous', () => {
+  const candidates = [
+    { kind: 'party', label: 'Tiinex A', authoringLabel: 'Tiinex', workspaceId: 'business', target: 'business::.topics/org-a.trace.md', artifactPath: '.topics/org-a.trace.md', schemaId: 'tiinex.party.organization.v1', qualification: 'authoring-assist' },
+    { kind: 'party', label: 'Tiinex B', authoringLabel: 'Tiinex', workspaceId: 'business', target: 'business::.topics/org-b.trace.md', artifactPath: '.topics/org-b.trace.md', schemaId: 'tiinex.party.organization.v1', qualification: 'authoring-assist' },
+    { kind: 'role', label: 'Sigma Role', authoringLabel: 'Sigma', organizationLabel: 'Tiinex', workspaceId: 'business', target: 'business::.topics/roles/sigma.trace.md', artifactPath: '.topics/roles/sigma.trace.md', schemaId: 'tiinex.party.role.v1', qualification: 'qualified-exact' }
+  ];
+  const scopes = projectOperatorPartyScopes(candidates);
+  for (const target of ['business::.topics/org-a.trace.md','business::.topics/org-b.trace.md']) {
+    const scope = scopes.find((item) => item.target === target);
+    assert.deepEqual(scope.recipientLabels, []);
+    assert.deepEqual(scope.recipientLabelAmbiguities, ['Tiinex']);
+    assert.equal(scope.expansionState, 'organization-ambiguous');
+  }
+  const sigma = scopes.find((item) => item.displayName === 'Sigma');
+  assert.deepEqual(sigma.recipientLabels, ['Sigma']);
+  assert.equal(sigma.expansionState, 'organization-ambiguous');
 });

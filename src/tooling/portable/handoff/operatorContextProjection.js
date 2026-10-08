@@ -77,6 +77,7 @@ export function projectPortableOperatorContext(input = {}) {
     endpoints: dedupeEndpoints(flattenedEndpoints),
     authoringEndpoints: dedupeEndpoints(flattenedAuthoringEndpoints),
     authoringReferenceCandidates: dedupeEndpoints(flattenedAuthoringReferenceCandidates),
+    operatorPartyScopes: projectOperatorPartyScopes(dedupeEndpoints(flattenedAuthoringReferenceCandidates)),
     participants: projectParticipantCandidatesFromEndpoints(flattenedEndpoints),
     pointerless,
     findings,
@@ -117,6 +118,62 @@ function fileBelongsToRootWorkspaceSurface(file = {}, root = '') {
   return Boolean(relative) && !relative.includes('/');
 }
 function samePath(a = '', b = '') { return String(a || '').replace(/\\/g, '/').replace(/\/$/, '') === String(b || '').replace(/\\/g, '/').replace(/\/$/, ''); }
+export function projectOperatorPartyScopes(candidates = []) {
+  const list = dedupeEndpoints(Array.isArray(candidates) ? candidates : []);
+  const display = (candidate) => String(candidate?.authoringLabel || candidate?.label || '').trim();
+  const norm = (value) => String(value || '').trim().toLocaleLowerCase();
+  const organizations = list.filter((candidate) => String(candidate?.schemaId || '') === 'tiinex.party.organization.v1');
+  const roles = list.filter((candidate) => String(candidate?.kind || '') === 'role');
+  return list.map((candidate) => {
+    const labels = new Set([display(candidate)].filter(Boolean));
+    const targets = new Set([String(candidate?.target || '').trim()].filter(Boolean));
+    const basis = ['selected-workspace-party-artifact'];
+    let expansionState = 'self-only';
+    if (String(candidate?.kind || '') === 'role') {
+      const organizationLabel = String(candidate?.organizationLabel || '').trim();
+      if (organizationLabel) {
+        const matches = organizations.filter((organization) => organization.workspaceId === candidate.workspaceId && norm(display(organization)) === norm(organizationLabel));
+        if (matches.length === 1) {
+          labels.add(display(matches[0]));
+          targets.add(String(matches[0].target || ''));
+          basis.push('role-identity-organization-label-same-workspace');
+          expansionState = 'organization-expanded';
+        } else if (matches.length > 1) expansionState = 'organization-ambiguous';
+        else expansionState = 'organization-unresolved';
+      }
+    } else if (String(candidate?.schemaId || '') === 'tiinex.party.organization.v1') {
+      const organizationLabel = display(candidate);
+      const sameLabelOrganizations = organizations.filter((organization) => organization.workspaceId === candidate.workspaceId && norm(display(organization)) === norm(organizationLabel));
+      if (sameLabelOrganizations.length > 1) {
+        expansionState = 'organization-ambiguous';
+      } else {
+        for (const role of roles.filter((role) => role.workspaceId === candidate.workspaceId && norm(role.organizationLabel) === norm(organizationLabel))) {
+          labels.add(display(role));
+          targets.add(String(role.target || ''));
+        }
+        if (labels.size > 1) { basis.push('organization-current-role-identity-same-workspace'); expansionState = 'current-roles-expanded'; }
+      }
+    }
+    const candidateTargetsForLabel = (label) => list
+      .filter((item) => norm(display(item)) === norm(label))
+      .map((item) => String(item?.target || '').trim())
+      .filter(Boolean);
+    const recipientLabelAmbiguities = [...labels].filter(Boolean).filter((label) => {
+      const matchingTargets = candidateTargetsForLabel(label);
+      return matchingTargets.some((target) => !targets.has(target));
+    }).sort((a, b) => a.localeCompare(b));
+    const safeLabels = [...labels].filter(Boolean).filter((label) => !recipientLabelAmbiguities.includes(label));
+    return freeze({
+      target: candidate.target, displayName: display(candidate), kind: candidate.kind, schemaId: candidate.schemaId, workspaceId: candidate.workspaceId, artifactPath: candidate.artifactPath, qualification: candidate.qualification,
+      recipientLabels: safeLabels.sort((a, b) => a.localeCompare(b)),
+      recipientTargets: [...targets].filter(Boolean).sort((a, b) => a.localeCompare(b)),
+      recipientLabelAmbiguities,
+      basis, expansionState,
+      boundary: 'Recipient visibility scope only. Organization/Role association comes only from explicit Role Identity Organization metadata in the same qualified Workspace; ambiguous display labels outside the selected scope fail closed and this projection does not grant representation, delegation, or Role authority.'
+    });
+  }).sort((a, b) => String(a.displayName || '').localeCompare(String(b.displayName || '')) || String(a.target || '').localeCompare(String(b.target || '')));
+}
+
 export function projectParticipantCandidatesFromEndpoints(candidates = []) {
   return dedupeEndpoints((Array.isArray(candidates) ? candidates : []).filter((candidate) => String(candidate?.kind || '') === 'role'));
 }

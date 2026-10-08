@@ -386,8 +386,12 @@ async function prepareBootstrapCarrierCliCommand(flags = {}, runtime = {}) {
   const expectedToolingBootstrap = await readOptionalJson(flags['tooling-bootstrap-manifest']);
   const verifyRoundtrip = !flags['no-roundtrip'];
   const carrierProfile = selectCarrierProfile({ operator: operatorCarrierProfile, runtime: runtime.defaultCarrierProfile || null });
+  const explicitContentSelection = Object.prototype.hasOwnProperty.call(flags, 'content-sources') || Object.prototype.hasOwnProperty.call(flags, 'content-roots');
+  const explicitContentRoots = splitFlag(flags['content-sources'] || flags['content-roots']);
+  const contentSources = explicitContentSelection ? explicitContentRoots : [...(runtime.contentSources || [])];
   const input = await prepareNodeBootstrapCarrierManufacturingInput({
     toolingBootstrap: flags['tooling-bootstrap'] || 'embedded', expectedToolingBootstrap, bootstrapMaxFiles: flags['bootstrap-max-files'], verifyRoundtrip, createdAt: flags['built-at'] || undefined,
+    contentSources,
     carrierLineage: Object.freeze({ ...initialHandoffCarrierLineage(), checkpointKind: 'progression', majorReason: '' }), carrierProfile
   }, runtime);
   return { input, options: { verifyRoundtrip, packageInput: { builtAt: flags['built-at'] || undefined } } };

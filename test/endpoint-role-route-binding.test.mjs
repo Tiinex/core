@@ -163,9 +163,9 @@ test('projects exact Role authoringLabel separately from presentation label for 
     assert.notEqual(candidate.label, candidate.authoringLabel);
     assert.equal(candidate.label, `${expectedLabel} Role — Canonical Holder Cutover Continuation`);
     assert.equal(candidate.workspaceCoordinate, `business::${expectedPath}`);
-    assert.equal(candidate.reference, '');
-    assert.equal(candidate.referenceQualification, 'none');
-    assert.equal(candidate.canonicalReference, '');
+    assert.equal(candidate.reference, `business::${expectedPath}`);
+    assert.equal(candidate.referenceQualification, 'qualified-workspace-coordinate');
+    assert.equal(candidate.canonicalReference, `[${candidate.label}](business::${expectedPath})`);
   }
 
 });

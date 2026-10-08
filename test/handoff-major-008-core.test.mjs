@@ -38,10 +38,10 @@ test('Handoff creation exposes canonical endpoint References as optional Core-ow
   assert.equal(to.state, 'qualified');
   assert.equal(from.target, 'business::.topics/roles/loom.trace.md');
   assert.equal(to.target, 'business::.topics/roles/anchor.trace.md');
-  assert.equal(from.reference, '');
-  assert.equal(to.reference, '');
-  assert.equal(from.referenceTarget, '');
-  assert.equal(to.referenceTarget, '');
+  assert.equal(from.reference, '[Loom Role](business::.topics/roles/loom.trace.md)');
+  assert.equal(to.reference, '[Anchor Role](business::.topics/roles/anchor.trace.md)');
+  assert.equal(from.referenceTarget, 'business::.topics/roles/loom.trace.md');
+  assert.equal(to.referenceTarget, 'business::.topics/roles/anchor.trace.md');
 
   const { contract, markdown } = render(handoffValues());
   assert.deepEqual(contract.creation.optionalInputs.filter((item) => item.endsWith('Reference')), ['From Reference', 'To Reference']);
@@ -49,6 +49,26 @@ test('Handoff creation exposes canonical endpoint References as optional Core-ow
   assert.doesNotMatch(markdown, /^- To Reference:/m);
   const parsed = parseArtifactMarkdown(markdown);
   assert.equal(parsed.envelope.current.schema.id, 'tiinex.handoff.v1');
+  assert.equal(parsed.hasIntegrity, true);
+});
+
+test('internal Workspace coordinates are valid optional Handoff resolution References without claiming provider provenance', () => {
+  const from = canonicalHandoffEndpointReference({ qualification: 'qualified-exact', kind: 'role', label: 'Loom', workspaceId: 'business', artifactPath: '.topics/roles/loom.trace.md', target: 'business::.topics/roles/loom.trace.md' });
+  const to = canonicalHandoffEndpointReference({ qualification: 'qualified-exact', kind: 'role', label: 'Anchor', workspaceId: 'business', artifactPath: '.topics/roles/anchor.trace.md', target: 'business::.topics/roles/anchor.trace.md' });
+  const { markdown } = render(handoffValues({ 'From Reference': from.reference, 'To Reference': to.reference }));
+  assert.match(markdown, /^- From Reference: \[Loom\]\(business::\.topics\/roles\/loom\.trace\.md\)$/m);
+  assert.match(markdown, /^- To Reference: \[Anchor\]\(business::\.topics\/roles\/anchor\.trace\.md\)$/m);
+  const partyLines = markdown.slice(markdown.indexOf('## Handoff Parties'), markdown.indexOf('## Transfers')).split('\n').filter((line) => line.startsWith('- '));
+  assert.deepEqual(partyLines.slice(0, 7), [
+    '- Purpose: Return one bounded result.',
+    '- From: Loom',
+    '- From Kind: role',
+    '- From Reference: [Loom](business::.topics/roles/loom.trace.md)',
+    '- To: Anchor',
+    '- To Kind: role',
+    '- To Reference: [Anchor](business::.topics/roles/anchor.trace.md)'
+  ]);
+  const parsed = parseArtifactMarkdown(markdown);
   assert.equal(parsed.hasIntegrity, true);
 });
 

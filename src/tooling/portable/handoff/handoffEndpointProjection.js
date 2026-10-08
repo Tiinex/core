@@ -9,27 +9,42 @@ import { isSchemaDefinitionRecord } from '../../../workspaces/workspace.material
 
 export const PORTABLE_HANDOFF_ENDPOINT_PROJECTION_SCHEMA_ID = 'tiinex.portable.handoff-endpoint-projection.v1';
 
-export function canonicalHandoffEndpointReference(candidate = {}) {
-  const qualification = String(candidate?.qualification || '').trim();
+function canonicalWorkspaceHandoffEndpointReference(candidate = {}) {
   const workspaceId = token(candidate?.workspaceId || '');
   const artifactPath = norm(candidate?.artifactPath || candidate?.path || '');
   const target = String(candidate?.target || '').trim();
   const expectedTarget = workspaceId && artifactPath ? `${workspaceId}::${artifactPath}` : '';
   const kind = String(candidate?.kind || '').trim().toLowerCase();
-  const providerReference = String(candidate?.referenceTarget || candidate?.externalReference || candidate?.providerReference || '').trim();
-  const providerQualified = !providerReference || String(candidate?.referenceQualification || candidate?.providerReferenceQualification || '') === 'qualified-exact';
-  if (qualification !== 'qualified-exact' || !workspaceId || !artifactPath || !target || target !== expectedTarget || !providerQualified || !['role', 'party'].includes(kind)) {
-    return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-candidate-not-exact-qualified' });
+  if (!workspaceId || !artifactPath || !target || target !== expectedTarget || !['role', 'party'].includes(kind)) {
+    return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-workspace-coordinate-unqualified' });
   }
-  if (providerReference && /\s|\)/u.test(providerReference)) return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-reference-not-markdown-link-safe' });
+  if (/\s|\)/u.test(target)) return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-reference-not-markdown-link-safe' });
   const rawLabel = String(candidate?.label || '').replaceAll(']', ' ').replace(/[\r\n]+/gu, ' ').replace(/\s+/gu, ' ').trim();
   const label = rawLabel || (kind === 'role' ? 'Role' : 'Party');
   return freeze({
     state: 'qualified',
-    reference: providerReference ? `[${label}](${providerReference})` : '',
-    referenceTarget: providerReference,
+    reference: `[${label}](${target})`,
+    referenceTarget: target,
     target, label, kind, workspaceId, artifactPath,
-    basis: providerReference ? 'exact-qualified-provider-reference-plus-workspace-coordinate' : 'exact-qualified-workspace-coordinate-without-public-source-reference'
+    basis: 'qualified-workspace-coordinate-reference'
+  });
+}
+
+export function canonicalHandoffEndpointReference(candidate = {}) {
+  const qualification = String(candidate?.qualification || '').trim();
+  if (qualification !== 'qualified-exact') return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-candidate-not-exact-qualified' });
+  const workspaceReference = canonicalWorkspaceHandoffEndpointReference(candidate);
+  if (workspaceReference.state !== 'qualified') return workspaceReference;
+  const providerReference = String(candidate?.referenceTarget || candidate?.externalReference || candidate?.providerReference || '').trim();
+  const providerQualified = !providerReference || String(candidate?.referenceQualification || candidate?.providerReferenceQualification || '') === 'qualified-exact';
+  if (!providerQualified) return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-candidate-not-exact-qualified' });
+  if (!providerReference) return workspaceReference;
+  if (/\s|\)/u.test(providerReference)) return freeze({ state: 'blocked', reference: '', referenceTarget: '', reason: 'endpoint-reference-not-markdown-link-safe' });
+  return freeze({
+    ...workspaceReference,
+    reference: `[${workspaceReference.label}](${providerReference})`,
+    referenceTarget: providerReference,
+    basis: 'exact-qualified-provider-reference-plus-workspace-coordinate'
   });
 }
 
@@ -74,9 +89,9 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     if (!kind) continue;
     const target = `${workspaceId}::${path}`;
     const label = String(parsed.title || record.title || path);
-    const authoringLabel = kind === 'role'
-      ? sectionField(sectionText(parsed.body?.text || '', 'Role Identity'), 'Role Label')
-      : '';
+    const bodyText = String(parsed.body?.text || '');
+    const authoringLabel = partyAuthoringLabel(schemaId, kind, bodyText) || label;
+    const organizationLabel = partyOrganizationLabel(schemaId, kind, bodyText);
     const providerReference = exactQualifiedProviderReference(record);
     if (authority.state === 'qualified' && audit.qualification?.exact === true) {
       const canonicalReference = canonicalHandoffEndpointReference({ target, label, kind, workspaceId, artifactPath: path, qualification: 'qualified-exact', ...(providerReference ? { referenceTarget: providerReference.target, referenceQualification: providerReference.qualification } : {}) });
@@ -86,32 +101,36 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
         target,
         workspaceCoordinate: target,
         reference: canonicalReference.referenceTarget,
-        referenceQualification: providerReference?.qualification || 'none',
+        referenceQualification: providerReference?.qualification || 'qualified-workspace-coordinate',
         canonicalReference: canonicalReference.reference,
         kind,
         label,
         ...(authoringLabel ? { authoringLabel } : {}),
+        ...(organizationLabel ? { organizationLabel } : {}),
         workspaceId,
         artifactPath: path,
         schemaId,
         qualification: 'qualified-exact'
       }));
     } else {
+      const workspaceReference = canonicalWorkspaceHandoffEndpointReference({ target, label, kind, workspaceId, artifactPath: path });
+      if (workspaceReference.state !== 'qualified') continue;
       authoringCandidates.push(freeze({
         id: target,
         target,
         workspaceCoordinate: target,
-        reference: '',
-        referenceQualification: providerReference?.qualification || 'unresolved',
-        canonicalReference: '',
+        reference: workspaceReference.referenceTarget,
+        referenceQualification: 'qualified-workspace-coordinate',
+        canonicalReference: workspaceReference.reference,
         kind,
         label,
         ...(authoringLabel ? { authoringLabel } : {}),
+        ...(organizationLabel ? { organizationLabel } : {}),
         workspaceId,
         artifactPath: path,
         schemaId,
         qualification: 'authoring-assist',
-        qualificationBoundary: 'Readable Role/Party material is presented as authoring assistance only. It does not establish an exact endpoint Reference or semantic authority.'
+        qualificationBoundary: 'Readable Role/Party material does not establish semantic endpoint authority, but its exact bounded Workspace/path coordinate is qualified as an internal Handoff resolution Reference.'
       }));
     }
   }
@@ -138,10 +157,30 @@ export function projectQualifiedHandoffEndpoints(input = {}) {
     authoringReferenceCandidates,
     findings,
     operationBoundary: { sourceMutation: false, remoteWrite: false, identityInference: false },
-    boundary: 'Projects only exactly qualified Role/Party artifacts from the bounded .topics material surface owned by one exact qualified requested Workspace artifact. target/workspaceCoordinate preserves explicit Workspace artifact identity; reference preserves an exact-qualified provider reference when supplied and otherwise remains absent; workspaceCoordinate alone carries the internal package-local Workspace/path identity; Role authoringLabel is the exact qualified Role Identity / Role Label semantic value while label remains presentation-only; authoringReferenceCandidates includes Party candidates plus only Core lineage-leaf Role candidates across exact and readable authoring-assist material; nested fixture Workspaces, repository-wide scans, caches, chronology, filenames, holder labels, and repository basenames never infer endpoint identity.'
+    boundary: 'Projects only exactly qualified Role/Party artifacts from the bounded .topics material surface owned by one exact qualified requested Workspace artifact. target/workspaceCoordinate preserves explicit Workspace artifact identity; reference preserves an exact-qualified provider reference when supplied and otherwise uses the exact bounded Workspace/path coordinate as an internal Handoff resolution aid; workspaceCoordinate remains the package-local Workspace/path identity; Role authoringLabel is the exact qualified Role Identity / Role Label semantic value while label remains presentation-only; authoringReferenceCandidates includes Party candidates plus only Core lineage-leaf Role candidates across exact and readable authoring-assist material; nested fixture Workspaces, repository-wide scans, caches, chronology, filenames, holder labels, and repository basenames never infer endpoint identity.'
   });
 }
 
+
+function partyAuthoringLabel(schemaId = '', kind = '', bodyText = '') {
+  if (kind === 'role') return sectionField(sectionText(bodyText, 'Role Identity'), 'Role Label');
+  const schema = String(schemaId || '').trim();
+  const candidates = schema === 'tiinex.party.organization.v1' ? [['Organization Identity', 'Organization Label']]
+    : schema === 'tiinex.party.group.v1' ? [['Group Identity', 'Group Label']]
+    : schema === 'tiinex.party.person.v1' ? [['Person Identity', 'Person Label']]
+    : [['Party Identity', 'Party Label'], ['Identity', 'Identity Label']];
+  for (const [section, field] of candidates) {
+    const value = sectionField(sectionText(bodyText, section), field);
+    if (value) return value;
+  }
+  return '';
+}
+
+function partyOrganizationLabel(schemaId = '', kind = '', bodyText = '') {
+  if (kind === 'role') return sectionField(sectionText(bodyText, 'Role Identity'), 'Organization');
+  if (String(schemaId || '').trim() === 'tiinex.party.group.v1') return sectionField(sectionText(bodyText, 'Group Identity'), 'Organization');
+  return '';
+}
 
 function projectCurrentRoleLeafPaths(records = []) {
   const roleRecords = records.filter((record) => {

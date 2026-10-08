@@ -16,3 +16,12 @@ test('continuation artifact allocation extends the parent lineage and allocates 
   const second = allocateContinuationPath({ parentRecord, targetId: 'tiinex.task.v1', title: 'Second task' }, { existingPaths: [parentRecord.path, first.path] });
   assert.equal(second.path, '.topics/001-2-second-task.trace.md');
 });
+
+
+test('deep continuation allocation follows semantic Parent filename convention without making it authority', () => {
+  const parentRecord = { path: '.topics/readme/001-1-1-parent.trace.md', title: 'Parent', schemaId: 'tiinex.topic.v1' };
+  const first = allocateContinuationPath({ parentRecord, targetId: 'tiinex.topic.v1', title: 'First child' }, { existingPaths: [parentRecord.path] });
+  assert.equal(first.path, '.topics/readme/001-1-1-1-first-child.trace.md');
+  const second = allocateContinuationPath({ parentRecord, targetId: 'tiinex.topic.v1', title: 'Second child' }, { existingPaths: [parentRecord.path, first.path] });
+  assert.equal(second.path, '.topics/readme/001-1-1-2-second-child.trace.md');
+});

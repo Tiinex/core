@@ -119,10 +119,18 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
     const fieldBindings = sectionBindings.filter((binding) => binding?.kind === 'ordinary-field');
     const groupBindings = sectionBindings.filter((binding) => binding?.kind === 'ordinary-group');
     const declarationBindings = sectionBindings.filter((binding) => binding?.kind === 'named-declaration-section');
-    if (fieldBindings.length && groupBindings.length) throw new Error(`creation-section-binding-ambiguous:${section}`);
+    if (fieldBindings.length && groupBindings.length) {
+      // A full ordinary-group binding and its inherited field-level binding
+      // describe the SAME line. Accept only exact shadow fields; unrelated
+      // field/group mixtures remain ambiguous and fail closed.
+      if (groupBindings.length !== 1 || fieldBindings.some((field) =>
+        ![...(groupBindings[0].requiredFields || []), ...(groupBindings[0].optionalFields || [])].includes(field.field || field.input))) {
+        throw new Error(`creation-section-binding-ambiguous:${section}`);
+      }
+    }
     if ((fieldBindings.length || groupBindings.length) && declarationBindings.length) throw new Error(`creation-section-binding-ambiguous:${section}`);
     if (declarationBindings.length > 1 || groupBindings.length > 1) throw new Error(`creation-section-binding-ambiguous:${section}`);
-    if (fieldBindings.length) {
+    if (fieldBindings.length && !groupBindings.length) {
       for (const binding of fieldBindings) {
         const value = creationValue(values, binding.input);
         const optional = String(binding?.requirement || '').trim() === 'optional' || optionalInputs.has(String(binding?.input || '').trim());
@@ -133,12 +141,22 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
         lines.push(`- ${binding.field || binding.input}: ${exactOneLineValue(value, binding.input)}`);
       }
       for (const supplemental of supplementalForSection) {
+        // Supplemental inherited placeholders fill otherwise unbound fields;
+        // they must not duplicate a caller-supplied field in the same section.
+        if (fieldBindings.some((binding) => (binding.field || binding.input) === supplemental.field && creationValue(values, binding.input) !== undefined)) continue;
         lines.push(`- ${supplemental.field}: ${exactOneLineValue(supplemental.value, supplemental.field)}`);
       }
       continue;
     }
     if (groupBindings.length === 1) {
-      lines.push(...renderOrdinaryGroupBinding(groupBindings[0], creationValue(values, groupBindings[0].input)));
+      const groupValue = creationValue(values, groupBindings[0].input);
+      for (const shadow of fieldBindings) {
+        const scalar = creationValue(values, shadow.input);
+        if (scalar !== undefined && String(scalar) !== String(groupValue?.[shadow.field || shadow.input] ?? '')) {
+          throw new Error(`creation-group-field-shadow-conflict:${section}:${shadow.input}`);
+        }
+      }
+      lines.push(...renderOrdinaryGroupBinding(groupBindings[0], groupValue));
       continue;
     }
     if (declarationBindings.length === 1) {
