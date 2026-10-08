@@ -60,11 +60,11 @@ export function buildPortableSchemaGuide(input = {}, options = {}) {
       ? loadedCreationProjection.inputBindings
       : (Array.isArray(resolution.descriptor?.factory?.creation?.inputBindings) ? resolution.descriptor.factory.creation.inputBindings : []));
   const creationCoveredFields = creationRequested ? creationBoundFieldNames(creationBindings) : new Set();
-  const requiredInputs = creationRequested ? uniqueStrings([
+  const requiredInputs = creationRequested ? creationRequiredInputs([
     ...(creationContract?.inputs?.required || []),
     ...(compiledContract ? compiledContract.creation.requiredInputs : []),
     ...requiredFields.filter((field) => !creationCoveredFields.has(normalizeKey(field)))
-  ]) : [];
+  ], creationBindings) : [];
   const optionalInputs = creationRequested && compiledContract ? [...compiledContract.creation.optionalInputs] : [];
   const toolingConfiguration = creationRequested && compiledContract ? [...compiledContract.creation.toolingConfigurationFields] : [];
   const hardRules = prioritizeRules([...rules, ...creationRules], task, detail);
@@ -390,6 +390,28 @@ function creationBoundFieldNames(bindings = []) {
     for (const field of [...(binding?.requiredFields || []), ...(binding?.optionalFields || [])]) fields.add(normalizeKey(field));
   }
   return fields;
+}
+
+// A schema lineage may expose a required field both as an inherited scalar
+// input and as a member of a qualified ordinary-group binding. Where the
+// owning group is itself a required creation input, its structured value is
+// the source of truth. Do not demand a second top-level shadow value; nested
+// missing fields are checked by missingStructuredCreationInputs instead.
+function creationRequiredInputs(rawInputs = [], bindings = []) {
+  const requested = uniqueStrings(rawInputs);
+  const requestedNames = new Set(requested.map(normalizeKey));
+  const requiredGroups = (bindings || []).filter((binding) =>
+    binding?.kind === 'ordinary-group' && requestedNames.has(normalizeKey(binding.input)));
+  const groupInputs = new Set(requiredGroups.map((binding) => normalizeKey(binding.input)));
+  const groupedFields = new Set(requiredGroups.flatMap((binding) =>
+    [...(binding.requiredFields || []), ...(binding.optionalFields || [])].map(normalizeKey)));
+  const standaloneFields = new Set((bindings || [])
+    .filter((binding) => binding?.kind === 'ordinary-field')
+    .map((binding) => normalizeKey(binding.field || binding.input)));
+  return requested.filter((name) => {
+    const normalized = normalizeKey(name);
+    return !groupedFields.has(normalized) || groupInputs.has(normalized) || standaloneFields.has(normalized);
+  });
 }
 
 function creationValuePresent(value) {

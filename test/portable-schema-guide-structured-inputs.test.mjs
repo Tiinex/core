@@ -13,6 +13,8 @@ const rootSchemaPath = path.join(nativeRoot, '.topics', '.schemas', 'tiinex.root
 const handoffSchemaPath = path.join(nativeRoot, '.topics', '.schemas', 'coordination', 'handoff', 'tiinex.handoff.v1.schema.md');
 const rootSchemaMarkdown = await readFile(rootSchemaPath, 'utf8');
 const handoffSchemaMarkdown = await readFile(handoffSchemaPath, 'utf8');
+const evidenceSchemaMarkdown = await readFile(path.join(nativeRoot, '.topics', '.schemas', 'core', 'evidence', 'tiinex.evidence.v1.schema.md'), 'utf8');
+const preservationSchemaMarkdown = await readFile(path.join(nativeRoot, '.topics', '.schemas', 'core', 'preservation', 'tiinex.preservation.v1.schema.md'), 'utf8');
 
 function handoffValues() {
   return {
@@ -82,4 +84,53 @@ test('portable Handoff plan reports missing fields inside repeatable declaration
   const noneResult = plan(withLiteralNone);
   assert.equal(noneResult.plan.readyToDraft, true, JSON.stringify(noneResult.plan));
   assert.deepEqual(noneResult.plan.missingInputs, []);
+});
+
+function evidenceValues() {
+  return {
+    'Supported Claim Or Question': {
+      'Supported Claim Or Question': 'README images illustrate the authoring flow.',
+      'Evidence Role': 'illustrates the flow'
+    },
+    'Known Source': 'Local README media',
+    'Provenance Limits': 'Only one Windows session',
+    'Preservation Basis': 'Source files retained locally',
+    Material: '[01-overview.gif](../../presentation/readme/01-overview.gif)',
+    'Material Kind': 'image',
+    'Preservation State': 'Captured unchanged',
+    'Fidelity Notes': 'Original GIF',
+    'Known Losses': 'No audio',
+    'Does Not Prove': 'Release readiness',
+    'Not Yet Used As': 'Final acceptance',
+    'Must Not Be Treated As': 'Independent host certification'
+  };
+}
+
+function evidencePlan(values) {
+  return planPortableArtifact({
+    files: [
+      { path: '.topics/.schemas/tiinex.root.v1.schema.md', content: rootSchemaMarkdown, sourceMode: 'node-local' },
+      { path: '.topics/.schemas/core/preservation/tiinex.preservation.v1.schema.md', content: preservationSchemaMarkdown, sourceMode: 'node-local' },
+      { path: '.topics/.schemas/core/evidence/tiinex.evidence.v1.schema.md', content: evidenceSchemaMarkdown, sourceMode: 'node-local' }
+    ],
+    schemaId: 'tiinex.evidence.v1',
+    task: 'continue',
+    values
+  });
+}
+
+test('portable Evidence plan accepts one fully populated Core-qualified ordinary group without a shadow Evidence Role', () => {
+  const result = evidencePlan(evidenceValues());
+  assert.equal(result.plan.readyToDraft, true, JSON.stringify(result.plan));
+  assert.deepEqual(result.plan.missingInputs, []);
+  assert.ok(result.guide.requiredInputs.includes('Supported Claim Or Question'));
+  assert.ok(!result.guide.requiredInputs.includes('Evidence Role'), 'the group owns Evidence Role; no flat shadow input');
+});
+
+test('portable Evidence plan reports a missing nested Evidence Role exactly at its owning group', () => {
+  const values = evidenceValues();
+  delete values['Supported Claim Or Question']['Evidence Role'];
+  const result = evidencePlan(values);
+  assert.equal(result.plan.readyToDraft, false);
+  assert.deepEqual(result.plan.missingInputs, ['Supported Claim Or Question.Evidence Role']);
 });
