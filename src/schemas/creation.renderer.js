@@ -13,6 +13,7 @@ export function renderArtifactCreationDraftMarkdown(contract = {}, input = {}) {
   const currentSchemaId = String(input.currentSchemaId || contract.target?.schemaId || '').trim();
   const createdAt = canonicalRootCreatedAt(input.createdAt);
   const values = creationValues(input);
+  qualifyNoUnboundStructuredCreationValues(values, contract?.creation?.inputBindings || []);
   const summaryBinding = (contract?.creation?.inputBindings || []).find((binding) => binding?.kind === 'root-current-summary-body-title');
   const boundSummary = summaryBinding ? creationValue(values, summaryBinding.input) : undefined;
   const hasBoundSummary = Boolean(summaryBinding && boundSummary !== undefined);
@@ -107,7 +108,7 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
     const supplementalForSection = supplementalRequiredFields.filter((item) => String(item?.section || '') === String(section || ''));
     const hasProvidedInput = sectionBindings.some((binding) => creationValue(values, binding?.input) !== undefined);
     const hasRequiredInput = sectionBindings.some((binding) => !optionalInputs.has(String(binding?.input || '').trim()));
-    if (!hasProvidedInput && !hasRequiredInput && supplementalForSection.length === 0) continue;
+    if (!hasProvidedInput && !hasRequiredInput && supplementalForSection.length === 0 && !sectionBindings.some((binding) => binding.kind === 'ordinary-group')) continue;
     lines.push('', `## ${section}`, '');
     if (sectionBindings.length === 1 && sectionBindings[0]?.kind === 'section-body') {
       const binding = sectionBindings[0];
@@ -130,6 +131,22 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
     }
     if ((fieldBindings.length || groupBindings.length) && declarationBindings.length) throw new Error(`creation-section-binding-ambiguous:${section}`);
     if (declarationBindings.length > 1 || groupBindings.length > 1) throw new Error(`creation-section-binding-ambiguous:${section}`);
+    const compositeBindings = sectionBindings.filter((binding) => binding?.kind === 'composite-declaration-section');
+    if (compositeBindings.length) {
+      if (compositeBindings.length !== 1 || sectionBindings.length !== 1) throw new Error(`creation-section-binding-ambiguous:${section}`);
+      const binding = compositeBindings[0];
+      const object = structuredObject(creationValue(values, binding.input), binding.input);
+      const parts = binding.parts || [];
+      if (!parts.length) throw new Error(`creation-composite-unavailable:${binding.input}`);
+      const allowed = new Set(parts.map((part) => part.section));
+      for (const key of Object.keys(object)) if (!allowed.has(key)) throw new Error(`creation-composite-part-unqualified:${binding.input}:${key}`);
+      for (const part of parts) {
+        if (!Object.prototype.hasOwnProperty.call(object, part.section)) throw new Error(`creation-required-composite-part-missing:${binding.input}:${part.section}`);
+        lines.push(`### ${part.section}`, '', ...renderNamedDeclarationBinding(part, object[part.section]), '');
+      }
+      while (lines.at(-1) === '') lines.pop();
+      continue;
+    }
     if (fieldBindings.length && !groupBindings.length) {
       for (const binding of fieldBindings) {
         const value = creationValue(values, binding.input);
@@ -156,7 +173,7 @@ function contractDrivenBodyMarkdown(contract = {}, { title = '', values = {} } =
           throw new Error(`creation-group-field-shadow-conflict:${section}:${shadow.input}`);
         }
       }
-      lines.push(...renderOrdinaryGroupBinding(groupBindings[0], groupValue));
+      lines.push(...renderOrdinaryGroupBinding(groupBindings[0], groupValue === undefined && !(groupBindings[0].requiredFields || []).length ? {} : groupValue));
       continue;
     }
     if (declarationBindings.length === 1) {
@@ -213,6 +230,27 @@ function structuredObject(value, label = 'value') {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`creation-structured-object-required:${label}`);
   return value;
 }
+/**
+ * A caller must not smuggle multi-entry data through an unbound input and get
+ * a perfectly sealed but data-losing artifact. Native/Core explicit bindings
+ * remain the sole executable authority for structured creation values.
+ * Preserve historical scalar-envelope allowance until it is reconciled.
+ */
+function qualifyNoUnboundStructuredCreationValues(values = {}, bindings = []) {
+  const bound = new Set(bindings.map((item) => String(item?.input || '')).filter(Boolean));
+  const nestedDeclared = new Set(bindings.filter((item) => item?.kind === 'named-declaration-section')
+    .flatMap((item) => [...(item.requiredFields || []), ...(item.optionalFields || [])]));
+  for (const [key, value] of Object.entries(values)) {
+    if (bound.has(key) || value === null || value === undefined) continue;
+    // Even scalar inputs are unsafe when they are explicitly nested under a
+    // repeatable declaration. Never silently drop a prior flat host control.
+    if (nestedDeclared.has(key)) throw new Error(`creation-nested-field-unbound:${key}`);
+    if (Array.isArray(value) || typeof value === 'object') {
+      throw new Error(`creation-structured-input-unqualified:${key}`);
+    }
+  }
+}
+
 function creationValues(input = {}) {
   const explicit = input.values && typeof input.values === 'object' && !Array.isArray(input.values) ? input.values : {};
   const alternate = input.inputs && typeof input.inputs === 'object' && !Array.isArray(input.inputs) ? input.inputs : {};
@@ -274,6 +312,11 @@ function normalizeParentSchemaReferenceAuthority(value, schemaId) {
   return Object.freeze({ schemaId: String(value?.schemaId || schemaId), exactTargets: Object.freeze(exactTargets), preferredTarget: target || exactTargets[0] || '', resolutionState: String(value?.resolutionState || value?.state || 'unresolved') });
 }
 function exactOneLineValue(value, label = 'value') {
+  // Generic scalar rendering must not serialize an array as comma-joined text
+  // or an object as '[object Object]': both silently lose source fidelity.
+  if (value !== null && value !== undefined && typeof value === 'object') {
+    throw new Error(`creation-one-line-value-structured-unqualified:${label}`);
+  }
   const text = String(value ?? '');
   if (!text || /[\r\n]/.test(text) || text !== text.trim()) throw new Error(`creation-one-line-value-unrepresentable:${label}`);
   return text;

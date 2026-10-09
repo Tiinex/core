@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: canonical projected filename is required even for an identical host-downloaded ZIP
+ok 1 - canonical projected filename is required even for an identical host-downloaded ZIP
+  ---
+  duration_ms: 19.328068
+  type: 'test'
+  ...
+# Subtest: ChatGPT Web Target Entry grounds exact Core filenames instead of encouraging shortened transport aliases
+ok 2 - ChatGPT Web Target Entry grounds exact Core filenames instead of encouraging shortened transport aliases
+  ---
+  duration_ms: 5.2655
+  type: 'test'
+  ...
+# Subtest: package and release policy bind the interop-openai repository identity
+ok 3 - package and release policy bind the interop-openai repository identity
+  ---
+  duration_ms: 10.591011
+  type: 'test'
+  ...
+# Subtest: ChatGPT continuity process keeps OpenAI semantics local and uses Transition Definitions for corrected executable topology
+ok 4 - ChatGPT continuity process keeps OpenAI semantics local and uses Transition Definitions for corrected executable topology
+  ---
+  duration_ms: 15.369173
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 159.97478
+

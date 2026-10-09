@@ -4,6 +4,7 @@ import {
   deletePortableArtifactDraft,
   discoverPortableTooling,
   compilePortableSchemaGuide,
+  inspectPortableFormFieldHelp,
   explainPortableArtifactFindings,
   describePortableSchemaChain,
   inspectPortableAssetIndex,
@@ -246,6 +247,13 @@ export const portableOperationCatalog = Object.freeze({
     safety: 'read-only',
     inputSchema: 'tiinex.portable.schema-guide.request.v1',
     handler: compilePortableSchemaGuide
+  }),
+  'form-field-help': operation({
+    name: 'form-field-help',
+    description: 'Project source-grounded field/group help for qualified creation bindings, without inventing missing rules or Form Profile authority.',
+    safety: 'read-only',
+    inputSchema: 'tiinex.portable.form-field-help.request.v1',
+    handler: inspectPortableFormFieldHelp
   }),
   'read-schema-section': operation({
     name: 'read-schema-section',

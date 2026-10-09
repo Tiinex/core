@@ -83,7 +83,7 @@ export function compilePortableSemanticPackage(input = {}) {
 
   for (const node of graph.nodes) {
     for (const key of node.localTransitionKeys) {
-      ensureTransitionRegistryEntry(transitionRegistry, materialIndex.byKey.get(key), node, 'distributed-.transitions', registryContext);
+      ensureTransitionRegistryEntry(transitionRegistry, materialIndex.byKey.get(key), node, 'package-local-artifact-type', registryContext);
     }
   }
 

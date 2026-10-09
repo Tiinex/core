@@ -7,7 +7,7 @@ import { runCommonAuthorCli } from '../src/tooling/portable/adapters/cli/cli.com
 import { qualifyLocalCreationReferences } from '../src/tooling/portable/adapters/cli/cli.local-creation-references.js';
 import { buildArtifactCreationContract } from '../src/schemas/creation.contracts.js';
 
-const claim = (reference) => `# Claim Evidence
+const claim = (reference, material = 'Local capture') => `# Claim Evidence
 
 ## Supported Claim Or Question
 
@@ -23,8 +23,10 @@ const claim = (reference) => `# Claim Evidence
 
 ## Evidence Material
 
-- Material: Local capture
-- Material Kind: screenshot
+- initial-capture
+  - Material: ${material}
+  - Material Kind: screenshot
+  - Description: Preserved original capture
 
 ## Preservation And Fidelity
 
@@ -71,10 +73,10 @@ test('Evidence local references resolve relative to authored Evidence path, not 
   assert.equal(target.findings[0].field, 'Target Artifact');
   await writeFile(path.join(directory, 'capture with spaces.gif'), 'binary fixture');
   const multiple = await qualifyLocalCreationReferences({ contract, workspaceRoot: root, artifactRelativePath: candidate,
-    markdown: claim('[parent](001-parent.trace.md)') + '\n- Material: [capture](capture%20with%20spaces.gif); [parent](001-parent.trace.md)\n' });
+    markdown: claim('[parent](001-parent.trace.md)', '[capture](capture%20with%20spaces.gif); [parent](001-parent.trace.md)') });
   assert.equal(multiple.state, 'qualified');
   const mixed = await qualifyLocalCreationReferences({ contract, workspaceRoot: root, artifactRelativePath: candidate,
-    markdown: claim('[parent](001-parent.trace.md)') + '\n- Material: [capture](missing.gif); [online](https://example.org/file.gif)\n' });
+    markdown: claim('[parent](001-parent.trace.md)', '[capture](missing.gif); [online](https://example.org/file.gif)') });
   assert.equal(mixed.state, 'blocked');
   assert.equal(mixed.findings[0].field, 'Material');
 });

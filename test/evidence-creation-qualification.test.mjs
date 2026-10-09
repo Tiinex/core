@@ -7,8 +7,10 @@ const evidence = {
   'Supported Claim Or Question': { 'Supported Claim Or Question': 'The screenshots illustrate the documented flow.', 'Evidence Role': 'illustrates the flow' },
   'Known Source': 'Local recording session', 'Preservation Basis': 'A retained source file linked in the same workspace',
   'Provenance Limits': 'One recording, not proof of all environments',
-  'Material': '[overview.gif](../presentation/readme/overview.gif); [notes.md](../work/notes.md)',
-  'Material Kind': 'screen recording; Markdown notes', 'Preservation State': 'Local assets retained',
+  'Evidence Material': [
+    {name:'recording',fields:{Material:'[overview.gif](../presentation/readme/overview.gif)', 'Material Kind':'screen recording', Description:'Original recording'}},
+    {name:'notes',fields:{Material:'[notes.md](../work/notes.md)', 'Material Kind':'Markdown notes', Description:'Related notes'}}
+  ], 'Preservation State': 'Local assets retained',
   'Fidelity Notes': 'Original captured footage', 'Known Losses': 'None reported',
   'Does Not Prove': 'A release is ready', 'Not Yet Used As': 'Acceptance material', 'Must Not Be Treated As': 'Independent acceptance'
 };
@@ -41,7 +43,8 @@ test('Evidence creation renders exact structured claim plus relative Markdown as
   const contract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
   const markdown = renderArtifactCreationDraftMarkdown(contract, { values: evidence, title: 'README capture evidence', createdAt: '2026-10-08T01:00:00Z' });
   assert.match(markdown, /## Supported Claim Or Question\n\n- Supported Claim Or Question: The screenshots illustrate the documented flow\.\n- Evidence Role: illustrates the flow/);
-  assert.match(markdown, /- Material: \[overview\.gif\]\(\.\.\/presentation\/readme\/overview\.gif\); \[notes\.md\]\(\.\.\/work\/notes\.md\)/);
+  assert.match(markdown, /- recording\n  - Material: \[overview\.gif\]/);
+  assert.match(markdown, /- notes\n  - Material: \[notes\.md\]/);
   const verified = validateArtifactCreationResult({ schemaId: 'tiinex.evidence.v1', path: '.topics/work/readme/evidence.trace.md', markdown, sourceMode: 'local-test', status: 'local' }, {}, { contract });
   assert.equal(verified.status, 'valid', JSON.stringify(verified.findings));
 });

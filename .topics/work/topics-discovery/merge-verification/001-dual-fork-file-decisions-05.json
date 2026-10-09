@@ -1,0 +1,499 @@
+[
+  {
+    "workspace": "core",
+    "path": ".topics/work/001-10-anchor-reference-aware-move-rebase-cli-and-operator-surface-cont.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/001-7-anchor-move-rebase-cli-and-vs-code-transport-completion-continua.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/001-8-anchor-qualified-move-rebase-and-target-transport-continuation.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/001-9-core-asset-reference-rebinding-and-cli-end-to-end-verification.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/evidence-material-entry-model/003-core-bootstrap-producer-version-test-currentness.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/guided-entry-transport-surface/001-3-portable-target-guided-transport-completion-projection.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/guided-entry-transport-surface/001-4-move-rebase-and-portable-transport-core-verification.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/portable-agent-surfaces/001-1-portable-agent-grounding-session-and-process-recheck-gate.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/portable-agent-surfaces/001-portable-agent-capability-projection-and-synchronization-contrac.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/topics-discovery/001-1-qualify-portable-transition-definition-and-companion-creation-co.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/topics-discovery/001-2-core-bounded-topics-discovery-and-transition-registry-qualificat.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": ".topics/work/topics-discovery/001-unify-scoped-topics-discovery-with-qualified-transition-applicab.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": "package.json",
+    "method": "semantic-json-merge",
+    "source": "Tooling manifest/version plus Discovery Node export"
+  },
+  {
+    "workspace": "core",
+    "path": "src/public/node.js",
+    "method": "three-way",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": "src/schemas/schema.lineageAuthority.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/adapters/cli/cli.command-input.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/adapters/cli/cli.help.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/adapters/cli/cli.material-policy.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/adapters/cli/cli.run.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/adapters/node/asset.relocation.inspect.js",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/adapters/node/lineage.maintenance.apply.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/adapters/node/lineage.maintenance.transaction.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/adapters/node/workspaceArtifact.discovery.js",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/handoff/transportCompletion.js",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/handoff/workspaceEntryProjection.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/lineage/asset.reference-rebind.js",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/lineage/asset.relocation.projection.js",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/lineage/lineage.operations.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/operation.catalog.package.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/package/semantic.package.graph.js",
+    "method": "three-way",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/package/semantic.package.js",
+    "method": "three-way",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": "src/tooling/portable/schema/qualifiedLocalRoot.runtime.js",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "test/asset-reference-rebind.test.mjs",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "test/asset-relocation-apply.test.mjs",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "test/asset-relocation-projection.test.mjs",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "test/bootstrap-carrier-export.test.mjs",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "test/fixtures/vscode-copilot-target.fixture.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "test/transition-authoring-availability.test.mjs",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": "test/transition-catalog.test.mjs",
+    "method": "three-way",
+    "source": "discovery"
+  },
+  {
+    "workspace": "core",
+    "path": "test/transport-completion.test.mjs",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "core",
+    "path": "test/workspace-artifact-discovery.test.mjs",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": ".topics/.entries/where/chatgpt-web/001-chatgpt-web-target-entry.trace.md",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": ".topics/work/host-observations/002-chatgpt-canonical-carrier-filename-drift-and-host-download-guard.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": ".topics/work/host-observations/media/chatgpt-20261009-carrier-download-alias-drift.png",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": "src/host/chatgptCarrierDelivery.js",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": "test/chatgpt-carrier-delivery.test.mjs",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": "test/process-topology-boundary.test.mjs",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": "tools/verify-chatgpt-carrier-download.mjs",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "native",
+    "path": ".topics/work/topics-discovery/001-qualify-topics-scoped-artifact-discovery.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/.entries/where/vscode-copilot/001-vs-code-copilot-execution-target.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/authoring-experience/003-2-core-guided-evidence-transitions-and-save-as-transition.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/authoring-experience/004-4-evidence-v1-browser-authoring-busy-state-and-two-material-roundt.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/authoring-experience/006-vs-code-evidence-v1-attach-to-form-per-material-preservation-reg.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/authoring-experience/007-vs-code-evidence-v1-repeatable-material-initial-value-restoratio.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/native-agent-surface/001-1-copilot-grounding-bootstrap-and-harness-specific-process-enforce.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/native-agent-surface/001-2-vs-code-target-entry-copilot-panel-actions-and-transport-instruc.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/native-agent-surface/001-3-vs-code-target-transport-tab-and-copilot-panel-delegation-verifi.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/native-agent-surface/001-vs-code-native-agent-tools-and-generated-customizations-adapter.trace.md",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/001-36-anchor-evidence-v1-material-attachment-fidelity-and-windows-gate.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/001-37-anchor-chatgpt-carrier-filename-discipline-and-evidence-v1-conti.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/001-38-sigma-evidence-v1-two-material-windows-acceptance.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/001-39-sigma-evidence-v1-feedback-and-local-authority-recovery.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/001-40-1-anchor-scoped-topics-discovery-and-evidence-transition-pre-branc.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/001-40-2-anchor-topics-discovery-run-one-and-transition-authoring-contrac.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/001-40-anchor-three-run-scoped-discovery-and-evidence-transition-accept.trace.md",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/transition-discovery-recovery-media/001-evidence-field-help-01.png",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": ".topics/work/readme-documentation/transition-discovery-recovery-media/001-evidence-schema-authority-02.png",
+    "method": "union",
+    "source": "discovery"
+  },
+  {
+    "workspace": "vscode",
+    "path": "package.json",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "src/artifactAuthoringPanel.ts",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "src/core/copilotPanelAccess.test.cjs",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "src/core/copilotPanelAccess.ts",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "src/operatorTrees.ts",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "src/tiinex/bootstrap.ts",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "src/vscode/copilotPanelDelegation.ts",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "src/vscode/transportCompletionPresentation.ts",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "test/run.mjs",
+    "method": "three-way",
+    "source": "tooling"
+  },
+  {
+    "workspace": "vscode",
+    "path": "test/transport-completion-source.test.cjs",
+    "method": "union",
+    "source": "tooling"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": ".topics/.entries/where/chatgpt-web/001-chatgpt-web-target-entry.trace.md",
+    "method": "semantic-audit-override",
+    "source": "discovery",
+    "reason": "Preserve exact Core-projected filename guidance and self-sealed target Entry from Discovery; Tooling version deleted the canonical transport paragraph"
+  },
+  {
+    "workspace": "interop-openai",
+    "path": "test/process-topology-boundary.test.mjs",
+    "method": "semantic-audit-override",
+    "source": "discovery",
+    "reason": "Keep test assertions matching byte-qualified carried transition topology (001-1 transition and six 001-2 definitions); Tooling test contradicts its own carried source and recorded audit debt"
+  },
+  {
+    "workspace": "vscode",
+    "path": "test/run.mjs",
+    "method": "post-merge-regression-currentness",
+    "source": "current merged product behavior",
+    "reason": "Refresh stale source-shape assertions and VS Code mock API to test current host semantic boundaries; 191/191 pass"
+  },
+  {
+    "workspace": "vscode",
+    "path": "test/transport-completion-source.test.cjs",
+    "method": "post-merge-test-portability",
+    "source": "Tooling branch test",
+    "reason": "Replace sandbox absolute paths with repository-relative paths and installed TypeScript module"
+  },
+  {
+    "workspace": "vscode",
+    "path": "src/core/copilotPanelAccess.test.cjs",
+    "method": "post-merge-test-portability",
+    "source": "Tooling branch test",
+    "reason": "Replace sandbox absolute paths with repository-relative paths and installed TypeScript module"
+  }
+]

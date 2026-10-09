@@ -1,0 +1,334 @@
+TAP version 13
+# Subtest: Core inspects full local supported-text scope, rebinds source links and reseals Tiinex artifact in the SAME durable transaction
+ok 1 - Core inspects full local supported-text scope, rebinds source links and reseals Tiinex artifact in the SAME durable transaction
+  ---
+  duration_ms: 49.17457
+  type: 'test'
+  ...
+# Subtest: an interruption rolls back binary and referenced Tiinex artifact together
+ok 2 - an interruption rolls back binary and referenced Tiinex artifact together
+  ---
+  duration_ms: 50.478154
+  type: 'test'
+  ...
+# Subtest: changed source artifacts and injected target collisions block atomically with no file modifications
+ok 3 - changed source artifacts and injected target collisions block atomically with no file modifications
+  ---
+  duration_ms: 16.830188
+  type: 'test'
+  ...
+# Subtest: unqualified text mention, JSON/TS reference, symlink or broken Tiinex integrity blocks projection
+ok 4 - unqualified text mention, JSON/TS reference, symlink or broken Tiinex integrity blocks projection
+  ---
+  duration_ms: 7.932537
+  type: 'test'
+  ...
+# Subtest: manual unqualified referencedBy inventory cannot claim it has rebound unknown ref material
+ok 5 - manual unqualified referencedBy inventory cannot claim it has rebound unknown ref material
+  ---
+  duration_ms: 0.504779
+  type: 'test'
+  ...
+# Subtest: removing inspection evidence cannot bypass requalification through the same plan fingerprint
+ok 6 - removing inspection evidence cannot bypass requalification through the same plan fingerprint
+  ---
+  duration_ms: 7.68793
+  type: 'test'
+  ...
+# Subtest: new reference between plan and apply invalidates inspected plan even if original files remain byte-identical
+ok 7 - new reference between plan and apply invalidates inspected plan even if original files remain byte-identical
+  ---
+  duration_ms: 7.283639
+  type: 'test'
+  ...
+# Subtest: source bytes modified after prepared (under cooperative lock) are detected before staging
+ok 8 - source bytes modified after prepared (under cooperative lock) are detected before staging
+  ---
+  duration_ms: 18.632322
+  type: 'test'
+  ...
+# Subtest: CLI exposes fully inspected transaction plan and applies it with existing portable command
+ok 9 - CLI exposes fully inspected transaction plan and applies it with existing portable command
+  ---
+  duration_ms: 1562.92698
+  type: 'test'
+  ...
+# Subtest: binary relocation applies through existing durable journal, preserves bytes, and cleans lock
+ok 10 - binary relocation applies through existing durable journal, preserves bytes, and cleans lock
+  ---
+  duration_ms: 35.029427
+  type: 'test'
+  ...
+# Subtest: source drift, target collision and tampered plan block with unchanged input bytes
+ok 11 - source drift, target collision and tampered plan block with unchanged input bytes
+  ---
+  duration_ms: 16.004026
+  type: 'test'
+  ...
+# Subtest: post-source-stage injected failure rolls back original binary exactly and cleans transaction
+ok 12 - post-source-stage injected failure rolls back original binary exactly and cleans transaction
+  ---
+  duration_ms: 21.491901
+  type: 'test'
+  ...
+# Subtest: source symlink and symlinked destination folder are never followed
+ok 13 - source symlink and symlinked destination folder are never followed
+  ---
+  duration_ms: 12.031361
+  type: 'test'
+  ...
+# Subtest: asset data changed during transaction staging fails before source mutation
+ok 14 - asset data changed during transaction staging fails before source mutation
+  ---
+  duration_ms: 12.574832
+  type: 'test'
+  ...
+# Subtest: Core projects safe, deterministic, 01/02 suffixed asset placement without changing source bytes or semantic Parent
+ok 15 - Core projects safe, deterministic, 01/02 suffixed asset placement without changing source bytes or semantic Parent
+  ---
+  duration_ms: 2.570685
+  type: 'test'
+  ...
+# Subtest: multiple same-name assets receive deterministic numbering and never overwrite existing siblings
+ok 16 - multiple same-name assets receive deterministic numbering and never overwrite existing siblings
+  ---
+  duration_ms: 0.446723
+  type: 'test'
+  ...
+# Subtest: Core blocks incomplete namespace and omitted reference qualifications and occupied asset relationships
+ok 17 - Core blocks incomplete namespace and omitted reference qualifications and occupied asset relationships
+  ---
+  duration_ms: 1.896194
+  type: 'test'
+  ...
+# Subtest: asset filenames retain safe normalized slugs and do not fabricate unreadable references
+ok 18 - asset filenames retain safe normalized slugs and do not fabricate unreadable references
+  ---
+  duration_ms: 0.336309
+  type: 'test'
+  ...
+# Subtest: local apply writes exact projected Move bytes and removes old paths
+ok 19 - local apply writes exact projected Move bytes and removes old paths
+  ---
+  duration_ms: 39.54196
+  type: 'test'
+  ...
+# Subtest: local apply fails closed on input drift without mutating paths
+ok 20 - local apply fails closed on input drift without mutating paths
+  ---
+  duration_ms: 6.446828
+  type: 'test'
+  ...
+# Subtest: local apply blocks an unplanned target collision
+ok 21 - local apply blocks an unplanned target collision
+  ---
+  duration_ms: 4.122909
+  type: 'test'
+  ...
+# Subtest: local apply rejects a tampered projected plan fingerprint before filesystem mutation
+ok 22 - local apply rejects a tampered projected plan fingerprint before filesystem mutation
+  ---
+  duration_ms: 3.092339
+  type: 'test'
+  ...
+# Subtest: Move relocates a whole coordinate lineage into an empty directory and preserves semantic Parent
+ok 23 - Move relocates a whole coordinate lineage into an empty directory and preserves semantic Parent
+  ---
+  duration_ms: 12.842819
+  type: 'test'
+  ...
+# Subtest: Move middle segment compacts source coordinate tree without manufacturing semantic Parent ancestry
+ok 24 - Move middle segment compacts source coordinate tree without manufacturing semantic Parent ancestry
+  ---
+  duration_ms: 9.538998
+  type: 'test'
+  ...
+# Subtest: Move into a non-empty target namespace deterministically compacts target roots before moved roots
+ok 25 - Move into a non-empty target namespace deterministically compacts target roots before moved roots
+  ---
+  duration_ms: 1.538303
+  type: 'test'
+  ...
+# Subtest: Prepend before a semantic root rewires only the insertion chain and shifts local coordinates deeper
+ok 26 - Prepend before a semantic root rewires only the insertion chain and shifts local coordinates deeper
+  ---
+  duration_ms: 3.817375
+  type: 'test'
+  ...
+# Subtest: Prepend supports an ordered multi-artifact chain on an existing Parent edge
+ok 27 - Prepend supports an ordered multi-artifact chain on an existing Parent edge
+  ---
+  duration_ms: 4.163619
+  type: 'test'
+  ...
+# Subtest: Directory namespace qualification reports drift and projects the normalize-directory recovery without changing semantic Parent
+ok 28 - Directory namespace qualification reports drift and projects the normalize-directory recovery without changing semantic Parent
+  ---
+  duration_ms: 3.324645
+  type: 'test'
+  ...
+# Subtest: Normalize Directory is an explicit no-op for an already compact namespace
+ok 29 - Normalize Directory is an explicit no-op for an already compact namespace
+  ---
+  duration_ms: 1.191529
+  type: 'test'
+  ...
+# Subtest: Unrelated unqualified Tiinex material does not block a directory-local normalization plan
+ok 30 - Unrelated unqualified Tiinex material does not block a directory-local normalization plan
+  ---
+  duration_ms: 0.872675
+  type: 'test'
+  ...
+# Subtest: Affected unqualified Tiinex material blocks lineage maintenance fail-closed
+ok 31 - Affected unqualified Tiinex material blocks lineage maintenance fail-closed
+  ---
+  duration_ms: 1.82577
+  type: 'test'
+  ...
+# Subtest: Workspace namespace qualification discovers compact and drifted numeric directories while excluding mixed Tiinex surfaces
+ok 32 - Workspace namespace qualification discovers compact and drifted numeric directories while excluding mixed Tiinex surfaces
+  ---
+  duration_ms: 1.872389
+  type: 'test'
+  ...
+# Subtest: Workspace namespace qualification reports an unqualified numeric namespace as blocked without rewriting it
+ok 33 - Workspace namespace qualification reports an unqualified numeric namespace as blocked without rewriting it
+  ---
+  duration_ms: 0.567633
+  type: 'test'
+  ...
+# Subtest: Workspace namespace qualification inventories non-numeric Tiinex directory surfaces without recommending Normalize
+ok 34 - Workspace namespace qualification inventories non-numeric Tiinex directory surfaces without recommending Normalize
+  ---
+  duration_ms: 0.564959
+  type: 'test'
+  ...
+# Subtest: Bounded Workspace Representation keeps lineage qualification scope-limited and suppresses Normalize recommendations
+ok 35 - Bounded Workspace Representation keeps lineage qualification scope-limited and suppresses Normalize recommendations
+  ---
+  duration_ms: 0.439522
+  type: 'test'
+  ...
+# Subtest: Lineage maintenance blocks mutation-ready projection unless Workspace Representation is explicitly complete
+ok 36 - Lineage maintenance blocks mutation-ready projection unless Workspace Representation is explicitly complete
+  ---
+  duration_ms: 0.344381
+  type: 'test'
+  ...
+# Subtest: Unsupported arbitrary lineage reorder remains fail-closed and non-executable
+ok 37 - Unsupported arbitrary lineage reorder remains fail-closed and non-executable
+  ---
+  duration_ms: 0.380014
+  type: 'test'
+  ...
+# Subtest: CLI workspace lineage qualification discovers namespace drift without caller-supplied directory enumeration
+ok 38 - CLI workspace lineage qualification discovers namespace drift without caller-supplied directory enumeration
+  ---
+  duration_ms: 22.481014
+  type: 'test'
+  ...
+# Subtest: CLI lineage qualification binds loaded Workspace files to the explicit workspace id
+ok 39 - CLI lineage qualification binds loaded Workspace files to the explicit workspace id
+  ---
+  duration_ms: 11.038743
+  type: 'test'
+  ...
+# Subtest: CLI lineage maintenance projection uses the same loaded Workspace file binding
+ok 40 - CLI lineage maintenance projection uses the same loaded Workspace file binding
+  ---
+  duration_ms: 7.209439
+  type: 'test'
+  ...
+# Subtest: cooperative Workspace lock blocks a second lineage-maintenance apply
+ok 41 - cooperative Workspace lock blocks a second lineage-maintenance apply
+  ---
+  duration_ms: 14.60151
+  type: 'test'
+  ...
+# Subtest: explicit recovery rolls back a process death after atomic source backup
+ok 42 - explicit recovery rolls back a process death after atomic source backup
+  ---
+  duration_ms: 99.815657
+  type: 'test'
+  ...
+# Subtest: recovery finalizes a durably committed transaction after process death without rolling it back
+ok 43 - recovery finalizes a durably committed transaction after process death without rolling it back
+  ---
+  duration_ms: 73.047179
+  type: 'test'
+  ...
+# Subtest: recovery fails closed and preserves unexpected concurrent target bytes
+ok 44 - recovery fails closed and preserves unexpected concurrent target bytes
+  ---
+  duration_ms: 71.6794
+  type: 'test'
+  ...
+# Subtest: recovery removes a dead orphan lock created before a transaction journal existed
+ok 45 - recovery removes a dead orphan lock created before a transaction journal existed
+  ---
+  duration_ms: 2.994454
+  type: 'test'
+  ...
+# Subtest: recovery does not clear a lock owned by an unverifiable foreign host
+ok 46 - recovery does not clear a lock owned by an unverifiable foreign host
+  ---
+  duration_ms: 1.997494
+  type: 'test'
+  ...
+# Subtest: CLI recover-lineage-maintenance exposes explicit local crash recovery
+ok 47 - CLI recover-lineage-maintenance exposes explicit local crash recovery
+  ---
+  duration_ms: 1.470943
+  type: 'test'
+  ...
+# Subtest: successful apply removes transaction journal and Workspace lock
+ok 48 - successful apply removes transaction journal and Workspace lock
+  ---
+  duration_ms: 20.768472
+  type: 'test'
+  ...
+# Subtest: real Core Transition Definition and Companion authoring contracts are ready
+ok 49 - real Core Transition Definition and Companion authoring contracts are ready
+  ---
+  duration_ms: 61.796797
+  type: 'test'
+  ...
+# Subtest: minimal legitimate zero-role Transition Definition materializes as exact schema-valid sealed artifact
+ok 50 - minimal legitimate zero-role Transition Definition materializes as exact schema-valid sealed artifact
+  ---
+  duration_ms: 16.646205
+  type: 'test'
+  ...
+# Subtest: unresolved complex Transition stays sealed and readable but fails closed at exact creation qualification
+ok 51 - unresolved complex Transition stays sealed and readable but fails closed at exact creation qualification
+  ---
+  duration_ms: 5.831444
+  type: 'test'
+  ...
+# Subtest: multiple independent real Input Role entries round-trip as named rows
+ok 52 - multiple independent real Input Role entries round-trip as named rows
+  ---
+  duration_ms: 7.64074
+  type: 'test'
+  ...
+# Subtest: fail closed on missing, duplicated, invented or flattened structured transition inputs
+ok 53 - fail closed on missing, duplicated, invented or flattened structured transition inputs
+  ---
+  duration_ms: 1.661025
+  type: 'test'
+  ...
+# Subtest: Schema Transition Companion empty set and exact attachment create through Core
+ok 54 - Schema Transition Companion empty set and exact attachment create through Core
+  ---
+  duration_ms: 6.072613
+  type: 'test'
+  ...
+1..54
+# tests 54
+# suites 0
+# pass 54
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2783.766788

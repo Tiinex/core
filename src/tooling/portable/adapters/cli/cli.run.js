@@ -17,6 +17,8 @@ import { runSchemasCli } from './cli.schemas.js';
 import { runVersionCli, formatVersionHuman } from './cli.version.js';
 import { runCatalogCli, formatCatalogHuman } from './cli.catalog.js';
 import { runLineageMaintenanceApplyCli, runLineageMaintenanceRecoveryCli } from './cli.lineage-maintenance.js';
+import { inspectPortableAssetRelocationWorkspace } from '../node/asset.relocation.inspect.js';
+import { readFile as readNodeFile } from 'node:fs/promises';
 import { runGitCommitProvenanceCli } from './cli.git-commit-provenance.js';
 
 export function portableCliRuntimeContentRoots(argv = process.argv.slice(2)) {
@@ -45,6 +47,16 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
       io.error(JSON.stringify({ schema: 'tiinex.portable.cli.error.v1', error: String(error?.message || error), command: parsed.command }, null, 2));
       return 1;
     }
+  }
+  if (parsed.command === 'inspect-asset-relocation-workspace') {
+    try {
+      const requestPath = String(parsed.flags.request || parsed.positionals[0] || '');
+      if (!requestPath) throw new Error('portable.cli.asset-relocation.inspect-request-required');
+      const value = JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result = await inspectPortableAssetRelocationWorkspace(value.request || value);
+      writeJson(io,result,parsed.flags.compact !== true);
+      return result.status === 'ready' ? 0 : 2;
+    }catch(error){ io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1; }
   }
   if (parsed.command === 'apply-lineage-maintenance') return runLineageMaintenanceApplyCli(parsed, io);
   if (parsed.command === 'project-git-commit-provenance') return runGitCommitProvenanceCli(parsed, io);

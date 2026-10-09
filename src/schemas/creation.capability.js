@@ -120,7 +120,7 @@ function probeOrdinaryCreationExecution(module = {}, authority = {}, implementat
   });
   const unsupported = requiredInputs.filter((name) => {
     const binding = inputBindings.find((item) => String(item?.input || '') === String(name || ''));
-    return !binding || !['section-body', 'root-current-summary-body-title', 'ordinary-field', 'ordinary-group', 'named-declaration-section'].includes(String(binding.kind || ''));
+    return !binding || !['section-body', 'root-current-summary-body-title', 'ordinary-field', 'ordinary-group', 'named-declaration-section', 'composite-declaration-section'].includes(String(binding.kind || ''));
   });
   if (unsupported.length) return Object.freeze({ state: 'unavailable', qualificationScope: 'representative-preflight', reason: 'required-input-binding-unavailable', findings: Object.freeze(unsupported.map((name) => `No exact qualified representation binding exists for required creation input: ${name}.`)), inputFidelity: 'representative-failed' });
 
@@ -187,7 +187,7 @@ function qualifyOrdinaryCreationExecutionResult(module = {}, authority = {}, con
   if (parsedParentHasAnyValue(parsed?.envelope?.parent || {})) inputFindings.push('Standalone create execution invented Continuity Parent truth.');
   for (const name of requiredInputs) {
     const binding = inputBindings.find((item) => String(item?.input || '') === String(name || ''));
-    if (!binding || !['section-body', 'root-current-summary-body-title', 'ordinary-field', 'ordinary-group', 'named-declaration-section'].includes(String(binding.kind || ''))) { inputFindings.push(`No exact qualified representation binding exists for required creation input: ${name}.`); continue; }
+    if (!binding || !['section-body', 'root-current-summary-body-title', 'ordinary-field', 'ordinary-group', 'named-declaration-section', 'composite-declaration-section'].includes(String(binding.kind || ''))) { inputFindings.push(`No exact qualified representation binding exists for required creation input: ${name}.`); continue; }
     if (!Object.prototype.hasOwnProperty.call(values, name)) { inputFindings.push(`Required creation input is missing under exact declared identity: ${name}.`); continue; }
     const expected = values[name];
     if (binding.kind === 'root-current-summary-body-title') {

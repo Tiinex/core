@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { currentSchemaMarkdown } from './helpers/current-schema-targets.mjs';
 import { projectPortableTransitionCatalog, projectPortableTransitionNeighborhood } from '../src/tooling/portable/transitions/transition.catalog.js';
+import { compileSemanticPackageGraph } from '../src/tooling/portable/package/semantic.package.graph.js';
+import { indexPortableMaterials } from '../src/tooling/portable/package/material.graph.js';
+import { compilePortableSchemaContractChain } from '../src/tooling/portable/schema/contract.compile.js';
+import { schemaMarkdown } from '../src/schemas/registry.js';
 import { runPortableOperation } from '../src/tooling/portable/operation.catalog.js';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 
@@ -253,4 +257,60 @@ test('Transition neighborhood can project qualified explicit generation defaults
   assert.equal(profile.boundary.recommendation, 'not-projected');
   assert.equal(profile.boundary.executionAuthorized, false);
   assert.equal(result.boundary.execution, 'not-authorized');
+});
+
+
+test('semantic package local Transition discovery follows qualified artifact type independent of directory', () => {
+  const root = compilePortableSchemaContractChain([schemaMarkdown('tiinex.root.v1'), schemaMarkdown('tiinex.semantic.package.v1')]);
+  for (const directory of ['.transitions', 'work/process-a', '.custom/transitions', 'features/nested']) {
+    const files = packageFixture('/repo-a', { attach: false });
+    const from = 'pkg/.transitions/create-task-transition-definition.trace.md';
+    const target = `pkg/${directory}/create-task-transition-definition.trace.md`;
+    files.find((file) => file.path === from).path = target;
+    // Nested package manifest is excluded regardless of layout, where present.
+    const index = indexPortableMaterials(files);
+    const manifest = index.materials.find((item) => item.schemaId === 'tiinex.semantic.package.v1');
+    const graph = compileSemanticPackageGraph({ selectedManifest: manifest, materialIndex: index, compiledContract: root });
+    const node = graph.nodes.find((item) => item.manifestKey === manifest.representationKey);
+    assert.equal(node.boundaryQualification, 'valid', directory);
+    assert.ok(node.localTransitionKeys.includes(index.materials.find((item) => item.path === target).representationKey), directory);
+    assert.equal(node.localTransitionKeys.length, 2, directory);
+  }
+});
+
+test('package-local discovery never borrows Transition artifacts from unselected nested package', () => {
+  const files = packageFixture('/repo-a',{attach:false});
+  const from='pkg/.transitions/create-task-transition-definition.trace.md';
+  files.find(x=>x.path===from).path='pkg/nested/work/create-task-transition-definition.trace.md';
+  const rootManifest=files[0];
+  files.push(material('pkg/nested/nested-package.trace.md',rootManifest.content.replace('Package Name: Task','Package Name: Nested Task')));
+  const index=indexPortableMaterials(files);
+  const contract=compilePortableSchemaContractChain([schemaMarkdown('tiinex.root.v1'),schemaMarkdown('tiinex.semantic.package.v1')]);
+  const selected=index.materials.find(x=>x.path==='pkg/task-semantic-package.trace.md');
+  const compiled=compileSemanticPackageGraph({selectedManifest:selected,materialIndex:index,compiledContract:contract});
+  const node=compiled.nodes.find(x=>x.manifestKey===selected.representationKey);
+  assert.equal(node.boundaryQualification,'valid');
+  assert.ok(node.nestedPackageRoots.includes('pkg/nested'));
+  assert.equal(node.localTransitionKeys.length,1,'nested definition does not join selected package');
+});
+
+test('explicit companion attachment and generation profile survive non-dot Transition location, without implicit applicability', () => {
+  for (const where of ['.transitions','work/process-a','.extensions/local']) {
+    const files=explicitGenerationFixture();
+    const old='pkg/.transitions/topic-to-task-transition-definition.trace.md';
+    const target=`pkg/${where}/topic-to-task-transition-definition.trace.md`;
+    const definition=files.find(item=>item.path===old);definition.path=target;definition.locator.localPath='/repo-a/'+target;
+    const companion=files.find(item=>item.path==='pkg/tiinex.task.v1-transitions.trace.md');
+    companion.content=companion.content.replace('.transitions/topic-to-task-transition-definition.trace.md', `${where}/topic-to-task-transition-definition.trace.md`);
+    // Definition's generation link resolves relative to its new directory;
+    // adapt its explicit, non-executable generation reference accordingly.
+    const relative=where.split('/').map(()=> '..').join('/') + '/.generation/task-authoring-generation.trace.md';
+    definition.content=definition.content.replace('../.generation/task-authoring-generation.trace.md',relative);
+    const result=projectPortableTransitionNeighborhood({files,outputSchemaId:'tiinex.task.v1'});
+    assert.equal(result.counts.attachedCandidates,1,where);
+    assert.equal(result.candidates[0].attachmentQualification,'explicit-schema-companion',where);
+    assert.equal(result.candidates[0].authoringProfile?.state,'qualified',where);
+    assert.equal(result.candidates[0].authoringProfile?.boundary.executionAuthorized,false);
+    assert.equal(result.boundary.applicability,'not-evaluated');
+  }
 });

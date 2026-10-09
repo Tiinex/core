@@ -4,7 +4,12 @@ export function representativeCreationValue(name, index, binding = {}, validatio
   if (binding?.kind === 'ordinary-group') {
     return Object.freeze(Object.fromEntries((binding.requiredFields || []).map((field, fieldIndex) => [field, representativeScalarForField(validationContract, binding.group, field, `${sentinel}_${fieldIndex + 1}`)])));
   }
+  if (binding?.kind === 'composite-declaration-section') {
+    return Object.freeze(Object.fromEntries((binding.parts || []).map((part) => [part.section,
+      representativeCreationValue(part.section, index, part, validationContract)])));
+  }
   if (binding?.kind === 'named-declaration-section') {
+    if (binding.allowLiteralNone === true) return 'none';
     const fields = Object.freeze(Object.fromEntries((binding.requiredFields || []).map((field, fieldIndex) => [field, representativeScalarForField(validationContract, binding.group, field, `${sentinel}_${fieldIndex + 1}`)])));
     return Object.freeze([Object.freeze({ name: `entry-${index + 1}`, fields })]);
   }
@@ -19,12 +24,19 @@ export function qualifyStructuredCreationInputFidelity(requiredInputs = [], inpu
     if (binding.kind === 'ordinary-field') qualifyOrdinaryField(findings, name, binding, values[name], validation);
     else if (binding.kind === 'ordinary-group') qualifyOrdinaryGroup(findings, name, binding, values[name], validation);
     else if (binding.kind === 'named-declaration-section') qualifyDeclarationSection(findings, name, binding, values[name], validation);
+    else if (binding.kind === 'composite-declaration-section') {
+      const parts = values[name];
+      if (!parts || typeof parts !== 'object' || Array.isArray(parts)) { findings.push(`Required composite input ${name} is not an object.`); continue; }
+      for (const part of binding.parts || []) qualifyDeclarationSection(findings, `${name}.${part.section}`, part, parts[part.section], validation);
+    }
   }
   return findings;
 }
 
 function representativeScalarForField(validationContract = null, group = '', field = '', fallback = 'TIINEX_CREATE_VALUE') {
   const contributions = (validationContract?.constraints || []).filter((item) => item?.kind === 'field-domain' && String(item?.targetGroup || item?.sourceGroup || '') === String(group || '') && String(item?.field || '') === String(field || '') && String(item?.authorityQualification || 'valid') === 'valid');
+  const expectsMarkdownLink = contributions.some((item) => (item.allowedShapes || []).includes('Markdown Link'));
+  if (expectsMarkdownLink) return `[${fallback}](./${fallback.toLowerCase()}.trace.md)`;
   const closed = contributions.filter((item) => String(item?.domainPolicy || '') === 'closed');
   if (closed.length) {
     const candidateSets = closed.map((item) => [...(item.allowedValues || [])]);
@@ -53,7 +65,7 @@ function qualifyOrdinaryGroup(findings, name, binding, expectedValue, validation
 
 function qualifyDeclarationSection(findings, name, binding, expected, validation) {
   const declaration = (validation.declarations || []).find((item) => String(item?.contract?.group || '') === String(binding.group || ''));
-  const section = (declaration?.sections || []).find((item) => String(item?.heading || '').replace(/^##\s+/, '') === String(binding.section || ''));
+  const section = (declaration?.sections || []).find((item) => String(item?.heading || '').replace(/^#{2,3}\s+/, '') === String(binding.section || ''));
   if (typeof expected === 'string' && expected === 'none') {
     const entries = section?.entries || [];
     if (!(entries.length === 1 && String(entries[0]?.name || '') === 'none')) findings.push(`Required input ${name} literal none was not preserved exactly in declaration section ${binding.section}.`);

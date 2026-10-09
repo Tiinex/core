@@ -110,7 +110,7 @@ function compilePackageNode(manifest, state, route) {
     localMaterialKeys: Object.freeze(localMaterials.map((item) => item.representationKey)),
     localSchemaKeys: Object.freeze(localMaterials.filter(materialIsSchemaDocument).map((item) => item.representationKey)),
     localCompanionKeys: Object.freeze(localMaterials.filter(isCompanionArtifact).map((item) => item.representationKey)),
-    localTransitionKeys: Object.freeze(localMaterials.filter((item) => isTransitionArtifact(item) && transitionPathIsAutoDiscovered(item.path, root)).map((item) => item.representationKey)),
+    localTransitionKeys: Object.freeze(localMaterials.filter(isTransitionArtifact).map((item) => item.representationKey)),
     includedDeclarations: Object.freeze(declarationEntries(projection, 'Included Package Declaration')),
     externalDeclarations: Object.freeze(declarationEntries(projection, 'External Package Dependency Declaration')),
     schemaBindingDeclarations: Object.freeze(declarationEntries(projection, 'Schema Resolution Binding Declaration')),
@@ -202,11 +202,6 @@ function ordinaryFieldValue(projection, groupName, fieldName) {
 function declarationEntries(projection, groupName) {
   const group = (projection.validation?.declarations || []).find((item) => exact(item.contract?.group) === exact(groupName));
   return group?.sections?.flatMap((section) => section.present ? section.entries : []) || [];
-}
-
-function transitionPathIsAutoDiscovered(path, root) {
-  if (!pathWithinBoundary(path, root)) return false;
-  return normalizePortablePath(path).split('/').filter(Boolean).includes('.transitions');
 }
 
 function frozenEdge(kind, node, entry, reference, target, qualification, targetPackageKey, finding) {

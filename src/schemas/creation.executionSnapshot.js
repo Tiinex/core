@@ -45,7 +45,7 @@ function exactDeclaredValues(input = {}, labels = [], bindings = new Map()) {
 }
 function snapshotCreationValue(value, binding = null) {
   const kind = String(binding?.kind || '');
-  if (kind === 'ordinary-group') return freezeStructuredObject(value, binding?.input || 'value');
+  if (kind === 'ordinary-group' || kind === 'composite-declaration-section') return freezeStructuredObject(value, binding?.input || 'value');
   if (kind === 'named-declaration-section') {
     if (typeof value === 'string') return scalar(value);
     if (!Array.isArray(value)) throw new Error(`creation-declaration-list-required:${binding?.input || 'value'}`);

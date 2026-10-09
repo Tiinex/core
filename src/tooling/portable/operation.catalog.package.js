@@ -16,6 +16,7 @@ import { projectPortableHandoffAuthoringPlan } from './handoff/handoffAuthoringP
 import { projectQualifiedHandoffEndpoints } from './handoff/handoffEndpointProjection.js';
 import { projectPortableHandoffParticipants } from './handoff/handoffParticipantProjection.js';
 import { projectWorkspaceCarrierEntry } from './handoff/workspaceEntryProjection.js';
+import { projectPortableTransportCompletion } from './handoff/transportCompletion.js';
 import { projectWorkspaceSessionRoles } from './handoff/workspaceSessionRoleProjection.js';
 import { projectPortableOperatorContext } from './handoff/operatorContextProjection.js';
 import { projectPortableStagedValidation } from './editor/staged.validation.js';
@@ -86,6 +87,13 @@ export function createPortablePackageOperationEntries({ operation, wrapPortableR
     safety: 'planning-only-read-only',
     inputSchema: 'tiinex.portable.workspace-session-role-projection.request.v1',
     handler: (input = {}) => wrapPortableResult('project-workspace-session-roles', projectWorkspaceSessionRoles(input))
+  }),
+  'project-transport-completion': operation({
+    name: 'project-transport-completion',
+    description: 'Project an exact, source-qualified, read-only Markdown transport receipt and clipboard text for one selected Handoff route or pointerless carrier. Optionally compose qualified WHAT/WHERE Entries without inventing target Process applicability.',
+    safety: 'read-only-projection',
+    inputSchema: 'tiinex.portable.transport-completion.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-transport-completion', projectPortableTransportCompletion(input))
   }),
   'project-workspace-carrier-entry': operation({
     name: 'project-workspace-carrier-entry',

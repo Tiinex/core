@@ -29,6 +29,10 @@ export async function commandInput(parsed, runtime = {}) {
     input: { schemaId: flags.schema || parsed.positionals[0] || '', transitionType: flags.transition || 'create-artifact' },
     options: {}
   };
+  if (parsed.command === 'form-field-help') return {
+    input: { schemaId: flags.schema || parsed.positionals[0] || '', field: flags.field || '' },
+    options: {}
+  };
   if (parsed.command === 'restore-session') {
     const file = parsed.positionals[0] || flags.input;
     if (!file) throw new Error('portable.cli.session-file.required');
@@ -210,6 +214,22 @@ export async function commandInput(parsed, runtime = {}) {
     }, options: {} };
   }
 
+  if (parsed.command === 'project-transport-completion') {
+    const packagePath = String(flags.package || parsed.positionals[0] || '').trim();
+    if (!packagePath) throw new Error('portable.cli.transport-completion.package-required');
+    const material = await loadNodePortableInput([packagePath], { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] });
+    const primaryRole = await readOptionalJson(flags['primary-role'] || flags.role);
+    const participants = await readOptionalJson(flags.participants);
+    return { input: {
+      bundle: material, filename: path.basename(packagePath),
+      route: flags.route || flags.pointer || '',
+      entryId: flags.entry || flags['entry-id'] || flags.mode || '',
+      targetEntryId: flags.target || flags.where || flags['target-entry-id'] || '',
+      customInstruction: flags['custom-instruction'] || '',
+      primaryRole: primaryRole.primaryRole || primaryRole.role || primaryRole || null,
+      participants: participants.participants || (Array.isArray(participants) ? participants : [])
+    }, options: {} };
+  }
   if (parsed.command === 'project-workspace-carrier-entry') {
     const packagePath = String(flags.package || parsed.positionals[0] || '').trim();
     if (!packagePath) throw new Error('portable.cli.workspace-entry.package-required');
@@ -264,6 +284,12 @@ export async function commandInput(parsed, runtime = {}) {
     options: {}
   };
   if(parsed.command==='project-workspace-landing')return land(flags,material,readOptionalJson,splitFlag);
+  if (parsed.command === 'project-asset-relocation') {
+    const requestPath = String(flags.request || flags.plan || parsed.positionals[0] || '').trim();
+    if (!requestPath) throw new Error('portable.cli.asset-relocation.request-required');
+    const value = await readOptionalJson(requestPath);
+    return { input: value.request || value, options: {} };
+  }
   if (parsed.command === 'project-lineage-maintenance') {
     const request = await readOptionalJson(flags.request || flags.plan);
     const operation = request.operation || {

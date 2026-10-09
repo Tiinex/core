@@ -90,6 +90,7 @@ export async function initializeLineageMaintenanceTransaction({ transactionId, p
         return Object.freeze({
           fromPath: item.fromPath,
           toPath: item.toPath,
+          createdOutput: item.kind === 'artifact-create',
           inputFingerprint: String(input.fingerprint || ''),
           afterFingerprint: String(item.afterFingerprint || ''),
           pathChanged: Boolean(item.pathChanged),
@@ -254,13 +255,13 @@ async function recoverTransactionGroup(group, roots, options = {}) {
     const outputs = new Map();
     const backups = new Map();
     for (const change of journal.changes || []) {
-      inputs.set(change.fromPath, change.inputFingerprint);
+      if (!change.createdOutput) inputs.set(change.fromPath, change.inputFingerprint);
       outputs.set(change.toPath, change.afterFingerprint);
       const backup = safeJoin(txRoot, path.posix.join('backup', change.fromPath));
-      const backupExists = await exists(backup);
+      const backupExists = change.createdOutput ? false : await exists(backup);
       const backupFingerprint = backupExists ? await fingerprintFile(backup) : '';
-      if (backupExists && backupFingerprint !== change.inputFingerprint) findings.push(finding('error', 'lineage-maintenance.recovery.backup-drift', `Recovery backup bytes do not match the projected input: ${workspaceId}::${change.fromPath}`, { workspaceId, path: change.fromPath, expected: change.inputFingerprint, actual: backupFingerprint }));
-      backups.set(change.fromPath, { path: backup, exists: backupExists, fingerprint: backupFingerprint });
+      if (!change.createdOutput && backupExists && backupFingerprint !== change.inputFingerprint) findings.push(finding('error', 'lineage-maintenance.recovery.backup-drift', `Recovery backup bytes do not match the projected input: ${workspaceId}::${change.fromPath}`, { workspaceId, path: change.fromPath, expected: change.inputFingerprint, actual: backupFingerprint }));
+      if (!change.createdOutput) backups.set(change.fromPath, { path: backup, exists: backupExists, fingerprint: backupFingerprint });
     }
     const pathState = new Map();
     for (const relative of new Set([...inputs.keys(), ...outputs.keys()])) {
@@ -401,7 +402,7 @@ export async function writeFileDurable(target, value) {
 }
 
 async function readJson(target) { return JSON.parse(await readFile(target, 'utf8')); }
-async function fingerprintFile(target) { return stableFingerprintBytes(utf8Bytes(await readFile(target, 'utf8'))); }
+async function fingerprintFile(target) { return stableFingerprintBytes(await readFile(target)); }
 async function exists(target) { try { await access(target); return true; } catch { return false; } }
 async function syncDirectory(directory) { let handle; try { handle = await open(directory, 'r'); await handle.sync(); } catch {} finally { await handle?.close().catch(() => {}); } }
 function normalizeRoots(value) { const out = new Map(); if (value instanceof Map) return new Map([...value].map(([k,v]) => [String(k), path.resolve(String(v))])); for (const [k,v] of Object.entries(value || {})) if (v) out.set(String(k), path.resolve(String(v))); return out; }

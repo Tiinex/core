@@ -1,0 +1,3 @@
+POSTS [{'type': 'authoring-ready'}] ERRS []
+AFTER ['[existing](old.png); [capture.png](../../assets/capture.png)'] SECTION 1 STATUS File attached. It will move with this artifact at Create.
+PASS Chromium generated Evidence form: deferred attach indication, committed reference hydration, preserved prior link, busy-state and Preview payload; JS_ERRORS 0

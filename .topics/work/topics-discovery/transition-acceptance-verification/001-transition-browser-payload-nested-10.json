@@ -1,0 +1,40 @@
+{
+  "workspaceId": "test",
+  "title": "Collect observation",
+  "slug": "",
+  "templateId": "",
+  "values": {
+    "Name": "Collect observation",
+    "Version": "1.0.0",
+    "Canonical Identifier": "tiinex.example.collect-observation.v1",
+    "Purpose": "Create one observation",
+    "Semantic Boundary": "Not proof of success",
+    "Applicability Meaning": "When requested",
+    "Authoring Bindings": {},
+    "Interpretation Limits": {
+      "Does Not Prove": "Output exists",
+      "Must Not Be Inferred": "Execution"
+    },
+    "Input Roles": "none",
+    "Output Roles": "none",
+    "Relation Effects": "none",
+    "Lifecycle And Continuity Effects": {
+      "Lifecycle Effects": "none",
+      "Parent Effects": "none"
+    },
+    "Placement Intent": {
+      "Destination Bindings": [
+        {
+          "name": "Selected workspace root",
+          "fields": {
+            "Meaning": "Operator-selected root"
+          }
+        }
+      ],
+      "Output Placements": "none"
+    }
+  },
+  "endpointSelections": {},
+  "attachToOutgoing": false,
+  "closeWhenDone": true
+}

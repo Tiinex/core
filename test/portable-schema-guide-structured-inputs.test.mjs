@@ -95,8 +95,7 @@ function evidenceValues() {
     'Known Source': 'Local README media',
     'Provenance Limits': 'Only one Windows session',
     'Preservation Basis': 'Source files retained locally',
-    Material: '[01-overview.gif](../../presentation/readme/01-overview.gif)',
-    'Material Kind': 'image',
+    'Evidence Material': [{name:'readme-capture', fields: {Material:'[01-overview.gif](../../presentation/readme/01-overview.gif)', 'Material Kind':'image', Description:'README authoring flow screenshot'}}],
     'Preservation State': 'Captured unchanged',
     'Fidelity Notes': 'Original GIF',
     'Known Losses': 'No audio',
@@ -119,7 +118,7 @@ function evidencePlan(values) {
   });
 }
 
-test('portable Evidence plan accepts one fully populated Core-qualified ordinary group without a shadow Evidence Role', () => {
+test('portable Evidence plan accepts one fully populated Core-qualified repeatable material section without a shadow Evidence Role', () => {
   const result = evidencePlan(evidenceValues());
   assert.equal(result.plan.readyToDraft, true, JSON.stringify(result.plan));
   assert.deepEqual(result.plan.missingInputs, []);

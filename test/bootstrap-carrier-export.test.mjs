@@ -43,7 +43,8 @@ test('bootstrap carrier export reuses canonical Package V1 manufacture and carri
     assert.doesNotMatch(result.transportText, /Continue From:/);
     const descriptor = bundle.files.find((file) => file.path === '001-2-bootstrap.trace.md')?.content || '';
     assert.match(descriptor, /- Created At: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
-    assert.match(descriptor, /- Producer: @tiinex\/core 0\.1\.1/);
+    const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+    assert.ok(descriptor.includes(`- Producer: @tiinex/core ${manifest.version}`), 'actual producer version must be verified from manifest');
     assert.match(descriptor, /- Runtime Composition SHA-256: [a-f0-9]{64}/);
     assert.match(descriptor, /- Comparison Command: node <extract-root>\/tiinex\.bootstrap\/runtime\/tools\/tiinex-portable\.mjs version --json/);
     assert.match(descriptor, /- Ordering Boundary: .*none establish global semantic supersession\./);

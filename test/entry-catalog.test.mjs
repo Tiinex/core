@@ -70,7 +70,7 @@ test('content-source Entry artifacts are qualified through the generic Entry con
     'tiinex.core.entry.start.v1'
   ]);
   assert.equal(catalog.contractAuthority?.schemaId, 'tiinex.entry.v1');
-  assert.equal(catalog.contractAuthority?.publicationState, 'published-immutable-canonical');
+  assert.equal(catalog.contractAuthority?.publicationState, 'qualified-local-unpublished', 'The mixed native pack must not pretend the draft Evidence v1 snapshot is fully published');
   assert.ok(catalog.entrySchemaIds.includes('tiinex.entry.session.v1'));
   for (const entry of catalog.entries) {
     assert.equal(entry.sourceKind, 'content-source');

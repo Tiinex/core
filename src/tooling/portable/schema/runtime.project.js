@@ -61,7 +61,8 @@ export function projectCreationRuntime(compiled = {}) {
   const requiredShape = projectRequiredShape(creation.groups || []);
   const requiredSections = uniqueStrings(creation.requiredSections || []);
   const allInputs = [...requiredInputs, ...optionalInputs];
-  const inputBindings = allInputs.map((input) => projectInputBinding({ input, requiredInputs, ordinaryGroups, declarations, requiredSections, requiredShape, schemaId: compiled.schemaId }));
+  const headingShape = Array.isArray(compiled.validation?.requiredHeadings) ? compiled.validation.requiredHeadings : [];
+  const inputBindings = allInputs.map((input) => projectInputBinding({ input, requiredInputs, ordinaryGroups, declarations, requiredSections, requiredShape, schemaId: compiled.schemaId, headingShape }));
   const supplementalRequiredFields = projectSupplementalRequiredFields({ requiredInputs, inputBindings, ordinaryGroups, schemaId: compiled.schemaId, creationDeclared: Array.isArray(creation.groups) && creation.groups.length > 0 });
   return Object.freeze({
     declared: Array.isArray(creation.groups) && creation.groups.length > 0,
@@ -99,22 +100,33 @@ function projectSameSnapshotLineageAuthority(lineageEntries = []) {
   }));
 }
 
-function projectInputBinding({ input, requiredInputs, ordinaryGroups, declarations, requiredSections, requiredShape, schemaId }) {
+function projectInputBinding({ input, requiredInputs, ordinaryGroups, declarations, requiredSections, requiredShape, schemaId, headingShape = [] }) {
   const requirement = requiredInputs.includes(input) ? 'required' : 'optional';
   if (input === 'Summary' && requiredShape.some((item) => item?.primitive?.kind === 'body-title-summary' && item?.primitive?.input === 'Summary')) {
     return Object.freeze({ input, kind: 'root-current-summary-body-title', section: '' });
   }
 
   const declaration = declarations.find((item) => exact(item?.group) === exact(input) && (item?.targetHeadings || []).length);
-  if (declaration) return Object.freeze({
-    input,
-    kind: 'named-declaration-section',
-    section: stripHeading(String(declaration.targetHeadings?.[0] || declaration.group || input)),
-    group: String(declaration.group || input),
-    requiredFields: Object.freeze([...(declaration.requiredFields || [])]),
-    optionalFields: Object.freeze([...(declaration.optionalFields || [])]),
-    allowLiteralNone: Boolean(declaration.allowLiteralNone)
-  });
+  if (declaration) return declarationInputBinding(input, declaration, stripHeading(String(declaration.targetHeadings?.[0] || declaration.group || input)));
+
+  // Structured creation is projected from qualified schema headings and
+  // declaration target headings, not from a host-owned per-schema serializer.
+  // A heading only qualifies a binding when a named declaration actually owns
+  // that exact target and declares all of its fields.
+  const namedHeading = headingShape.find((item) => item.level === 2 && exact(item.title) === exact(input));
+  const declaredHeading = namedHeading && declarations.find((item) => (item.targetHeadings || []).includes(`## ${namedHeading.title}`));
+  if (declaredHeading) return declarationInputBinding(input, declaredHeading, namedHeading.title);
+  if (namedHeading) {
+    const at = headingShape.indexOf(namedHeading);
+    const next = headingShape.slice(at + 1).findIndex((item) => item.level <= 2);
+    const children = headingShape.slice(at + 1, next < 0 ? undefined : at + 1 + next)
+      .filter((item) => item.level === 3);
+    if (children.length) {
+      const childBindings = children.map((item) => declarations.find((declaration) => (declaration.targetHeadings || []).includes(`### ${item.title}`)));
+      if (childBindings.every(Boolean)) return Object.freeze({ input, kind: 'composite-declaration-section', section: namedHeading.title,
+        parts: Object.freeze(children.map((item, index) => declarationInputBinding(item.title, childBindings[index], item.title))) });
+    }
+  }
 
   const exactGroup = ordinaryGroups.find((group) => exact(group?.group) === exact(input) && String(group?.qualification || '') === 'valid');
   if (exactGroup) return Object.freeze({
@@ -146,6 +158,13 @@ function projectInputBinding({ input, requiredInputs, ordinaryGroups, declaratio
   if (requiredSections.some((section) => exact(section) === exact(input))) return Object.freeze({ input, kind: 'section-body', section: input });
 
   return Object.freeze({ input, kind: 'unmapped', section: '', reason: 'no-qualified-generic-representation' });
+}
+
+function declarationInputBinding(input, declaration, section) {
+  return Object.freeze({ input, kind: 'named-declaration-section', section,
+    headingLevel: (declaration.targetHeadings || []).find((item) => item.endsWith(section))?.match(/^#+/)?.[0]?.length || 2,
+    group: String(declaration.group || input), requiredFields: Object.freeze([...(declaration.requiredFields || [])]),
+    optionalFields: Object.freeze([...(declaration.optionalFields || [])]), allowLiteralNone: Boolean(declaration.allowLiteralNone) });
 }
 
 function sourceSchemaForField(group = {}, field = '') {

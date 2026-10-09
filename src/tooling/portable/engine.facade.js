@@ -10,6 +10,7 @@ import { portableFinding } from './findings.js';
 import { normalizePortableDepth as normalizeDepth, normalizePortableSchemaIds as normalizeSchemaIds, portableOperationResult as operationResult } from './operation.result.js';
 import { qualifyCapabilityResolution, qualifyCreationContract, qualifyWriterBrief } from './qualification.js';
 import { buildPortableSchemaGuide, planPortableArtifact, readPortableSchemaGuideSections } from './schema/schema.guide.js';
+import { projectPortableFormFieldHelp } from './schema/form.fieldHelp.js';
 import { buildPortableRepairPlan, explainPortableFindings, validatePortableDraft } from './draft/draft.operations.js';
 import { createPortableLocalDraft, stagePortableDraft } from './draft/draft.create.js';
 import { deletePortableLocalDraft, updatePortableLocalDraft } from './draft/draft.crud.js';
@@ -375,6 +376,13 @@ export function makePortableWriterBrief(input = {}, options = {}) {
     instructions: writerInstructions({ mode, schemaId, schemaMaterial, qualification }),
     findings
   });
+}
+
+export function inspectPortableFormFieldHelp(input = {}) {
+  const result = projectPortableFormFieldHelp(input);
+  return operationResult('form-field-help', { ...result, findings: (result.findings || []).map((message) =>
+    portableFinding('info', 'portable.form-field-help.source-unresolved', String(message), { schemaId: result.schemaId })
+  ) });
 }
 
 export function compilePortableSchemaGuide(input = {}, options = {}) {

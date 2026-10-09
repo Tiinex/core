@@ -1,0 +1,2 @@
+PASS deferred Attach to Form: unchanged on Attach/Preview/Cancel; Core allocates lineage and commits artifact + PNG atomically
+PASS removed pending reference never moves unrelated file

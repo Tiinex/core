@@ -1,0 +1,195 @@
+✓ Newly created Parent refreshes its own Core catalog and exact selection stays fail-closed
+✓ Attach to Form accepts only Core-qualified file fields, preserving section routing and append meaning
+✓ Incoming qualified preview runs before local review comparison; queued reviews serialize and ignore closed packages
+✓ Outgoing qualified source selection avoids global operator-context identity and preserves fail-closed mapping
+✓ Incoming startup projects Loading without blocking activation or resurrecting cancelled roots
+✓ Operator Party bounded projections run independently with stable order and bounded concurrency
+✓ Incoming Workspace source discovery is bounded, ordered and still rejects ambiguous qualified identities
+✓ Incoming automatic role preview lazily reuses prefetched qualified Workspace sources
+✓ Incoming maps 17 Core-qualified per-root Workspace identities 1:1 with relative rootPath, not path guesses
+✓ Incoming mapping respects renamed roots, rejects foreign host paths and fails closed on ambiguous identities
+✓ Operator Party scopes a qualified target to its exact Workspace and never conflates open roots
+✓ Incoming packageBuilder does not conflate Core rootPath with a host repository path
+✓ Incoming Replace consumes the same per-root qualification as Incoming preview
+✓ New Artifact schema picker ignores an unrelated unversioned VS Code root without guessing Workspace identity
+✓ Incoming source status distinguishes current, changed and missing carriers without resurrecting stale qualification
+✓ Incoming activation, independent local comparison, retry and preview have separate fail-closed boundaries
+✓ carrier filename collision, transport identity and Major frontier decisions stay behind the shared Core operation seam
+✓ bootstrap replacement filename allocation and Transport title wiring stay deterministic and host-bounded
+✓ participant projection exposes only exact Core-qualified semantic Role material
+✓ Evidence reference picker formats exact relative links, handles special characters, and refuses outside-workspace files
+✓ schema-grounded form help attaches exact Core field lines and rejects invented source authority
+✓ Generic authoring exposes Add/Remove only for a qualified repeatable binding, never for legacy Evidence ordinary fields
+✓ Incoming Replace selection starts before expensive exact-byte delta comparison
+✓ Core-projected local evidence reference affordances are the only file picker controls
+✓ artifact authoring candidate sources expose reusable Party-reference capability without Handoff coupling
+✓ Party-reference authoring assist preserves Core-known kind and Core-qualified internal Workspace Reference without upgrading semantic authority
+✓ Transition authoring presets dedupe equivalent representations by canonical identity and stay explicit
+✓ Role and Identity picker presentation groups by the same qualified Workspace title and keeps labels/path concise
+✓ Incoming local review decision becomes available immediately when every carried Workspace is exact and hides Replace through decision context
+✓ generic authoring UX keeps Party, Transition and host-state hydration independent and preserves post-Replace review decisions
+✓ Handoff endpoint host scoping preserves exact same-label choices and rejects nested fixture paths
+✓ Handoff authoring endpoint choices preserve exact Core target References without upgrading authoring-assist candidates
+✓ Handoff endpoint authoring serializes qualified dropdown identity as exact schema-required Markdown Link
+✓ Handoff endpoint dropdown writes References into the exact Core-projected group container
+✓ Handoff authoring-assist endpoint preserves known Role kind without inventing an exact Reference
+✓ Return To authoring-assist preserves completion recipient label without inventing endpoint kind or Reference
+✓ Handoff route host scoping consumes Core qualification and rejects nested fixture paths
+✓ carrier continuation allocation is consumed only from exact Core manufacture projection
+✓ participant projection preview requests full Core manufacture evidence without weakening compact Pack receipts
+✓ artifact navigation resolves relative, qualified and external links without guessing
+✓ artifact navigation integration is source-backed instead of ephemeral-preview-backed
+✓ artifact navigation extracts inline Markdown targets but ignores fenced examples and images
+✓ Windows multi-root comparison treats equivalent Git API and git.exe roots as the same repository
+✓ Incoming repository session stays single-root for one repo and opens multi-root only for multiple repo targets
+✓ Incoming mutation roots fail closed when full Workspace snapshots alias or overlap
+✓ VS Code main-host tooling avoids Code.exe for portable Node tooling unless explicitly overridden
+✓ Receive UX chooses the most common repository parent and treats Operator Party recipient scope as presentation filtering only
+✓ Outgoing Parent source presets project the five deterministic operator modes
+✓ Incoming operator defaults allow multiple matching Workspaces and Outgoing duplicate selection uses top-source priority
+✓ Outgoing transport identity stays separate from internal carrier lineage
+✓ VS Code parent/source UI presents exact transport filenames and Core-qualified Workspace titles
+✓ outgoing destination adapter reports filesystem facts without inventing carrier naming semantics
+✓ Outgoing workspace picker chooses one representative qualified Workspace per open VS Code root
+✓ package route identity is separate from Workspace inclusion and contains no authoring Parent state
+✓ extension contributes stable Discovery, Incoming, Outgoing and Transport TreeView actions
+✓ Operator Party uses one canonical picker setting with None/manual modes, visible view actions, Authors default, and Core scope matching
+✓ Discovery settings are non-mutating and ordinary builds avoid relinking the active extension
+✓ extension activation synchronously registers all native Tiinex views and refresh commands before async startup
+✓ participant controller selects zero/one/many qualified extras and still confirms only the exact Core-qualified result
+✓ Receive orchestration keeps Workspace mutation explicit and makes unasserted branch state visible
+✓ received carrier context stays qualified when only a subset of carried Workspaces is landed locally
+✓ native tree operator keeps projection choices separate from canonical item actions
+✓ operator README and deterministic GIF runbook describe the stabilized Major 001 surfaces
+✓ Discovery indexes explicit folders and auto-refresh never invokes landing
+✓ artifact-tree helpers keep lineage leaves and alphabetical Workspace siblings deterministic without owning current-Role semantics
+✓ authoring discovery remains host-generic and may be scoped to exact selected Workspace roots
+✓ generic authoring exposes only Core-executable ordinary fields and reports schema-only optional gaps
+✓ generic authoring projects Core declaration constraints into repeatable controls
+✓ generic authoring reserves multiline controls for Core body bindings rather than structured declaration/group fields
+✓ generic authoring trusts shared Core draft status/severity and preserves exact finding details
+✓ create-local-draft wrapper returns shared Core blocking findings unchanged for host presentation
+✓ Git Operator candidates come only from Core-qualified Workspace context and coalesce aliases by repository root
+✓ Git Operator result report preserves exact per-repository partial outcomes
+✓ post-stage Git policy is singular, SCM-first and debounced while redundant stage/commit/push command is absent
+✓ post-stage reviewed preparation does not require Tiinex qualification
+✓ reviewed staged preparation rejects conflicts before explicit Stage All
+✓ automatic reviewed staging refuses source-only closure and never commits it
+✓ automatic reviewed staging fails closed while relevant unstaged changes remain
+✓ reviewed staged preparation re-verifies exact working fingerprint after validation and message derivation
+✓ explicit reviewed source-only flow can commit locally without an upstream but cannot imply push
+✓ reviewed Commit + Push publishes only the exact same-operation commit
+✓ Stage All and Reset Dirty are the only visible multi-workspace Git convenience commands and the retired review/commit/push form is removed
+✓ linked-extension Local and Latest shortcuts are distinct portable npm build scripts while the original build task stays unchanged
+✓ Git Operator preparation rejects unrelated ahead state before staging
+✓ Git Operator preparation stages, validates, derives with the repository helper, and snapshots the reviewed state in order
+✓ Git Operator commit fails closed when working state changes after review
+✓ Git Operator commit and push bind publication to exactly the reviewed commit
+✓ Git Operator exact push rejects a changed HEAD without pushing
+✓ generic Artifact Authoring renders Core contracts while Handoff host actions remain separate
+✓ generic materialization and draft wrappers stay schema-neutral for a non-Handoff Task
+✓ Handoff draft wrapper passes operator Title to Core while path allocation remains a separate Core-planned label
+✓ Transport prepared state is keyed by immutable package SHA plus exact route selection
+✓ Pointerless transport queue requires Core-owned generic transport text without inventing Handoff semantics
+✓ Outgoing participant affordance consumes exact Core route projection and never falls back to endpoint inventory
+✓ Outgoing Files projection indexes exact temporary Core-manufactured carrier bytes instead of host pending-shape paths
+✓ Transport package projection delegates exact generic and route transport text to Core CLI
+✓ Transport file clipboard publishes persistent Windows file-copy formats with the original basename
+✓ Replace cleanup prunes only truly empty legacy directories deepest-first and can restore them
+✓ Workspace empty-directory cleanup converges nested empty parents without recursive deletion
+✓ Workspace empty-directory cleanup treats symlinks as material and race-safe non-empty directories as skips
+✓ Incoming exact shared comparison remains a no-op before Merge planning
+✓ file-safe Incoming union preserves local-only paths, adds incoming-only paths, and conflicts only on divergent overlaps
+✓ file-safe Incoming conflicts retain exact Git sides, preserve binary working bytes, and block automatic commit of staged markers
+✓ package-level Transport uses Guided Entry while Handoff Pointer rows retain exact Copy Transport Text
+✓ Artifact Authoring host UX keeps repair and direct-create behavior bounded by Core
+✓ installed Core exposes Handoff endpoint References as writable optional authoring inputs
+✓ installed Core preserves historical reference debt as warning and blocks the same omission prospectively
+✓ Discovery and Incoming delta display is shared-compare-backed and never hides unqualified differences
+✓ Incoming Merge/Replace shares Landing Stage policy and keeps dirty-work staging fail-closed
+✓ multi-Incoming and Merge/Replace remain selection-first, dry until final execute, and keep filesystem/Git safety explicit
+✓ tree errors keep compact summaries visible and blocked Incoming carriers stay visible without raw stack modals
+✓ latest-wins queue keeps active work serialized and collapses multiple pending values for the same key
+✓ watcher accepts only completed Handoff package names
+✓ stable debounce requires consecutive unchanged probes
+✓ Auto Incoming gates moving carrier bytes and Refresh retries the failed qualified preview
+✓ Incoming Refresh publishes qualifications before background comparison and Replace avoids re-orienting unchanged source
+✓ Incoming review generations invalidate stale background comparison readiness after Replace
+✓ Schema field help presents exact rule first and separately collapses group context
+✓ Outgoing measures distinct Core qualification, route preflight, manufacture and publishing without weakening package gates
+✓ Auto Discovery retries blocked carriers only after changed source bytes and preserves fail-closed requalification
+✓ Blocked Auto Incoming retries only on new file identity, never trusting the old qualification
+✓ safe landing paths reject traversal and absolute forms
+✓ ignored preservation rejects direct and ancestor collisions only
+✓ bootstrap descriptor binds exact package payload bytes and entrypoint
+✓ installed @tiinex/core public portable entry matches the lockfile-resolved runtime
+✓ runtime binding rejects a missing lockfile, stale declaration and different installed version
+✓ Local Core mode survives a linked-extension restart and does not weaken Latest mode
+✓ explicit persisted Local mode survives restart and Published mode remains strict
+✓ Incoming, Outgoing and Replace share the same runtime binding instead of bypassing version checks
+✓ carrier names are labels and never filesystem paths
+✓ pointerless Pack passes the displayed filename and qualifies the exact manufactured receipt once
+✓ routed Handoff Pack consumes Core topology then qualifies the exact physical manufacture once
+✓ Handoff endpoint selections persist exact Core References and Pack can resolve open discovery-only material without transient authority
+✓ all package-builder Core discovery consumes the shared host runtime resolver
+✓ local/latest Core mode is persisted and ordinary install preserves the selected mode
+✓ long Pack progress keeps an elapsed-time heartbeat while one Core stage is still running
+✓ routed Handoff Pack reports slow stages in order and clears loading on every terminal path
+✓ carrier publication does not overwrite different bytes and accepts an exact retry
+✓ title extraction skips the integrity footer and fenced examples
+✓ package collision and runtime drift errors suggest a non-destructive next step
+✓ public Core portable entry exposes every VS Code-used shared operation
+✓ installed Core runtime executes real operator-context and staged-only validation projections
+✓ installed Core editor assistance withholds mixed-revision schema lineage while preserving qualified local authority
+✓ source-frontier compare wrapper uses current shared Core and exact explicit source kinds
+✓ structured Core qualification receipts survive non-zero CLI exit codes
+✓ landing-plan descriptors use cleaned OS temp files and exact CLI flag shapes
+✓ in-memory editor assistance stages exact unsaved overlay bytes only for the shared operation lifetime
+✓ editor assistance forwards explicit permalink resolution evidence through temporary shared-Core input only
+✓ Tiinex Markdown ingress requires the Continuity Context marker on the first line
+✓ diagnostics ignores non-Tiinex Markdown before shared runtime validation
+✓ diagnostics controller captures unsaved bytes before debounce and discards stale or closed-editor work
+✓ native Quick Fixes include deterministic shared-Core actions qualified with explicit host resolution evidence
+✓ native Quick Fixes are a thin projection of shared-Core diagnostics, ranges and replacement bytes
+✓ linked Tiinex checkout binds directly to sibling Core while VSIX packaging rewrites only packaged dependency receipts
+✓ pointerless package builder projects exact workspace-carrier args without route semantics
+✓ pointerless Workspace carrier args preserve Parent continuity while independently requesting a Major bump
+✓ host manufacture progression matrix gives routed and pointerless paths the same Parent/Major frontier facts while Core owns allocation
+✓ Guided Entry projects WHERE selection through the shared Core target argument
+✓ Guided Entry projection wrapper preserves the pre-WHERE positional runner contract
+✓ Guided Entry UI presents Core WHAT before Core WHERE without OpenAI hardcoding
+✓ Guided Entry Role discovery reuses Core current-role authoring references and shared Workspace grouping
+✓ Attach Handoff participants reuse all Core-current Role leaves and package-local Workspace references before Core requalification
+✓ Transport keeps one native Open Folder reveal and uses green prepared indicators
+✓ Use Child Carrier Lineage restores the exact Parent continuation after a Major override
+✓ native package and authoring wrappers preserve exact shared CLI operation shapes
+✓ multi-root package-source projection passes every opened root and Git fact to one shared-core call
+✓ operator-context wrapper sends all roots plus explicit root and repository descriptors to shared Tooling
+✓ staged-validation wrapper carries only explicit staged paths and cleans its descriptor
+✓ staged path discovery is exact, null-delimited, and slash-normalized before shared validation
+✓ Receive dirty-worktree helpers stash, discard, commit, and stage without touching ignored files through git clean -x
+✓ landing stage preserves pre-landing ignored files even when the incoming ignore rules stop ignoring them
+✓ Stage=no can unstage a successful Git-native Incoming merge without absorbing preserved human dirt
+✓ checkout-only payload eligibility requires a clean exact HEAD published to upstream
+✓ Git safety helpers honor .gitignore for future paths and report dirty paths exactly once
+✓ Git-native Incoming merge leaves real unmerged index entries for VS Code Merge Editor
+✓ branch preflight rejects dirty worktrees before branch mutation
+✓ landing commit uses a trusted supplied message and exact push rejects unrelated ahead commits
+✓ commit message delegates to repository helper instead of reimplementing derivation
+✓ Stage Commit Push fails closed on detached HEAD
+✓ Stage Commit Push fails closed when upstream is missing
+✓ Stage Commit Push fails closed when staging yields no changes
+✓ Stage Commit Push validates the staged Tiinex path set before commit-message derivation or commit
+✓ Stage Commit Push uses helper after staging and pushes only after successful commit
+✓ Candidate 018 keeps lineage as artifact membership and normalizes native VS Code UX affordances
+✓ Marketplace surface is release-auditable without embedding a legacy publishing credential path
+✓ Workspace initialization delegates source identity and ignore semantics to shared Core
+✓ Dependency-mode tasks switch the complete Tiinex dev composition without changing Build linked extension semantics
+✓ Diagnostics shares the same host runtime composition path as Replace, Initialize, Incoming and Pack
+✓ Host Core runtime collapses physical path aliases before declaring source ambiguity
+✓ Incoming qualified-match projection and Outgoing fallback share the Host Core runtime boundary
+✓ Selected Core manufacture is authoritative, routed Major receives observed filenames, and Handoff navigation prefers Markdown Preview
+
+191/191 Tiinex VS Code bridge core cases passed.
+✓ Transition Definition and Companion forms consume real Core-owned nested declaration creation contracts
+✓ Move/Rebase Explorer and Attach to Form expose one qualified Core planning/apply boundary

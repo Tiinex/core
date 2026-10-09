@@ -20,6 +20,7 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} qualify-lineage-directory <workspace-or-material-root> --workspace-id <id> --directory <workspace-relative-directory> [--coverage complete|bounded|partial|unknown]`,
     `${command} qualify-lineage-workspace <workspace-or-material-root> --workspace-id <id> [--coverage complete|bounded|partial|unknown]`,
     `${command} project-git-commit-provenance <repository-root> [--label <human-label>] [--message]`,
+    `${command} inspect-asset-relocation-workspace --request <request.json> [--compact]`,
     `${command} project-lineage-maintenance <workspace-or-material-root> --request <request.json> [--coverage complete|bounded|partial|unknown]`,
     `${command} apply-lineage-maintenance --plan <plan.json> (--workspace-roots <roots.json> | --workspace-id <id> --workspace-root <dir>)`,
     `${command} recover-lineage-maintenance (--workspace-roots <roots.json> | --workspace-id <id> --workspace-root <dir>)`,
@@ -52,6 +53,30 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
 }
 
 function commonCommandHelp(command, surfaceCommand) {
+  if (surfaceCommand === 'inspect-asset-relocation-workspace') return [
+    'Tiinex Core — inspect and plan a local referenced binary asset relocation',
+    '',
+    `${command} inspect-asset-relocation-workspace --request <request.json> [--compact]`,
+    '',
+    'Request JSON:',
+    '{',
+    '  "workspaceRoot": "/absolute/workspace/path",',
+    '  "workspaceId": "native",',
+    '  "assetPaths": [".topics/assets/capture.png"],',
+    '  "targetDirectory": ".topics/work/evidence",',
+    '  "lineageDimension": "001-2"',
+    '}',
+    '',
+    'Returns an exact read-only executable plan if local supported-text references, source bytes and target namespace qualify.',
+    'Save the returned JSON OUTSIDE the scanned Workspace, review the exact changes, then apply with:',
+    `${command} apply-lineage-maintenance --plan <result.json> --workspace-id <id> --workspace-root <absolute-workspace-root>`,
+    'Recover a suspended local transaction with recover-lineage-maintenance; never use an old plan after source/namespace drift.',
+    'The request/plan files should not be stored in the inspected Workspace: JSON mentioning the source may itself be flagged as a reference.',
+    'Supported: local Markdown inline-link destinations, self-sealed Tiinex artifacts and opaque binary asset files.',
+    'Unsupported: ambiguous/unparsed links, arbitrary script/HTML references, text-source files with outgoing links, cross-Workspace references, source symlinks and unknown proprietary file formats.',
+    'This is a local Node adapter over Core-owned planning/apply/recovery; filename coordinates never imply semantic Parent authority.',
+    ''
+  ];
   if (surfaceCommand === 'catalog') return [
     'Tiinex portable tooling — reusable content catalog',
     '',

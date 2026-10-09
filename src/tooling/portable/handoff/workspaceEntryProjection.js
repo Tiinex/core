@@ -112,6 +112,7 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     shell = String(routed.normalInlineRouting.content || '').trimEnd();
   }
   const lines = [shell, ''];
+  const augmentationStart = lines.length;
   if (customRequested) {
     lines.push('Entry intent: Custom', '', 'After bootstrap, treat the following operator instruction as session intent. Ground it against the available qualified Workspace material before acting.', '', 'Operator instruction:', customInstruction);
   } else {
@@ -148,6 +149,7 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     primaryRole: resolvedPrimaryRole ? { label: resolvedPrimaryRole.label, reference: resolvedPrimaryRole.reference } : null,
     participants: Object.freeze(resolvedParticipants.map((item) => ({ label: item.label, reference: item.reference }))),
     transportText: `${lines.join('\n')}\n`,
+    entryAugmentationText: `${lines.slice(augmentationStart).join('\n')}\n`,
     boundary: pointerlessWorkspace
       ? 'Guided Entry is a transport/invocation projection over an unchanged pointerless Workspace carrier. Entry, Target Entry, Role, participant, and operator-instruction selection do not mutate the carrier or its semantic lineage and do not independently create authority, routing, acceptance, continuation, work transfer, or completion.'
       : 'Guided Entry is a transport/invocation projection over an unchanged routed Handoff carrier. The exact qualified Handoff transport shell remains authoritative and unchanged; Entry, Target Entry, Role, participant, and operator-instruction selection only adds recipient-session intent and does not create or alter routing, recipient authority, semantic Parent, acceptance, work transfer, or completion.'

@@ -18,6 +18,7 @@ export * from './schema/contract.project.js';
 export * from './schema/ordinary.fields.js';
 export * from './schema/schema.snapshot.js';
 export * from './schema/schema.guide.js';
+export * from './schema/form.fieldHelp.js';
 export * from './schema/llm.companion.js';
 export * from './lineage/lineage.search.js';
 export * from './lineage/lineage.maintenance.projection.js';

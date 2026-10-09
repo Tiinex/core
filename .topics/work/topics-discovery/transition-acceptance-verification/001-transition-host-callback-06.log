@@ -1,0 +1,4 @@
+HTML tiinex.transition.definition.v1 69842 MODEL Transition Identity:fields:0, Purpose And Scope:fields:0, Input Roles:repeatable:0, Output Roles:repeatable:0, Lifecycle And Continuity Effects:composite:2, Relation Effects:repeatable:0, Applicability And Conditions:fields:0, Authoring Bindings:group:0, Placement Intent:composite:2, Interpretation Limits:group:0
+HTML tiinex.schema.transition.companion.v1 30846 MODEL Schema Binding:fields:0, Transition Attachments:repeatable:0, Interpretation Limits:group:0
+HTML tiinex.evidence.v1 41645 MODEL Supported Claim Or Question:group:0, Provenance:fields:0, Evidence Material:repeatable:0, Preservation And Fidelity:fields:0, Interpretation Limits:fields:0
+OUTPUT_DIR /tmp/tiinex-transition-html-zAW5MX

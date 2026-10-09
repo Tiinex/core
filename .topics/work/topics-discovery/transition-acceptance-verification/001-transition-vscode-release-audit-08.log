@@ -1,0 +1,9 @@
+
+> tiinex-vscode@0.1.7 release:audit
+> node scripts/release-check.mjs
+
+{
+  "status": "ready",
+  "errors": [],
+  "warnings": []
+}

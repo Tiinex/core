@@ -1,0 +1,7 @@
+LOADED tiinex-transition-definition-v1 H2 ['Transition Identity', 'Purpose And Scope', 'Input Roles', 'Output Roles', 'Lifecycle And Continuity Effects', 'Lifecycle Effects', 'Parent Effects', 'Relation Effects', 'Applicability And Conditions', 'Authoring Bindings'] ERRORS []
+COMPOSITE_SUBMISSION 1 {'Lifecycle Effects': 'none', 'Parent Effects': 'none'}
+NESTED_ENTRY_PASS [{'name': 'Selected workspace root', 'fields': {'Meaning': 'Operator-selected root'}}]
+LOADED tiinex-schema-transition-companion-v1 H2 ['Schema Binding', 'Transition Attachments', 'Interpretation Limits'] ERRORS []
+LOADED tiinex-evidence-v1 H2 ['Supported Claim Or Question', 'Provenance', 'Evidence Material', 'Preservation And Fidelity', 'Interpretation Limits'] ERRORS []
+PARTIAL_SAVE_TRANSITION 1 Partial evidence draft
+CHROMIUM_BROWSER_MANUAL_PASS
