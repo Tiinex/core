@@ -21,7 +21,19 @@ export function projectPortableAuthoringParent(input = {}) {
     && audit.qualification?.exact === true
     && audit.schemaValidationAuthority?.state === 'qualified'
     && selfIntegrity.state === 'verified';
-  if ((audit.status !== 'readable' && !directParentUsableWithHistoricalDebt) || audit.qualification?.exact !== true || (auditErrors.length && !directParentUsableWithHistoricalDebt)) return freeze({ schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID, status: 'blocked', parentRecord: null, findings: [{ severity: 'error', code: 'portable.authoring-parent.unqualified', message: 'Selected Parent must pass exact shared audit before it can be used for native authoring.' }], operationBoundary: boundary() });
+  if ((audit.status !== 'readable' && !directParentUsableWithHistoricalDebt) || audit.qualification?.exact !== true || (auditErrors.length && !directParentUsableWithHistoricalDebt)) {
+    const sourceCodes = [...new Set(auditErrors.map(item => String(item.code || '')).filter(Boolean))].slice(0, 6);
+    const sourceAuthority = String(audit.schemaValidationAuthority?.state || 'unknown');
+    const unavailable = sourceAuthority !== 'qualified';
+    return freeze({ schema: PORTABLE_AUTHORING_PARENT_SCHEMA_ID, status: 'blocked', parentRecord: null, findings: [{
+      severity: 'error', code: 'portable.authoring-parent.unqualified',
+      message: unavailable
+        ? 'Selected Parent is readable but its exact schema authority is unqualified. A historical GitHub schema URL is not proof of current local schema authority. Review the declared Current Schema and use a Core-qualified repair; child-of-Evidence is not categorically forbidden.'
+        : 'Selected Parent failed the exact Core audit. Inspect the cited audit findings before authoring a child.',
+      sourceSchemaAuthority: sourceAuthority, sourceFindingCodes: sourceCodes,
+      remediation: unavailable ? 'Qualify the Parent Current Schema source and integrity; do not bypass audit or edit a referenced Parent silently.' : 'Resolve the exact Parent audit findings and retry.'
+    }], operationBoundary: boundary() });
+  }
   const schemaId = String(parsed.envelope?.current?.schema?.id || audit.schemaId || '');
   const schemaTarget = String(parsed.envelope?.current?.schema?.target || '');
   const createdAt = String(parsed.envelope?.current?.createdAt || audit.artifact?.createdAt || '');

@@ -20,6 +20,7 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} qualify-lineage-directory <workspace-or-material-root> --workspace-id <id> --directory <workspace-relative-directory> [--coverage complete|bounded|partial|unknown]`,
     `${command} qualify-lineage-workspace <workspace-or-material-root> --workspace-id <id> [--coverage complete|bounded|partial|unknown]`,
     `${command} project-git-commit-provenance <repository-root> [--label <human-label>] [--message]`,
+    `${command} agent-role-sync --workspace <workspace-root> --role <qualified-role.trace.md> --mode plan|check|apply [--approved --expected-after-sha256 <sha256>]`,
     `${command} inspect-asset-relocation-workspace --request <request.json> [--compact]`,
     `${command} project-lineage-maintenance <workspace-or-material-root> --request <request.json> [--coverage complete|bounded|partial|unknown]`,
     `${command} apply-lineage-maintenance --plan <plan.json> (--workspace-roots <roots.json> | --workspace-id <id> --workspace-root <dir>)`,
@@ -56,6 +57,7 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'inspect-asset-relocation-workspace') return [
     'Tiinex Core — inspect and plan a local referenced binary asset relocation',
     '',
+    `${command} agent-role-sync --workspace <workspace-root> --role <qualified-role.trace.md> --mode plan|check|apply [--approved --expected-after-sha256 <sha256>]`,
     `${command} inspect-asset-relocation-workspace --request <request.json> [--compact]`,
     '',
     'Request JSON:',

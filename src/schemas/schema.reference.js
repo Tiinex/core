@@ -43,6 +43,54 @@ function qualifiedImmutableReferencePublication(binding = {}, sourceQualificatio
 }
 
 
+/** Resolve local *reference* authority once, at the schema-reference owner.
+ * The accepted Axiom workspace mode preserves its pre-existing bounded-local
+ * authority; qualified Docs snapshots only license a plain schema-ID, never a
+ * remote-looking link. A schema source qualification alone is not publication.
+ */
+export function qualifyLocalSchemaReferenceAuthority(binding = {}, qualification = null, form = '') {
+  const publicationState = String(binding?.publicationState || '').trim();
+  const completeness = String(binding?.snapshotCompleteness || '').trim();
+  if (qualification?.state === 'qualified'
+      && publicationState === 'accepted-local-unpublished'
+      && completeness === 'exact-axiom-canonical-unpublished-bounded-workspace-contract') {
+    return Object.freeze({ state: 'qualified', basis: 'qualified-workspace-local-authority' });
+  }
+
+  const material = qualification?.materialIdentity || {};
+  const repository = String(binding?.sourceRepository || '').trim();
+  const path = String(binding?.sourcePath || '').trim();
+  const checksum = String(binding?.checksum?.value || '').trim().toLowerCase();
+  const blobSha = String(binding?.sourceBlobSha || '').trim().toLowerCase();
+  const docsQualified = Boolean(
+    form === 'plain-schema-id'
+    && qualification?.state === 'qualified'
+    && qualification?.validationLineageAuthority?.state === 'qualified'
+    && material.state === 'qualified'
+    && publicationState === 'qualified-local-unpublished'
+    && completeness === 'exact-local-docs-snapshot'
+    && String(binding?.sourceCommit || '').trim() === ''
+    && String(binding?.permalink || '').trim() === ''
+    && String(binding?.rawUrl || '').trim() === ''
+    && repository === 'Tiinex/docs'
+    && path.startsWith('.topics/.schemas/')
+    && path.endsWith('.schema.md')
+    && Boolean(String(binding?.schemaId || '').trim())
+    && material.schemaId === binding.schemaId
+    && material.sourceRepository === repository
+    && material.sourcePath === path
+    && String(material.sourceCommit || '').trim() === ''
+    && /^[0-9a-f]{64}$/.test(checksum)
+    && material.sha256 === checksum
+    && /^[0-9a-f]{40}$/.test(blobSha)
+    && material.sourceBlobSha === blobSha
+    && Number.isSafeInteger(material.bytes) && material.bytes > 0
+  );
+  return Object.freeze(docsQualified
+    ? { state: 'qualified', basis: 'qualified-local-docs-exact-snapshot' }
+    : { state: 'unavailable', basis: '' });
+}
+
 export function schemaReferenceResolutionForTarget(resolutions = [], target = '') {
   const exactTarget = String(target || '').trim();
   if (!exactTarget) return null;

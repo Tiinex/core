@@ -89,8 +89,19 @@ test('locally qualified Evidence-v1 refuses a fabricated published source link',
   const markdown = render('tiinex.evidence.v1', contract);
   assert.match(markdown, /^  - Current Schema: tiinex\.evidence\.v1$/m);
   assert.doesNotMatch(markdown, /Current Schema: \[tiinex\.evidence\.v1\]/);
-  const audit = auditPortableRecord({ path: '.topics/testing/evidence.trace.md', markdown, schemaId: 'tiinex.evidence.v1' });
+  const record = { path: '.topics/testing/evidence.trace.md', markdown, schemaId: 'tiinex.evidence.v1' };
+  const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true });
   assert.equal(audit.findings.some((item) => item.code === 'schema.reference.exact-target-omitted' && item.params?.field === 'Current Schema' && item.severity === 'error'), false);
+  // The qualified local Docs checksum + source identity grants local validation,
+  // not a fabricated GitHub permalink. The VS Code editor must not warn that
+  // the exact schema is unavailable for this plain-ID local Evidence.
+  assert.equal(audit.validation?.state, 'exact-schema-validated');
+  assert.equal(audit.findings.some((item) => item.code === 'audit.schema-authority.unqualified'), false);
+  const editor = projectPortableEditorAssistance({ records: [record] });
+  assert.equal(editor.documents[0].diagnostics.some((item) => item.code === 'audit.schema-authority.unqualified'), false);
+  const forged = reseal(markdown.replace('Current Schema: tiinex.evidence.v1', 'Current Schema: [tiinex.evidence.v1](https://example.invalid/forged.schema.md)'));
+  const rejected = auditPortableRecord({ ...record, markdown: forged }, { requireExactSchemaAuthority: true });
+  assert.equal(rejected.findings.some((item) => item.code === 'audit.schema-authority.unqualified'), true, 'fabricated published locators remain unqualified');
 });
 
 test('qualified exact Evidence material renders an exact Current link while stale material authority is refused', () => {

@@ -1,6 +1,6 @@
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { resolveSchemaModule } from '../../../schemas/resolver.js';
-import { qualifySchemaReferenceValue, schemaReferenceAuthorityFromBinding, schemaReferenceAuthorityWithEquivalentResolvedTarget, schemaReferenceResolutionForTarget } from '../../../schemas/schema.reference.js';
+import { qualifySchemaReferenceValue, schemaReferenceAuthorityFromBinding, schemaReferenceAuthorityWithEquivalentResolvedTarget, schemaReferenceResolutionForTarget, qualifyLocalSchemaReferenceAuthority } from '../../../schemas/schema.reference.js';
 import {
   PORTABLE_QUALIFIED_LOCAL_ROOT_RUNTIME_PROJECTION_SCHEMA_ID,
   qualifiedLocalRootRuntimeProjection,
@@ -45,15 +45,16 @@ export function portableRuntimeValidationAuthorityForRecord(record = {}, options
   const currentModule = runtime.resolution?.module || null;
   const currentQualification = typeof currentModule?.schemaSource?.qualify === 'function' ? currentModule.schemaSource.qualify() : null;
   const currentBinding = currentModule?.binding || {};
-  const localWorkspaceAuthority = isQualifiedLocalUnpublishedAuthority(currentBinding, currentQualification);
+  const localReference = qualifyLocalSchemaReferenceAuthority(currentBinding, currentQualification, declaredSchema.form);
+  const localWorkspaceAuthority = localReference.basis === 'qualified-workspace-local-authority';
   let currentReferenceState = 'unavailable';
   let currentReferenceBasis = 'unavailable';
 
   if (!declaredSchema.id || declaredSchema.id !== schemaId) {
     findings.push(`Current Schema identity is unavailable or contradictory for ${schemaId || '(missing schema id)'}.`);
-  } else if (localWorkspaceAuthority) {
+  } else if (localReference.state === 'qualified') {
     currentReferenceState = 'qualified';
-    currentReferenceBasis = 'qualified-workspace-local-authority';
+    currentReferenceBasis = localReference.basis;
   } else if (declaredSchema.form === 'plain-schema-id') {
     findings.push(`Current Schema ${schemaId} declares no version-bearing locator and no qualified local workspace authority supersedes that omission.`);
     currentReferenceBasis = 'schema-id-only-version-unresolved';
@@ -154,14 +155,6 @@ function sameSourceTuple(actual = {}, expected = {}) {
 function isQualifiedLocalUnpublishedSource(source = {}) {
   return String(source?.publicationState || '').trim().toLowerCase() === 'accepted-local-unpublished'
     && String(source?.snapshotCompleteness || '').trim() === 'exact-axiom-canonical-unpublished-bounded-workspace-contract';
-}
-
-function isQualifiedLocalUnpublishedAuthority(binding = {}, qualification = null) {
-  const publicationState = String(binding?.publicationState || '').trim().toLowerCase();
-  const snapshotCompleteness = String(binding?.snapshotCompleteness || '').trim();
-  return qualification?.state === 'qualified'
-    && publicationState === 'accepted-local-unpublished'
-    && snapshotCompleteness === 'exact-axiom-canonical-unpublished-bounded-workspace-contract';
 }
 
 function unavailableAuthority(schemaId = '', runtime = {}, findings = []) {

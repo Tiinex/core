@@ -44,10 +44,27 @@ import { createPortablePackageOperationEntries } from './operation.catalog.packa
 import { compareOrReconcilePortableSourceFrontiers } from './comparison/sourceFrontierComparison.js';
 import { provePortableSourceReconciliation } from './comparison/sourceFrontierReconciliationProof.js';
 import { projectTiinexCommitProvenance } from './git/git.commitProvenance.js';
+import { projectPortableAgentCapabilities } from './agent.capabilities.js';
+import { projectPortableAgentRoleSync } from './agent.roleSync.js';
 
 export const PORTABLE_OPERATION_CATALOG_SCHEMA_ID = 'tiinex.portable.operation.catalog.v1';
 
 export const portableOperationCatalog = Object.freeze({
+  'project-agent-role-sync': operation({
+    name: 'project-agent-role-sync',
+    description: 'Project a local VS Code Role-to-agent document from exact canonical Role material. Never assigns holders, grants tools, or writes files.',
+    safety: 'read-only',
+    inputSchema: 'tiinex.portable.agent-role-sync-plan.request.v1',
+    handler: (input = {}) => wrapPortableResult('project-agent-role-sync', projectPortableAgentRoleSync(input))
+  }),
+  'inspect-agent-capabilities': operation({
+    name: 'inspect-agent-capabilities',
+    description: 'Discover qualified Core operation names, intent, safety and schema identities for host agent tools or skills without execution or Role authority.',
+    safety: 'read-only',
+    inputSchema: 'tiinex.portable.agent-capabilities.request.v1',
+    handler: (input = {}) => wrapPortableResult('inspect-agent-capabilities', projectPortableAgentCapabilities(
+      Object.values(portableOperationCatalog).map(({handler, ...descriptor}) => descriptor), input))
+  }),
   'project-git-commit-provenance': operation({
     name: 'project-git-commit-provenance',
     description: 'Project deterministic human-facing commit provenance from explicit staged-change facts without reading Git, mutating source, or creating currentness authority.',
