@@ -79,27 +79,25 @@ test('prospective creation and draft staging require exact Root target when exac
   assert.ok(staged.findings.some((item) => item.code === 'schema.reference.exact-target-omitted' && item.severity === 'error'));
 });
 
-test('locally qualified Evidence-v1 refuses a fabricated published source link', () => {
+test('published Evidence-v1 refuses a fabricated published source link', () => {
   const contract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
-  assert.equal(contract.schemaReferences.current.resolutionState, 'unavailable');
+  assert.equal(contract.schemaReferences.current.resolutionState, 'qualified');
   assert.equal(contract.schemaReferences.current.semanticMaterialIdentity.state, 'qualified');
-  assert.equal(contract.schemaReferences.current.semanticMaterialIdentity.sourceCommit, '');
+  assert.match(contract.schemaReferences.current.semanticMaterialIdentity.sourceCommit, /^[0-9a-f]{40}$/);
   assert.equal(contract.schemaReferences.current.semanticMaterialIdentity.sourcePath, '.topics/.schemas/core/evidence/tiinex.evidence.v1.schema.md');
-  assert.equal(contract.schemaReferences.current.preferredTarget, '');
+  assert.match(contract.schemaReferences.current.preferredTarget, /^https:\/\/github\.com\/Tiinex\/docs\/blob\/[0-9a-f]{40}\//);
   const markdown = render('tiinex.evidence.v1', contract);
-  assert.match(markdown, /^  - Current Schema: tiinex\.evidence\.v1$/m);
-  assert.doesNotMatch(markdown, /Current Schema: \[tiinex\.evidence\.v1\]/);
+  assert.ok(markdown.includes(`Current Schema: [tiinex.evidence.v1](${contract.schemaReferences.current.preferredTarget})`));
   const record = { path: '.topics/testing/evidence.trace.md', markdown, schemaId: 'tiinex.evidence.v1' };
   const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true });
   assert.equal(audit.findings.some((item) => item.code === 'schema.reference.exact-target-omitted' && item.params?.field === 'Current Schema' && item.severity === 'error'), false);
-  // The qualified local Docs checksum + source identity grants local validation,
-  // not a fabricated GitHub permalink. The VS Code editor must not warn that
-  // the exact schema is unavailable for this plain-ID local Evidence.
+  // The qualified published Docs checksum + source identity grants validation.
+  // An arbitrary replacement permalink is not equivalent without proof.
   assert.equal(audit.validation?.state, 'exact-schema-validated');
   assert.equal(audit.findings.some((item) => item.code === 'audit.schema-authority.unqualified'), false);
   const editor = projectPortableEditorAssistance({ records: [record] });
   assert.equal(editor.documents[0].diagnostics.some((item) => item.code === 'audit.schema-authority.unqualified'), false);
-  const forged = reseal(markdown.replace('Current Schema: tiinex.evidence.v1', 'Current Schema: [tiinex.evidence.v1](https://example.invalid/forged.schema.md)'));
+  const forged = reseal(markdown.replace(`Current Schema: [tiinex.evidence.v1](${contract.schemaReferences.current.preferredTarget})`, 'Current Schema: [tiinex.evidence.v1](https://example.invalid/forged.schema.md)'));
   const rejected = auditPortableRecord({ ...record, markdown: forged }, { requireExactSchemaAuthority: true });
   assert.equal(rejected.findings.some((item) => item.code === 'audit.schema-authority.unqualified'), true, 'fabricated published locators remain unqualified');
 });

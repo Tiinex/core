@@ -26,6 +26,26 @@ export async function checkNativeSchemas(options = {}) {
   const plan = await buildNativeSchemaSyncPlan(options);
   if (plan.status !== 'ready') return resultFromPlan(plan, 'check', false);
   const findings = [...plan.findings];
+  // Release qualification is opt-in: local drafts remain valid for development.
+  // Check canonical publication bindings against the exact Docs bytes, never
+  // infer publication from a nonempty URL or an unverified commit-shaped string.
+  if (options.requirePublished === true) {
+    const catalogOutput = plan.outputs.find((item) => item.path.endsWith(path.join('.generated', 'native.schema.catalog.json')));
+    const catalog = catalogOutput ? JSON.parse(catalogOutput.bytes.toString('utf8')) : null;
+    const byId = new Map((plan.entries || []).map((entry) => [entry.schemaId, entry]));
+    for (const record of catalog?.entries || []) {
+      const entry = byId.get(record.schemaId);
+      const binding = record.binding;
+      if (!entry || !publishedBindingMatchesEntry(binding, entry)) {
+        findings.push(finding('error', 'schema-sync.release-publication-required', `Release schema ${record.schemaId} lacks qualified immutable publication for its exact Docs bytes.`, { schemaId: record.schemaId }));
+        continue;
+      }
+      const expected = `https://github.com/${entry.sourceRepository}/blob/${binding.sourceCommit}/${encodeGithubPath(entry.sourcePath)}`;
+      const expectedRaw = `https://raw.githubusercontent.com/${entry.sourceRepository}/${binding.sourceCommit}/${encodeGithubPath(entry.sourcePath)}`;
+      if (binding.permalink !== expected || binding.rawUrl !== expectedRaw || binding.snapshotCompleteness !== 'exact-canonical-docs-snapshot')
+        findings.push(finding('error', 'schema-sync.release-reference-invalid', `Release schema ${record.schemaId} has an inconsistent immutable source URL or snapshot state.`, { schemaId: record.schemaId }));
+    }
+  }
   let driftCount = 0;
   for (const output of plan.outputs) {
     let actual = null;

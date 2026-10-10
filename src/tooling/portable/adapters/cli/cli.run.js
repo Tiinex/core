@@ -18,6 +18,15 @@ import { runVersionCli, formatVersionHuman } from './cli.version.js';
 import { runCatalogCli, formatCatalogHuman } from './cli.catalog.js';
 import { runLineageMaintenanceApplyCli, runLineageMaintenanceRecoveryCli } from './cli.lineage-maintenance.js';
 import { inspectPortableAssetRelocationWorkspace } from '../node/asset.relocation.inspect.js';
+import { inspectPortableScopedMoveWorkspace } from '../node/lineage.scoped-move.inspect.js';
+import { qualifyCrossWorkspacePublication } from '../../lineage/lineage.crossWorkspacePublication.js';
+import { inspectNodeCrossWorkspaceGitSource } from '../node/lineage.gitSource.inspect.js';
+import { inspectPortableCrossWorkspaceContinuity, recheckPortableCrossWorkspaceContinuity } from '../node/lineage.crossWorkspace.inspect.js';
+import { inspectPortableHistoricalSchemaSource } from '../../schema/schema.historicalSource.inspect.js';
+import { projectPortableAuthoringParent } from '../../editor/authoring.parent.js';
+import { inspectPortableCrossWorkspaceStandaloneTransfer, applyPortableCrossWorkspaceStandaloneTransfer, recoverPortableCrossWorkspaceTransfer } from '../node/lineage.crossWorkspace.transfer.js';
+import {inspectPortableCrossWorkspaceAssetBundle,applyPortableCrossWorkspaceAssetBundle,recoverPortableCrossWorkspaceAssetBundle} from '../node/lineage.crossWorkspace.bundle.js';
+import {inspectPortableCrossWorkspaceClosedGraph} from '../node/lineage.crossWorkspace.graphBundle.js';
 import { readFile as readNodeFile } from 'node:fs/promises';
 import { runGitCommitProvenanceCli } from './cli.git-commit-provenance.js';
 import { runPortableAgentRoleSyncNode } from '../node/agent.roleSync.node.js';
@@ -70,6 +79,118 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
       io.error(JSON.stringify({ schema: 'tiinex.portable.cli.error.v1', error: String(error?.message || error), command: parsed.command }, null, 2));
       return 1;
     }
+  }
+  if (['plan-cross-workspace-closed-graph','apply-cross-workspace-closed-graph','recover-cross-workspace-closed-graph'].includes(parsed.command)) {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.flags.plan || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.closed-graph.request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=parsed.command==='plan-cross-workspace-closed-graph'
+        ?await inspectPortableCrossWorkspaceClosedGraph(value.request||value)
+        :parsed.command==='apply-cross-workspace-closed-graph'
+        ?await applyPortableCrossWorkspaceAssetBundle(value.plan||value)
+        :await recoverPortableCrossWorkspaceAssetBundle({...value.request||value,allowCurrentProcess:false});
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.status==='ready'?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (['plan-cross-workspace-assets','apply-cross-workspace-assets','recover-cross-workspace-assets'].includes(parsed.command)) {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.flags.plan || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.cross-workspace-assets.request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=parsed.command==='plan-cross-workspace-assets'
+        ? await inspectPortableCrossWorkspaceAssetBundle(value.request||value)
+        : parsed.command==='apply-cross-workspace-assets'
+        ? await applyPortableCrossWorkspaceAssetBundle(value.plan||value)
+        : await recoverPortableCrossWorkspaceAssetBundle({...value.request||value,allowCurrentProcess:false});
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.status==='ready'?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (['plan-cross-workspace-standalone','apply-cross-workspace-standalone','recover-cross-workspace-standalone'].includes(parsed.command)) {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.flags.plan || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.cross-workspace-transfer.request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=parsed.command==='plan-cross-workspace-standalone'
+        ? await inspectPortableCrossWorkspaceStandaloneTransfer(value.request||value)
+        : parsed.command==='apply-cross-workspace-standalone'
+        ? await applyPortableCrossWorkspaceStandaloneTransfer(value.plan||value)
+        : await recoverPortableCrossWorkspaceTransfer({...value.request||value,allowCurrentProcess:false});
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.status==='ready'?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (parsed.command === 'recheck-cross-workspace-continuity') {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.cross-workspace-recheck.request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=await recheckPortableCrossWorkspaceContinuity(value.request||value);
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.status==='ready'?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (parsed.command === 'qualify-historical-evidence-parent') {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.historical-parent.request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=projectPortableAuthoringParent(value.request||value);
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.status==='ready'?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (parsed.command === 'inspect-historical-schema-source') {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.historical-schema.inspect-request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=inspectPortableHistoricalSchemaSource(value.request||value);
+      writeJson(io,result,parsed.flags.compact!==true);
+      return ['byte-equivalent','historical-distinct','historical-uncompared'].includes(result.status)?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (parsed.command === 'inspect-cross-workspace-continuity') {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.cross-workspace-continuity.request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=await inspectPortableCrossWorkspaceContinuity(value.request||value);
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.executable===true?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (parsed.command === 'inspect-cross-workspace-git-source') {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.git-source.request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=await inspectNodeCrossWorkspaceGitSource(value.request||value);
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.status==='candidate'?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (parsed.command === 'qualify-cross-workspace-publication') {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.cross-workspace-publication.request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=qualifyCrossWorkspacePublication(value.request||value);
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.status==='qualified'?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
+  }
+  if (parsed.command === 'inspect-scoped-move-workspace') {
+    try {
+      const requestPath=String(parsed.flags.request || parsed.positionals[0] || '');
+      if(!requestPath)throw new Error('portable.cli.scoped-move.inspect-request-required');
+      const value=JSON.parse(await readNodeFile(path.resolve(requestPath),'utf8'));
+      const result=await inspectPortableScopedMoveWorkspace(value.request||value);
+      writeJson(io,result,parsed.flags.compact!==true);
+      return result.status==='ready'?0:2;
+    }catch(error){io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));return 1;}
   }
   if (parsed.command === 'inspect-asset-relocation-workspace') {
     try {

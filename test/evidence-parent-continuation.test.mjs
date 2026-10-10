@@ -18,7 +18,7 @@ function parent(){return renderArtifactCreationDraftMarkdown(buildArtifactCreati
 });}
 test('fresh qualified Evidence may become Evidence Parent, no schema-type ban',()=>{
   const current=parent();
-  assert.match(current,/- Current Schema: tiinex\.evidence\.v1/);
+  assert.match(current,/- Current Schema: \[tiinex\.evidence\.v1\]\(https:\/\/github\.com\/Tiinex\/docs\/blob\//);
   const result=projectPortableAuthoringParent({records:[{path,markdown:current}],reference:path});
   assert.equal(result.status,'ready',JSON.stringify(result.findings));
   assert.equal(result.parentRecord.schemaId,'tiinex.evidence.v1');
@@ -26,7 +26,7 @@ test('fresh qualified Evidence may become Evidence Parent, no schema-type ban',(
 });
 test('historical unqualified schema URL blocks a Parent with actionable cause, never silent promotion',()=>{
   const original=parent();
-  const replaced=original.replace('- Current Schema: tiinex.evidence.v1',`- Current Schema: [tiinex.evidence.v1](https://github.com/Tiinex/docs/blob/${'f'.repeat(40)}/.topics/.schemas/core/evidence/tiinex.evidence.v1.schema.md)`);
+  const replaced=original.replace(/- Current Schema: \[tiinex\.evidence\.v1\]\([^)]+\)/,`- Current Schema: [tiinex.evidence.v1](https://github.com/Tiinex/docs/blob/${'f'.repeat(40)}/.topics/.schemas/core/evidence/tiinex.evidence.v1.schema.md)`);
   const sealed=sealC14nV2Self(replaced);assert.equal(sealed.state,'sealed');
   const result=projectPortableAuthoringParent({records:[{path,markdown:sealed.markdown}],reference:path});
   assert.equal(result.status,'blocked');

@@ -51,8 +51,10 @@ test('external transitions remain separate and Native inclusion is explicit in t
   const source = { files: [{ path: '.topics/processes/create-task.trace.md', content: fixture, sourceMode: 'portable-node-local', locator: { kind: 'node-file', localPath: '/org-repo/.topics/processes/create-task.trace.md' } }] };
   const onlyExternal = projectPortableTransitionCatalog(source);
   assert.equal(onlyExternal.counts.discovered, 1);
+  const nativeOnly = projectPortableTransitionCatalog({ includeNative: true });
   const both = projectPortableTransitionCatalog({ ...source, includeNative: true });
-  assert.equal(both.counts.discovered, 7);
+  assert.equal(both.counts.discovered, nativeOnly.counts.discovered + 1,
+    'Native package growth must not erase an independent external Transition representation');
   assert.ok(both.definitions.some((entry) => entry.source?.locator?.localPath === '/org-repo/.topics/processes/create-task.trace.md'));
 });
 
@@ -74,4 +76,44 @@ test('embedded bootstrap carries selected Native content independently of App an
   assert.ok(!paths.some((path) => path.startsWith('tiinex.bootstrap/runtime/../app/')));
   const appDependency = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
   assert.ok(!Object.keys(appDependency.dependencies || {}).includes('@tiinex/app'));
+});
+
+test('LLM and VS Code see one Evidence preset per byte-identical complete Native/Workspace package, with Workspace priority', async () => {
+  const base = resolve(nativeRoot, '.topics/.schemas/core/evidence');
+  const names = [
+    'evidence-semantic-package.trace.md',
+    'tiinex.evidence.v1.schema.md',
+    'tiinex.evidence.v1-transitions.trace.md',
+    ...['preserve-source-excerpt', 'record-counter-evidence', 'record-image-observation']
+      .flatMap((name) => [`.transitions/${name}-evidence-transition-definition.trace.md`, `.transitions/${name}-evidence-generation-authority.trace.md`])
+  ];
+  const local = await Promise.all(names.map(async (name) => ({
+    path: `.topics/.schemas/core/evidence/${name}`,
+    content: await readFile(resolve(base, name), 'utf8'),
+    sourceMode: 'portable-node-local',
+    locator: { kind: 'node-file', localPath: resolve(base, name) }
+  })));
+  const input = { includeNative: true, files: local, outputSchemaId: 'tiinex.evidence.v1' };
+  const catalog = projectPortableTransitionCatalog(input);
+  assert.equal(catalog.candidates.filter((item) => item.outputSchemaIds.includes('tiinex.evidence.v1')).length, 3);
+  const neighborhood = projectPortableTransitionNeighborhood(input);
+  assert.equal(neighborhood.counts.attachedCandidates, 3);
+  assert.equal(neighborhood.findings.filter((item) => item.severity === 'error').length, 0);
+  for (const item of neighborhood.candidates) {
+    assert.equal(item.authoringProfile?.state, 'qualified');
+    assert.equal(item.source?.sourceMode, 'portable-node-local', 'Workspace must outrank identical embedded Native content');
+    assert.ok(item.source?.locator?.localPath?.startsWith(base));
+  }
+  const embedded = projectPortableTransitionNeighborhood({ includeNative: true, outputSchemaId: 'tiinex.evidence.v1' });
+  assert.equal(embedded.counts.attachedCandidates, 3);
+  assert.ok(embedded.candidates.every((item) => item.source?.sourceMode === 'portable-composed-schema-content'));
+  // A modified Generation authority changes the qualified package context,
+  // even when the Transition Definition itself has exactly the same SHA.
+  const generation = local.find((item) => item.path.includes('preserve-source-excerpt-evidence-generation-authority'));
+  const changed = local.map((item) => item !== generation ? item : {
+    ...item, content: item.content.replace('What does the preserved source excerpt bear on?', 'What claim is this locally customized excerpt about?')
+  });
+  const divergentCatalog = projectPortableTransitionCatalog({ ...input, files: changed });
+  const preservedDefinitions = divergentCatalog.candidates.filter((item) => item.canonicalIdentifier === 'tiinex.core.evidence.preserve-source-excerpt.v1');
+  assert.equal(preservedDefinitions.length, 2, 'Different generation bytes must never collapse independent package representations');
 });

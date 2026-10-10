@@ -84,12 +84,12 @@ test('common creation rendering uses the qualified immutable Root schema target 
   assert.doesNotMatch(markdown, /- Envelope Schema: tiinex\.root\.v1\s*$/m);
 });
 
-test('locally qualified Evidence preserves source identity without inventing a published schema permalink', () => {
+test('published Evidence preserves exact source identity and never invents a different permalink', () => {
   const evidenceContract = buildArtifactCreationContract({ schemaId: 'tiinex.evidence.v1', transitionType: 'create-artifact' });
   assert.equal(evidenceContract.schemaReferences.envelope.resolutionState, 'qualified');
-  assert.equal(evidenceContract.schemaReferences.current.resolutionState, 'unavailable');
-  assert.equal(evidenceContract.schemaReferences.current.preferredTarget, '');
-  assert.equal(evidenceContract.schemaReferences.current.semanticMaterialIdentity.sourceCommit, '');
+  assert.equal(evidenceContract.schemaReferences.current.resolutionState, 'qualified');
+  assert.match(evidenceContract.schemaReferences.current.preferredTarget, /^https:\/\/github\.com\/Tiinex\/docs\/blob\/[0-9a-f]{40}\//);
+  assert.match(evidenceContract.schemaReferences.current.semanticMaterialIdentity.sourceCommit, /^[0-9a-f]{40}$/);
   assert.equal(evidenceContract.schemaReferences.current.semanticMaterialIdentity.state, 'qualified');
   const localMarkdown = renderArtifactCreationDraftMarkdown(evidenceContract, {
     currentSchemaId: 'tiinex.evidence.v1',
@@ -100,8 +100,7 @@ test('locally qualified Evidence preserves source identity without inventing a p
     createdAt: '2026-09-12 01:00:00'
   });
   assert.match(localMarkdown, /- Envelope Schema: \[tiinex\.root\.v1\]/);
-  assert.match(localMarkdown, /^  - Current Schema: tiinex\.evidence\.v1$/m);
-  assert.doesNotMatch(localMarkdown, /Current Schema: \[tiinex\.evidence\.v1\]/);
+  assert.ok(localMarkdown.includes(`Current Schema: [tiinex.evidence.v1](${evidenceContract.schemaReferences.current.preferredTarget})`));
 
   const historicalMixed = sealC14nV2Self(`# Continuity Context\n\n- Envelope Schema: tiinex.root.v1\n- Current\n  - Current Schema: [tiinex.task.v1](${TASK_SCHEMA_TARGET})\n  - Created At: 2026-09-12 01:00:00\n  - Summary: Historical mixed\n\n---\n\n# Historical mixed\n\nHistorical body.\n\n---\n\n# Continuity Integrity\n\n- sha256-base64url-c14n-v2\n  - Towards: self\n  - Value: pending`);
   assert.equal(historicalMixed.state, 'sealed');

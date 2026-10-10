@@ -8,6 +8,9 @@ export const SCAFFOLD_RELOCATION_PLAN_SCHEMA_ID = 'tiinex.scaffold.relocation-pl
 export function projectScaffoldArtifactRelocation(input = {}) {
   const materials = (input.materials || []).map((item) => ({ workspaceId: String(item.workspaceId || ''), path: norm(item.path), markdown: String(item.markdown || '') }));
   const relocations = normalizeRelocations(input.relocations || []);
+  // A semantic Parent edit can change a source artifact before path rewriting.
+  // Treat it as a content change so descendants inherit its NEW self digest.
+  const originalMaterials = new Map((input.originalMaterials || []).map(x=>[`${x.workspaceId}::${norm(x.path)}`,String(x.markdown||'')]));
   const findings = [];
   const key=(w,p)=>`${w}::${norm(p)}`;
   const sourceByKey=new Map(materials.map((m)=>[key(m.workspaceId,m.path),m]));
@@ -16,7 +19,7 @@ export function projectScaffoldArtifactRelocation(input = {}) {
   for(const material of materials){
     const toPath=relocatedPath(material.workspaceId,material.path);
     const rewritten=rewriteReferences(material.markdown,{workspaceId:material.workspaceId,fromPath:material.path,toPath,relocations});
-    drafts.set(key(material.workspaceId,toPath),{workspaceId:material.workspaceId,fromPath:material.path,toPath,originalMarkdown:material.markdown,markdown:rewritten.markdown,referenceRewrites:rewritten.count,moved:toPath!==material.path,referenceChanged:rewritten.markdown!==material.markdown});
+    drafts.set(key(material.workspaceId,toPath),{workspaceId:material.workspaceId,fromPath:material.path,toPath,originalMarkdown:material.markdown,markdown:rewritten.markdown,referenceRewrites:rewritten.count,moved:toPath!==material.path,referenceChanged:rewritten.markdown!==material.markdown,semanticChanged:originalMaterials.has(key(material.workspaceId,material.path)) && originalMaterials.get(key(material.workspaceId,material.path))!==material.markdown});
   }
 
   const parentByKey=new Map();
@@ -61,7 +64,7 @@ export function projectScaffoldArtifactRelocation(input = {}) {
         }
       }
     }
-    const contentChanged=draft.referenceChanged||parentIntegrityUpdated;
+    const contentChanged=draft.referenceChanged||parentIntegrityUpdated||draft.semanticChanged;
     let selfResealed=false;
     if(contentChanged){
       const sealed=sealC14nV2Self(markdown);

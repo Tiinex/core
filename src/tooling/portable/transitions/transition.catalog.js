@@ -1,4 +1,5 @@
 import { schemaMarkdown as nativeSchemaMarkdown, schemaPackManifest, schemaCompanionTextEntries } from '../../../schemas/registry.js';
+import { buildArtifactCreationContract } from '../../../schemas/creation.contracts.js';
 import { sha256Hex, utf8Bytes } from '../../../export/package.bytes.js';
 import { portableFinding } from '../findings.js';
 import { portableInputFiles } from '../input/portable.input.js';
@@ -147,8 +148,78 @@ export function projectPortableTransitionCatalog(input = {}, options = {}) {
     }
   }
 
-  definitions.sort(compareDefinitions);
-  return catalogResult(definitions, findings, input, options);
+  // A qualified semantic package may be present twice: embedded by the
+  // bootstrap and opened as an ordinary Workspace. Compare the COMPLETE
+  // package (manifest, schema, companion, definitions and generation bindings)
+  // before collapsing that alias. Never collapse by display name or ID alone.
+  const uniqueDefinitions = collapseIdenticalWorkspacePackageAliases(definitions, materialIndex.materials);
+  uniqueDefinitions.sort(compareDefinitions);
+  return catalogResult(uniqueDefinitions, findings, input, options);
+}
+
+/** A Transition alias is proven only by identical bytes across the *whole*
+ * qualified semantic package. This avoids hiding a same-named Definition whose
+ * Companion or Generation Binding has changed. Local Workspace bytes take
+ * precedence over the Core/bootstrap composition; no file is mutated.
+ *
+ * Loose, invalid and remote representations are intentionally left intact:
+ * without equivalent package context they are not known to be the same preset.
+ */
+function collapseIdenticalWorkspacePackageAliases(definitions = [], materials = []) {
+  const packageIdentity = new Map();
+  for (const group of groupTransitionMaterialsByOrigin(materials)) {
+    const manifests = group.materials.filter(isPackageManifestArtifact);
+    for (const manifest of manifests) {
+      const prefix = manifest.path.slice(0, manifest.path.lastIndexOf('/') + 1);
+      const members = group.materials.filter((item) => item.path.startsWith(prefix) && /\.(?:trace|schema)\.md$/i.test(item.path));
+      const paths = new Set();
+      const entries = [];
+      let ambiguous = false;
+      for (const member of members) {
+        const relative = member.path.slice(prefix.length);
+        if (!relative || paths.has(relative)) { ambiguous = true; break; }
+        paths.add(relative);
+        entries.push([relative, sha256Hex(utf8Bytes(member.markdown))]);
+      }
+      if (ambiguous || !entries.length) continue;
+      entries.sort((left, right) => compareText(left[0], right[0]));
+      const fingerprint = sha256Hex(utf8Bytes(JSON.stringify(entries)));
+      for (const member of members) {
+        const previous = packageIdentity.get(member.representationKey);
+        // A material claimed by multiple package boundaries is not a safe alias.
+        packageIdentity.set(member.representationKey, previous ? '' : fingerprint);
+      }
+    }
+  }
+
+  const winners = new Map();
+  const preserved = [];
+  for (const definition of definitions) {
+    const kind = transitionAliasSourceKind(definition);
+    const fingerprint = packageIdentity.get(definition.representationKey);
+    if (!definition.canonicalReadQualified || !kind || !fingerprint ||
+      !definition.canonicalIdentifier || !definition.version || !definition.representationSha256) {
+      preserved.push(definition);
+      continue;
+    }
+    const key = [fingerprint, definition.canonicalIdentifier, definition.version, definition.representationSha256].join('\u0000');
+    const current = winners.get(key);
+    if (!current || compareTransitionAliasPriority(definition, current) < 0) winners.set(key, definition);
+  }
+  return [...preserved, ...winners.values()];
+}
+
+function transitionAliasSourceKind(definition = {}) {
+  if (definition.source?.locator?.kind === 'node-file' && definition.source.locator.localPath) return 'workspace';
+  if (definition.source?.provider === 'composed-schema-content' && definition.source?.sourceMode === 'portable-composed-schema-content') return 'bootstrap';
+  return '';
+}
+
+function compareTransitionAliasPriority(left = {}, right = {}) {
+  const score = (definition) => transitionAliasSourceKind(definition) === 'workspace' ? 0 : 1;
+  return score(left) - score(right)
+    || compareText(left.source?.locator?.localPath || left.path, right.source?.locator?.localPath || right.path)
+    || compareDefinitions(left, right);
 }
 
 function transitionDefinitionContract() {
@@ -193,18 +264,32 @@ function schemaAuthorityFromDocument(document = {}) {
 }
 
 function transitionMaterialInputs(input = {}) {
-  // Native material uses the same qualification/indexing path as external Workspace material.
-  // It is opt-in for the programmatic API, and always supplied by Core's portable CLI.
-  // The canonical Handoff schema is projected from the existing native pack, never copied.
-  const native = input.includeNative === true ? [
-    { path: 'coordination/handoff/tiinex.handoff.v1.schema.md', content: nativeSchemaMarkdown('tiinex.handoff.v1') },
-    ...schemaCompanionTextEntries().filter(([path]) => /(?:^|\/)coordination\/handoff\/.*\.trace\.md$/i.test(path)).map(([path, content]) => ({ path, content }))
-  ].map((file, index) => Object.freeze({
+  // Compose canonical Native packages from the same already-loaded schema
+  // content registry. Previously this was hardcoded to Handoff; that concealed
+  // otherwise qualified Evidence packages outside the Native Workspace. Only
+  // actual Semantic Package boundaries opt in, never loose definitions or a
+  // global per-schema search. The ordinary package + companion + generation
+  // qualification path below remains the sole authority.
+  const companionEntries = input.includeNative === true
+    ? schemaCompanionTextEntries().filter(([path]) => /\.trace\.md$/i.test(path))
+    : [];
+  const packageRoots = [...new Set(companionEntries
+    .filter(([path]) => /(?:^|\/)[^/]*semantic-package\.trace\.md$/i.test(path))
+    .map(([path]) => path.slice(0, path.lastIndexOf('/'))))];
+  const insidePackage = (path) => packageRoots.some((root) => path.startsWith(`${root}/`));
+  const nativeMaterials = [
+    ...schemaPackManifest().schemas.filter((record) => {
+      const logical = String(record.sourcePath || '').replace(/^\.topics\/\.schemas\//, '');
+      return logical.endsWith('.schema.md') && insidePackage(logical);
+    }).map((record) => ({ path: String(record.sourcePath).replace(/^\.topics\/\.schemas\//, ''), content: nativeSchemaMarkdown(record.schemaId) })),
+    ...companionEntries.filter(([path]) => insidePackage(path)).map(([path, content]) => ({ path, content }))
+  ];
+  const native = nativeMaterials.map((file, index) => Object.freeze({
     ...file,
-    representationKey: `composed-native:handoff:${index}`,
+    representationKey: `composed-native:${index}:${file.path}`,
     sourceMode: 'portable-composed-schema-content',
     source: Object.freeze({ provider: 'composed-schema-content', sourceMode: 'portable-composed-schema-content' })
-  })) : [];
+  }));
   return [...native, ...portableInputFiles(input)]
     .filter((file) => typeof file?.content === 'string' || typeof file?.markdown === 'string' || typeof file?.text === 'string')
     .map((file, index) => ({
@@ -338,7 +423,7 @@ function catalogResult(definitions, findings, input = {}, options = {}) {
       'Discovery does not imply Semantic Package or Schema Transition Companion attachment.',
       'Target-schema projection is a read filter over declared role schema constraints; it is not applicability or execution qualification.',
       'Generation semantics remain owned by each Output Role Generation Binding and the referenced target schema/generation authority.',
-      'Each supplied Transition representation is preserved independently. Canonical Identifier + Version is not universal representation identity and is not used to collapse or reject independent origins.'
+      'Only byte-identical complete semantic packages from Workspace and embedded Native are treated as aliases. Workspace takes precedence; different package context, Definition bytes or unqualified material remains independent.'
     ]),
     findings: Object.freeze(findings)
   });
@@ -395,7 +480,19 @@ function projectTransitionAuthoringProfile({ definition = {}, targetMaterial = n
     return Object.freeze({ profile: Object.freeze({ ...emptyAuthoringProfile(`explicit-generation-${qualification.qualification || 'unresolved'}`), generationBinding: declared, generationQualification: qualification.qualification || 'unresolved' }), findings: Object.freeze(findings) });
   }
   const projectedDefaults = (qualification.authority.defaultedInputs || []).filter((entry) => entry.qualification === 'qualified' && entry.name);
-  const unresolvedDefaults = (qualification.authority.defaultedInputs || []).filter((entry) => entry.qualification !== 'qualified');
+  const targetCreation = buildArtifactCreationContract({ schemaId: outputSchemaId, transitionType: 'create-artifact' });
+  const creationInputs = new Set(targetCreation.status === 'ready'
+    ? (targetCreation.creation?.inputBindings || []).filter((binding) => binding.kind !== 'unmapped').map((binding) => binding.input)
+    : []);
+  // Generation contract qualification alone is not proof its defaults can be
+  // represented by the target artifact's current Core creation contract.
+  // An unknown input would otherwise be silently ignored by a host form.
+  const unrepresentableDefaults = projectedDefaults.filter((entry) => !creationInputs.has(entry.name));
+  if (unrepresentableDefaults.length) findings.push(portableFinding('warning',
+    'portable.transition-authoring.defaulted-input.not-in-target-creation',
+    'A defaulted Generation input cannot be represented by the qualified target schema creation contract; do not offer this Transition as an authoring preset.',
+    { transitionPath: definition.path, outputSchemaId, names: unrepresentableDefaults.map((entry) => entry.name) }));
+  const unresolvedDefaults = (qualification.authority.defaultedInputs || []).filter((entry) => entry.qualification !== 'qualified').concat(unrepresentableDefaults);
   const defaults = {};
   for (const entry of projectedDefaults) defaults[entry.name] = entry.value;
   const state = unresolvedDefaults.length ? 'unresolved-defaults' : projectedDefaults.length ? 'qualified' : 'no-defaults';

@@ -5,6 +5,10 @@ import { canonicalC14nV2SelfState, sealC14nV2Self } from '../../../integrity/int
 import { C14N_V2_METHOD_ID } from '../../../integrity/integrity.methodReference.js';
 import { projectScaffoldArtifactRelocation } from '../../../scaffolds/scaffold.relocation.js';
 import { normalizePortableInput } from '../input/portable.input.js';
+import { projectPortableMoveSelection } from './lineage.move-selection.js';
+import { projectScopedAssetChanges } from './lineage.mixed-assets.js';
+import { createRecordFromMarkdown } from '../../../artifacts/artifact.record.js';
+import { verifyC14nV2TargetSelfDigest } from '../../../integrity/integrity.c14nV2.js';
 
 export const LINEAGE_MAINTENANCE_PLAN_SCHEMA_ID = 'tiinex.portable.lineage-maintenance-plan.v1';
 
@@ -21,14 +25,63 @@ export function projectPortableLineageMaintenance(input = {}) {
   const parsed = materials.map((material) => inspectMaterial(material, findings, { requireSelf: false }));
   if (findings.some((item) => item.severity === 'error')) return blockedPlan(operation, materials, findings);
 
+  // Explicit local scope is qualified by Core, not guessed from file names
+  // in a host adapter. Binary companions are not silently omitted from Apply.
+  let scopedSelection = null;
+  if (operation.kind === 'scoped-move') {
+    if (operation.targetWorkspaceId && operation.targetWorkspaceId !== operation.workspaceId) {
+      findings.push(finding('error','lineage-maintenance.cross-workspace-git-continuity-unqualified',
+        'Cross-Workspace moves require full reference closure and verified Git permalink fallback; this version never silently assumes a same-Workspace move.'));
+    }
+    if (operation.scope !== 'alone' && (!Array.isArray(input.assetPaths) || input.assetCoverage !== 'complete')) {
+      findings.push(finding('error','lineage-maintenance.complete-asset-inventory-required',
+        'An explicit complete asset inventory is required for every scope that may include assets.'));
+    }
+    if (input.referenceCoverage && input.referenceCoverage !== 'complete') {
+      findings.push(finding('error','lineage-maintenance.reference-closure-unqualified',
+        'Executable scoped Move/Rebase requires qualified complete reference coverage; partial or bounded scans are preview-only.'));
+    }
+    const familiar = operation.placement === 'same' && operation.parentPolicy === 'keep';
+    const semanticInsert = ['append','prepend'].includes(operation.placement) && operation.parentPolicy === 'new';
+    const coordinateInsert = ['append','prepend'].includes(operation.placement) && operation.parentPolicy === 'keep';
+    if (!familiar && !semanticInsert && !coordinateInsert) {
+      findings.push(finding('error','lineage-maintenance.scoped-placement-unqualified',
+        'Unsupported placement/Parent Policy combination; Core requires explicit qualified coordinates and preserved Parent identity.'));
+    }
+    scopedSelection = projectPortableMoveSelection({
+      workspaceId: operation.workspaceId, selectedPath: operation.selectedPath,
+      scope: operation.scope, materials, assetPaths: input.assetPaths,
+      representationCoverage
+    });
+    if (scopedSelection.status !== 'ready') {
+      for (const item of scopedSelection.findings) findings.push(finding('error',item.code,item.detail || item.code));
+    }
+    if (findings.some(item=>item.severity === 'error')) return blockedPlan(operation,materials,findings);
+  }
   let projected;
-  if (operation.kind === 'move') projected = projectMove(parsed, operation, findings);
+  if (operation.kind === 'scoped-move') {
+    if (operation.placement === 'same') projected = projectMove(parsed, { ...operation, kind: 'move', selectedPaths: scopedSelection.artifactPaths }, findings);
+    else projected = operation.parentPolicy === 'keep'
+      ? projectKeptParentCoordinateInsertion(parsed, operation, scopedSelection, findings)
+      : projectScopedInsertion(parsed, operation, scopedSelection, findings);
+  }
+  else if (operation.kind === 'move') projected = projectMove(parsed, operation, findings);
   else if (operation.kind === 'normalize-directory') projected = projectNormalizeDirectory(parsed, operation, findings);
   else if (operation.kind === 'prepend') projected = projectPrepend(parsed, operation, findings);
   else findings.push(finding('error', 'lineage-maintenance.operation-unsupported', `Unsupported lineage maintenance operation ${operation.kind}.`, { kind: operation.kind }));
   if (!projected || findings.some((item) => item.severity === 'error')) return blockedPlan(operation, materials, findings, projected);
+  if (scopedSelection && operation.placement !== 'same') {
+    qualifyScopedInsertionCoordinates(materials, projected, scopedSelection, operation, findings);
+    if (findings.some(x=>x.severity==='error')) return blockedPlan(operation,materials,findings,projected);
+  }
 
-  const relocation = projectScaffoldArtifactRelocation({ materials: projected.materials, relocations: projected.relocations });
+  const mixedAssets = scopedSelection?.assetPaths.length
+    ? projectScopedAssetChanges({ input, selection: scopedSelection, projected, workspaceId: operation.workspaceId })
+    : { inputs: [], changes: [], relocations: [], findings: [] };
+  for (const item of mixedAssets.findings) findings.push(finding(item.severity,item.code,item.message));
+  if (findings.some(x=>x.severity==='error')) return blockedPlan(operation,materials,findings,projected);
+  const relocation = projectScaffoldArtifactRelocation({ materials: projected.materials, originalMaterials: materials,
+    relocations: [...projected.relocations, ...mixedAssets.relocations] });
   for (const item of relocation.findings || []) findings.push(finding(item.severity || 'error', `lineage-maintenance.${item.code || 'relocation'}`, item.message || 'Artifact relocation projection failed.', item.params || {}));
   if (relocation.status !== 'ready') return blockedPlan(operation, materials, findings, projected);
 
@@ -60,12 +113,24 @@ export function projectPortableLineageMaintenance(input = {}) {
       markdown
     });
   });
+  if (scopedSelection) {
+    // The selected semantic Parent must remain the SAME artifact after a move
+    // even when its textual relative locator is different. Validate the
+    // resolved identity and the exact parent digest BEFORE an executable plan
+    // can reach the transaction engine.
+    qualifyPreservedParentContinuity(materials, changes, findings);
+    if (findings.some(item=>item.severity==='error')) return blockedPlan(operation,materials,findings,projected);
+  }
+  changes.push(...mixedAssets.changes.map(c=>Object.freeze(c)));
   const collisions = detectOutputCollisions(changes);
   if (collisions.length) {
     findings.push(finding('error', 'lineage-maintenance.output-collision', 'Projected lineage maintenance produces duplicate output paths.', { collisions }));
     return blockedPlan(operation, materials, findings, projected);
   }
-  const inputFingerprint = fingerprintMaterials(materials);
+  const inputs = [...materials.map((item)=>Object.freeze({ workspaceId:item.workspaceId,path:item.path,fingerprint:stableFingerprintBytes(utf8Bytes(item.markdown)) })), ...mixedAssets.inputs.map(x=>Object.freeze(x))];
+  const inputFingerprint = mixedAssets.inputs.length
+    ? stableFingerprintBytes(utf8Bytes(JSON.stringify(inputs)))
+    : fingerprintMaterials(materials);
   const planFingerprint = stableFingerprintBytes(utf8Bytes(JSON.stringify({ representationCoverage, operation, inputFingerprint, outputs: changes.map(({ workspaceId, fromPath, toPath, afterFingerprint }) => ({ workspaceId, fromPath, toPath, afterFingerprint })) })));
   return Object.freeze({
     schema: LINEAGE_MAINTENANCE_PLAN_SCHEMA_ID,
@@ -75,14 +140,15 @@ export function projectPortableLineageMaintenance(input = {}) {
     operation,
     inputFingerprint,
     planFingerprint,
-    inputs: Object.freeze(materials.map((item) => Object.freeze({ workspaceId: item.workspaceId, path: item.path, fingerprint: stableFingerprintBytes(utf8Bytes(item.markdown)) }))),
+    inputs: Object.freeze(inputs),
+    ...(mixedAssets.inputs.length ? {assetCoverage:'complete',referenceCoverage:'complete'} : {}),
     changes: Object.freeze(changes),
     summary: Object.freeze({
       materials: materials.length,
       pathChanges: changes.filter((item) => item.pathChanged).length,
       byteChanges: changes.filter((item) => item.bytesChanged).length,
-      semanticParentChanges: changes.filter((item) => item.semanticParent.changed).length,
-      preservedSemanticParents: changes.filter((item) => !item.semanticParent.changed && item.semanticParent.before).length
+      semanticParentChanges: changes.filter((item) => item.semanticParent?.changed).length,
+      preservedSemanticParents: changes.filter((item) => !item.semanticParent?.changed && item.semanticParent?.before).length
     }),
     findings: Object.freeze(findings),
     findingSummary: summarize(findings),
@@ -265,6 +331,238 @@ function projectMove(materials, operation, findings) {
   return { materials: materials.map(stripInspection), relocations, pathMap, semanticParentDelta };
 }
 
+/** A semantic Parent rewrite is not itself a numeric placement. Check the
+ * operator's exact anchor promise before exposing an executable transaction.
+ * Other non-selected siblings must not be silently renumbered. */
+function qualifyScopedInsertionCoordinates(materials, projected, selection, operation, findings) {
+  const map=projected.pathMap;
+  const chosen=new Set(selection.artifactPaths);
+  const local=new Map(materials.filter(x=>x.workspaceId===operation.workspaceId && path.posix.dirname(x.path)===selection.directory).map(x=>[x.path,x]));
+  const roots=selection.artifactPaths.filter(x=>!chosen.has(resolveLocalParentPath(local.get(x))));
+  const root=roots[0];const fromTarget=operation.targetPath;
+  const toRoot=map.get(`${operation.workspaceId}::${root}`)||root;
+  const toTarget=map.get(`${operation.workspaceId}::${fromTarget}`)||fromTarget;
+  const dim=p=>filenameCoordinate(p)?.dimension||[];
+  const equals=(a,b)=>a.length===b.length && a.every((v,i)=>v===b[i]);
+  if(operation.placement==='prepend' && !equals(dim(toRoot),dim(fromTarget)))
+    findings.push(finding('error','lineage-maintenance.prepend-target-dimension-drift',`Prepend must put the selected root at the target's exact original dimension: ${fromTarget}`));
+  if(operation.placement==='append' && (!equals(dim(toTarget),dim(fromTarget)) || !equals(dim(toRoot).slice(0,-1),dim(fromTarget))))
+    findings.push(finding('error','lineage-maintenance.append-anchor-dimension-drift',`Append must preserve target's original dimension and nest the selection root directly below it: ${fromTarget}`));
+  const allowed=new Set(selection.artifactPaths);
+  if(operation.placement==='prepend') {
+    const byPath=new Map([...local].map(([p,m])=>[p,m]));
+    // Target and its existing descendants necessarily follow the newly
+    // inserted chain; unrelated siblings do not.
+    const children=semanticChildren([...byPath.values()]);
+    const visit=p=>{if(allowed.has(p))return;allowed.add(p);for(const child of children.get(p)||[])visit(child.path);};
+    visit(fromTarget);
+  }
+  for (const item of local.values()) {
+    const relocated=map.get(materialKey(item))||item.path;
+    if(relocated!==item.path && !allowed.has(item.path))
+      findings.push(finding('error','lineage-maintenance.insertion-unselected-renumber',`Insertion would renumber an unselected artifact: ${item.path}`,{from:item.path,to:relocated}));
+  }
+}
+
+/** Pure numeric positioning; do NOT derive semantic Parent from filename
+ * ancestry. The existing Parent and all qualified references are rewritten by
+ * the shared relocation engine, then independently checked for exact identity
+ * and digest continuity before the transaction becomes executable.
+ *
+ * Only the selection and, for Prepend, the target's own semantic descendants
+ * may change path. Every other artifact retains its old numeric coordinate.
+ */
+function projectKeptParentCoordinateInsertion(materials, operation, selection, findings) {
+  const workspaceId = operation.workspaceId;
+  const dir = selection.directory;
+  const local = materials.filter(m => m.workspaceId === workspaceId && path.posix.dirname(m.path) === dir);
+  const byPath = new Map(local.map(m => [m.path, m]));
+  const target = byPath.get(operation.targetPath);
+  const chosen = new Set(selection.artifactPaths);
+  if (!target || chosen.has(operation.targetPath) || operation.targetDirectory !== dir) {
+    findings.push(finding('error','lineage-maintenance.keep-parent-target-invalid',
+      'Keep Parent insertion requires an exact different artifact anchor in the same source directory.'));
+    return null;
+  }
+  if (selection.shape.roots !== 1 || (operation.placement === 'prepend' && !selection.shape.straight)) {
+    findings.push(finding('error','lineage-maintenance.keep-parent-selection-shape',
+      'Insertion requires one selected root; Prepend must be a straight chain.'));
+    return null;
+  }
+  const parents = new Map(local.map(m => [m.path, resolveLocalParentPath(m)]));
+  const root = selection.artifactPaths.find(p => !chosen.has(parents.get(p)));
+  if (!root) {
+    findings.push(finding('error','lineage-maintenance.keep-parent-root-missing','A qualified selected root is required.'));
+    return null;
+  }
+  // Do not reorder an ancestor and its own descendant, even if its numeric
+  // coordinates happen to look unrelated.
+  const followAncestor = (first, sought) => {
+    let current = first; const visited = new Set();
+    while (current && byPath.has(current)) {
+      if (current === sought) return true;
+      if (visited.has(current)) return true; // cycle => fail closed
+      visited.add(current); current = parents.get(current);
+    }
+    return false;
+  };
+  if (followAncestor(operation.targetPath, root) || followAncestor(root, operation.targetPath)) {
+    findings.push(finding('error','lineage-maintenance.keep-parent-semantic-overlap',
+      'Keep Parent insertion does not reposition an artifact against its own ancestor or descendant.'));
+    return null;
+  }
+  const coords = new Map(local.map(m => [m.path, filenameCoordinate(m.path)]));
+  const dimOf = pathname => coords.get(pathname)?.dimension;
+  if ([...local].some(m => !dimOf(m.path))) {
+    findings.push(finding('error','lineage-maintenance.keep-parent-coordinate-invalid',
+      'All directory-local artifact coordinates must be representable.'));
+    return null;
+  }
+  const targetDim = dimOf(operation.targetPath);
+  const children = semanticChildren(local);
+  const candidate = new Map();
+  const visit = (pathname, dimension, allowed, seen = new Set()) => {
+    if (seen.has(pathname) || candidate.has(pathname)) return false;
+    seen.add(pathname);
+    if (!allowed.has(pathname)) return false;
+    candidate.set(pathname, dimension);
+    const descendants = (children.get(pathname) || []).filter(c => allowed.has(c.path))
+      .sort((a,b)=>compareDimension(dimOf(a.path),dimOf(b.path)) || a.path.localeCompare(b.path));
+    for (let n = 0; n < descendants.length; n++) {
+      if (!visit(descendants[n].path, [...dimension,n + 1],allowed,seen)) return false;
+    }
+    return true;
+  };
+  if (operation.placement === 'append') {
+    // Do not disturb existing anchor children or unrelated numbered siblings.
+    const occupied = [...coords.values()].map(c => c.dimension);
+    const direct = occupied.filter(d => d.length === targetDim.length + 1 && targetDim.every((v,i)=>v===d[i]));
+    const childNumber = direct.reduce((n,d)=>Math.max(n,d.at(-1)),0) + 1;
+    if (!visit(root,[...targetDim,childNumber],chosen)) {
+      findings.push(finding('error','lineage-maintenance.keep-parent-selection-not-closed',
+        'Cannot derive an exact connected selection under its existing Parent relationships.'));
+      return null;
+    }
+  } else {
+    if (!visit(root,targetDim,chosen)) {
+      findings.push(finding('error','lineage-maintenance.keep-parent-selection-not-closed',
+        'Prepend selection must be a single contiguous Parent chain.'));
+      return null;
+    }
+    const chain = selection.artifactPaths.filter(p => candidate.has(p));
+    if (chain.length !== selection.artifactPaths.length) {
+      findings.push(finding('error','lineage-maintenance.keep-parent-selection-not-contiguous',
+        'Prepend cannot silently detach a selected artifact.'));
+      return null;
+    }
+    const last = selection.artifactPaths.find(p => !(children.get(p) || []).some(c=>chosen.has(c.path)));
+    const kept = new Set();
+    const collect = p => { if (kept.has(p)) return; kept.add(p); for (const c of children.get(p) || []) collect(c.path); };
+    collect(operation.targetPath);
+    if (!last || !visit(operation.targetPath,[...candidate.get(last),1],kept)) {
+      findings.push(finding('error','lineage-maintenance.keep-parent-target-branch-unqualified',
+        'Cannot rebase the target and its own children without losing semantic continuity.'));
+      return null;
+    }
+  }
+  if ([...chosen].some(p=>!candidate.has(p)) ||
+      (operation.placement === 'prepend' && !candidate.has(operation.targetPath))) {
+    findings.push(finding('error','lineage-maintenance.keep-parent-selection-incomplete',
+      'Exact selected artifacts or the target were omitted from the coordinate plan.'));
+    return null;
+  }
+  const updated = new Map();
+  for (const [oldPath,dim] of candidate) {
+    const coordinate = coords.get(oldPath);
+    updated.set(`${workspaceId}::${oldPath}`,path.posix.join(dir,`${renderDimension(dim)}-${coordinate.slug}`));
+  }
+  // A different slug is NOT permission to reuse the same numeric
+  // coordinate. Enforce both path and dimension uniqueness across every
+  // unchanged sibling and every output before an executable plan exists.
+  const existing = new Set(local.filter(m=>!candidate.has(m.path)).map(m=>m.path));
+  const existingDimensions = local.filter(m=>!candidate.has(m.path))
+    .map(m=>renderDimension(coords.get(m.path).dimension));
+  const projected = [...updated.values()];
+  const projectedDimensions = projected.map(p=>renderDimension(filenameCoordinate(p).dimension));
+  if (new Set(existingDimensions).size !== existingDimensions.length ||
+      new Set(projectedDimensions).size !== projectedDimensions.length ||
+      projected.some(p=>existing.has(p)) ||
+      projectedDimensions.some(d=>existingDimensions.includes(d))) {
+    findings.push(finding('error','lineage-maintenance.keep-parent-coordinate-collision',
+      'Projected coordinates collide with another artifact, regardless of slug; no sibling is silently renumbered.'));
+    return null;
+  }
+  const relocations = [...updated].map(([k,to])=>({workspaceId,from:k.slice(workspaceId.length+2),to}))
+    .filter(x=>x.from!==x.to);
+  const semanticParentDelta = new Map(materials.map(m=>[materialKey(m),Object.freeze({
+    changed:false,before:parentTarget(m),after:parentTarget(m)
+  })]));
+  return {materials:materials.map(stripInspection),relocations,pathMap:updated,semanticParentDelta};
+}
+
+/** Insert one directory-local semantic selection relative to an artifact anchor.
+ * The graph is qualified BEFORE any coordinate rewrite. Keep-Parent insertion
+ * is deliberately not approximated by a semantic graph insertion. */
+function projectScopedInsertion(materials, operation, selection, findings) {
+  const target = materials.find(m=>m.workspaceId===operation.workspaceId && m.path===operation.targetPath);
+  if (!target || !operation.targetPath || selection.artifactPaths.includes(operation.targetPath)) {
+    findings.push(finding('error','lineage-maintenance.insertion-target-invalid','Choose an exact qualified target outside the selected artifacts.'));
+    return null;
+  }
+  const directory=selection.directory;
+  if(path.posix.dirname(operation.targetPath)!==directory || operation.targetDirectory!==directory) {
+    findings.push(finding('error','lineage-maintenance.insertion-cross-directory-unqualified','Graph insertion is restricted to the selected artifact directory.'));
+    return null;
+  }
+  if(selection.shape.roots!==1) {
+    findings.push(finding('error','lineage-maintenance.insertion-root-ambiguous','An insertion must have exactly one semantic root.'));
+    return null;
+  }
+  const selected=new Set(selection.artifactPaths);
+  const byPath=new Map(materials.filter(m=>m.workspaceId===operation.workspaceId).map(m=>[m.path,m]));
+  const root=selection.artifactPaths.find(p=>!selected.has(resolveLocalParentPath(byPath.get(p))));
+  if (!root) {
+    findings.push(finding('error','lineage-maintenance.insertion-root-missing','Cannot establish selected semantic root.'));
+    return null;
+  }
+  // Target descendants may be outside the selection when scope=Alone. Reject
+  // any backwards edge that would turn a valid lineage into a cycle.
+  let ancestor=operation.targetPath;const seen=new Set();
+  while(ancestor && byPath.has(ancestor) && !seen.has(ancestor)) {
+    if (selected.has(ancestor)) { findings.push(finding('error','lineage-maintenance.insertion-cycle','Target is a semantic descendant of the selected set.'));return null; }
+    seen.add(ancestor);ancestor=resolveLocalParentPath(byPath.get(ancestor));
+  }
+  if(operation.placement==='prepend') {
+    if(!selection.shape.straight || selection.shape.branches!==0) {
+      findings.push(finding('error','lineage-maintenance.prepend-selection-branched','Prepend requires one straight selection with one last leaf.'));
+      return null;
+    }
+    const children=semanticChildren(selection.artifactPaths.map(p=>byPath.get(p)));
+    const ordered=[];let cursor=root;
+    while(cursor && !ordered.includes(cursor)) {
+      ordered.push(cursor);
+      cursor=(children.get(cursor)||[])[0]?.path || '';
+    }
+    if(ordered.length!==selection.artifactPaths.length) {
+      findings.push(finding('error','lineage-maintenance.prepend-selection-not-contiguous','Prepend selection is not a contiguous semantic chain.'));
+      return null;
+    }
+    return projectPrepend(materials,{...operation,kind:'prepend',orderedPaths:ordered,targetPath:operation.targetPath},findings);
+  }
+  const working=new Map(materials.map(m=>[materialKey(m),{...stripInspection(m)}]));
+  const key=materialKey(byPath.get(root));
+  const rebound=rewriteParentBinding(working.get(key).markdown,root,working.get(materialKey(target)));
+  if(!rebound.ok){findings.push(finding('error','lineage-maintenance.append-parent-rewrite-blocked',`Cannot link selected root to target: ${rebound.reason}`));return null;}
+  working.set(key,{...working.get(key),markdown:rebound.markdown});
+  const semanticParentDelta=new Map(materials.map(m=>[materialKey(m),Object.freeze({changed:false,before:parentTarget(m),after:parentTarget(m)})]));
+  semanticParentDelta.set(key,Object.freeze({changed:true,before:parentTarget(byPath.get(root)),after:target.path}));
+  const local=[...working.values()].filter(m=>m.workspaceId===operation.workspaceId && path.posix.dirname(m.path)===directory).map(m=>inspectMaterial(m,findings));
+  if(findings.some(f=>f.severity==='error'))return null;
+  const pathMap=assignSemanticDirectoryPaths(local,directory,{lastAppendPath:root,appendToPath:target.path});
+  const relocations=[...pathMap].map(([id,to])=>{const [workspace,...rest]=id.split('::');return Object.freeze({workspaceId:workspace,from:rest.join('::'),to});}).filter(x=>x.from!==x.to);
+  return {materials:[...working.values()],relocations,pathMap,semanticParentDelta};
+}
+
 function projectPrepend(materials, operation, findings) {
   const workspaceId = operation.workspaceId;
   const orderedPaths = operation.orderedPaths;
@@ -360,6 +658,8 @@ function assignSemanticDirectoryPaths(entries, directory, options = {}) {
   const order = (a, b) => {
     if (a.path === options.firstInsertPath && b.path === options.targetPath) return -1;
     if (b.path === options.firstInsertPath && a.path === options.targetPath) return 1;
+    if(a.path===options.lastAppendPath && b.path!==options.lastAppendPath && byPath.get(a.path)?.parsed?.envelope?.parent?.trace) return 1;
+    if(b.path===options.lastAppendPath && a.path!==options.lastAppendPath && byPath.get(b.path)?.parsed?.envelope?.parent?.trace) return -1;
     return compareDimension(a.coordinate.dimension, b.coordinate.dimension) || a.path.localeCompare(b.path);
   };
   roots.sort(order); for (const values of children.values()) values.sort(order);
@@ -419,6 +719,64 @@ function rewritePrimaryParentIntegrity(markdown, childPath, parentMaterial) {
   return lines.join('\n');
 }
 
+function qualifyPreservedParentContinuity(materials, changes, findings) {
+  const before=new Map(materials.map(m=>[materialKey(m),m]));
+  const after=new Map(changes.map(c=>[`${c.workspaceId}::${c.toPath}`,c]));
+  const movedByOld=new Map(changes.map(c=>[`${c.workspaceId}::${c.fromPath}`,c]));
+  for(const source of materials) {
+    const output=movedByOld.get(materialKey(source));
+    if(!output || (!output.pathChanged && !output.bytesChanged))continue;
+    const current=createRecordFromMarkdown(source.markdown,{path:source.path});
+    const revised=createRecordFromMarkdown(output.markdown,{path:output.toPath});
+    const former=String(current.trace||'');const latter=String(revised.trace||'');
+    if(output.semanticParent?.changed) {
+      const desired=String(output.semanticParent.after||'');
+      const actual=latter && !/^[a-z][a-z0-9+.-]*:/i.test(latter)
+        ? path.posix.normalize(path.posix.join(path.posix.dirname(output.toPath),latter)) : '';
+      const desiredOutput=movedByOld.get(`${source.workspaceId}::${desired}`)?.toPath || desired;
+      if(!desired) {
+        const refs=(revised.integrity?.entries||[]).filter(i=>i.towards && i.towards!=='self');
+        if(latter || refs.length) findings.push(finding('error','lineage-maintenance.changed-root-parent-drift',`Root ${source.path} unexpectedly acquired a Parent.`));
+        continue;
+      }
+      const parent=after.get(`${source.workspaceId}::${desiredOutput}`);
+      if(!parent || actual!==desiredOutput || !desiredOutput || desiredOutput===output.toPath) {
+        findings.push(finding('error','lineage-maintenance.changed-parent-identity-drift',`Changed Parent of ${source.path} does not resolve to its qualified target.`,{desiredOutput,actual}));continue;
+      }
+      const candidates=(revised.integrity?.entries||[]).filter(i=>i.towards&&i.towards!=='self');
+      if(!candidates.some(i=>verifyC14nV2TargetSelfDigest({value:i.value,targetMarkdown:parent.markdown}).state==='verified'))
+        findings.push(finding('error','lineage-maintenance.changed-parent-integrity-drift',`Changed Parent digest does not verify: ${source.path}`));
+      continue;
+    }
+    if (!former && !latter) continue;
+    if (!former || !latter) {
+      findings.push(finding('error','lineage-maintenance.preserved-parent-lost',`Move must not add/remove a Parent: ${source.path}`)); continue;
+    }
+    // External publication links are immutable custody outside this local
+    // complete representation. Never fabricate their current target identity.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(former)||former.includes('::')) {
+      if (former!==latter) findings.push(finding('error','lineage-maintenance.external-parent-drift',source.path));
+      continue;
+    }
+    const previous=path.posix.normalize(path.posix.join(path.posix.dirname(source.path),former));
+    const expected=movedByOld.get(`${source.workspaceId}::${previous}`)?.toPath || previous;
+    const actual=path.posix.normalize(path.posix.join(path.posix.dirname(output.toPath),latter));
+    if (actual!==expected) {
+      findings.push(finding('error','lineage-maintenance.preserved-parent-identity-drift',
+        `Parent of ${source.path} resolves to ${actual} rather than ${expected}.`,{before:previous,expected,actual}));continue;
+    }
+    const parent=after.get(`${source.workspaceId}::${expected}`);
+    if(!parent || !before.has(`${source.workspaceId}::${previous}`)) {
+      findings.push(finding('error','lineage-maintenance.preserved-parent-material-unavailable',
+        `Cannot verify preserved Parent bytes for ${source.path}.`,{parent:expected}));continue;
+    }
+    const references=(revised.integrity?.entries||[]).filter(i=>i.towards&&i.towards!=='self');
+    const qualified=references.some(i=>verifyC14nV2TargetSelfDigest({value:i.value,targetMarkdown:parent.markdown}).state==='verified');
+    if(!qualified) findings.push(finding('error','lineage-maintenance.preserved-parent-integrity-drift',
+      `Parent digest of ${source.path} no longer verifies after rebase.`,{parent:expected}));
+  }
+}
+
 function inspectMaterial(material, findings, options = {}) {
   let parsed; try { parsed = parseArtifactMarkdown(material.markdown); } catch (error) { findings.push(finding('error', 'lineage-maintenance.parse-failed', `Artifact parse failed: ${material.path}`, { path: material.path, message: error?.message || String(error) })); return { ...material, parsed: null, coordinate: filenameCoordinate(material.path) }; }
   if (options.requireSelf !== false) {
@@ -445,7 +803,7 @@ function normalizeMaintenanceMaterials(input = {}, fallbackWorkspaceId = '') {
 }
 
 function normalizeMaterials(values) { return (values || []).map((item) => Object.freeze({ workspaceId: String(item.workspaceId || ''), path: norm(item.path), markdown: String(item.markdown || '') })).filter((item) => item.workspaceId && item.path && item.markdown).sort((a,b)=>a.workspaceId.localeCompare(b.workspaceId)||a.path.localeCompare(b.path)); }
-function normalizeOperation(value = {}) { const kind = String(value.kind || value.operation || '').trim().toLowerCase(); return Object.freeze({ kind, workspaceId: String(value.workspaceId || '').trim(), selectedPaths: Object.freeze((value.selectedPaths || []).map(norm)), targetDirectory: norm(value.targetDirectory || value.directory || ''), orderedPaths: Object.freeze((value.orderedPaths || value.insertPaths || []).map(norm)), targetPath: norm(value.targetPath || '') }); }
+function normalizeOperation(value = {}) { const kind = String(value.kind || value.operation || '').trim().toLowerCase(); return Object.freeze({ kind, workspaceId: String(value.workspaceId || '').trim(), selectedPath: norm(value.selectedPath || ''), targetWorkspaceId: String(value.targetWorkspaceId || ''), scope: String(value.scope || 'alone'), placement: String(value.placement || 'same'), parentPolicy: String(value.parentPolicy || 'keep'), selectedPaths: Object.freeze((value.selectedPaths || []).map(norm)), targetDirectory: norm(value.targetDirectory || value.directory || ''), orderedPaths: Object.freeze((value.orderedPaths || value.insertPaths || []).map(norm)), targetPath: norm(value.targetPath || '') }); }
 function stripInspection(item) { return { workspaceId: item.workspaceId, path: item.path, markdown: item.markdown }; }
 function parentTarget(item) { return String(item.parsed?.envelope?.parent?.trace || parseArtifactMarkdown(item.markdown).envelope?.parent?.trace || ''); }
 function resolveLocalParentPath(item) { const trace = parentTarget(item); if (!trace || trace.includes('::') || /^[a-z][a-z0-9+.-]*:/i.test(trace) || trace.startsWith('/')) return ''; return norm(path.posix.join(path.posix.dirname(item.path), trace)); }

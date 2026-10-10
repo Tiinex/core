@@ -51,6 +51,9 @@ test('schema sync/check materializes canonical schema authority into the selecte
   assert.equal(check.status, 'ready');
   assert.equal(check.generated.driftCount, 0);
   assert.equal(check.generated.staleCanonicalSchemaCopies, 0);
+  const releaseBefore = await checkNativeSchemas({ contentRoot, docsRoot, repository: 'Tiinex/docs', requirePublished: true });
+  assert.equal(releaseBefore.status, 'blocked');
+  assert.ok(releaseBefore.findings.some((item) => item.code === 'schema-sync.release-publication-required'));
 
   const source = await discoverLocalTiinexContentSource({ root: contentRoot });
   const runtime = await initializePortableNodeRuntime({ contentSources: [source], discoverBundled: false, discoverInstalled: false, environmentContentRoots: '' });
@@ -86,6 +89,8 @@ test('published sync preserves exact immutable bindings for unchanged schema byt
   const nextCommit = 'b'.repeat(40);
   const first = await synchronizeNativeSchemas({ contentRoot, docsRoot, sourceCommit: firstCommit, repository: 'Tiinex/docs', published: true });
   assert.equal(first.status, 'ready');
+  const releaseAfter = await checkNativeSchemas({ contentRoot, docsRoot, requirePublished: true });
+  assert.equal(releaseAfter.status, 'ready');
 
   const localPlan = await buildNativeSchemaSyncPlan({ contentRoot, docsRoot, repository: 'Tiinex/docs', published: false });
   assert.equal(localPlan.status, 'ready');

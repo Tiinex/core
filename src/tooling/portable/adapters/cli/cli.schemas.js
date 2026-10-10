@@ -14,6 +14,7 @@ export async function runSchemasCli(parsed = {}) {
     sourceCommit,
     repository,
     published,
+    requirePublished: parsed.flags['require-published'] === true || String(parsed.flags['require-published'] || '').toLowerCase() === 'true',
     schemaSurfaceRoot
   };
   if (parsed.command === 'schemas-sync') return synchronizeNativeSchemas(options);

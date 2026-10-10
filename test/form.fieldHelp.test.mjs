@@ -16,8 +16,8 @@ test('Evidence field help is sourced from an exact qualified schema section', ()
   assert.equal(material.source.contextScope, 'schema-validation-group');
   assert.match(material.source.excerpt, /- Material Kind/);
   assert.ok(material.source.fieldLine > material.source.groupLine);
-  assert.equal(material.source.publicationState, 'qualified-local-unpublished');
-  assert.equal(material.source.commit, '');
+  assert.equal(material.source.publicationState, 'published-immutable-canonical');
+  assert.match(material.source.commit, /^[0-9a-f]{40}$/);
   assert.match(material.source.checksum, /^[a-f0-9]{64}$/);
   assert.ok(material.source.schemaPath.endsWith('tiinex.evidence.v1.schema.md'));
 });
@@ -86,8 +86,8 @@ test('CLI form-field-help returns field/line provenance without external materia
   assert.equal(receipt.fields.length, 1);
   assert.equal(receipt.fields[0].status, 'qualified');
   assert.ok(receipt.fields[0].source.fieldLine > 0);
-  assert.equal(receipt.fields[0].source.commit, '');
-  assert.equal(receipt.fields[0].source.publicationState, 'qualified-local-unpublished');
+  assert.match(receipt.fields[0].source.commit, /^[0-9a-f]{40}$/);
+  assert.equal(receipt.fields[0].source.publicationState, 'published-immutable-canonical');
 });
 
 test('portable CLI unresolved field reports a structured finding, never a character-expanded string', () => {

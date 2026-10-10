@@ -11,6 +11,7 @@ import { portableCliRuntimeContentRoots } from '../src/tooling/portable/adapters
 import { portableCliRuntimeProjection, projectPortableCliOperation } from '../src/tooling/portable/adapters/cli/cli.invocation.js';
 import { prepareHandoffManufactureCliCommand } from '../src/tooling/portable/adapters/cli/cli.handoff-manufacture.js';
 import { describeSchemaCapabilities } from '../src/schemas/capability.registry.js';
+import { buildPortableRepairPlan } from '../src/tooling/portable/draft/draft.operations.js';
 
 const runtime = Object.freeze({
   commandInvocation: Object.freeze({
@@ -69,7 +70,7 @@ test('Transition discovery help makes workspace-contributed capability discovera
   assert.match(neighborhoodHelp, /explicitly attached by a Schema Transition Companion/i);
   assert.match(neighborhoodHelp, /attachment still does not prove .*applicability.*executability/i);
   assert.match(help, /regardless of their workspace-local directory/i);
-  assert.match(help, /Independent supplied representations stay independent/i);
+  assert.match(help, /Independent packages with distinct bytes or qualified bindings stay separate/i);
   assert.match(help, /do not imply .*applicability.*execution/i);
 });
 
@@ -127,4 +128,20 @@ test('explicit CLI content-source flags initialize source runtime composition be
   assert.equal(receipt.schemas.state, 'ready');
   assert.ok(receipt.schemas.total > 0);
   assert.equal(receipt.schemas.registrySource, 'portable-content-source-composition');
+});
+
+
+test('LLM repair plan cannot downgrade an integrity mismatch behind optional detection findings', () => {
+  const plan = buildPortableRepairPlan({ findings: [
+    { severity: 'info', code: 'integrity.c14n-v2.detected', message: 'Method is declared.' },
+    { severity: 'info', code: 'integrity.method-reference.qualified', message: 'Method reference is qualified.' },
+    { severity: 'warning', code: 'integrity.c14n-v2.mismatch', message: 'Self-integrity digest mismatch.' }
+  ] });
+  assert.equal(plan.steps.length, 1);
+  assert.equal(plan.steps[0].category, 'integrity');
+  assert.equal(plan.steps[0].priority, 'important');
+  assert.deepEqual(plan.steps[0].codes, ['integrity.c14n-v2.detected', 'integrity.method-reference.qualified', 'integrity.c14n-v2.mismatch']);
+  assert.match(plan.steps[0].action, /explicitly authorized Core repair/);
+  assert.match(plan.steps[0].constraint, /mismatch is not permission to reseal/i);
+  assert.equal(plan.boundary.automaticRewrite, false);
 });

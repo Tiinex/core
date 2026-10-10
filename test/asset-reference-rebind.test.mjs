@@ -58,7 +58,9 @@ test('unqualified text mention, JSON/TS reference, symlink or broken Tiinex inte
  await writeFile(extra,'File photo 01.png is used here outside a qualifying Markdown link.');
  let p=await inspect(req(root));assert.equal(p.status,'blocked');
  await rm(extra);await writeFile(path.join(root,'.topics/work/notes/002-code.ts'),'const source = "photo 01.png";');
- p=await inspect(req(root));assert.equal(p.status,'blocked');
+ p=await inspect(req(root));assert.equal(p.status,'ready','Unrelated same-basename string in a different directory is not a qualified reference');
+ await writeFile(path.join(root,'.topics/work/notes/002-code.ts'),'const source = "../../source/photo 01.png";');
+ p=await inspect(req(root));assert.equal(p.status,'blocked','Resolvable non-Markdown string reference still fails closed');
  await rm(path.join(root,'.topics/work/notes/002-code.ts'));
  await writeFile(path.join(root,record),original+'\ninvalid edit');p=await inspect(req(root));assert.equal(p.status,'blocked');
  await writeFile(path.join(root,record),original);

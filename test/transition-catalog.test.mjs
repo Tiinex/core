@@ -10,6 +10,8 @@ import { indexPortableMaterials } from '../src/tooling/portable/package/material
 import { compilePortableSchemaContractChain } from '../src/tooling/portable/schema/contract.compile.js';
 import { schemaMarkdown } from '../src/schemas/registry.js';
 import { runPortableOperation } from '../src/tooling/portable/operation.catalog.js';
+import { buildArtifactCreationContract, validateArtifactCreationResult } from '../src/schemas/creation.contracts.js';
+import { renderArtifactCreationDraftMarkdown } from '../src/schemas/creation.renderer.js';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -205,7 +207,7 @@ test('canonical identifier and version do not collapse independent Transition re
   assert.equal(result.counts.readQualified, 2);
   assert.equal(result.counts.projectedCandidates, 2);
   assert.equal(result.candidates.every((definition) => definition.canonicalIdentifier === 'tiinex.site.create-task.v1'), true);
-  assert.equal(result.limitations.some((item) => /not universal representation identity/i.test(item)), true);
+  assert.equal(result.limitations.some((item) => /different package context, Definition bytes or unqualified material/i.test(item)), true);
 });
 
 test('Transition neighborhood requires explicit Semantic Package plus Schema Transition Companion attachment', () => {
@@ -313,4 +315,60 @@ test('explicit companion attachment and generation profile survive non-dot Trans
     assert.equal(result.candidates[0].authoringProfile?.boundary.executionAuthorized,false);
     assert.equal(result.boundary.applicability,'not-evaluated');
   }
+});
+
+test('own Evidence Transition Definition becomes authoring preset only with exact Evidence Generation and Companion attachment', () => {
+  // Same existing qualified Core material chain as the Task example. We alter
+  // canonical artifacts IN MEMORY only; no workspace sidecar or new schema.
+  const source = explicitGenerationFixture();
+  const base=source.map((file)=>({...file, path:file.path.replaceAll('task', 'evidence'),
+    locator:{...file.locator,localPath:file.locator.localPath.replaceAll('task','evidence')},
+    content:file.content.replaceAll('tiinex.task.v1','tiinex.evidence.v1').replaceAll('Task', 'Evidence').replaceAll('task', 'evidence')}));
+  const schema=base.find((x)=>x.path==='pkg/tiinex.evidence.v1.schema.md');
+  assert.ok(schema,'fixture Evidence schema');schema.content=currentSchemaMarkdown('tiinex.evidence.v1');
+  const generation=base.find((x)=>x.path.endsWith('evidence-authoring-generation.trace.md'));
+  assert.ok(generation,'fixture Evidence generation');
+  generation.content=sealC14nV2Self(generation.content
+    .replace('- Objective\n  - Input Source Policy: defaulted-input\n  - Defaultable Input: "Review the bounded objective before saving."',
+      '- Known Source\n  - Input Source Policy: defaulted-input\n  - Defaultable Input: "Reviewed source input, not proof of truth."')
+    .replace('- Scope\n  - Input Source Policy: defaulted-input\n  - Defaultable Input: {"Included":"bounded fixture","Excluded":"execution"}',
+      '- Supported Claim Or Question\n  - Input Source Policy: defaulted-input\n  - Defaultable Input: {"Supported Claim Or Question":"What was observed?","Evidence Role":"illustration"}')
+  ).markdown;
+  const attached=projectPortableTransitionNeighborhood({files:base,outputSchemaId:'tiinex.evidence.v1'});
+  const [selected]=attached.candidates.filter((x)=>x.authoringProfile?.state==='qualified');
+  assert.ok(selected,JSON.stringify(attached.findings.slice(0,10)));
+  assert.equal(selected.authoringProfile.defaults['Known Source'],'Reviewed source input, not proof of truth.');
+  assert.deepEqual(selected.authoringProfile.defaults['Supported Claim Or Question'],{'Supported Claim Or Question':'What was observed?','Evidence Role':'illustration'});
+  assert.equal(selected.authoringProfile.boundary.executionAuthorized,false);
+  // The operator explicitly selects this qualified, non-executable preset and
+  // reviews/completes the *target Evidence Core creation contract*. No extra
+  // persisted form snapshot or dynamically synthesized schema is involved.
+  const evidence=buildArtifactCreationContract({schemaId:'tiinex.evidence.v1',transitionType:'create-artifact'});
+  assert.equal(evidence.status,'ready');
+  const completedValues={
+    ...selected.authoringProfile.defaults,
+    'Preservation Basis':'Locally supplied test material',
+    'Provenance Limits':'Synthetic fixture only',
+    'Evidence Material':[{name:'capture',fields:{Material:'[capture](capture.png)','Material Kind':'PNG image',Description:'Fixture image reference'}}],
+    'Preservation State':'Local fixture', 'Fidelity Notes':'No actual camera source', 'Known Losses':'none',
+    'Does Not Prove':'Acceptance of any product','Not Yet Used As':'Sigma result','Must Not Be Treated As':'Verified external observation'
+  };
+  const evidenceMarkdown=renderArtifactCreationDraftMarkdown(evidence,{values:completedValues,title:'Custom preset Evidence',createdAt:'2026-10-10T12:00:00Z'});
+  const creation=validateArtifactCreationResult({schemaId:'tiinex.evidence.v1',path:'.topics/work/evidence/custom-preset.trace.md',markdown:evidenceMarkdown,status:'local',sourceMode:'local-test'},{},{contract:evidence});
+  assert.equal(creation.ok,true,JSON.stringify(creation.findings));
+  assert.match(evidenceMarkdown,/Supported Claim Or Question: What was observed\?/);
+  assert.equal(evidenceMarkdown.includes('Tiinex automatic execution'),false);
+  const noCompanion=base.filter((x)=>!x.path.endsWith('tiinex.evidence.v1-transitions.trace.md'));
+  const blocked=projectPortableTransitionNeighborhood({files:noCompanion,outputSchemaId:'tiinex.evidence.v1'});
+  assert.equal(blocked.candidates.length,0,'Definition alone is never an attached preset');
+  const noGeneration=base.filter((x)=>!x.path.endsWith('evidence-authoring-generation.trace.md'));
+  const withoutAuthority=projectPortableTransitionNeighborhood({files:noGeneration,outputSchemaId:'tiinex.evidence.v1'});
+  assert.equal(withoutAuthority.candidates.filter((x)=>x.authoringProfile?.state==='qualified').length,0,'Missing explicit generation authority cannot prefill');
+  const impossible=base.map((file)=>({...file,content:file.content}));
+  const bogus=impossible.find((x)=>x.path.endsWith('evidence-authoring-generation.trace.md'));
+  bogus.content=sealC14nV2Self(bogus.content.replace('- Known Source\n', '- Unknown Host Only Setting\n')).markdown;
+  const nonRepresentable=projectPortableTransitionNeighborhood({files:impossible,outputSchemaId:'tiinex.evidence.v1'});
+  assert.equal(nonRepresentable.candidates.filter((x)=>x.authoringProfile?.state==='qualified').length,0,
+    'Target creation cannot silently discard generated values that do not match the Core schema');
+  assert.ok(nonRepresentable.findings.some((x)=>x.code==='portable.transition-authoring.defaulted-input.not-in-target-creation'));
 });

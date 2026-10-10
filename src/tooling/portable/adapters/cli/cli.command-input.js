@@ -259,6 +259,12 @@ export async function commandInput(parsed, runtime = {}) {
     return { input: value.qualificationInput || value.input || value, options: {} };
   }
 
+  // An exact self-contained Core projection request is an independently
+  // runnable portable tool, not a VS Code-only wrapper or material loader.
+  if (parsed.command === 'project-lineage-maintenance' && (flags.request || flags.plan)) {
+    const request = await readOptionalJson(flags.request || flags.plan);
+    return { input: request.request || request, options: {} };
+  }
   const explicitTargets = parsed.positionals.length ? parsed.positionals : flags.input ? [flags.input] : [];
   const schemaAwareOperations = new Set(['resolve-schema-material', 'resolve-schema-chain-material', 'describe-schema-chain', 'make-writer-brief', 'schema-guide', 'read-schema-section', 'plan-artifact', 'prepare-materialization', 'create-local-artifact-set', 'create-local-draft', 'update-local-draft', 'validate-draft', 'stage-draft', 'materialize-durable-findings', 'process-live-turn', 'export-live-lineage']);
   const schemaAware = schemaAwareOperations.has(parsed.command);

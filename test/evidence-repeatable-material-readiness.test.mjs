@@ -78,13 +78,14 @@ test('Old scalar Material cannot masquerade as a structured repeated collection 
   assert.throws(() => render({...values,'Evidence Material':[ {name:'x', fields:{Material:['a','b'],'Material Kind':'screenshot',Description:'Unqualified array'}} ]}),/creation-one-line-value-structured-unqualified/);
 });
 
-test('Native v1 revision is source-checksummed and explicitly unpublished rather than a fabricated GitHub snapshot', () => {
+test('Native v1 Evidence retains its verified published byte identity without fabricated source claims', () => {
   const schema = schemaMarkdown('tiinex.evidence.v1');
   const parsed = parsePortableSchemaDocument(schema);
   assert.equal(parsed.schemaId, 'tiinex.evidence.v1');
   assert.ok(parsed.validation.groups.some((group) => group.name === 'Evidence Material' && group.categories.some((cat)=>cat.name === 'Entry Shape')));
   const binding = schemaRegistry.byId.get('tiinex.evidence.v1').binding;
-  assert.equal(binding.publicationState, 'qualified-local-unpublished');
-  assert.equal(binding.sourceCommit, '');
+  assert.equal(binding.publicationState, 'published-immutable-canonical');
+  assert.match(binding.sourceCommit, /^[0-9a-f]{40}$/);
+  assert.match(binding.permalink, /^https:\/\/github\.com\/Tiinex\/docs\/blob\/[0-9a-f]{40}\//);
   assert.equal(schemaRegistry.byId.get('tiinex.evidence.v1').schemaSource.qualify().state, 'qualified');
 });

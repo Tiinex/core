@@ -101,18 +101,25 @@ export function explainPortableFindings(input = {}) {
 export function buildPortableRepairPlan(input = {}) {
   const explanation = explainPortableFindings(input);
   const steps = [];
-  const seen = new Set();
+  const groups = new Map();
   for (const item of explanation.explanations) {
     const key = `${item.category}:${item.recommendedAction}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  for (const group of groups.values()) {
+    const first = group[0];
+    // One optional info finding must not hide a later integrity mismatch.
+    // Derive the repair priority from the strongest grouped finding.
+    const priority = group.some((item) => item.blocking) ? 'blocking'
+      : group.some((item) => item.severity === 'warning') ? 'important' : 'optional';
     steps.push(Object.freeze({
       order: steps.length + 1,
-      priority: item.blocking ? 'blocking' : item.severity === 'warning' ? 'important' : 'optional',
-      category: item.category,
-      action: item.recommendedAction,
-      codes: Object.freeze(explanation.explanations.filter((entry) => entry.category === item.category && entry.recommendedAction === item.recommendedAction).map((entry) => entry.code)),
-      constraint: item.preserveBoundary
+      priority,
+      category: first.category,
+      action: first.recommendedAction,
+      codes: Object.freeze([...new Set(group.map((entry) => entry.code))]),
+      constraint: first.preserveBoundary
     }));
   }
   steps.sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.order - b.order);
@@ -238,7 +245,7 @@ function recommendedAction(finding = {}) {
   if (category === 'schema') return 'Confirm the intended schema and obtain its readable canonical contract before rewriting the body.';
   if (category === 'continuity') return 'Repair only the declared Parent/Trace/continuity fields using known loaded material; do not invent a parent.';
   if (category === 'provenance') return 'State the known origin/source boundary explicitly and preserve unknown or local status.';
-  if (category === 'integrity') return 'Regenerate integrity only with the maintained integrity tool after content is final.';
+  if (category === 'integrity') return 'Verify the exact source bytes and loaded lineage first. Only an explicitly authorized Core repair may regenerate integrity; never reseal untrusted changes or change Parent digests solely to silence a mismatch.';
   if (category === 'structure') return 'Add or correct the named required section/field without removing unknown supplied content.';
   return 'Review the relevant schema rule and make the smallest local change that resolves the finding.';
 }
@@ -247,7 +254,7 @@ function boundaryWarning(finding = {}) {
   const category = findingCategory(finding);
   if (category === 'continuity') return 'Never guess a parent or convert Origin into Parent.';
   if (category === 'provenance') return 'Never infer GitHub/source-backed status for local material.';
-  if (category === 'integrity') return 'Do not hand-edit integrity values.';
+  if (category === 'integrity') return 'A mismatch is not permission to reseal: validate source authority, Parent and loaded descendants. Use Core-qualified repair and re-audit, otherwise BLOCK.';
   return 'Preserve unknown sections and unrelated content.';
 }
 

@@ -5,6 +5,7 @@ import { canonicalC14nV2SelfState } from '../../../../integrity/integrity.c14nV2
 import { LINEAGE_MAINTENANCE_PLAN_SCHEMA_ID } from '../../lineage/lineage.maintenance.projection.js';
 import { ASSET_RELOCATION_PLAN_SCHEMA_ID, cleanRelative } from '../../lineage/asset.relocation.projection.js';
 import { inspectPortableAssetRelocationWorkspace } from './asset.relocation.inspect.js';
+import { qualifyScopedMoveInspectionReceipt } from './lineage.scoped-move.inspect.js';
 import {
   acquireLineageMaintenanceWorkspaceLocks,
   cleanupLineageMaintenanceTransaction,
@@ -23,8 +24,14 @@ export const LINEAGE_MAINTENANCE_APPLY_SCHEMA_ID = 'tiinex.portable.lineage-main
 export async function applyPortableLineageMaintenancePlan(plan = {}, options = {}) {
   const findings = [];
   const binaryAssetPlan = plan?.schema === ASSET_RELOCATION_PLAN_SCHEMA_ID;
+  const mixedAssetPlan = plan?.schema === LINEAGE_MAINTENANCE_PLAN_SCHEMA_ID && plan?.operation?.kind === 'scoped-move' && (plan?.changes||[]).some(c=>c.kind==='binary-asset');
+  const containsBinary = binaryAssetPlan || mixedAssetPlan;
   if ((!binaryAssetPlan && plan?.schema !== LINEAGE_MAINTENANCE_PLAN_SCHEMA_ID) || plan?.status !== 'ready' || plan?.executable !== true) {
     return blocked(findings, 'lineage-maintenance.apply.plan-unqualified', 'Lineage maintenance apply requires one exact ready executable plan.');
+  }
+  if (mixedAssetPlan) {
+    const shape=qualifyMixedAssetPlanShape(plan);
+    if (shape.length) return blockedEnvelope(plan,shape);
   }
   if (binaryAssetPlan) {
     const shape = qualifyBinaryAssetPlanShape(plan);
@@ -39,8 +46,12 @@ export async function applyPortableLineageMaintenancePlan(plan = {}, options = {
   for (const id of workspaceIds) if (!roots.get(id)) findings.push(finding('error', 'lineage-maintenance.apply.workspace-root-missing', `Workspace root is unavailable for ${id}.`, { workspaceId: id }));
   if (findings.length) return blockedEnvelope(plan, findings);
 
+  if (plan.inspectionReceipt) {
+    const receipt=await qualifyScopedMoveInspectionReceipt(plan,Object.fromEntries(roots));
+    if(receipt.status!=='ready') findings.push(finding('error',receipt.code||'lineage-maintenance.apply.inspection-failed','Workspace reference-closure inspection changed before Apply.',{detail:receipt.detail||''}));
+  }
   await qualifyCurrentInputs(plan, roots, findings);
-  if (binaryAssetPlan) await qualifyBinaryAssetPaths(plan, roots, findings);
+  if (containsBinary) await qualifyBinaryAssetPaths(plan, roots, findings);
   if (binaryAssetPlan) await qualifyAssetInspectionCurrent(plan, roots, findings);
   await qualifyTargetCollisions(plan, roots, findings);
   if (findings.length) return blockedEnvelope(plan, findings);
@@ -56,8 +67,12 @@ export async function applyPortableLineageMaintenancePlan(plan = {}, options = {
   let releaseLocks = true;
   try {
     findings.length = 0;
+    if (plan.inspectionReceipt) {
+      const receipt=await qualifyScopedMoveInspectionReceipt(plan,Object.fromEntries(roots));
+      if(receipt.status!=='ready') findings.push(finding('error',receipt.code||'lineage-maintenance.apply.inspection-failed','Workspace changed while acquiring transaction locks.',{detail:receipt.detail||''}));
+    }
     await qualifyCurrentInputs(plan, roots, findings);
-    if (binaryAssetPlan) await qualifyBinaryAssetPaths(plan, roots, findings);
+    if (containsBinary) await qualifyBinaryAssetPaths(plan, roots, findings);
     if (binaryAssetPlan) await qualifyAssetInspectionCurrent(plan, roots, findings);
     await qualifyTargetCollisions(plan, roots, findings);
     if (findings.length) throw new ApplyAbort('lineage-maintenance.apply.pre-mutation-requalification-failed');
@@ -68,7 +83,7 @@ export async function applyPortableLineageMaintenancePlan(plan = {}, options = {
     for (const change of affected) {
       const state = journals.get(String(change.workspaceId));
       const staged = transactionStagePath(state, change.toPath);
-      const payload = binaryAssetPlan && change.kind === 'binary-asset' ? await readFile(safeJoin(roots.get(String(change.workspaceId)), change.fromPath)) : change.markdown;
+      const payload = containsBinary && change.kind === 'binary-asset' ? await readFile(safeJoin(roots.get(String(change.workspaceId)), change.fromPath)) : change.markdown;
       await writeFileDurable(staged, payload);
     }
     await updateLineageMaintenanceTransactionPhase(journals, 'prepared');
@@ -77,6 +92,10 @@ export async function applyPortableLineageMaintenancePlan(plan = {}, options = {
     // destructive source staging. Recheck after the externally visible prepared
     // checkpoint, while the cooperative lock remains held.
     if (binaryAssetPlan) await qualifyAssetInspectionCurrent(plan, roots, findings);
+    if (plan.inspectionReceipt) {
+      const receipt=await qualifyScopedMoveInspectionReceipt(plan,Object.fromEntries(roots));
+      if(receipt.status!=='ready')findings.push(finding('error',receipt.code||'lineage-maintenance.apply.inspection-failed','Workspace changed during prepared transaction.',{detail:receipt.detail||''}));
+    }
     if (findings.length) throw new ApplyAbort('asset-relocation.apply.inspection-changed-during-prepared');
 
     for (const change of affected) {
@@ -90,7 +109,7 @@ export async function applyPortableLineageMaintenancePlan(plan = {}, options = {
         throw new ApplyAbort('lineage-maintenance.apply.input-missing-after-lock');
       }
       const actual = await fingerprintFile(source);
-      if (binaryAssetPlan && sha256Hex(await readFile(source)) !== inputSha256(plan, workspaceId, change.fromPath)) {
+      if (containsBinary && change.kind==='binary-asset' && sha256Hex(await readFile(source)) !== inputSha256(plan, workspaceId, change.fromPath)) {
         findings.push(finding('error','asset-relocation.apply.strong-source-drift',`Source SHA-256 changed before mutation: ${workspaceId}::${change.fromPath}`));
         throw new ApplyAbort('asset-relocation.apply.strong-source-drift');
       }
@@ -103,7 +122,7 @@ export async function applyPortableLineageMaintenancePlan(plan = {}, options = {
       await mkdir(path.dirname(backup), { recursive: true });
       await rename(source, backup);
       const backupFingerprint = await fingerprintFile(backup);
-      if (binaryAssetPlan && sha256Hex(await readFile(backup)) !== inputSha256(plan, workspaceId, change.fromPath)) {
+      if (containsBinary && change.kind==='binary-asset' && sha256Hex(await readFile(backup)) !== inputSha256(plan, workspaceId, change.fromPath)) {
         findings.push(finding('error','asset-relocation.apply.strong-backup-drift',`Source backup SHA-256 changed: ${workspaceId}::${change.fromPath}`));
         throw new ApplyAbort('asset-relocation.apply.strong-backup-drift');
       }
@@ -119,7 +138,7 @@ export async function applyPortableLineageMaintenancePlan(plan = {}, options = {
       const workspaceId = String(change.workspaceId);
       const root = roots.get(workspaceId);
       const target = safeJoin(root, change.toPath);
-      if (binaryAssetPlan) await assertNoSymlinkComponents(root, change.toPath);
+      if (containsBinary) await assertNoSymlinkComponents(root, change.toPath);
       if (await exists(target)) {
         findings.push(finding('error', 'lineage-maintenance.apply.concurrent-target-collision', `Projected target appeared after source staging; apply will not overwrite it: ${workspaceId}::${change.toPath}`, { workspaceId, path: change.toPath }));
         throw new ApplyAbort('lineage-maintenance.apply.concurrent-target-collision');
@@ -188,7 +207,7 @@ async function qualifyCurrentInputs(plan, roots, findings) {
     catch (error) { findings.push(finding('error', 'lineage-maintenance.apply.input-missing', `Plan input is unavailable: ${workspaceId}::${input.path}`, { message: error?.message || String(error) })); continue; }
     const fingerprint = stableFingerprintBytes(bytes);
     if (fingerprint !== input.fingerprint) findings.push(finding('error', 'lineage-maintenance.apply.input-drift', `Plan input changed after projection: ${workspaceId}::${input.path}`, { expected: input.fingerprint, actual: fingerprint }));
-    if (plan.schema === ASSET_RELOCATION_PLAN_SCHEMA_ID && sha256Hex(bytes) !== input.sha256)
+    if (input.sha256 && sha256Hex(bytes) !== input.sha256)
       findings.push(finding('error', 'asset-relocation.apply.input-sha256-drift', `Source strong digest differs from the projected bytes: ${workspaceId}::${input.path}`));
   }
 }
@@ -214,10 +233,10 @@ async function verifyAppliedOutputs(plan, affected, roots, findings) {
     catch (error) { findings.push(finding('error', 'lineage-maintenance.apply.post-output-missing', `Applied output is unavailable: ${workspaceId}::${change.toPath}`, { message: error?.message || String(error) })); continue; }
     const actual = stableFingerprintBytes(bytes);
     if (actual !== change.afterFingerprint) findings.push(finding('error', 'lineage-maintenance.apply.post-byte-mismatch', `Applied output does not match projected bytes: ${workspaceId}::${change.toPath}`, { expected: change.afterFingerprint, actual }));
-    if (plan.schema === ASSET_RELOCATION_PLAN_SCHEMA_ID) {
+    if (plan.schema === ASSET_RELOCATION_PLAN_SCHEMA_ID || change.kind==='binary-asset') {
       if (sha256Hex(bytes) !== change.sha256) findings.push(finding('error','asset-relocation.apply.post-sha256-mismatch',`Asset output SHA-256 differs from plan: ${workspaceId}::${change.toPath}`));
       if (['artifact-create','artifact-reference-rebind'].includes(change.kind) && canonicalC14nV2SelfState(bytes.toString('utf8')).state !== 'verified') findings.push(finding('error','asset-relocation.apply.rebound-self-unqualified',`Rebound Tiinex artifact lost self integrity: ${workspaceId}::${change.toPath}`));
-    } else {
+    } else if (change.toPath.endsWith('.trace.md')) {
       const self = canonicalC14nV2SelfState(bytes.toString('utf8'));
       if (self.state !== 'verified') findings.push(finding('error', 'lineage-maintenance.apply.post-self-unqualified', `Applied output self integrity is not verified: ${workspaceId}::${change.toPath}`, { state: self.state }));
     }
@@ -228,6 +247,33 @@ async function verifyAppliedOutputs(plan, affected, roots, findings) {
       if (!remainsAsOutput && await exists(old)) findings.push(finding('error', 'lineage-maintenance.apply.old-path-remains', `Moved source path still exists after apply: ${oldKey}`));
     }
   }
+}
+
+function qualifyMixedAssetPlanShape(plan) {
+  const failures=[];
+  const fail=(code,message)=>failures.push(finding('error',`lineage-maintenance.apply.${code}`,message));
+  if (plan.representationCoverage!=='complete'||plan.assetCoverage!=='complete'||plan.referenceCoverage!=='complete') fail('mixed-coverage-required','Complete artifact, asset and reference coverage are mandatory.');
+  const op=plan.operation || {};
+  const direct=op.placement==='same' && op.parentPolicy==='keep';
+  const inserted=['append','prepend'].includes(op.placement) && ['new','keep'].includes(op.parentPolicy) &&
+    cleanRelative(op.targetPath) && op.targetDirectory===path.posix.dirname(op.targetPath) &&
+    (plan.inputs||[]).some(x=>x.workspaceId===op.workspaceId && x.path===op.targetPath) &&
+    (op.parentPolicy!=='keep' || (plan.changes||[]).every(c=>c.kind==='binary-asset'||c.semanticParent?.changed===false));
+  if(op.scope==='alone' || (!direct && !inserted))
+    fail('mixed-operation-invalid','Mixed move requires a qualified scope and Same + Keep Parent or a qualified anchored insertion. Keep Parent insertion cannot change semantic Parent.');
+  const seen=new Set(),destinations=new Set();
+  for(const change of plan.changes||[]) {
+    if (destinations.has(`${change.workspaceId}::${change.toPath}`)) fail('mixed-destination-duplicate','Plan contains repeated output path.');
+    destinations.add(`${change.workspaceId}::${change.toPath}`);
+    if(change.kind!=='binary-asset')continue;
+    const input=(plan.inputs||[]).find(x=>x.workspaceId===change.workspaceId&&x.path===change.fromPath);
+    if(seen.has(change.fromPath)||!input || !change.pathChanged || change.bytesChanged || !cleanRelative(change.fromPath) || !cleanRelative(change.toPath) || change.fromPath.endsWith('.trace.md') || change.toPath.endsWith('.trace.md') || !/^[a-f0-9]{64}$/.test(change.sha256||'') || input.sha256!==change.sha256 || input.fingerprint!==change.beforeFingerprint || change.beforeFingerprint!==change.afterFingerprint) fail('mixed-binary-invalid','Each binary must bind one strongly fingerprinted existing file and a different safe target.');
+    seen.add(change.fromPath);
+  }
+  if (!seen.size || (plan.inputs||[]).filter(x=>x.sha256).length!==seen.size) fail('mixed-inputs-invalid','Mixed plans may not carry unknown or duplicate binary sources.');
+  const calculated=stableFingerprintBytes(utf8Bytes(JSON.stringify(plan.inputs||[])));
+  if (plan.inputFingerprint!==calculated)fail('mixed-input-fingerprint-invalid','Combined artifact/binary source fingerprint is not consistent.');
+  return failures;
 }
 
 function qualifyBinaryAssetPlanShape(plan) {
@@ -296,6 +342,7 @@ function fingerprintPlan(plan) {
     representationCoverage: plan.representationCoverage,
     operation: plan.operation,
     inputFingerprint: plan.inputFingerprint,
+    ...(plan.inspectionReceipt ? {inspectionSnapshotSha256:plan.inspectionReceipt.snapshotSha256} : {}),
     outputs: (plan.changes || []).map(({ workspaceId, fromPath, toPath, afterFingerprint }) => ({ workspaceId, fromPath, toPath, afterFingerprint }))
   })));
 }
@@ -309,7 +356,7 @@ function readyEnvelope(plan, affected, findings, transaction) { return Object.fr
   transaction: Object.freeze({ id: transaction.transactionId, durableJournal: Boolean(transaction.durableJournal), cooperativeWorkspaceLocking: Boolean(transaction.locks) }),
   planFingerprint: String(plan.planFingerprint || ''), operation: plan.operation,
   changes: Object.freeze(affected.map((item) => Object.freeze({ workspaceId: item.workspaceId, fromPath: item.fromPath, toPath: item.toPath, pathChanged: item.pathChanged, bytesChanged: item.bytesChanged, semanticParentChanged: Boolean(item.semanticParent?.changed) }))),
-  verification: Object.freeze({ exactProjectedBytes: true, selfIntegrityVerified: plan.schema !== ASSET_RELOCATION_PLAN_SCHEMA_ID || affected.some(x=>x.kind === 'artifact-reference-rebind'), binarySha256Verified: plan.schema === ASSET_RELOCATION_PLAN_SCHEMA_ID, unexpectedRemoteMutation: false }),
+  verification: Object.freeze({ exactProjectedBytes: true, selfIntegrityVerified: affected.filter(x=>x.toPath.endsWith('.trace.md')).length > 0, binarySha256Verified: plan.schema === ASSET_RELOCATION_PLAN_SCHEMA_ID || affected.some(x=>x.kind==='binary-asset'), unexpectedRemoteMutation: false }),
   findings: Object.freeze(findings), findingSummary: summarize(findings),
   boundary: Object.freeze({ localFilesystemMutation: Boolean(affected.length), exactPlanRequired: true, inputDriftFailsClosed: true, cooperativeWorkspaceLocking: Boolean(transaction.locks), durableTransactionJournal: Boolean(transaction.durableJournal), crashRecovery: Boolean(transaction.durableJournal), concurrentTargetCollisionFailsClosed: true, rollbackOnWriteFailure: true, rollbackOnVerificationFailure: true, planFingerprintVerified: true, remoteWrite: false, gitMutation: false })
 }); }

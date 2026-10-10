@@ -63,7 +63,10 @@ export async function inspectPortableAssetRelocationWorkspace(input={}) {
     try {content=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}
     catch{findings.push(`invalid-utf8:${relative}`);continue;}
     if(!relative.endsWith('.md')) {
-      if(requested.some(x=>content.includes(x)||content.includes(path.posix.basename(x))))findings.push(`non-markdown-reference-possible:${relative}`);
+      // Ordinary prose mentioning a basename is not a filesystem reference.
+      // A string literal that resolves to the exact asset from THIS source
+      // directory is a possible reference and still blocks until qualified.
+      if(requested.some(x=>hasResolvableNonMarkdownReference(content,relative,x)))findings.push(`non-markdown-reference-possible:${relative}`);
       continue;
     }
     const projected=projectAssetReferenceRebind({markdown:content,sourcePath:relative,assetPaths:targetMap});
@@ -85,4 +88,23 @@ export async function inspectPortableAssetRelocationWorkspace(input={}) {
   const projected=projectPortableAssetRelocation({workspaceId,targetDirectory:directory,lineageDimension:dimension,assets,referenceMaterials,targetDirectoryEntries,artifactCreation:input.artifactCreation,representationCoverage:'complete',referenceCoverage:'complete',inspectionMode:scanEvidence.mode});
   return Object.freeze({...projected,inspection:scanEvidence});
   function blocked(code,message,detail={}) {return Object.freeze({schema:'tiinex.portable.asset-relocation-workspace-inspection.v1',status:'blocked',executable:false,findings:[{severity:'error',code,message,...detail}],findingSummary:{error:1,warning:0,total:1}});}
+}
+
+/** Only potential resolvable path *tokens* block an asset relocation.
+ * Filename substrings in unrelated tests do not establish reference edges.
+ * A real non-Markdown edge remains fail-closed until a format-specific rebind
+ * can prove it safe. */
+export function hasResolvableNonMarkdownReference(content,sourcePath,assetPath) {
+  const sourceDir=path.posix.dirname(sourcePath);
+  const literals=/(?:["'`])((?:\\.|[^"'`\r\n]){1,1024})(?:["'`])/g;
+  for (const match of String(content).matchAll(literals)) {
+    let token=match[1].trim();
+    if(!token || token.includes('\\') || /[{}<>]/.test(token) || /^[a-z][a-z0-9+.-]*:/i.test(token))continue;
+    token=token.replace(/[?#].*$/,'');
+    try {token=decodeURIComponent(token);} catch {continue;}
+    if(token===assetPath || token.replace(/^\/+/,'')===assetPath)return true;
+    if(token.startsWith('/'))continue;
+    if(path.posix.normalize(path.posix.join(sourceDir,token))===assetPath)return true;
+  }
+  return false;
 }

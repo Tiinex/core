@@ -9,10 +9,14 @@ test('plain-ID local Evidence authority requires exact qualified Docs bytes and 
   const source = module.schemaSource.qualify();
   assert.equal(source.state, 'qualified');
   assert.equal(source.validationLineageAuthority?.state, 'qualified');
-  assert.deepEqual(qualifyLocalSchemaReferenceAuthority(module.binding, source, 'plain-schema-id'), { state: 'qualified', basis: 'qualified-local-docs-exact-snapshot' });
-  assert.equal(qualifyLocalSchemaReferenceAuthority(module.binding, source, 'markdown-link').state, 'unavailable');
+  // Simulate a separate, genuinely unpublished local Docs schema without
+  // demoting the now-published first-party Evidence binding in production.
+  const localBinding = { ...module.binding, sourceCommit: '', permalink: '', rawUrl: '', publicationState: 'qualified-local-unpublished', schemaReferencePublicationState: 'qualified-local-unpublished', snapshotCompleteness: 'exact-local-docs-snapshot' };
+  const localSource = { ...source, materialIdentity: { ...source.materialIdentity, sourceCommit: '' } };
+  assert.deepEqual(qualifyLocalSchemaReferenceAuthority(localBinding, localSource, 'plain-schema-id'), { state: 'qualified', basis: 'qualified-local-docs-exact-snapshot' });
+  assert.equal(qualifyLocalSchemaReferenceAuthority(localBinding, localSource, 'markdown-link').state, 'unavailable');
 
-  const withField = (key, value) => ({ ...module.binding, [key]: value });
+  const withField = (key, value) => ({ ...localBinding, [key]: value });
   const unqualified = [
     withField('checksum', { value: '0'.repeat(64) }),
     withField('sourceBlobSha', '0'.repeat(40)),
@@ -23,9 +27,9 @@ test('plain-ID local Evidence authority requires exact qualified Docs bytes and 
     withField('permalink', 'https://example.invalid/forged.schema.md'),
     withField('sourceRepository', 'Another/docs')
   ];
-  for (const binding of unqualified) assert.equal(qualifyLocalSchemaReferenceAuthority(binding, source, 'plain-schema-id').state, 'unavailable');
-  assert.equal(qualifyLocalSchemaReferenceAuthority(module.binding, { ...source, state: 'unavailable' }, 'plain-schema-id').state, 'unavailable');
-  assert.equal(qualifyLocalSchemaReferenceAuthority(module.binding, { ...source, validationLineageAuthority: { state: 'unresolved' } }, 'plain-schema-id').state, 'unavailable');
+  for (const binding of unqualified) assert.equal(qualifyLocalSchemaReferenceAuthority(binding, localSource, 'plain-schema-id').state, 'unavailable');
+  assert.equal(qualifyLocalSchemaReferenceAuthority(localBinding, { ...localSource, state: 'unavailable' }, 'plain-schema-id').state, 'unavailable');
+  assert.equal(qualifyLocalSchemaReferenceAuthority(localBinding, { ...localSource, validationLineageAuthority: { state: 'unresolved' } }, 'plain-schema-id').state, 'unavailable');
 });
 
 test('accepted Axiom local authority remains a separate explicitly scoped mode of the same reference qualification', () => {

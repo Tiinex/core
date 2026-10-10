@@ -22,6 +22,7 @@ export * from './schema/form.fieldHelp.js';
 export * from './schema/llm.companion.js';
 export * from './lineage/lineage.search.js';
 export * from './lineage/lineage.maintenance.projection.js';
+export * from './lineage/lineage.move-selection.js';
 export * from './overview/operatingOverview.js';
 export * from './draft/draft.operations.js';
 export * from './host/host.capabilities.js';

@@ -22,14 +22,21 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} project-git-commit-provenance <repository-root> [--label <human-label>] [--message]`,
     `${command} agent-role-sync --workspace <workspace-root> --role <qualified-role.trace.md> --mode plan|check|apply [--approved --expected-after-sha256 <sha256>]`,
     `${command} inspect-asset-relocation-workspace --request <request.json> [--compact]`,
-    `${command} project-lineage-maintenance <workspace-or-material-root> --request <request.json> [--coverage complete|bounded|partial|unknown]`,
+    `${command} qualify-cross-workspace-publication --request <request.json> [--compact]`,
+    `${command} inspect-cross-workspace-git-source --request <request.json> [--compact]`,
+    `${command} inspect-cross-workspace-continuity --request <request.json> [--compact]`,
+    `${command} inspect-historical-schema-source --request <request.json> [--compact]`,
+    `${command} qualify-historical-evidence-parent --request <request.json> [--compact]`,
+    `${command} plan-cross-workspace-assets --request <two-workspace-request.json> [--compact]`,
+    `${command} recheck-cross-workspace-continuity --request <inspection-and-roots.json> [--compact]`,
+    `${command} project-lineage-maintenance --request <request.json> [--compact]`,
     `${command} apply-lineage-maintenance --plan <plan.json> (--workspace-roots <roots.json> | --workspace-id <id> --workspace-root <dir>)`,
     `${command} recover-lineage-maintenance (--workspace-roots <roots.json> | --workspace-id <id> --workspace-root <dir>)`,
     `${command} project-transition-catalog [<workspace-or-material-root> ...] [--output-schema <schema-id>] [--input-schema <schema-id>]`,
     `${command} project-transition-neighborhood [<workspace-or-material-root> ...] --output-schema <schema-id> [--input-schema <schema-id>]`,
-    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
+    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
+    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
     `${command} handoff <workspace-dir>`,
     `${command} handoff <workspace-dir> --carrier-mode workspace (--package-parent <intended-predecessor-carrier.zip> | --new-root) [--output-dir <dir>]`,
     `${command} compare --left-kind <kind> --left <path> --right-kind <kind> --right <path> [side selectors]`,
@@ -54,6 +61,111 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
 }
 
 function commonCommandHelp(command, surfaceCommand) {
+  if (surfaceCommand === 'plan-cross-workspace-closed-graph') return [
+    'Tiinex Core — cross-Workspace qualified closed semantic Parent subtree',
+    `${command} plan-cross-workspace-closed-graph --request <two-root-request.json>`,
+    `${command} apply-cross-workspace-closed-graph --plan <saved-ready-plan.json>`,
+    `${command} recover-cross-workspace-closed-graph --request <journal-and-both-roots.json>`,
+    'Only Self+Leaves / Same / Keep Parent for a Parentless root plus exact descendant artifacts/assets with all internal Parent links, verified original integrity and zero outside readers.',
+    'Every descendant Parent integrity is updated transitively, all moved links rebound and all artifact self digests re-sealed. Any outside Parent or unresolvable reader BLOCKS.',
+    'Two-root durable journal with inode-owned crash rollback; other scopes, Git fallback, third Workspaces and dynamic references still BLOCK.',
+    ''
+  ];
+  if (surfaceCommand === 'plan-cross-workspace-assets') return [
+    'Tiinex Core — bounded two-Workspace artifact and opaque asset bundle',
+    `${command} plan-cross-workspace-assets --request <two-workspace-request.json>`,
+    `${command} apply-cross-workspace-assets --plan <plan.json>`,
+    `${command} recover-cross-workspace-assets --request <transaction-and-both-roots.json>`,
+    'ONE Parentless artifact + 1–16 exact-dimension assets; Same + Keep Parent only. Explicit two-root inspection and zero incoming readers required.',
+    'Real mixed binary/C14n plan, durable mirrored journal, hardlink-exclusive destinations, inode-owned recovery. Parent chains and dynamic/cross-Workspace readers still BLOCK.',
+    ''
+  ];
+  if (surfaceCommand === 'plan-cross-workspace-standalone') return [
+    'Tiinex Core — bounded executable Cross-Workspace transfer',
+    `${command} plan-cross-workspace-standalone --request <two-workspace-request.json>`,
+    `${command} apply-cross-workspace-standalone --plan <saved-plan.json>`,
+    `${command} recover-cross-workspace-standalone --request <transaction-and-two-roots.json>`,
+    'This experimental executable subset is ONLY Alone + Same + Keep Parent for one verified, parentless, descendantless, reference-free artifact.',
+    'Two physically distinct Workspaces and supported local reference inventories required; incoming links, assets, children and Git-dependent Parent block.',
+    'Both Workspaces receive durable journals and cooperative locks; unexpected bytes fail closed. No remote mutation or blanket cross-Workspace safety claim.',
+    ''
+  ];
+  if (surfaceCommand === 'qualify-historical-evidence-parent') return [
+    'Tiinex Core — independently audited historical Evidence-as-Parent qualification',
+    `${command} qualify-historical-evidence-parent --request <request.json> --compact`,
+    'Requires {records:[{path,markdown}],reference,historicalSchemaSource:{availableTools,hostPlan,hostReceipt}}.',
+    'First use inspect-historical-schema-source and fulfill a read-only exact pinned repository-read action; feed its original plan and normalized receipt.',
+    'Only accepted exact historical-schema BYTE EQUIVALENCE to the registered compiled contract may qualify the immutable historical Parent without modifying it.',
+    'Distinct versions, absent or contradictory provider receipt, failed artifact validation or immutable Git source mismatch BLOCK. Never migrate historical bytes automatically.',
+    'If ready, use the qualified returned parentRecord in normal Core continue-from-record draft creation; no remote writes.',
+    ''
+  ];
+  if (surfaceCommand === 'inspect-historical-schema-source') return [
+    'Tiinex Core — read-only historical Current Schema verification',
+    `${command} inspect-historical-schema-source --request <request.json> --compact`,
+    'Input requires one verified artifact markdown with immutable Current Schema, and optional availableTools with GitHub repository-read.',
+    'Obtain a concrete host repository-read receipt for that exact commit/path and resubmit hostPlan plus hostReceipt.',
+    'Returns byte-equivalent or historical-distinct and exact SHA-256/Git blob identities. Neither outcome silently edits Parent, grants authoring nor authorizes migration.',
+    ''
+  ];
+  if (surfaceCommand === 'inspect-cross-workspace-continuity') return [
+    'Tiinex Core — read-only two-Workspace Move/Rebase reference continuity preflight',
+    '',
+    `${command} inspect-cross-workspace-continuity --request <request.json> [--compact]`,
+    `${command} plan-cross-workspace-assets --request <two-workspace-request.json> [--compact]`,
+    '',
+    'Pass two distinct absolute roots (sourceWorkspace, targetWorkspace), explicit IDs and scoped-move operation including targetWorkspaceId, selectedPath and targetPath.',
+    'Inspects exact physical local file digests in BOTH Workspaces, the selected Parent graph, inbound references, outbound Parents and existing target anchor.',
+    'Provides a read-only GitHub repository-read recovery route via available connector tools; immutable commit and matching file bytes are still required.',
+    'This is deliberately NOT a cross-Workspace Apply; CLI returns exit 2 and executable=false until dual-Workspace mutation and all reference rewrites qualify.',
+    'No remote writes or GitHub publication inference.',
+    ''
+  ];
+  if (surfaceCommand === 'inspect-cross-workspace-git-source') return [
+    'Tiinex Core — read-only local Git immutable source candidate inspection',
+    '',
+    `${command} inspect-cross-workspace-git-source --request <request.json> --compact`,
+    'Request: {"workspaceRoot":"/absolute/repo-root","commit":"<40-hex>","sourcePath":".topics/path/parent.trace.md"}',
+    'Reads local Git object and github.com origin only. Candidate is NOT proof of remote publication.',
+    'If .git or object is unavailable, recover using qualify-cross-workspace-publication plus a read-only GitHub connector or another repository reader.',
+    'No branch movement, git fetch, push, checkout or remote write is performed.',
+    ''
+  ];
+  if (surfaceCommand === 'qualify-cross-workspace-publication') return [
+    'Tiinex Core — read-only exact Cross-Workspace Git publication qualification',
+    '',
+    `${command} qualify-cross-workspace-publication --request <request.json> --compact`,
+    'Request includes two distinct Workspace IDs, repository owner/name, full 40-hex commit, exact .topics/*.trace.md source path and self-verified markdown bytes.',
+    'Optional availableTools advertises GitHub fetch_file or repository-read connectors. Core returns a host repository-read action with exact arguments; the LLM/host may fulfill it through a read-only connector.',
+    'Feed hostPlan + matching hostReceipt with pinned repository/commit/path and exact content back into the same request; only an accepted read receipt + matching SHA yields a qualified immutable permalink.',
+    'If shell/Git is unavailable, discover GitHub or alternative repository-read connectors; local Git objects, mutable branches, arbitrary URLs and raw search snippets are NOT evidence of published source bytes.',
+    'This is a READ-ONLY evidence qualification. It cannot itself relocate assets, grant cross-Workspace Apply authority, or perform remote writes.',
+    ''
+  ];
+  if (surfaceCommand === 'inspect-scoped-move-workspace') return [
+    'Tiinex Core — host-independent Workspace reference closure and Move/Rebase',
+    '',
+    `${command} inspect-scoped-move-workspace --request <request.json> --compact`,
+    `${command} apply-lineage-maintenance --plan <saved-plan.json> --workspace-id <id> --workspace-root <absolute-workspace-root>`,
+    '',
+    'Request: {"workspaceRoot":"/absolute/workspace","workspaceId":"name","operation":{"kind":"scoped-move","workspaceId":"name","selectedPath":".topics/...trace.md","scope":"alone-with-assets","placement":"same","parentPolicy":"keep","targetDirectory":".topics/destination"}}',
+    'Inspects every supported local UTF-8 text file, qualifies original artifact integrity, assembles binary+artifact plan, and blocks unrewritable incoming references.',
+    'The plan embeds a full local file-snapshot fingerprint, rechecked before and during Apply. Keep request and plan files OUTSIDE the inspected Workspace.',
+    'Excluded directories: .git, .tiinex, node_modules. Dynamic/remote references and proprietary binary metadata are not certified. Cross-Workspace/Git moves remain blocked.',
+    ''
+  ];
+  if (surfaceCommand === 'project-lineage-maintenance') return [
+    'Tiinex Core — manual standalone Move/Rebase projection and Apply',
+    '',
+    `${command} project-lineage-maintenance --request <self-contained-request.json> [--compact]`,
+    `${command} apply-lineage-maintenance --plan <plan.json> --workspace-id <id> --workspace-root <root>`,
+    '',
+    'Use an explicitly complete Workspace artifact representation for scoped-move. For binary assets supply assetCoverage: complete, referenceCoverage: complete, the full assetPaths inventory and exact assetMaterials with stable source fingerprint and SHA-256.',
+    'Scopes: alone, alone-with-assets, self-and-leaves, branch, tree. Qualified Same, Prepend or Append with the appropriate Keep/New Parent policy execute through ONE durable transaction when the graph and exact numeric anchor qualify.',
+    'Use inspect-scoped-move-workspace for Core-owned local reference inspection and a drift-checked receipt; non-Tiinex incoming references and all cross-Workspace/Git movement still block.',
+    'Review the projected plan and store it OUTSIDE the target Workspace before Apply. Existing sources and targets are reverified; collided/stale plans block and recover-lineage-maintenance handles interrupted transactions.',
+    ''
+  ];
   if (surfaceCommand === 'inspect-asset-relocation-workspace') return [
     'Tiinex Core — inspect and plan a local referenced binary asset relocation',
     '',
@@ -118,8 +230,8 @@ function commonCommandHelp(command, surfaceCommand) {
     `${command} project-transition-catalog [<workspace-or-material-root> ...] [--output-schema <schema-id>] [--input-schema <schema-id>]`,
     `${command} project-transition-neighborhood [<workspace-or-material-root> ...] --output-schema <schema-id> [--input-schema <schema-id>]`,
     '',
-    'Discovers bundled Core-native and explicitly supplied external tiinex.transition.definition.v1 artifacts regardless of their workspace-local directory, read-qualifies them against the bundled canonical Transition Definition contract, and preserves source representation identity.',
-    'Use --no-native to inspect only explicitly supplied external material. Independent supplied representations stay independent; Canonical Identifier + Version text is not treated as universal representation identity.',
+    'Discovers bundled Core-native and explicitly supplied external tiinex.transition.definition.v1 artifacts regardless of their workspace-local directory, read-qualifies them against the bundled canonical Transition Definition contract, and prefers exact, fully matched Workspace package material over embedded Native aliases.',
+    'Use --no-native to inspect only explicitly supplied external material. Independent packages with distinct bytes or qualified bindings stay separate; a verified byte-identical package alias is represented once, with Workspace priority.',
     'Discovery and target-schema filtering do not imply Semantic Package/Schema Transition Companion attachment, applicability, recommendation, execution, or generation authority.',
     '',
     `Advanced/internal catalog: ${command} operations`
@@ -127,9 +239,9 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'schemas') return [
     'Tiinex portable tooling — native schema source lifecycle',
     '',
-    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
+    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
+    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
     '',
     'Uses only local Workspace bytes. Sync deterministically projects canonical Docs schemas into the Core Schema Pack, generated catalog, exact source bindings, and specialized runtime projections. Check is read-only and fails on generated drift or stale local schema Markdown copies.',
     'Without `--published`, source content remains local-qualified and no immutable remote publication authority is claimed. `--published` requires one exact `--docs-commit`; Tooling does not fetch or verify that remote commit and therefore expects the caller to supply already-qualified publication metadata.',
@@ -201,9 +313,9 @@ function commonCommandHelp(command, surfaceCommand) {
     'Tiinex portable tooling — author',
     '',
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
-    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
-    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published]`,
+    `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
+    `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
+    `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
     '',
     'Uses qualified continuation state to infer the ordinary Parent when `--parent` is omitted. Tiinex first-party tooling and LLMs should normally use `--directory` for ordinary Parent continuations so Tooling allocates the conventional child filename from the semantic Parent lineage. `--path` is an intentional exact-path override and remains valid for humans/integrations that deliberately want a custom local coordinate; filename shape never replaces semantic Parent authority. For a Workspace-qualified Parent such as `business::.topics/...`, also supply `--parent-source` for the exact Parent bytes and `--parent-reference` with the commit-pinned browse+git permalink. The `workspace::path` value remains an internal selector only and is never serialized as durable cross-Workspace recovery authority. Authoring seals c14n-v2 self-integrity, audits, stages, and updates continuation state only after qualification. `--preflight` uses that exact qualification path but removes the candidate and leaves continuation state unchanged; use it before the durable author step when validating a filled runtime scaffold. Invalid output is not retained.',
     '',
