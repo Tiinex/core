@@ -91,23 +91,26 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
   const parentIntegrityRepair = deterministicParentIntegrityRepair(markdown, lineageArtifact);
   const parentRepairQualification = parentIntegrityRepair.state === 'ready'
     ? qualifyReplacementAgainstSharedGuardrails(record, records, parentIntegrityRepair.markdown, {
+      referenceResolutions,
       allowExistingWarningCodes: sharedFindings.filter((item) => item.severity === 'warning').map((item) => String(item.code || ''))
     })
     : { state: 'unavailable' };
   if (parentIntegrityRepair.state === 'ready' && parentIntegrityRepair.markdown !== markdown && parentRepairQualification.state === 'qualified') actions.push(freeze({
     id: 'refresh-parent-integrity-and-self-seal',
-    title: 'Refresh Tiinex Parent integrity and self seal',
+    title: 'Refresh Tiinex Parent integrity and self seal (this artifact only)',
     kind: 'replace-document',
     qualification: 'deterministic-shared-core',
     sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
     replacementMarkdown: parentIntegrityRepair.markdown,
     diagnosticCodes: ['portable.lineage-integrity.parent-target-mismatch', 'integrity.c14n-v2.mismatch', 'portable.lineage-integrity.child-self-mismatch'],
-    boundary: 'Refreshes only an existing Parent integrity digest whose declared locator already matches the exact resolved Parent and whose verified Parent self digest is available locally; the focused artifact is resealed and the action is withheld when loaded descendants would become inconsistent.'
+    descendantEffects: parentRepairQualification.descendantEffects || [],
+    boundary: 'Refreshes only this artifact’s verified Parent integrity digest and self seal; descendants are never edited by this Quick Fix. Dependent artifacts can retain or acquire stale Parent digests and require their own explicit repair.'
   }));
 
   const integrityRepair = deterministicIntegrityHygieneRepair(markdown, sharedFindings);
   const repairQualification = integrityRepair.state === 'ready'
     ? qualifyReplacementAgainstSharedGuardrails(record, records, integrityRepair.markdown, {
+      referenceResolutions,
       allowExistingWarningCodes: sharedFindings.filter((item) => item.severity === 'warning').map((item) => String(item.code || ''))
     })
     : { state: 'unavailable' };
@@ -119,13 +122,39 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
     sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
     replacementMarkdown: integrityRepair.markdown,
     diagnosticCodes: integrityRepair.diagnosticCodes,
+    descendantEffects: repairQualification.descendantEffects || [],
     boundary: integrityRepair.methodReferenceChanged
-      ? 'Rebinds only unqualified c14n-v2 footer method links to the shared qualified maintained target and reseals the existing primary self Value; the replacement is exposed only after the same shared audit and lineage guardrails re-qualify the focused artifact and every loaded digest-bound descendant.'
-      : 'Refreshes only the existing primary c14n-v2 self Value through the shared integrity algorithm; the replacement is exposed only after the same shared audit and lineage guardrails re-qualify the focused artifact and every loaded digest-bound descendant.'
+      ? 'Rebinds only unqualified c14n-v2 footer method links to the shared qualified maintained target and reseals the existing primary self Value; the replacement is exposed only after the focused artifact re-qualifies; dependent descendants are not edited and their potentially stale integrity is separately reported.'
+      : 'Refreshes only the existing primary c14n-v2 self Value through the shared integrity algorithm; the replacement is exposed only after the focused artifact re-qualifies; dependent descendants are not edited and their potentially stale integrity is separately reported.'
   }));
+  // Explain why a visible Parent mismatch has no deterministic editor action.
+  // The host must not mistake a resolvable link for authorized digest repair.
+  const parentMismatch = Boolean(lineageArtifact && ['parent-target-mismatch', 'parent-unresolved', 'parent-ambiguous', 'parent-self-mismatch', 'parent-self-unavailable', 'parent-target-ambiguous'].includes(lineageArtifact.state));
+  const parentRepairReady = actions.some((item) => item.id === 'refresh-parent-integrity-and-self-seal');
+  const parentRepairAvailability = !parentMismatch ? null : parentRepairReady
+    ? freeze({ state: 'ready', reason: 'verified-local-parent', message: 'The exact local Parent is verified. Core qualified a Parent digest and self-seal repair.' })
+    : parentIntegrityRepair.state !== 'ready'
+      ? freeze({
+        state: 'blocked',
+        reason: String(lineageArtifact?.parentAvailability?.state || '') !== 'resolved' ? 'parent-not-resolved'
+          : String(lineageArtifact?.parentPrimarySelf?.state || '') !== 'verified' ? 'parent-self-not-verified'
+          : 'parent-locator-or-digest-not-qualified',
+        message: String(lineageArtifact?.parentAvailability?.state || '') !== 'resolved'
+          ? 'The exact Parent is not resolved locally. Opening a relative link is not sufficient; its exact artifact and digest must be qualified.'
+          : String(lineageArtifact?.parentPrimarySelf?.state || '') !== 'verified'
+            ? 'The resolved Parent does not have a verified self integrity seal. Repair or qualify that Parent first; this child cannot inherit an unverified digest.'
+            : 'The declared Parent locator does not qualify for a deterministic digest refresh. Confirm the intended Parent and its exact integrity target before retrying.'
+      })
+      : freeze({
+        state: 'blocked', reason: String(parentRepairQualification.reason || 'shared-guardrails-blocked'),
+        blockerCodes: freeze([...(parentRepairQualification.blockerCodes || [])]),
+        blockers: freeze([...(parentRepairQualification.blockers || [])]),
+        message: 'Core computed a possible Parent digest, but the focused replacement failed its exact audit or local lineage guard. Descendants do not veto a qualified one-file fix; no bytes were changed.'
+      });
   const validationAuthority = audit.schemaValidationAuthority || null;
   return freeze({
     path: String(record.path || record.id || ''),
+    parentRepairAvailability,
     schemaId: String(audit.schemaId || ''),
     validator: {
       state: packageQualifiedWorkspace || (audit.qualification?.exact && validationAuthority?.state === 'qualified') ? 'qualified-exact' : 'degraded',
@@ -383,7 +412,7 @@ function qualifyReplacementAgainstSharedGuardrails(record = {}, records = [], re
   const replacedRecords = records.map((item) => norm(item.path || item.id || '') === focusPath ? { ...item, markdown: replacementMarkdown } : item);
   const replacementRecord = replacedRecords.find((item) => norm(item.path || item.id || '') === focusPath);
   if (!replacementRecord) return freeze({ state: 'unavailable', reason: 'focused-record-unavailable' });
-  const replacementAudit = auditPortableRecord(replacementRecord, { requireExactSchemaAuthority: true });
+  const replacementAudit = auditPortableRecord(replacementRecord, { requireExactSchemaAuthority: true, schemaReferenceResolutions: options.referenceResolutions || [] });
   const allowedWarnings = new Set((options.allowExistingWarningCodes || []).map((item) => String(item || '')));
   const auditBlockers = [...(replacementAudit.findings || [])].filter((item) => {
     if (item.severity === 'error') return true;
@@ -394,14 +423,27 @@ function qualifyReplacementAgainstSharedGuardrails(record = {}, records = [], re
 
   const before = inspectPortableLineageIntegrity({ records });
   const after = inspectPortableLineageIntegrity({ records: replacedRecords });
+  // A one-document Quick Fix is a *local* repair, not a subtree mutation.
+  // Only the replaced artifact must independently qualify. Descendant debt
+  // (including new stale Parent digests after resealing this artifact) must be
+  // reported, but cannot veto a valid local repair or trigger cascade writes.
+  const afterFocus = (after.artifacts || []).find((item) => norm(item.path || '') === focusPath);
+  if (!afterFocus || afterFocus.state !== 'healthy') {
+    return freeze({ state: 'blocked', reason: 'replacement-focused-lineage-not-clean',
+      blockers: afterFocus ? [{ path: focusPath, state: afterFocus.state }] : [{ path: focusPath, state: 'unavailable' }] });
+  }
   const beforeFocus = (before.artifacts || []).find((item) => norm(item.path || '') === focusPath);
-  const affectedPaths = new Set([focusPath, ...((beforeFocus?.downstreamDescendants || []).map((item) => norm(item.path || '')).filter(Boolean))]);
-  const lineageBlockers = (after.artifacts || []).filter((item) => {
-    if (!affectedPaths.has(norm(item.path || '')) || item.state === 'healthy') return false;
-    return true;
-  });
-  if (lineageBlockers.length) return freeze({ state: 'blocked', reason: 'replacement-shared-lineage-not-clean', blockers: lineageBlockers.map((item) => ({ path: item.path, state: item.state })) });
-  return freeze({ state: 'qualified', affectedPaths: [...affectedPaths] });
+  const affectedPaths = [...new Set((beforeFocus?.downstreamDescendants || [])
+    .map((item) => norm(item.path || '')).filter((item) => item && item !== focusPath))];
+  const beforeByPath = new Map((before.artifacts || []).map((item) => [norm(item.path || ''), item]));
+  const afterByPath = new Map((after.artifacts || []).map((item) => [norm(item.path || ''), item]));
+  const descendantEffects = affectedPaths.map((path) => freeze({ path,
+    before: String(beforeByPath.get(path)?.state || 'unavailable'),
+    after: String(afterByPath.get(path)?.state || 'unavailable') }))
+    .filter((item) => item.after !== 'healthy' || item.before !== 'healthy');
+  return freeze({ state: 'qualified', scope: 'focused-artifact-only',
+    affectedPaths: [focusPath], descendantEffects: freeze(descendantEffects),
+    boundary: 'Descendant states are reported, not validated as a cascade or mutated by this single-document action.' });
 }
 
 function deterministicReferenceHygieneRepair(record = {}, records = [], audit = {}, markdown = '') {

@@ -476,3 +476,83 @@ test('editor assistance emits one Core-owned lineage changeset when schema-refer
   });
   assert.equal(repaired.documents[0].diagnostics.some((item) => item.code === 'portable.lineage-integrity.parent-target-mismatch' || item.code === 'integrity.c14n-v2.mismatch'), false);
 });
+
+test('editor Parent repair availability distinguishes verified local fix from unverifiable Parent bytes', () => {
+  const parentPath = '.topics/source/001-parent.trace.md';
+  const childPath = '.topics/target/001-parent-digest-child.trace.md';
+  const parent = parentMarkdown(parentPath);
+  const createdParent = projectPortableAuthoringParent({ records: [{ path: parentPath, markdown: parent, sourceMode: 'portable-node-local' }] });
+  assert.equal(createdParent.status, 'ready');
+  const created = createPortableLocalDraft({
+    schemaId: TOPIC, transitionType: 'continue-from-record', path: childPath,
+    parent: createdParent.parentRecord, values: VALUES, title: 'Child', materials: []
+  });
+  assert.equal(created.status, 'created-clean');
+  const broken = created.draft.markdown.replace(/(  - Value: )[^\n]+/, '$1incorrect-parent-digest');
+  const ready = projectPortableEditorAssistance({ records: [{ path: parentPath, markdown: parent }, { path: childPath, markdown: broken }], focusPath: childPath }).documents[0];
+  assert.equal(ready.parentRepairAvailability?.state, 'ready');
+  assert.ok(ready.actions.some(action => action.id === 'refresh-parent-integrity-and-self-seal'));
+  const unresolved = projectPortableEditorAssistance({ records: [{ path: childPath, markdown: broken }], focusPath: childPath }).documents[0];
+  assert.equal(unresolved.actions.some(action => action.id === 'refresh-parent-integrity-and-self-seal'), false);
+  assert.equal(unresolved.parentRepairAvailability?.state, 'blocked');
+  assert.equal(unresolved.parentRepairAvailability?.reason, 'parent-not-resolved');
+});
+
+test('one-document Parent Quick Fix ignores pre-existing broken descendants and edits only focus', () => {
+  const rootPath = '.topics/tree/001-root.trace.md';
+  const parentPath = '.topics/tree/001-1-parent.trace.md';
+  const leafPath = '.topics/tree/001-1-1-leaf.trace.md';
+  const siblingPath = '.topics/tree/001-2-sibling.trace.md';
+  const root = parentMarkdown(rootPath);
+  const qualifiedRoot = projectPortableAuthoringParent({ records: [{ path: rootPath, markdown: root }] });
+  assert.equal(qualifiedRoot.status, 'ready');
+  const parent = createPortableLocalDraft({ schemaId: TOPIC, transitionType: 'continue-from-record',
+    path: parentPath, parent: qualifiedRoot.parentRecord, values: VALUES, title: 'Middle', materials: [] });
+  assert.equal(parent.status, 'created-clean');
+  const qualifiedParent = projectPortableAuthoringParent({ records: [{ path: parentPath, markdown: parent.draft.markdown }] });
+  assert.equal(qualifiedParent.status, 'ready');
+  const leaf = createPortableLocalDraft({ schemaId: TOPIC, transitionType: 'continue-from-record',
+    path: leafPath, parent: qualifiedParent.parentRecord, values: VALUES, title: 'Leaf', materials: [] });
+  const sibling = createPortableLocalDraft({ schemaId: TOPIC, transitionType: 'continue-from-record',
+    path: siblingPath, parent: qualifiedRoot.parentRecord, values: VALUES, title: 'Sibling', materials: [] });
+  assert.equal(leaf.status, 'created-clean');
+  assert.equal(sibling.status, 'created-clean');
+  // Middle has an incorrectly entered Parent digest; leaf already carries
+  // unrelated historical integrity debt. Neither justifies rewriting the leaf.
+  const staleMiddle = parent.draft.markdown.replace(/(  - Value: )[^\n]+/, '$1deliberately-stale-parent-digest');
+  const badLeaf = leaf.draft.markdown.replace(/(  - Value: )[^\n]+/, '$1deliberately-stale-leaf-digest');
+  const records = [{ path: rootPath, markdown: root }, { path: parentPath, markdown: staleMiddle },
+    { path: leafPath, markdown: badLeaf }, { path: siblingPath, markdown: sibling.draft.markdown }];
+  const doc = projectPortableEditorAssistance({ records, focusPath: parentPath }).documents[0];
+  const fix = doc.actions.find((action) => action.id === 'refresh-parent-integrity-and-self-seal');
+  assert.ok(fix, `local repair should be available despite descendant debt: ${JSON.stringify(doc.parentRepairAvailability)}`);
+  assert.equal(fix.kind, 'replace-document');
+  assert.equal(fix.replacements, undefined, 'Quick Fix must never include a descendant changeset');
+  assert.equal(fix.descendantEffects.some((effect) => effect.path === leafPath && effect.after !== 'healthy'), true);
+  assert.equal(fix.descendantEffects.some((effect) => effect.path === siblingPath), false);
+  assert.equal(canonicalC14nV2SelfState(fix.replacementMarkdown).state, 'verified');
+  const following = projectPortableEditorAssistance({ records: records.map((record) =>
+    record.path === parentPath ? { ...record, markdown: fix.replacementMarkdown } : record), focusPath: parentPath });
+  assert.equal(following.documents[0].diagnostics.some((d) => d.code === 'portable.lineage-integrity.parent-target-mismatch' || d.code === 'integrity.c14n-v2.mismatch'), false);
+  assert.equal(records.find((record) => record.path === leafPath).markdown, badLeaf, 'descendant bytes unchanged');
+  assert.equal(records.find((record) => record.path === siblingPath).markdown, sibling.draft.markdown, 'unrelated sibling unchanged');
+});
+
+test('one-document Quick Fix remains blocked for unavailable or unverifiable focused Parent', () => {
+  const parentPath = '.topics/root/001-parent.trace.md';
+  const childPath = '.topics/root/001-1-child.trace.md';
+  const parent = parentMarkdown(parentPath);
+  const qualified = projectPortableAuthoringParent({ records: [{ path: parentPath, markdown: parent }] });
+  assert.equal(qualified.status, 'ready');
+  const child = createPortableLocalDraft({ schemaId: TOPIC, transitionType: 'continue-from-record',
+    path: childPath, parent: qualified.parentRecord, values: VALUES, title: 'Child', materials: [] });
+  assert.equal(child.status, 'created-clean');
+  const corrupted = child.draft.markdown.replace(/(  - Value: )[^\n]+/, '$1stale-parent');
+  for (const records of [
+    [{ path: childPath, markdown: corrupted }],
+    [{ path: parentPath, markdown: parent.replace('- Value:', '- Value: forged-') }, { path: childPath, markdown: corrupted }]
+  ]) {
+    const doc = projectPortableEditorAssistance({ records, focusPath: childPath }).documents[0];
+    assert.equal(doc.actions.some((action) => action.id === 'refresh-parent-integrity-and-self-seal'), false);
+  }
+});
