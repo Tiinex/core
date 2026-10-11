@@ -18,7 +18,7 @@ export function projectPortableEditorAssistance(input = {}) {
   const focusPath = norm(input.focusPath || input.focus || '');
   const selectedRecords = focusPath ? tiinexRecords.filter((record) => norm(record.path || record.id || '') === focusPath) : tiinexRecords;
   const lineageInspection = inspectPortableLineageIntegrity({ records: tiinexRecords });
-  const documents = selectedRecords.map((record) => projectDocument(record, tiinexRecords, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record), norm(input.selectedParentPath || '')));
+  const documents = selectedRecords.map((record) => projectDocument(record, tiinexRecords, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record), norm(input.selectedParentPath || ''), input.includeDescendantRepair === true));
   const diagnostics = documents.flatMap((item) => item.diagnostics);
   return freeze({
     schema: PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID,
@@ -29,7 +29,7 @@ export function projectPortableEditorAssistance(input = {}) {
   });
 }
 
-function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = [], selectedParentPath = '') {
+function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = [], selectedParentPath = '', includeDescendantRepair = false) {
   if (isCanonicalSchemaSourceRecord(record)) return projectSchemaSourceDocument(record, records);
   const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true, schemaReferenceResolutions: referenceResolutions });
   const markdown = String(record.markdown || '');
@@ -95,6 +95,7 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
       sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
       replacementMarkdown: chosen.markdown,
       diagnosticCodes: ['portable.lineage-integrity.parent-unresolved', 'portable.lineage-integrity.parent-target-mismatch', 'portable.lineage-integrity.parent-schema-mismatch'],
+      descendantCount: (lineageInspection?.artifacts || []).find((item) => norm(item.path || '') === recordPath)?.downstreamDescendants?.length || 0,
       boundary: 'Human-selected exact local Parent; Core verified its matching declared schema and primary self, resolved the relative header and c14n-v2 target and qualified only the current artifact. No descendant rewrite.'
     }));
   }
@@ -103,6 +104,19 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
   actions.push(...referenceResolution.actions);
 
   const lineageArtifact = (lineageInspection?.artifacts || []).find((item) => norm(item?.path || '') === recordPath) || null;
+  // Optional post-repair cascade: Core proposes a separate changeset only
+  // when it can verify every loaded descendant and its exact Parent. No
+  // focused artifact rewrite is needed after a successful Locate Parent.
+  const descendantRefresh = includeDescendantRepair ? deterministicDescendantIntegrityRefresh(record, records, lineageInspection) : { state: 'unavailable' };
+  if (descendantRefresh.state === 'ready') actions.push(freeze({
+    id: 'refresh-descendant-integrity',
+    title: `Refresh ${descendantRefresh.replacements.length} descendant integrit${descendantRefresh.replacements.length === 1 ? 'y' : 'ies'} in this Workspace`,
+    kind: 'replace-record-set', qualification: 'deterministic-shared-core',
+    sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
+    replacements: descendantRefresh.replacements,
+    diagnosticCodes: ['portable.lineage-integrity.parent-target-mismatch'],
+    boundary: 'Optional explicit cascade after a focused repair. Only Core-qualified descendants in the same Workspace are changed. The focus and unrelated sibling artifacts remain untouched; every source hash is rechecked before writing.'
+  }));
   const parentIntegrityRepair = deterministicParentIntegrityRepair(markdown, lineageArtifact);
   const parentRepairQualification = parentIntegrityRepair.state === 'ready'
     ? qualifyReplacementAgainstSharedGuardrails(record, records, parentIntegrityRepair.markdown, {
@@ -622,6 +636,48 @@ function parseArtifactEnvelopeForParentSelection(markdown = '') {
   return { parentSchema, currentSchema };
 }
 
+function deterministicDescendantIntegrityRefresh(record = {}, records = [], lineageInspection = null) {
+  const focusPath = norm(record.path || record.id || '');
+  const byPath = new Map((records || []).map((item) => [norm(item.path || item.id || ''), item]).filter(([p]) => Boolean(p)));
+  const byLineage = new Map((lineageInspection?.artifacts || []).map((item) => [norm(item.path || ''), item]));
+  const root = byLineage.get(focusPath);
+  if (!root || root.state !== 'healthy' || !byPath.has(focusPath)) return freeze({ state: 'unavailable' });
+  const descendants = [...(root.downstreamDescendants || [])]
+    .filter((item) => byPath.has(norm(item.path || '')))
+    .sort((a, b) => Number(a.depth || 0) - Number(b.depth || 0) || norm(a.path || '').localeCompare(norm(b.path || '')));
+  if (!descendants.length || descendants.length !== (root.downstreamDescendants || []).length) return freeze({ state: 'unavailable' });
+  const working = new Map((records || []).map((item) => [norm(item.path || item.id || ''), String(item.markdown || '')]));
+  for (const descendant of descendants) {
+    const path = norm(descendant.path || '');
+    const parentPath = norm(byLineage.get(path)?.exactParent?.path || '');
+    if (!parentPath || !working.has(parentPath) || parentPath === path) return freeze({ state: 'blocked' });
+    const refreshed = refreshLoadedParentDigest(working.get(path) || '', working.get(parentPath) || '');
+    if (refreshed.state !== 'ready' && refreshed.state !== 'unchanged') return freeze({ state: 'blocked' });
+    working.set(path, String(refreshed.markdown));
+  }
+  const replacements = descendants.map((item) => {
+    const path = norm(item.path || '');
+    const original = String(byPath.get(path)?.markdown || '');
+    const modified = String(working.get(path) || original);
+    return modified === original ? null : freeze({ path, sourceSha256: sha256Hex(new TextEncoder().encode(original)), replacementMarkdown: modified });
+  }).filter(Boolean);
+  if (!replacements.length) return freeze({ state: 'unavailable' });
+  const qualified = qualifyReferenceRepairChangeset(records, replacements, lineageInspection);
+  if (qualified.state !== 'qualified') return freeze({ state: 'blocked', reason: qualified.reason });
+  // The post-apply dialog must never promise that ALL descendants were fixed
+  // if one child still fails exact lineage qualification after the candidate.
+  const changedByPath = new Map(replacements.map((item) => [item.path, item.replacementMarkdown]));
+  const after = inspectPortableLineageIntegrity({ records: records.map((item) => {
+    const p = norm(item.path || item.id || '');
+    return changedByPath.has(p) ? { ...item, markdown: changedByPath.get(p) } : item;
+  }) });
+  for (const item of descendants) {
+    const resolved = (after.artifacts || []).find((artifact) => norm(artifact.path || '') === norm(item.path || ''));
+    if (!resolved || resolved.state !== 'healthy') return freeze({ state: 'blocked', reason: 'descendant-not-fully-qualified' });
+  }
+  return freeze({ state: 'ready', replacements: freeze(replacements) });
+}
+
 function deterministicReferenceRepairChangeset(record = {}, records = [], lineageInspection = null, focusRepair = {}) {
   const focusPath = norm(record.path || record.id || '');
   if (!focusPath || focusRepair.state !== 'ready' || !focusRepair.markdown) return freeze({ state: 'unavailable', replacements: Object.freeze([]) });
@@ -727,7 +783,8 @@ function normalizeMarkdownBytes(value = '') {
   return String(value || '').replace(/\r\n?/g, '\n');
 }
 
-function relativePortableReference(fromPath = '', toPath = '') {
+export function relativePortableReference(fromPath = '', toPath = '') {
+  if (norm(fromPath) === norm(toPath)) return '';
   const from = norm(fromPath).split('/').filter(Boolean);
   const to = norm(toPath).split('/').filter(Boolean);
   if (!from.length || !to.length) return '';
@@ -735,8 +792,10 @@ function relativePortableReference(fromPath = '', toPath = '') {
   let common = 0;
   while (common < from.length && common < to.length && from[common] === to[common]) common += 1;
   const relative = [...Array(from.length - common).fill('..'), ...to.slice(common)].join('/');
-  if (!relative) return './';
-  return relative.startsWith('.') ? relative : `./${relative}`;
+  // Tiinex relative references are canonical without redundant './' for
+  // same-directory siblings. Keep meaningful '../' when directories differ.
+  // A self/empty reference is never a qualified Parent or schema target.
+  return relative;
 }
 
 function referenceResolutionsForRecord(resolutions = [], record = {}) {

@@ -26,9 +26,9 @@ test('explicit exact qualified parent can be selected without mutating the origi
  assert.equal(a.qualification,'deterministic-shared-core');
  assert.ok(!a.replacements || a.replacements.length <=1);
  assert.equal(canonicalC14nV2SelfState(a.replacementMarkdown).state,'verified');
- assert.match(a.replacementMarkdown,/  - Trace: \[001-initiatives\.trace\.md\]\(\.\/001-initiatives\.trace\.md\)/);
- assert.match(a.replacementMarkdown,/    - \[relative\]\(\.\/001-initiatives\.trace\.md\)/);
- assert.match(a.replacementMarkdown,/  - Towards: \[001-initiatives\.trace\.md\]\(\.\/001-initiatives\.trace\.md\)/);
+ assert.match(a.replacementMarkdown,/  - Trace: \[001-initiatives\.trace\.md\]\(001-initiatives\.trace\.md\)/);
+ assert.match(a.replacementMarkdown,/    - \[relative\]\(001-initiatives\.trace\.md\)/);
+ assert.match(a.replacementMarkdown,/  - Towards: \[001-initiatives\.trace\.md\]\(001-initiatives\.trace\.md\)/);
  assert.deepEqual([exact,child,project].map(x=>x.markdown),originals);
 });
 test('explicit Parent never follows an unqualified path, unrelated schema, broken self, or self parent',()=>{

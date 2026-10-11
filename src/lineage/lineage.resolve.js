@@ -240,6 +240,25 @@ function resolveTarget(target, index, declaringNode = null, options = {}) {
   const urlFilePath = githubRepoRelativePathFromUrl(raw);
   const urlSourceKey = sourceKeyFromTarget(raw);
   const targetSourceConstraint = urlSourceKey ? sourceConstraintFromTarget(raw) : null;
+  // A declared local Parent file reference is a locator, not a suggestion.
+  // Resolve its exact path BEFORE considering integrity-based recovery, Origin,
+  // suffix aliases or publication bindings. A matching digest on another file
+  // must never silently rewrite the declared Parent identity. Pinned remote
+  // locators retain their separately qualified historical recovery rules.
+  const exactRelativeParent = options.targetKind === LineageEdgeKind.parent &&
+    !isUrlLike(raw) && !/^record:/i.test(raw) &&
+    (isDotRelativeReference(raw) || isSimpleRelativeReference(raw) ||
+      (!raw.startsWith('/') && !raw.startsWith('.topics/') && /\.md$/i.test(raw))) &&
+    /\.md$/i.test(raw);
+  if (exactRelativeParent) {
+    const contextual = relativeCandidatePath(raw, declaringNode);
+    if (contextual?.blocked) return contextual;
+    const constraint = sourceConstraintFromNode(declaringNode);
+    const candidates = contextual ? exactPathMatches(contextual.path, index, constraint, true) : [];
+    const matched = resolveCandidateNodes(candidates, contextual?.method || 'relative-parent-path', declaringNode);
+    if (matched) return withParentIntegrityStatus(matched, expectedIntegrity);
+    return exactUnloadedParent(raw, 'declared-relative-parent-not-loaded');
+  }
   if (expectedIntegrityValues.length && !targetSourceConstraint?.ref) {
     const integrityMatch = resolveIntegrityTarget(expectedIntegrityValues, index, declaringNode);
     if (integrityMatch) return withParentIntegrityStatus(integrityMatch, expectedIntegrity);
