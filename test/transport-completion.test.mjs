@@ -98,3 +98,55 @@ test('a Target requiring a separate purpose Entry remains blocked on formal Wher
  assert.equal(output.status,'blocked');
  assert.equal(output.reasonCode,'entry-target-entry-requires-purpose-entry');
 });
+
+test('explicit independent Guided Entry over routed carrier selects no Handoff Pointer, including a single available route', () => {
+  const base={inspection:routed,filename:'tiinex-033-1-anchor-to-sigma.handoff-package.zip',contentSources:[nativeEntryContentSource()],entryId:'EXPLORE',independentEntry:true};
+  const independent=projectPortableTransportCompletion(base);
+  assert.equal(independent.status,'ready',independent.reasonCode);
+  assert.equal(independent.carrier.kind,'independent-entry');
+  assert.equal(independent.carrier.routeId,'');
+  assert.equal(independent.carrier.selectedRoute,null);
+  assert.equal(independent.markdown.includes('**Send to:** Sigma'),false);
+  assert.match(independent.clipboardText,/Independent Guided Entry/);
+  assert.match(independent.clipboardText,/Entry intent: Explore/);
+  assert.doesNotMatch(independent.clipboardText,/Continue from|001-3-1-2-sigma-handoff-pointer|001-3-1-1-anchor-handoff-pointer/);
+  assert.equal(projectPortableTransportCompletion({...base,route:'route:sigma'}).reasonCode,'independent-entry-route-or-purpose-invalid');
+  assert.equal(projectPortableTransportCompletion({...base,entryId:''}).reasonCode,'independent-entry-route-or-purpose-invalid');
+  assert.equal(projectPortableTransportCompletion({...base,inspection:{...routed,carrierProjection:{...routed.carrierProjection,routes:[routes[1]]}}}).status,'ready');
+  const routedSelection=projectPortableTransportCompletion({inspection:routed,route:'route:sigma'});
+  assert.equal(routedSelection.status,'ready');
+  assert.equal(routedSelection.carrier.selectedRoute.parties.to,'Sigma');
+  assert.match(routedSelection.clipboardText,/001-3-1-2-sigma-handoff-pointer/);
+});
+
+test('independent Guided Entry uses the selected short Role Label for human project title, preserving the exact session Role identity', () => {
+  const fullLabel = 'Anchor Role — Canonical Holder Cutover Continuation';
+  const input = {
+    inspection: routed,
+    filename: 'tiinex-033-1-anchor-to-sigma.handoff-package.zip',
+    contentSources: [nativeEntryContentSource()],
+    entryId: 'EXPLORE', independentEntry: true,
+    primaryRole: {
+      label: fullLabel, authoringLabel: 'Anchor', workspaceId: 'business',
+      path: '.topics/roles/anchor.trace.md',
+      reference: `https://github.com/Tiinex/business/blob/${'a'.repeat(40)}/.topics/roles/anchor.trace.md`
+    }
+  };
+  const selected = projectPortableTransportCompletion(input);
+  assert.equal(selected.status, 'ready', selected.reasonCode);
+  assert.match(selected.markdown, /\*\*Send to:\*\* Anchor\n/);
+  assert.match(selected.markdown, /\*\*Suggested project title:\*\* `tiinex-033 \(Anchor\)`/);
+  assert.match(selected.clipboardText, /Session Role: Anchor Role — Canonical Holder Cutover Continuation/);
+  assert.doesNotMatch(selected.clipboardText, /Suggested project title|authoringLabel/);
+  assert.equal(selected.carrier.routeId, '');
+  const withoutAlias = projectPortableTransportCompletion({
+    ...input, primaryRole: {...input.primaryRole, authoringLabel: undefined}
+  });
+  assert.equal(withoutAlias.status, 'ready', withoutAlias.reasonCode);
+  assert.equal(selected.clipboardText, withoutAlias.clipboardText, 'preview alias must not change recipient transport');
+  assert.equal(selected.canonicalTransportText, withoutAlias.canonicalTransportText);
+  assert.doesNotMatch(withoutAlias.markdown, /\*\*Suggested project title:\*\*/);
+  const formal = projectPortableTransportCompletion({inspection:routed,route:'route:sigma',filename:input.filename});
+  assert.equal(formal.status, 'ready');
+  assert.match(formal.markdown,/\*\*Suggested project title:\*\* `tiinex-033 \(Sigma\)`/);
+});

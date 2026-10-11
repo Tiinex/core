@@ -1,7 +1,7 @@
 import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { projectPortableEntryCatalog } from '../entry/entry.catalog.js';
-import { projectHandoffHumanOutput } from './carrierProjection.js';
+import { projectHandoffHumanOutput, projectIndependentEntryCarrierOutput } from './carrierProjection.js';
 
 export const WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID = 'tiinex.portable.workspace-entry-projection.v1';
 
@@ -30,6 +30,8 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   const qualifiedRoutes = (projection.routes || []).filter((route) => String(route?.state || '') === 'qualified');
   const pointerlessWorkspace = projection.mode === 'workspace' && qualifiedRoutes.length === 0;
   const routedHandoff = projection.mode === 'handoff' && qualifiedRoutes.length > 0;
+  const independentEntry = input.independentEntry === true;
+  if (independentEntry && (!routedHandoff || input.route || input.routeId || input.pointer)) return blocked('independent-entry-route-conflict', inspection.findings || []);
   if (!pointerlessWorkspace && !routedHandoff) return blocked('workspace-or-routed-handoff-carrier-required', inspection.findings || []);
 
   const entryCatalog = projectPortableEntryCatalog({ inspection, contentSources: input.contentSources || input.sources || [] });
@@ -47,14 +49,14 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   const requestedTargetForHandoff = String(input.targetEntryId || input.targetEntry || input.target || input.where || '').trim();
   // A qualified formal Handoff already supplies the exact work and parties.
   // Allow selecting only WHERE without manufacturing a new purpose Entry.
-  if (!requested && routedHandoff && requestedTargetForHandoff && requestedTargetForHandoff.toUpperCase() !== 'NONE') {
+  if (!independentEntry && !requested && routedHandoff && requestedTargetForHandoff && requestedTargetForHandoff.toUpperCase() !== 'NONE') {
     return projectRoutedHandoffTarget({ inspection, projection, input, targetEntries, targetCatalog: routedTargetCatalog });
   }
   if (!requested) return Object.freeze({
     schema: WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID,
     status: 'ready',
     state: 'catalog',
-    carrierKind: pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff',
+    carrierKind: independentEntry ? 'independent-entry' : (pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff'),
     modes,
     targets: routedHandoff ? routedTargetCatalog : targetCatalog,
     targetOptional: true,
@@ -70,7 +72,9 @@ export function projectWorkspaceCarrierEntry(input = {}) {
       to: String(route.to || route.parties?.to || '')
     }))),
     startPath: String(projection.startPath || '001-1-READ-BEFORE-PROCEEDING.trace.md'),
-    boundary: pointerlessWorkspace
+    boundary: independentEntry
+      ? 'Independent Guided Entry is an explicit operator request over an unchanged routed Handoff carrier. No carried Handoff Pointer is selected; Entry, Target, and Roles qualify session intent only.'
+      : pointerlessWorkspace
       ? 'Guided Entry exposes qualified reusable Entry definitions plus an explicit Custom runtime path. Entry selection describes recipient-session intent for a pointerless Workspace carrier; it does not alter the carrier or establish Handoff routing, recipient authority, Role-holder state, participant authority, acceptance, work transfer, or completion.'
       : 'Guided Entry exposes qualified reusable Entry definitions above an already-qualified routed Handoff carrier. Entry selection does not choose or alter Handoff authority: exact route selection remains qualified from the carried Handoff Pointer, and Entry/Role/participant/session choices cannot manufacture routing, recipient authority, acceptance, work transfer, or completion.'
   });
@@ -109,7 +113,11 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   let routeId = '';
   let continueFrom = '';
   let shell = POINTERLESS_CANONICAL_SHELL(startPath);
-  if (routedHandoff) {
+  if (independentEntry) {
+    const projected = projectIndependentEntryCarrierOutput({ projection, filename: input.filename || input.transportFilename || 'tiinex-entry.handoff-package.zip' });
+    if (projected.status !== 'ready') return blocked(`independent-entry-${projected.reasonCode || projected.status}`, inspection.findings || [], modes, targetOptions);
+    shell = projected.normalInlineRouting.content.trimEnd();
+  } else if (routedHandoff) {
     const routeSelector = String(input.route || input.routeId || input.pointer || '').trim();
     const routed = projectHandoffHumanOutput({ projection, route: routeSelector });
     if (routed.status === 'selection-required') return blocked('handoff-route-required', inspection.findings || [], modes, targetOptions);
@@ -149,15 +157,17 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     targetOption: targetDefinition ? targetChoice(targetDefinition) : NO_TARGET_OPTION,
     targetOptions,
     targetOptional: true,
-    carrierKind: pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff',
+    carrierKind: independentEntry ? 'independent-entry' : (pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff'),
     startPath,
     routeId,
     continueFrom,
-    primaryRole: resolvedPrimaryRole ? { label: resolvedPrimaryRole.label, reference: resolvedPrimaryRole.reference } : null,
+    primaryRole: resolvedPrimaryRole ? { label: resolvedPrimaryRole.label, authoringLabel: resolvedPrimaryRole.authoringLabel, reference: resolvedPrimaryRole.reference } : null,
     participants: Object.freeze(resolvedParticipants.map((item) => ({ label: item.label, reference: item.reference }))),
     transportText: `${lines.join('\n')}\n`,
     entryAugmentationText: `${lines.slice(augmentationStart).join('\n')}\n`,
-    boundary: pointerlessWorkspace
+    boundary: independentEntry
+      ? 'Independent Guided Entry qualifies recipient-session intent only; no qualified carried Handoff Pointer is selected or activated, and no work/Role authority is manufactured.'
+      : pointerlessWorkspace
       ? 'Guided Entry is a transport/invocation projection over an unchanged pointerless Workspace carrier. Entry, Target Entry, Role, participant, and operator-instruction selection do not mutate the carrier or its semantic lineage and do not independently create authority, routing, acceptance, continuation, work transfer, or completion.'
       : 'Guided Entry is a transport/invocation projection over an unchanged routed Handoff carrier. The exact qualified Handoff transport shell remains authoritative and unchanged; Entry, Target Entry, Role, participant, and operator-instruction selection only adds recipient-session intent and does not create or alter routing, recipient authority, semantic Parent, acceptance, work transfer, or completion.'
   });
@@ -316,11 +326,15 @@ function resolveSessionRoleReference(identity, inspection, bundle = null) {
   const workspaceId = String(identity?.workspaceId || '').trim();
   const artifactPath = normalizePath(identity?.path || identity?.artifactPath || '');
   const label = String(identity?.label || '').trim();
+  // Operator-facing Role Label is presentation only. The exact qualified Role
+  // artifact remains the binding; this label does not change session authority.
+  const authoringLabel = String(identity?.authoringLabel || '').trim();
   if (!label || !workspaceId || !artifactPath) return null;
   const local = findCarriedRoleMaterial(inspection, bundle, workspaceId, artifactPath);
   if (local) {
     return Object.freeze({
       label,
+      authoringLabel,
       reference: `${workspaceId}::${artifactPath}`,
       materialDescription: `carried in this package at \`${workspaceId}::${artifactPath}\``
     });
@@ -329,6 +343,7 @@ function resolveSessionRoleReference(identity, inspection, bundle = null) {
   if (!isQualifiedExternalRoleReference(external)) return null;
   return Object.freeze({
     label,
+    authoringLabel,
     reference: external,
     materialDescription: `available at ${markdownLink(label, external)}`
   });
@@ -383,10 +398,11 @@ function normalizeSessionIdentity(value = null) {
     return label ? Object.freeze({ label, reference: '' }) : null;
   }
   const label = String(value.label || value.authoringLabel || value.name || '').trim();
+  const authoringLabel = String(value.authoringLabel || '').trim();
   const reference = String(value.reference || value.target || '').trim();
   const workspaceId = String(value.workspaceId || value.workspace || '').trim();
   const path = String(value.path || value.artifactPath || '').trim();
-  return label ? Object.freeze({ label, reference, workspaceId, path }) : null;
+  return label ? Object.freeze({ label, authoringLabel, reference, workspaceId, path }) : null;
 }
 
 function normalizeParticipants(value = []) {

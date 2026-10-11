@@ -223,6 +223,7 @@ export async function commandInput(parsed, runtime = {}) {
     return { input: {
       bundle: material, filename: path.basename(packagePath),
       route: flags.route || flags.pointer || '',
+      independentEntry: flags['independent-entry'] === true || flags['independent-entry'] === 'true',
       entryId: flags.entry || flags['entry-id'] || flags.mode || '',
       targetEntryId: flags.target || flags.where || flags['target-entry-id'] || '',
       customInstruction: flags['custom-instruction'] || '',
@@ -242,6 +243,8 @@ export async function commandInput(parsed, runtime = {}) {
       mode: flags.mode || flags.entry || flags['entry-id'] || '',
       targetEntryId: flags.target || flags.where || flags['target-entry'] || flags['target-entry-id'] || '',
       route: flags.route || flags.pointer || '',
+      independentEntry: flags['independent-entry'] === true || flags['independent-entry'] === 'true',
+      filename: path.basename(packagePath),
       customInstruction: flags['custom-instruction'] || flags.instruction || '',
       primaryRole: primaryRole.primaryRole || primaryRole.role || primaryRole || null,
       participants: participants.participants || (Array.isArray(participants) ? participants : [])

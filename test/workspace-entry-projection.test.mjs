@@ -227,3 +227,21 @@ test('Guided Entry deduplicates Roles by exact identity rather than human label 
   assert.match(result.transportText, /Session Role: Anchor/);
   assert.match(result.transportText, /Participant: Anchor/);
 });
+
+test('routed carrier independent Guided Entry applies selected Anchor session Role without activating Sigma Handoff', () => {
+  const path='.topics/roles/001-anchor-role.trace.md';
+  const inspection={status:'valid',findings:[],carrierProjection:{status:'ready',mode:'handoff',startPath:'001-1-READ-BEFORE-PROCEEDING.trace.md',lineage:{prefix:'tiinex',dimension:'033-1'},routes:[
+    {id:'route:sigma',state:'qualified',pointerPath:'001-3-1-1-1-handoff-pointer.trace.md',from:'Anchor',to:'Sigma'},
+    {id:'route:anchor',state:'qualified',pointerPath:'001-3-1-2-handoff-pointer.trace.md',from:'Anchor',to:'Anchor'}
+  ]},workspaces:[{workspaceId:'business',archive:{state:'qualified',entries:[{path,data:new TextEncoder().encode(roleFixture('Anchor'))}]}}]};
+  const data={inspection,contentSources:reusableEntrySources,mode:'EXPLORE',independentEntry:true,filename:'tiinex-033-1.handoff-package.zip',primaryRole:{label:'Anchor',workspaceId:'business',path}};
+  const entry=projectWorkspaceCarrierEntry(data);
+  assert.equal(entry.status,'ready',entry.reasonCode);
+  assert.equal(entry.carrierKind,'independent-entry');
+  assert.equal(entry.routeId,'');
+  assert.equal(entry.continueFrom,'');
+  assert.equal(entry.primaryRole.label,'Anchor');
+  assert.match(entry.transportText,/Session Role: Anchor/);
+  assert.doesNotMatch(entry.transportText,/001-3-1-1-1-handoff-pointer|001-3-1-2-handoff-pointer/);
+  assert.equal(projectWorkspaceCarrierEntry({...data,route:'route:sigma'}).reasonCode,'independent-entry-route-conflict');
+});

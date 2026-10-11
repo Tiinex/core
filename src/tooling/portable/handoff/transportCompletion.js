@@ -1,5 +1,5 @@
 import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
-import { projectHandoffCarrierOutputFromPackage } from './carrierProjection.js';
+import { projectHandoffCarrierOutputFromPackage, projectIndependentEntryCarrierOutput } from './carrierProjection.js';
 import { projectWorkspaceCarrierEntry } from './workspaceEntryProjection.js';
 import { projectOperatorTargetGuide } from './operatorTargetGuide.js';
 
@@ -11,8 +11,10 @@ export const TRANSPORT_COMPLETION_SCHEMA_ID = 'tiinex.portable.transport-complet
 export function projectPortableTransportCompletion(input = {}) {
   const inspection = input.inspection || inspectHandoffPackageV1(input.bundle || input.package || input);
   if (inspection?.status !== 'valid') return blocked('carrier-invalid', inspection?.findings || []);
+  const independentEntry = input.independentEntry === true;
+  if (independentEntry && (input.route || input.routeId || !String(input.entryId || input.entry || input.mode || '').trim())) return blocked('independent-entry-route-or-purpose-invalid');
   let output;
-  try { output = projectHandoffCarrierOutputFromPackage({
+  try { output = (independentEntry ? projectIndependentEntryCarrierOutput : projectHandoffCarrierOutputFromPackage)({
     inspection,
     route: input.route || input.routeId || '',
     filename: input.filename || input.transportFilename || '',
@@ -45,6 +47,7 @@ export function projectPortableTransportCompletion(input = {}) {
       inspection,
       contentSources: input.contentSources || input.sources || [],
       entryId, targetEntryId: targetId, route: input.route || input.routeId || '',
+      independentEntry, filename: input.filename || input.transportFilename || output.primary.filename,
       customInstruction: input.customInstruction || '',
       primaryRole: input.primaryRole || null, participants: input.participants || []
     });
@@ -81,7 +84,8 @@ export function projectPortableTransportCompletion(input = {}) {
   // A human-friendly suggestion only, never a semantic identifier or part of
   // the recipient's clipboard. Derive it from the short Tiinex prefix and the
   // already-qualified Handoff recipient, never from the full carrier slug.
-  const projectTitle = suggestedProjectTitle(filename, route);
+  const selectedRoleLabel = independentEntry ? (entry?.primaryRole?.authoringLabel || entry?.primaryRole?.label) : route?.parties?.to;
+  const projectTitle = suggestedProjectTitle(filename, selectedRoleLabel);
   const targetName = entry?.targetOption?.label || 'your chosen platform';
   const nextActions = [
     `Attach the unchanged package \`${filename}\` through ${targetName}'s regular upload interface.`,
@@ -91,7 +95,7 @@ export function projectPortableTransportCompletion(input = {}) {
   const markdown = [
     '# Send your Tiinex package', '',
     '## At a glance', '',
-    `- **Send to:** ${route?.parties?.to || 'The receiving conversation you choose'}`,
+    `- **Send to:** ${independentEntry ? (selectedRoleLabel || 'The receiving conversation you choose') : (route?.parties?.to || 'The receiving conversation you choose')}`,
     `- **Use:** ${targetName}`,
     ...(projectTitle ? [`- **Suggested project title:** \`${inlineCode(projectTitle)}\` — copy this as the project name, not the long ZIP filename.`] : []),
     `- **File to attach:** \`${inlineCode(filename)}\``, '',
@@ -109,7 +113,7 @@ export function projectPortableTransportCompletion(input = {}) {
     '## Final check', '',
     ...nextActions.map(value => `- ${value}`), '',
     '## Technical details (optional)', '',
-    `- Handoff route: ${route ? `\`${inlineCode(route.id)}\`` : 'None (informal entry)'}`,
+    `- Handoff route: ${route ? `\`${inlineCode(route.id)}\`` : 'None (independent Guided Entry)'}`,
     `- Purpose: ${entryId ? (entry?.modeDefinition?.label || 'Guided Entry') : (route ? 'Defined by the Handoff Pointer' : 'Generic')}`,
     `- Target: ${entry?.targetOption?.label || 'None'}`,
     ...(operatorGuide?.status === 'ready' && operatorGuide.reviewState !== 'accepted'
@@ -134,13 +138,13 @@ export function projectPortableTransportCompletion(input = {}) {
     targetSource: source, operatorGuide, entryId: entry?.entryId || '',
     markdown: markdown.join('\n'), nextActions: Object.freeze(nextActions),
     clipboardStatus: 'not-performed', uploadStatus: 'not-performed',
-    boundary: 'Read-only, source-qualified projection. The selected exact route and carrier are unchanged. Target Entry selection is environment adaptation only.'
+    boundary: independentEntry ? 'Read-only independent Entry selection. Carried Handoff Pointer routes are not activated. Target/Role selections do not grant transfer authority.' : 'Read-only, source-qualified projection. The selected exact route and carrier are unchanged. Target Entry selection is environment adaptation only.'
   });
 }
 
-function suggestedProjectTitle(filename, route) {
+function suggestedProjectTitle(filename, recipientLabel) {
   const prefix = String(filename || '').match(/^(tiinex-\d+)(?=-|\.|$)/i)?.[1] || '';
-  const recipient = String(route?.parties?.to || '').trim();
+  const recipient = String(recipientLabel || '').trim();
   if (!prefix || !recipient || !/^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,48}$/u.test(recipient)) return '';
   return `${prefix} (${recipient})`;
 }

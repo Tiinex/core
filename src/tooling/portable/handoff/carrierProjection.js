@@ -216,6 +216,32 @@ function routeLessTransportText(startPath = '', mode = 'workspace') {
   return `${coldStartInstruction(startPath)}\n\n${boundary}${reuse}\n`;
 }
 
+/** A separate, operator-requested Entry over a qualified routed carrier.
+ * No carried Handoff Pointer is selected, even if exactly one is available. */
+export function projectIndependentEntryCarrierOutput(input = {}) {
+  const projection = input.projection || input.inspection?.carrierProjection || {};
+  const routes = (projection.routes || []).filter(route => String(route?.state || '') === 'qualified');
+  if (projection.status !== 'ready' || projection.mode !== 'handoff' || !routes.length) {
+    return Object.freeze({ status: 'blocked', reasonCode: 'routed-carrier-required' });
+  }
+  const filename = transportFilename(input.filename || '', '');
+  if (!filename) return Object.freeze({ status: 'blocked', reasonCode: 'filename-required' });
+  const startPath = String(projection.startPath || '001-1-READ-BEFORE-PROCEEDING.trace.md');
+  const content = `${coldStartInstruction(startPath)}
+
+Independent Guided Entry: after bootstrap, orient this carrier as qualified source material. Do not automatically activate or continue from any carried Handoff Pointer. The explicitly selected Entry and Session Role below define the requested session intent, subject to qualification; they do not create Handoff authority, recipient assignment, or work transfer.
+`;
+  return Object.freeze({
+    schema: HANDOFF_HUMAN_OUTPUT_SCHEMA_ID, status: 'ready',
+    primary: Object.freeze({ filename, kind: 'independent-entry', routeId: '', startPath }),
+    selectedRoute: null,
+    normalInlineRouting: Object.freeze({ kind: 'transport-text', content, continueFrom: '', authority: 'qualified-package-start-and-explicit-entry-only' }),
+    routes: Object.freeze([]),
+    findings: Object.freeze(projection.findings || []),
+    boundary: 'Explicit operator Entry. Carried Handoff routes are available as context only and are not implicitly activated.'
+  });
+}
+
 export function projectHandoffCarrierOutputFromPackage(input = {}) {
   const inspection = input.inspection || inspectHandoffPackageV1(input.bundle || input.package || input);
   const projection = inspection.carrierProjection || {};
