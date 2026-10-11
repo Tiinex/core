@@ -41,15 +41,22 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     CUSTOM_ENTRY
   ]);
   const targetCatalog = Object.freeze([NO_TARGET_OPTION, ...targetEntries.map(targetChoice)]);
+  const routedTargetCatalog = Object.freeze([NO_TARGET_OPTION, ...compatibleTargetEntries(targetEntries, null).map(targetChoice)]);
 
   const requested = String(input.entryId || input.entry || input.mode || '').trim();
+  const requestedTargetForHandoff = String(input.targetEntryId || input.targetEntry || input.target || input.where || '').trim();
+  // A qualified formal Handoff already supplies the exact work and parties.
+  // Allow selecting only WHERE without manufacturing a new purpose Entry.
+  if (!requested && routedHandoff && requestedTargetForHandoff && requestedTargetForHandoff.toUpperCase() !== 'NONE') {
+    return projectRoutedHandoffTarget({ inspection, projection, input, targetEntries, targetCatalog: routedTargetCatalog });
+  }
   if (!requested) return Object.freeze({
     schema: WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID,
     status: 'ready',
     state: 'catalog',
     carrierKind: pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff',
     modes,
-    targets: targetCatalog,
+    targets: routedHandoff ? routedTargetCatalog : targetCatalog,
     targetOptional: true,
     entries: Object.freeze(entryCatalog.entries || []),
     purposeEntries,
@@ -153,6 +160,45 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     boundary: pointerlessWorkspace
       ? 'Guided Entry is a transport/invocation projection over an unchanged pointerless Workspace carrier. Entry, Target Entry, Role, participant, and operator-instruction selection do not mutate the carrier or its semantic lineage and do not independently create authority, routing, acceptance, continuation, work transfer, or completion.'
       : 'Guided Entry is a transport/invocation projection over an unchanged routed Handoff carrier. The exact qualified Handoff transport shell remains authoritative and unchanged; Entry, Target Entry, Role, participant, and operator-instruction selection only adds recipient-session intent and does not create or alter routing, recipient authority, semantic Parent, acceptance, work transfer, or completion.'
+  });
+}
+
+function projectRoutedHandoffTarget({ inspection, projection, input, targetEntries, targetCatalog }) {
+  const selected = String(input.targetEntryId || input.targetEntry || input.target || input.where || '').trim();
+  const definition = resolveRequestedEntry(targetEntries, selected);
+  if (!definition) return blocked('target-entry-invalid', inspection.findings || [], [], targetCatalog);
+  // Without a selected purpose Entry, target-specific Entry-family or capability
+  // requirements cannot be satisfied merely by the presence of a Handoff.
+  if (!compatibleTargetEntries(targetEntries, null).some(entry => entry.id === definition.id)) {
+    return blocked('target-entry-requires-purpose-entry', inspection.findings || [], [], targetCatalog);
+  }
+  const routed = projectHandoffHumanOutput({ projection, route: String(input.route || input.routeId || input.pointer || '').trim() });
+  if (routed.status !== 'ready' || !routed.normalInlineRouting?.continueFrom || !routed.normalInlineRouting?.content) {
+    return blocked(routed.status === 'selection-required' ? 'handoff-route-required' : `handoff-route-${routed.status || 'unavailable'}`, inspection.findings || [], [], targetCatalog);
+  }
+  const option = targetChoice(definition);
+  const augmentation = [
+    `Target intent: ${option.label}`, '',
+    `Qualified Target Entry: ${definition.canonicalIdentifier || definition.label}`,
+    ...(definition.sourceKind === 'carried'
+      ? [`Target material: carried in this package at \`${definition.workspaceId}::${definition.artifactPath}\``]
+      : [`Target material: qualified reusable Target Entry \`${definition.artifactPath}\``]),
+    'After bootstrap, qualify the exact selected Handoff Pointer and Target material. The Handoff supplies the work and parties; Target is environment adaptation only. Do not infer new recipient/Role authority, work transfer, Process applicability, or remote-mutation authority.'
+  ].join('\n');
+  const shell = String(routed.normalInlineRouting.content).trimEnd();
+  return Object.freeze({
+    schema: WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID,
+    status: 'ready', state: 'rendered', carrierKind: 'routed-handoff',
+    mode: '', entryId: '', modeDefinition: null, entryDefinition: null,
+    targetEntryId: definition.id, targetDefinition: definition, targetOption: option,
+    targetOptions: targetCatalog, targetOptional: true,
+    startPath: String(projection.startPath || '001-1-READ-BEFORE-PROCEEDING.trace.md'),
+    routeId: String(routed.selectedRoute.id || ''),
+    continueFrom: String(routed.normalInlineRouting.continueFrom),
+    primaryRole: null, participants: Object.freeze([]),
+    transportText: `${shell}\n\n${augmentation}\n`,
+    entryAugmentationText: `${augmentation}\n`,
+    boundary: 'The exact qualified Handoff Pointer supplies What and Who/With. WHERE is qualified host adaptation only; no new purpose Entry, role assignment, transfer or mutation authority is inferred.'
   });
 }
 

@@ -28,7 +28,7 @@ test('exact route produces byte-identical canonical transport text and unmodifie
   assert.equal(result.canonicalTransportText,source.normalInlineRouting.content);
   assert.equal(result.carrier.filename,source.primary.filename);
   assert.equal(result.carrier.selectedRoute.parties.to,'Sigma');
-  assert.match(result.markdown,/Exact clipboard text/);
+  assert.match(result.markdown,/Exact text to paste into the chat/);
   assert.match(result.markdown,/001-3-1-2-sigma-handoff-pointer\.trace\.md/);
   assert.equal(result.targetSource,null);assert.equal(result.clipboardStatus,'not-performed');
 });
@@ -37,7 +37,7 @@ test('pointerless Workspace has Start but never a fabricated recipient or Contin
  assert.equal(result.status,'ready');assert.equal(result.carrier.routeId,'');
  assert.match(result.clipboardText,/pointerless Workspace carrier/);
  assert.doesNotMatch(result.clipboardText,/Continue from/);
- assert.match(result.markdown,/Recipient: Not declared/);
+ assert.match(result.markdown,/Send to:.*receiving conversation you choose/);
 });
 test('qualified purpose Entry can augment exact shell without new authority',()=>{
  const result=projectPortableTransportCompletion({inspection:pointerless,entryId:'START',contentSources:[nativeEntryContentSource()]});
@@ -64,8 +64,37 @@ test('current qualified VS Code Target Entry projects exact source and bounded h
  assert.equal(selected.status,'ready',selected.reasonCode);
  assert.equal(selected.targetSource.canonicalIdentifier,'tiinex.host.vscode.copilot.target.v1');
  assert.match(selected.markdown,/attach the unchanged ZIP to the intended Copilot chat/i);
- assert.match(selected.markdown,/Referenced material is context, not an activated Process/);
+ assert.match(selected.markdown,/Linked material is supporting context, not an activated procedure/);
  assert.match(selected.clipboardText,/Target intent: VS Code \/ Copilot/);
  assert.equal(selected.carrier.routeId,'');
  assert.ok(selected.clipboardText.startsWith(selected.canonicalTransportText.trimEnd()));
+});
+
+
+test('formal qualified Handoff Pointer composes WHERE-only Target without inventing WHAT or parties', () => {
+ const data=readFileSync(new URL('./fixtures/chatgpt-web-target.fixture.trace.md', import.meta.url));
+ const inspection={...routed,workspaces:[{workspaceId:'interop-openai',archive:{state:'qualified',entries:[{path:'.topics/.entries/where/chatgpt-web/001-chatgpt-web-target-entry.trace.md',data}]}}]};
+ const canonical=projectPortableTransportCompletion({inspection,route:'route:sigma'});
+ const output=projectPortableTransportCompletion({inspection,route:'route:sigma',target:'ChatGPT Web'});
+ assert.equal(output.status,'ready',output.reasonCode);
+ assert.equal(output.carrier.routeId,canonical.carrier.routeId);
+ assert.equal(output.carrier.selectedRoute.parties.to,'Sigma');
+ assert.equal(output.canonicalTransportText,canonical.clipboardText);
+ assert.ok(output.clipboardText.startsWith(canonical.clipboardText.trimEnd()));
+ assert.match(output.clipboardText,/Target intent: ChatGPT Web/);
+ assert.doesNotMatch(output.clipboardText,/Entry intent:/);
+ assert.match(output.markdown,/Purpose: Defined by the Handoff Pointer/);
+ assert.equal(output.entryId,'');
+ assert.equal(output.targetSource.canonicalIdentifier,'tiinex.interop.openai.entry.target.chatgpt-web.v1');
+ assert.equal(projectPortableTransportCompletion({inspection,route:'route:sigma',target:'not-real'}).status,'blocked');
+ assert.equal(projectPortableTransportCompletion({inspection,target:'ChatGPT Web'}).status,'blocked', 'ambiguous multi-route carrier is not implied');
+ assert.equal(projectPortableTransportCompletion({inspection:pointerless,target:'ChatGPT Web'}).reasonCode,'target-requires-purpose-entry');
+});
+
+test('a Target requiring a separate purpose Entry remains blocked on formal Where-only route', () => {
+ const data=readFileSync(new URL('./fixtures/vscode-copilot-target.fixture.trace.md', import.meta.url));
+ const inspection={...routed,workspaces:[{workspaceId:'vscode',archive:{state:'qualified',entries:[{path:'.topics/.entries/where/vscode-copilot/001-vs-code-copilot-execution-target.trace.md',data}]}}]};
+ const output=projectPortableTransportCompletion({inspection,route:'route:sigma',target:'VS Code / Copilot'});
+ assert.equal(output.status,'blocked');
+ assert.equal(output.reasonCode,'entry-target-entry-requires-purpose-entry');
 });
