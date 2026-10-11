@@ -1,3 +1,5 @@
+import { qualifySectionScopedRepeatedCreationInputs } from './creation.repeatedFields.js';
+import { genericArtifactCreationImplementation } from './creation.renderer.js';
 import { parseArtifactMarkdown } from '../artifacts/artifact.parse.js';
 import { qualifiedCreationAuthorityFromSchemaSource } from './schema.source.js';
 import { canonicalC14nV2SelfState } from '../integrity/integrity.c14nV2.js';
@@ -28,8 +30,13 @@ export function defineArtifactCreationCapability(binding = {}, implementation = 
 export function qualifyArtifactCreationCapability(module = {}, transitionType = '') {
   const capability = module?.artifactCreation || null;
   const schemaId = String(module?.id || '').trim();
-  const authority = qualifiedCreationAuthorityFromSchemaSource(module);
-  const implementation = capability?.implementation || null;
+  const rawAuthority = qualifiedCreationAuthorityFromSchemaSource(module);
+  const authority = rawAuthority.compiledContract?.creation ? Object.freeze({ ...rawAuthority, compiledContract: Object.freeze({ ...rawAuthority.compiledContract, creation: qualifySectionScopedRepeatedCreationInputs(rawAuthority.compiledContract.creation, rawAuthority.compiledContract.validationContract, schemaId) }) }) : rawAuthority;
+  // A concrete schema companion may define qualified validation/read authority
+  // without a separate authoring plugin. Reuse the generic Core renderer only
+  // when its exact schema source is qualified and representative creation
+  // preflight passes; never invent fields or override an explicit implementation.
+  const implementation = effectiveCreationImplementation(module, authority);
   const supportedTransitions = new Set(implementation?.transitionTypes || []);
   const transition = String(transitionType || 'create-artifact').trim();
   const callable = Boolean(
@@ -59,7 +66,7 @@ export function qualifyArtifactCreationCapability(module = {}, transitionType = 
 
 export function executeArtifactCreationCapability(module = {}, transitionType = 'create-artifact', contract = {}, input = {}) {
   const qualification = qualifyArtifactCreationCapability(module, transitionType);
-  const implementation = module?.artifactCreation?.implementation || null;
+  const implementation = effectiveCreationImplementation(module, qualification.authority);
   if (!qualification.ready || typeof implementation?.execute !== 'function') return Object.freeze({ state: 'unavailable', reason: 'creation-capability-not-ready', markdown: '', qualification: executionQualificationSummary(qualification, null) });
   try {
     const rootCreation = String(transitionType || 'create-artifact') === 'create-artifact';
@@ -84,6 +91,12 @@ export function executeArtifactCreationCapability(module = {}, transitionType = 
   } catch (error) {
     return Object.freeze({ state: 'unavailable', reason: String(error?.message || error || 'creation-execution-failed'), markdown: '', error, qualification: executionQualificationSummary(qualification, null) });
   }
+}
+
+function effectiveCreationImplementation(module, authority) {
+  if (module?.artifactCreation) return module.artifactCreation?.implementation || null;
+  if (module?.kind !== 'concrete' || module?.capabilities?.canRenderFallback !== true || authority?.state !== 'qualified') return null;
+  return Object.freeze({ ...genericArtifactCreationImplementation, status: 'implemented', transitionTypes: Object.freeze(['create-artifact', 'continue-from-record']) });
 }
 
 function executionQualification(module, authority, implementation, transition) {

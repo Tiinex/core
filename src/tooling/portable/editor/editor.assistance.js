@@ -18,7 +18,7 @@ export function projectPortableEditorAssistance(input = {}) {
   const focusPath = norm(input.focusPath || input.focus || '');
   const selectedRecords = focusPath ? tiinexRecords.filter((record) => norm(record.path || record.id || '') === focusPath) : tiinexRecords;
   const lineageInspection = inspectPortableLineageIntegrity({ records: tiinexRecords });
-  const documents = selectedRecords.map((record) => projectDocument(record, tiinexRecords, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record)));
+  const documents = selectedRecords.map((record) => projectDocument(record, tiinexRecords, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record), norm(input.selectedParentPath || '')));
   const diagnostics = documents.flatMap((item) => item.diagnostics);
   return freeze({
     schema: PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID,
@@ -29,7 +29,7 @@ export function projectPortableEditorAssistance(input = {}) {
   });
 }
 
-function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = []) {
+function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = [], selectedParentPath = '') {
   if (isCanonicalSchemaSourceRecord(record)) return projectSchemaSourceDocument(record, records);
   const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true, schemaReferenceResolutions: referenceResolutions });
   const markdown = String(record.markdown || '');
@@ -83,6 +83,21 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
     }));
   }
 
+  // An operator can explicitly choose one same-Workspace Parent. This does
+  // not confer automatic reparenting authority: exact Core review must qualify
+  // the parent schema, v2 seal, relative references, and the focused replacement.
+  if (selectedParentPath) {
+    const chosen = qualifyExplicitLocalParentSelection(record, records, selectedParentPath, referenceResolutions);
+    if (chosen.state === 'qualified' && chosen.markdown !== markdown) actions.push(freeze({
+      id: 'relocate-selected-parent-and-self-seal',
+      title: 'Use selected Parent and refresh this artifact only',
+      kind: 'replace-document', qualification: 'deterministic-shared-core',
+      sourceSha256: sha256Hex(new TextEncoder().encode(markdown)),
+      replacementMarkdown: chosen.markdown,
+      diagnosticCodes: ['portable.lineage-integrity.parent-unresolved', 'portable.lineage-integrity.parent-target-mismatch', 'portable.lineage-integrity.parent-schema-mismatch'],
+      boundary: 'Human-selected exact local Parent; Core verified its matching declared schema and primary self, resolved the relative header and c14n-v2 target and qualified only the current artifact. No descendant rewrite.'
+    }));
+  }
   const referenceResolution = projectReferenceResolutionAssistance(markdown, referenceResolutions);
   diagnostics.push(...referenceResolution.diagnostics);
   actions.push(...referenceResolution.actions);
@@ -543,6 +558,68 @@ function preferredSchemaReferenceTarget(record = {}, records = [], schemaId = ''
   }
   if (published) return freeze({ target: published, kind: 'published-immutable-exact' });
   return null;
+}
+
+/** Exact operator-chosen same-Workspace Parent; never guesses a candidate or rewrites other files. */
+function qualifyExplicitLocalParentSelection(record = {}, records = [], parentPathInput = '', referenceResolutions = []) {
+  const currentPath = norm(record.path || record.id || '');
+  const selectedPath = norm(parentPathInput);
+  if (!currentPath.startsWith('.topics/') || !selectedPath.startsWith('.topics/') || currentPath === selectedPath ||
+      selectedPath.split('/').includes('..') || !selectedPath.endsWith('.trace.md')) return freeze({ state: 'blocked', reason: 'local-parent-selection-path-unqualified' });
+  const matches = records.filter((item) => norm(item.path || item.id || '') === selectedPath);
+  if (matches.length !== 1) return freeze({ state: 'blocked', reason: 'selected-parent-not-exactly-loaded' });
+  const parent = matches[0];
+  const parentSeal = canonicalC14nV2SelfState(String(parent.markdown || ''));
+  if (parentSeal.state !== 'verified' || !parentSeal.declaredValue) return freeze({ state: 'blocked', reason: 'selected-parent-self-unverified' });
+  const child = parseArtifactEnvelopeForParentSelection(String(record.markdown || ''));
+  const parentHeader = parseArtifactEnvelopeForParentSelection(String(parent.markdown || ''));
+  if (!child || !parentHeader || !child.parentSchema || !parentHeader.currentSchema || child.parentSchema !== parentHeader.currentSchema)
+    return freeze({ state: 'blocked', reason: 'selected-parent-schema-mismatch' });
+  const relative = relativePortableReference(currentPath, selectedPath);
+  if (!relative) return freeze({ state: 'blocked', reason: 'selected-parent-relative-path-unavailable' });
+  const source = String(record.markdown || '');
+  const lines = source.replace(/\r\n?/g, '\n').split('\n');
+  const headerEnd = lines.findIndex((line) => line === '- Current');
+  const parentStart = lines.findIndex((line) => line === '- Parent');
+  const integrityStart = lines.findIndex((line) => line === '# Continuity Integrity');
+  if (parentStart < 0 || headerEnd <= parentStart || integrityStart < headerEnd) return freeze({ state: 'blocked', reason: 'parent-envelope-unavailable' });
+  const trace = [], origin = [];
+  for (let i=parentStart+1; i<headerEnd; i++) {
+    if (/^  - Trace:\s*\[[^\]]+\]\([^)]+\)\s*$/.test(lines[i])) trace.push(i);
+    if (/^    - \[relative\]\([^)]+\)\s*$/.test(lines[i])) origin.push(i);
+  }
+  if (trace.length !== 1 || origin.length !== 1) return freeze({ state: 'blocked', reason: 'parent-trace-or-relative-origin-ambiguous' });
+  const parentMethodValueIndex = primaryParentIntegrityValueLine(lines);
+  if (parentMethodValueIndex < integrityStart) return freeze({ state: 'blocked', reason: 'parent-c14n-v2-target-unavailable' });
+  const towards=[];
+  for (let i=integrityStart+1; i<parentMethodValueIndex; i++)
+    if (/^\s+- Towards:\s*\[[^\]]+\]\([^)]+\)\s*$/.test(lines[i])) towards.push(i);
+  if (towards.length !== 1) return freeze({ state: 'blocked', reason: 'parent-c14n-v2-target-ambiguous' });
+  const selectedLabel = selectedPath.split('/').at(-1);
+  lines[trace[0]] = `  - Trace: [${selectedLabel}](${relative})`;
+  lines[origin[0]] = `    - [relative](${relative})`;
+  lines[towards[0]] = `  - Towards: [${selectedLabel}](${relative})`;
+  lines[parentMethodValueIndex] = `  - Value: ${parentSeal.declaredValue}`;
+  const sealed = sealC14nV2Self(lines.join('\n'));
+  if (!['sealed','unchanged'].includes(sealed.state)) return freeze({ state: 'blocked', reason: 'reparent-self-seal-unavailable' });
+  const audit = auditPortableRecord({ ...record, markdown: sealed.markdown }, { requireExactSchemaAuthority: true, schemaReferenceResolutions: referenceResolutions });
+  const allowedWarnings = new Set((auditPortableRecord(record, { requireExactSchemaAuthority: true, schemaReferenceResolutions: referenceResolutions }).findings || [])
+    .filter((item) => item.severity === 'warning').map((item) => item.code));
+  if ((audit.findings || []).some((item) => item.severity === 'error' || (item.severity === 'warning' && !allowedWarnings.has(item.code))))
+    return freeze({ state: 'blocked', reason: 'reparent-schema-audit-unqualified' });
+  const changedRecords = records.map((item) => norm(item.path || item.id || '') === currentPath ? { ...item, markdown: sealed.markdown } : item);
+  const resulting = inspectPortableLineageIntegrity({ records: changedRecords });
+  const focused = (resulting.artifacts || []).find((item) => norm(item.path || '') === currentPath);
+  if (!focused || focused.state !== 'healthy') return freeze({ state: 'blocked', reason: `reparent-lineage-${focused?.state || 'unavailable'}` });
+  return freeze({ state: 'qualified', markdown: sealed.markdown, parentPath: selectedPath });
+}
+
+function parseArtifactEnvelopeForParentSelection(markdown = '') {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const header = lines.slice(0, lines.findIndex((line) => line === '---') >= 0 ? lines.findIndex((line) => line === '---') : 0);
+  const parentSchema = header.find((line) => /^  - Parent Schema:/.test(line))?.match(/\[([^\]]+)\]\([^)]+\)/)?.[1] || '';
+  const currentSchema = header.find((line) => /^  - Current Schema:/.test(line))?.match(/\[([^\]]+)\]\([^)]+\)/)?.[1] || '';
+  return { parentSchema, currentSchema };
 }
 
 function deterministicReferenceRepairChangeset(record = {}, records = [], lineageInspection = null, focusRepair = {}) {

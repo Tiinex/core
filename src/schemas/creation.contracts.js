@@ -1,3 +1,4 @@
+import { qualifySectionScopedRepeatedCreationInputs } from './creation.repeatedFields.js';
 import { parseArtifactMarkdown } from '../artifacts/artifact.parse.js';
 import { runtimeRootValidate } from './root.runtime.js';
 import { resolveSchemaCapabilities, CapabilityStatus } from './capability.registry.js';
@@ -207,7 +208,7 @@ function composeCreationAuthority(module = null, authority = {}, localCreation =
     if (!lineageModule) continue;
     const qualified = qualifiedCreationAuthorityFromSchemaSource(lineageModule);
     if (qualified.state !== 'qualified' || !qualified.compiledContract?.creation) continue;
-    creationAuthorities.push({ schemaId, creation: qualified.compiledContract.creation });
+    creationAuthorities.push({ schemaId, creation: qualifySectionScopedRepeatedCreationInputs(qualified.compiledContract.creation, qualified.compiledContract.validationContract, schemaId) });
   }
   if (!creationAuthorities.length) creationAuthorities.push({ schemaId: String(module?.id || ''), creation: localCreation });
 
