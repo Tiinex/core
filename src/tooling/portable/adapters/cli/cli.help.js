@@ -13,7 +13,7 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} catalog [--json]`,
     `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>] [--holder-assignment-mode <mode>] [--recipient]`,
     `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> [--holder-assignment-mode <mode>] --recipient --continue <workspace-dir>`,
-    `${command} qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>`,
+    `${command} qualify-return <continued-workspace-dir> --result <result-path> [--expected <expected-file-path>]`,
     `${command} prepare-return <continued-workspace-dir>`,
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
     `${command} project-lineage-relation-neighborhood <material-root...> --focus <workspace::path|path> [--workspace-roots <roots.json>] [--coverage complete|bounded|partial|unknown] [--depth <n>]`,
@@ -292,10 +292,10 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'qualify-return') return [
     'Tiinex portable tooling — qualify return transition',
     '',
-    `${command} qualify-return <continued-workspace-dir> --result <workspace-relative-result> --expected <workspace-relative-expected-file>`,
+    `${command} qualify-return <continued-workspace-dir> --result <workspace-relative-result> [--expected <workspace-relative-expected-file>]`,
     '',
-    'Reads qualified runtime continuation state and the exact selected Handoff return protocol. It compares the exact local result bytes to one explicit expected local file, writes runtime-only `.tiinex/return-transition.json`, and qualifies only that result-specific return transition when the bytes match. It does not establish Task completion, Task closure, acceptance, or remote-write authority.',
-    'After it reports `qualified`, run `prepare-return <continued-workspace-dir>`. Prepare-return rechecks the transition receipt and both byte sets and fails closed if either changed.',
+    'Reads qualified runtime continuation state and the exact selected Handoff return protocol. It pins the exact local result SHA-256/size in runtime-only `.tiinex/return-transition.json`. If --expected is supplied, it also requires byte equality to that local file; this never proves that the expected file is independent or semantically correct. Do not manufacture a duplicate expected file merely to qualify a return. It does not establish Task completion, Task closure, acceptance, or remote-write authority.',
+    'After it reports `qualified`, run `prepare-return <continued-workspace-dir>`. Prepare-return rechecks the transition receipt and the result bytes, and also the expected bytes if supplied, and fails closed on change.',
     '',
     `Advanced/internal catalog: ${command} operations`
   ];

@@ -251,7 +251,7 @@ function projectRecipientContract({ result = {}, required = {}, currentWork = {}
     ...(flags.recipient ? ['--recipient'] : []),
     '--continue', '<empty-workspace-dir>'
   ]);
-  const qualifyReturnCommand = projectPortableCliOperation(runtime, 'qualify-return', ['<continued-workspace-dir>', '--result', '<result-path>', '--expected', '<expected-file-path>']);
+  const qualifyReturnCommand = projectPortableCliOperation(runtime, 'qualify-return', ['<continued-workspace-dir>', '--result', '<result-path>']);
   const prepareReturnCommand = projectPortableCliOperation(runtime, 'prepare-return', ['<continued-workspace-dir>']);
   const handoffCommand = projectPortableCliOperation(runtime, 'handoff', ['<continued-workspace-dir>']);
   const knownLosses = continuity?.losses?.blocking === false ? (continuity.losses.items || []) : [];

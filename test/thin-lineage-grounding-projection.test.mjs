@@ -645,7 +645,7 @@ test('common ground projection separates epistemic basis, semantic participants,
   assert.equal(output.recipientContract.completion.returnPackage.defaultNextDimension, '001-1');
   assert.match(output.recipientContract.completion.localWorkProductRule, /inside the continued Workspace/);
   assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.command, 'qualify-return');
-  assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.cli, '/usr/bin/node /tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>');
+  assert.equal(output.recipientContract.completion.returnAuthoring.qualifyTransition.cli, '/usr/bin/node /tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs qualify-return <continued-workspace-dir> --result <result-path>');
   assert.equal(output.recipientContract.completion.returnAuthoring.prepare.command, 'prepare-return');
   assert.equal(output.recipientContract.completion.returnAuthoring.prepare.cli, '/usr/bin/node /tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs prepare-return <continued-workspace-dir>');
   assert.match(output.recipientContract.completion.returnAuthoring.semanticResponsibility, /qualify-return/);

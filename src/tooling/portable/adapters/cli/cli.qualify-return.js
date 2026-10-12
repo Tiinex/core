@@ -24,14 +24,15 @@ export async function runQualifyReturnCli(parsed = {}, runtime = {}) {
   const resultRelativePath = normalizeWorkspaceRelativePath(flags.result || '');
   const expectedRelativePath = normalizeWorkspaceRelativePath(flags.expected || flags['expected-file'] || '');
   if (!resultRelativePath) throw new Error('portable.cli.qualify-return.result.required');
-  if (!expectedRelativePath) throw new Error('portable.cli.qualify-return.expected-file.required');
+  if ((flags.expected || flags['expected-file']) && !expectedRelativePath) throw new Error('portable.cli.qualify-return.expected-file.path.invalid');
+  if (expectedRelativePath && expectedRelativePath === resultRelativePath) throw new Error('portable.cli.qualify-return.expected-file.same-as-result');
   if (resultRelativePath.startsWith('.tiinex/') || expectedRelativePath.startsWith('.tiinex/')) throw new Error('portable.cli.qualify-return.runtime-only-path.forbidden');
 
   const resultBytes = await readFile(safeWorkspaceTarget(workspaceRoot, resultRelativePath));
-  const expectedBytes = await readFile(safeWorkspaceTarget(workspaceRoot, expectedRelativePath));
+  const expectedBytes = expectedRelativePath ? await readFile(safeWorkspaceTarget(workspaceRoot, expectedRelativePath)) : null;
   const resultSha256 = sha256Hex(resultBytes);
-  const expectedSha256 = sha256Hex(expectedBytes);
-  if (!resultBytes.equals(expectedBytes)) throw new Error('portable.cli.qualify-return.result-byte-verification.failed');
+  const expectedSha256 = expectedBytes ? sha256Hex(expectedBytes) : '';
+  if (expectedBytes && !resultBytes.equals(expectedBytes)) throw new Error('portable.cli.qualify-return.result-byte-verification.failed');
 
   const receipt = Object.freeze({
     schema: 'tiinex.portable.return-transition.v1',
@@ -40,9 +41,13 @@ export async function runQualifyReturnCli(parsed = {}, runtime = {}) {
     selectedHandoffPath,
     selectedRouteId: String(state.selectedRouteId || ''),
     result: Object.freeze({ path: resultRelativePath, byteSize: resultBytes.byteLength, sha256: resultSha256 }),
-    verification: Object.freeze({ kind: 'exact-byte-match', expectedPath: expectedRelativePath, expectedByteSize: expectedBytes.byteLength, expectedSha256 }),
+    verification: Object.freeze(expectedBytes
+      ? { kind: 'exact-byte-match', expectedPath: expectedRelativePath, expectedByteSize: expectedBytes.byteLength, expectedSha256 }
+      : { kind: 'result-sha256', boundary: 'Result bytes captured and SHA-256/size pinned for later recheck. No independent expected result was supplied.' }),
     returnProtocol: Object.freeze({ signalKind, returnTo, returnToReference }),
-    boundary: 'Qualifies only the current return transition for one exact local bounded result that byte-matches one explicit expected local file under the exact selected Handoff return protocol. It does not establish Task completion, Task closure, acceptance, semantic correctness beyond exact-byte equality, or remote mutation authority.'
+    boundary: expectedBytes
+      ? 'Qualifies only the bounded result byte-match against the explicitly supplied local expected file and the selected Handoff return protocol. It does not establish independent expected provenance, Task completion, Task closure, acceptance, semantic correctness, or remote mutation authority.'
+      : 'Qualifies only the bounded result SHA-256 and size under the selected Handoff return protocol, with recheck before manufacture. No expected reference or semantic correctness is established. It does not establish Task completion, Task closure, acceptance, or remote mutation authority.'
   });
   const outputPath = safeWorkspaceTarget(workspaceRoot, TRANSITION_RELATIVE_PATH);
   await mkdir(path.dirname(outputPath), { recursive: true });
@@ -68,20 +73,25 @@ export async function readQualifiedReturnTransition(workspaceRoot, state = {}) {
   if (!selectedHandoffPath || String(receipt.selectedHandoffPath || '') !== selectedHandoffPath) throw new Error('portable.cli.prepare-return.return-transition.handoff-mismatch');
   if (String(receipt.selectedRouteId || '') !== String(state.selectedRouteId || '')) throw new Error('portable.cli.prepare-return.return-transition.route-mismatch');
   const resultPath = normalizeWorkspaceRelativePath(receipt.result?.path || '');
+  const verificationKind = String(receipt.verification?.kind || '');
+  if (!['exact-byte-match', 'result-sha256'].includes(verificationKind)) throw new Error('portable.cli.prepare-return.return-transition.verification-unqualified');
   const expectedPath = normalizeWorkspaceRelativePath(receipt.verification?.expectedPath || '');
-  if (!resultPath || !expectedPath) throw new Error('portable.cli.prepare-return.return-transition.material-missing');
+  if (!resultPath || (verificationKind === 'exact-byte-match' && !expectedPath) || (verificationKind === 'result-sha256' && expectedPath)) throw new Error('portable.cli.prepare-return.return-transition.material-missing');
   const resultBytes = await readFile(safeWorkspaceTarget(root, resultPath));
-  const expectedBytes = await readFile(safeWorkspaceTarget(root, expectedPath));
-  if (sha256Hex(resultBytes) !== String(receipt.result?.sha256 || '') || resultBytes.byteLength !== Number(receipt.result?.byteSize || -1)) throw new Error('portable.cli.prepare-return.return-transition.result-stale');
-  if (sha256Hex(expectedBytes) !== String(receipt.verification?.expectedSha256 || '') || expectedBytes.byteLength !== Number(receipt.verification?.expectedByteSize || -1)) throw new Error('portable.cli.prepare-return.return-transition.expected-stale');
-  if (!resultBytes.equals(expectedBytes)) throw new Error('portable.cli.prepare-return.return-transition.byte-match-stale');
+  const expectedBytes = verificationKind === 'exact-byte-match' ? await readFile(safeWorkspaceTarget(root, expectedPath)) : null;
+  if (sha256Hex(resultBytes) !== String(receipt.result?.sha256 || '') || resultBytes.byteLength !== Number(receipt.result?.byteSize ?? -1)) throw new Error('portable.cli.prepare-return.return-transition.result-stale');
+  if (expectedBytes) {
+    if (sha256Hex(expectedBytes) !== String(receipt.verification?.expectedSha256 || '') || expectedBytes.byteLength !== Number(receipt.verification?.expectedByteSize ?? -1)) throw new Error('portable.cli.prepare-return.return-transition.expected-stale');
+    if (!resultBytes.equals(expectedBytes)) throw new Error('portable.cli.prepare-return.return-transition.byte-match-stale');
+  }
   return Object.freeze({ ...receipt, result: Object.freeze({ ...(receipt.result || {}) }), verification: Object.freeze({ ...(receipt.verification || {}) }), returnProtocol: Object.freeze({ ...(receipt.returnProtocol || {}) }) });
 }
 
-export function returnTransitionResultReference(resultPath = '') {
+export function returnTransitionResultReference(resultPath = '', authoredDirectory = '') {
   const normalized = normalizeWorkspaceRelativePath(resultPath);
-  if (!normalized) return '';
-  return path.posix.relative('.topics/handoffs', normalized) || path.posix.basename(normalized);
+  const directory = normalizeWorkspaceRelativePath(authoredDirectory);
+  if (!normalized || !directory) return '';
+  return path.posix.relative(directory, normalized) || path.posix.basename(normalized);
 }
 
 async function readJson(filePath) { return JSON.parse(await readFile(filePath, 'utf8')); }

@@ -38,10 +38,18 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
     if (!reductionSourceContext.qualified) throw new Error(`portable.cli.author.reduction-source-context.invalid:${reductionSourceContext.findings.join(',')}`);
   }
   if (schemaId === 'tiinex.handoff.v1' && /(?:<<TIINEX_REQUIRED:[A-Z0-9_]+>>|TIINEX_REQUIRED_[A-Z0-9_]+)/.test(bodyMarkdown)) throw new Error('portable.cli.author.return-scaffold.incomplete: replace every <<TIINEX_REQUIRED:...>> marker with exact supported return semantics before authoring.');
-  if (schemaId === 'tiinex.handoff.v1') await validatePreparedReturnBodyAuthority({ workspaceRoot, state, bodyPath: path.resolve(bodyPath), bodyMarkdown });
+  const preparedReturn = schemaId === 'tiinex.handoff.v1'
+    ? await validatePreparedReturnBodyAuthority({ workspaceRoot, state, bodyPath: path.resolve(bodyPath), bodyMarkdown })
+    : null;
   const title = String(flags.title || firstHeading(bodyMarkdown) || state?.roleLabel || schemaId).trim();
 
   const parentReference = resolveParentReference(flags, state);
+  if (preparedReturn?.applies) {
+    const expectedDirectory = preparedReturn.authority.authoredDirectory;
+    const observedDirectory = requestedArtifactRelativePath ? path.posix.dirname(requestedArtifactRelativePath) : targetDirectory;
+    if (observedDirectory !== expectedDirectory) throw new Error('portable.cli.author.return-scaffold.directory-mismatch');
+    if (parentReference !== preparedReturn.authority.causalParentPath) throw new Error('portable.cli.author.return-scaffold.causal-parent-mismatch');
+  }
   const parentSource = String(flags['parent-source'] || flags['parent-file'] || '').trim();
   const parentPublishedReference = String(flags['parent-reference'] || flags['parent-permalink'] || '').trim();
   if (isWorkspaceQualifiedReference(parentReference) && !parentSource) throw new Error(`portable.cli.author.parent-source.required: --parent ${parentReference} names an explicit cross-Workspace Parent. Supply --parent-source <local-file> containing the exact qualified Parent bytes; Tooling will not discover or fetch that Parent automatically.`);

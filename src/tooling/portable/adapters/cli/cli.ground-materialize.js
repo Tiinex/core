@@ -58,7 +58,7 @@ export async function materializeGroundWorkspaceCliOutput(result = {}, input = {
     guidanceOperationSelection: projectContinuationGuidanceOperationSelection(result?.capsule?.guidanceAuthority),
     returnDiscipline: Object.freeze({
       state: 'qualified-return-path-required-when-return-transition-is-due',
-      qualifyReturnCommand: 'qualify-return <continued-workspace-dir> --result <result-path> --expected <expected-file-path>',
+      qualifyReturnCommand: 'qualify-return <continued-workspace-dir> --result <result-path>',
       prepareReturnCommand: 'prepare-return <continued-workspace-dir>',
       manualPackageConstruction: 'forbidden',
       looseExternalReturnPayloads: 'forbidden',
@@ -92,7 +92,7 @@ export async function materializeGroundWorkspaceCliOutput(result = {}, input = {
     continuationStatePath,
     sourceMutation: false,
     remoteWrite: false,
-    nextActionAfterBoundedWork: `qualify-return ${outputDir} --result <result-path> --expected <expected-file-path>`,
+    nextActionAfterBoundedWork: `qualify-return ${outputDir} --result <result-path>`,
     boundary: 'Local exact-byte materialization of one already-qualified carried Workspace as a writable continuation plus runtime-only .tiinex continuation state. The received carried source snapshot and input carrier remain immutable inputs. The runtime state is excluded from canonical Workspace manufacture; no package content is executed, semantic authority is not inferred from filenames or output placement, and the input carrier remains untouched. Return authoring remains fail-closed until qualify-return establishes a byte-current transition for an exact bounded result.'
   });
   return Object.freeze({ ...result, continuationMaterialization: materialization });

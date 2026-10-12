@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -97,8 +97,8 @@ function incomingHandoff(){
 async function fixture(){
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-ux-'));
   await mkdir(path.join(root,'.tiinex'),{recursive:true});
-  await mkdir(path.join(root,'.topics','handoffs'),{recursive:true});
-  const incoming='.topics/handoffs/002-anchor-to-anchor.trace.md';
+  await mkdir(path.join(root,'.topics','work','first-use-guidance'),{recursive:true});
+  const incoming='.topics/work/first-use-guidance/002-anchor-to-anchor.trace.md';
   await writeFile(path.join(root,incoming),incomingHandoff(),'utf8');
   await writeFile(path.join(root,'.tiinex','continuation.json'),JSON.stringify({schema:'tiinex.portable.ground-continuation-state.v1',version:1,selectedHandoffPath:incoming,selectedRouteId:'fixture-route',roleLabel:'Anchor'},null,2));
   await writeFile(path.join(root,'result.txt'),'bounded-result\n','utf8');
@@ -107,11 +107,96 @@ async function fixture(){
   return {root,incoming};
 }
 
+integrationTest('qualify-return without an expected file pins only result bytes and does not create an expected copy', async () => {
+  const { root, incoming } = await fixture();
+  await rm(path.join(root, 'expected.txt'));
+  const qualified = await runQualifyReturnCli({ positionals: [root], flags: { result: 'result.txt' } }, exactRuntime);
+  assert.equal(qualified.transition.verification.kind, 'result-sha256');
+  assert.equal(qualified.transition.verification.expectedPath, undefined);
+  assert.equal(existsSync(path.join(root, 'expected.txt')), false);
+  const prepared = await runPrepareReturnCli({ positionals: [root], flags: {} }, exactRuntime);
+  assert.equal(prepared.authority.causalParentPath, incoming);
+  assert.equal(prepared.authority.authoredDirectory, '.topics/work/first-use-guidance');
+  assert.equal(prepared.returnTransition.verification.kind, 'result-sha256');
+  assert.match(prepared.nextAction.author.cli, /--parent \.topics\/work\/first-use-guidance\/002-anchor-to-anchor\.trace\.md /);
+  assert.equal(existsSync(path.join(root, '.topics', 'handoffs')), false);
+  await writeFile(path.join(root, 'result.txt'), 'tampered after qualification\n', 'utf8');
+  await assert.rejects(runPrepareReturnCli({ positionals: [root], flags: {} }), /return-transition\.result-stale/);
+});
+
+integrationTest('prepared return rejects an unrelated Parent or authoring directory instead of fabricating a sibling', async () => {
+  const { root } = await fixture();
+  const prepared = await runPrepareReturnCli({ positionals: [root], flags: {} });
+  let body = await readFile(prepared.scaffold.path, 'utf8');
+  const replacements = { RETURN_PURPOSE: 'return review', TRANSFER_DESCRIPTION: 'transfer review', TRANSFER_BOUNDARY: 'bounded', RETURNED_MATERIAL: 'review result', RETURNED_MATERIAL_PURPOSE: 'for human review', RETAINED_BY: 'Sigma', RETAINED_BY_REFERENCE: sigmaRef, RETAINED_RESPONSIBILITY: 'accept or reject', RETAINED_RESPONSIBILITY_BOUNDARY: 'human only', EXCLUSION_KIND: 'excluded-scope', EXCLUSION_DESCRIPTION: 'no publication', EXCLUSION_RESPONSIBLE_PARTY: 'Sigma', SIGNAL_KIND: 'result', SIGNAL_MEANING: 'review result', DOES_NOT_MEAN: 'acceptance', MUST_NOT_CLAIM: 'release' };
+  for (const [key, value] of Object.entries(replacements)) body = body.replaceAll(`<<TIINEX_REQUIRED:${key}>>`, value);
+  await writeFile(prepared.scaffold.path, body, 'utf8');
+  await assert.rejects(runCommonAuthorCli({ positionals: [root], flags: { schema: 'tiinex.handoff.v1', directory: '.topics/handoffs', parent: prepared.authority.causalParentPath, body: prepared.scaffold.path, preflight: true } }), /return-scaffold\.directory-mismatch/);
+  await assert.rejects(runCommonAuthorCli({ positionals: [root], flags: { schema: 'tiinex.handoff.v1', directory: prepared.authority.authoredDirectory, parent: 'README.md', body: prepared.scaffold.path, preflight: true } }), /return-scaffold\.causal-parent-mismatch/);
+  assert.equal(existsSync(path.join(root, '.topics', 'handoffs')), false);
+});
+
+integrationTest('historic handoff locations remain readable but cannot silently authorize a new retired handoffs directory', async () => {
+  const { root } = await fixture();
+  const historical = '.topics/handoffs/002-historical.trace.md';
+  await mkdir(path.join(root, '.topics', 'handoffs'), { recursive: true });
+  await writeFile(path.join(root, historical), incomingHandoff(), 'utf8');
+  const statePath = path.join(root, '.tiinex', 'continuation.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  state.selectedHandoffPath = historical;
+  delete state.lastAuthoredPath;
+  await writeFile(statePath, JSON.stringify(state), 'utf8');
+  await runQualifyReturnCli({ positionals: [root], flags: { result: 'result.txt' } });
+  await assert.rejects(runPrepareReturnCli({ positionals: [root], flags: {} }), /work-lineage\.unqualified/);
+  const entries = await (await import('node:fs/promises')).readdir(path.join(root, '.topics', 'handoffs'));
+  assert.deepEqual(entries, ['002-historical.trace.md']);
+});
+
+integrationTest('prepare-return selects the actual sealed causal descendant rather than a sibling', async () => {
+  const { root, incoming } = await fixture();
+  const descendant = '.topics/work/first-use-guidance/002-1-follow-up.trace.md';
+  const parentBlock = `- Parent
+  - Parent Schema: [tiinex.handoff.v1](https://github.com/Tiinex/docs/blob/3988951208eb9a8926e84ab42625d4b42fa00c2d/.topics/.schemas/coordination/handoff/tiinex.handoff.v1.schema.md)
+  - Created At: 2026-09-24 19:00:00
+  - Trace: [source](002-anchor-to-anchor.trace.md)
+  - Origin:
+    - [relative](002-anchor-to-anchor.trace.md)
+`;
+  const unsigned = incomingHandoff().replace('- Current\n', `${parentBlock}- Current\n`)
+    .replace(/(- Towards: self\n\s+- Value:)\s+[^\n]*/, '$1 pending');
+  const sealed = sealC14nV2Self(unsigned);
+  assert.equal(sealed.state, 'sealed');
+  await writeFile(path.join(root, descendant), `${sealed.markdown}\n`, 'utf8');
+  const statePath = path.join(root, '.tiinex', 'continuation.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  state.lastAuthoredPath = descendant;
+  await writeFile(statePath, JSON.stringify(state), 'utf8');
+  const prepared = await runPrepareReturnCli({ positionals: [root], flags: {} });
+  assert.equal(prepared.authority.sourceHandoff, incoming);
+  assert.equal(prepared.authority.causalParentPath, descendant);
+  assert.match(prepared.nextAction.author.cli, /--parent \.topics\/work\/first-use-guidance\/002-1-follow-up\.trace\.md /);
+  state.lastAuthoredPath = '.topics/work/first-use-guidance/002-2-unrelated.trace.md';
+  await writeFile(path.join(root, state.lastAuthoredPath), incomingHandoff(), 'utf8');
+  await writeFile(statePath, JSON.stringify(state), 'utf8');
+  await assert.rejects(runPrepareReturnCli({ positionals: [root], flags: {} }), /causal-parent\.unqualified/);
+});
+
+integrationTest('qualify-return rejects pretend expected files, and correctly pins zero-byte results', async () => {
+  const { root } = await fixture();
+  await assert.rejects(runQualifyReturnCli({ positionals: [root], flags: { result: 'result.txt', expected: 'result.txt' } }), /expected-file\.same-as-result/);
+  await assert.rejects(runQualifyReturnCli({ positionals: [root], flags: { result: 'result.txt', expected: '../outside.txt' } }), /expected-file\.path\.invalid/);
+  await writeFile(path.join(root, 'result.txt'), '', 'utf8');
+  const receipt = await runQualifyReturnCli({ positionals: [root], flags: { result: 'result.txt' } });
+  assert.equal(receipt.transition.result.byteSize, 0);
+  const prepared = await runPrepareReturnCli({ positionals: [root], flags: {} });
+  assert.equal(prepared.returnTransition.result.byteSize, 0);
+});
+
 integrationTest('prepare-return fails closed until a separate exact-result return transition is qualified',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-gate-'));
   await mkdir(path.join(root,'.tiinex'),{recursive:true});
-  await mkdir(path.join(root,'.topics','handoffs'),{recursive:true});
-  const incoming='.topics/handoffs/002-anchor-to-anchor.trace.md';
+  await mkdir(path.join(root,'.topics','work','first-use-guidance'),{recursive:true});
+  const incoming='.topics/work/first-use-guidance/002-anchor-to-anchor.trace.md';
   await writeFile(path.join(root,incoming),incomingHandoff(),'utf8');
   await writeFile(path.join(root,'.tiinex','continuation.json'),JSON.stringify({schema:'tiinex.portable.ground-continuation-state.v1',version:1,selectedHandoffPath:incoming,selectedRouteId:'fixture-route',roleLabel:'Anchor'},null,2));
   await writeFile(path.join(root,'result.txt'),'bounded-result\n','utf8');
@@ -131,8 +216,8 @@ integrationTest('prepare-return fails closed until a separate exact-result retur
 integrationTest('qualify-return and prepare-return preserve an intentionally omitted optional Return To Reference',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-no-reference-'));
   await mkdir(path.join(root,'.tiinex'),{recursive:true});
-  await mkdir(path.join(root,'.topics','handoffs'),{recursive:true});
-  const incoming='.topics/handoffs/002-anchor-to-anchor.trace.md';
+  await mkdir(path.join(root,'.topics','work','first-use-guidance'),{recursive:true});
+  const incoming='.topics/work/first-use-guidance/002-anchor-to-anchor.trace.md';
   const unsigned=incomingHandoff().replace(`- Return To Reference: [Sigma Role](${sigmaRef})\n`,'');
   const withoutSelf=unsigned.replace(/(- Towards: self\n\s+- Value:)\s+[^\n]*/,'$1 pending');
   const sealed=sealC14nV2Self(withoutSelf);
@@ -162,8 +247,8 @@ integrationTest('qualify-return and prepare-return preserve an intentionally omi
 integrationTest('qualify-return rejects mismatched result bytes and prepare-return rejects a stale qualified result',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-stale-'));
   await mkdir(path.join(root,'.tiinex'),{recursive:true});
-  await mkdir(path.join(root,'.topics','handoffs'),{recursive:true});
-  const incoming='.topics/handoffs/002-anchor-to-anchor.trace.md';
+  await mkdir(path.join(root,'.topics','work','first-use-guidance'),{recursive:true});
+  const incoming='.topics/work/first-use-guidance/002-anchor-to-anchor.trace.md';
   await writeFile(path.join(root,incoming),incomingHandoff(),'utf8');
   await writeFile(path.join(root,'.tiinex','continuation.json'),JSON.stringify({schema:'tiinex.portable.ground-continuation-state.v1',version:1,selectedHandoffPath:incoming,selectedRouteId:'fixture-route',roleLabel:'Anchor'},null,2));
   await writeFile(path.join(root,'result.txt'),'wrong\n','utf8');
@@ -194,10 +279,10 @@ integrationTest('prepare-return derives exact return endpoints and writes only a
   assert.match(body,/<<TIINEX_REQUIRED:RETURN_PURPOSE>>/);
   assert.equal(result.authority.currentWorkControlReference,'002-anchor-to-anchor.trace.md');
   assert.equal(result.authority.currentWorkControl.state,'selected-source-handoff-preserved');
-  assert.equal(result.authority.returnedMaterialReference,'../../result.txt');
+  assert.equal(result.authority.returnedMaterialReference,'../../../result.txt');
   assert.equal(result.returnTransition.state,'qualified');
   assert.match(body,/Controlling Artifact: \[selected source Handoff\]\(002-anchor-to-anchor\.trace\.md\)/);
-  assert.match(body,/Material Reference: \[returned work\]\(\.\.\/\.\.\/result\.txt\)/);
+  assert.match(body,/Material Reference: \[returned work\]\(\.\.\/\.\.\/\.\.\/result\.txt\)/);
   assert.match(body,/Retained By: <<TIINEX_REQUIRED:RETAINED_BY>>/);
   assert.match(body,/Retained By Reference: \[retained role\]\(<<TIINEX_REQUIRED:RETAINED_BY_REFERENCE>>\)/);
   assert.deepEqual(result.fieldDomains.exclusionKind,['excluded-scope','unresolved-dependency']);
@@ -209,7 +294,7 @@ integrationTest('prepare-return derives exact return endpoints and writes only a
   assert.match(body,/Return To: Sigma/);
   assert.doesNotMatch(body,/COMPLETION_RETURN_TO/);
   assert.match(result.nextAction.author.cli,/^\/usr\/bin\/node \/tmp\/tiinex\.bootstrap\/runtime\/tools\/tiinex-portable\.mjs author /);
-  assert.match(result.nextAction.author.cli,/author .* --schema tiinex\.handoff\.v1 --directory \.topics\/handoffs --body "?.*\.tiinex[\\/]+return-handoff\.body\.md"?/);
+  assert.match(result.nextAction.author.cli,/author .* --schema tiinex\.handoff\.v1 --directory \.topics\/work\/first-use-guidance --parent \.topics\/work\/first-use-guidance\/002-anchor-to-anchor\.trace\.md --body "?.*\.tiinex[\\/]+return-handoff\.body\.md"?/);
   assert.equal(result.nextAction.author.invocation.entrypoint,'/tmp/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
   assert.match(result.nextAction.manufacture.cli,/^\/usr\/bin\/node \/tmp\/tiinex\.bootstrap\/runtime\/tools\/tiinex-portable\.mjs handoff /);
   assert.equal(result.nextAction.preflight.cli, `${result.nextAction.author.cli} --preflight`);
@@ -223,10 +308,10 @@ integrationTest('prepare-return derives exact return endpoints and writes only a
 integrationTest('prepare-return rebases selected-Handoff workspace-relative endpoint Role references to the return authoring directory without changing semantic targets',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'tiinex-return-rebase-'));
   await mkdir(path.join(root,'.tiinex'),{recursive:true});
-  await mkdir(path.join(root,'.topics','processes','gpt','grounding'),{recursive:true});
-  await mkdir(path.join(root,'.topics','handoffs'),{recursive:true});
-  const incoming='.topics/processes/gpt/grounding/015-selected.trace.md';
-  const localRole='../../../roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md';
+  await mkdir(path.join(root,'.topics','work','grounding'),{recursive:true});
+  await mkdir(path.join(root,'.topics','work','first-use-guidance'),{recursive:true});
+  const incoming='.topics/work/grounding/015-selected.trace.md';
+  const localRole='../../roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md';
   const unsigned=incomingHandoff()
     .replace('- Purpose: do bounded work','- Purpose: preserve frozen bounded work without losing endpoint fields after the letter z')
     .replace('- Signal Meaning: return result','- Signal Meaning: return authorized result after frozen replay')
@@ -245,22 +330,22 @@ integrationTest('prepare-return rebases selected-Handoff workspace-relative endp
   const result=await runPrepareReturnCli({positionals:[root],flags:{}});
   assert.equal(result.authority.fromSourceReference,localRole);
   assert.equal(result.authority.toSourceReference,localRole);
-  assert.equal(result.authority.fromReference,'../roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md');
-  assert.equal(result.authority.toReference,'../roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md');
-  assert.equal(result.authority.currentWorkControlReference,'../processes/gpt/grounding/015-selected.trace.md');
+  assert.equal(result.authority.fromReference,'../../roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md');
+  assert.equal(result.authority.toReference,'../../roles/001-1-1-1-1-1-anchor-canonical-holder-cutover-role.trace.md');
+  assert.equal(result.authority.currentWorkControlReference,'015-selected.trace.md');
   assert.equal(result.authority.referenceProjection.state,'semantic-target-preserved-for-authored-location');
   const body=await readFile(result.scaffold.path,'utf8');
-  assert.match(body,/From Reference: \[Anchor endpoint\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
-  assert.match(body,/To Reference: \[Anchor endpoint\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
-  assert.match(body,/Return To Reference: \[Anchor endpoint\]\(\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
-  assert.match(body,/Controlling Artifact: \[selected source Handoff\]\(\.\.\/processes\/gpt\/grounding\/015-selected\.trace\.md\)/);
+  assert.match(body,/From Reference: \[Anchor endpoint\]\(\.\.\/\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
+  assert.match(body,/To Reference: \[Anchor endpoint\]\(\.\.\/\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
+  assert.match(body,/Return To Reference: \[Anchor endpoint\]\(\.\.\/\.\.\/roles\/001-1-1-1-1-1-anchor-canonical-holder-cutover-role\.trace\.md\)/);
+  assert.match(body,/Controlling Artifact: \[selected source Handoff\]\(015-selected\.trace\.md\)/);
 });
 
 integrationTest('common author refuses an unfilled prepare-return scaffold before schema or integrity work',async()=>{
   const {root}=await fixture();
   const prepared=await runPrepareReturnCli({positionals:[root],flags:{}});
   await assert.rejects(
-    runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/handoffs',body:prepared.scaffold.path}},{}),
+    runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/work/first-use-guidance',body:prepared.scaffold.path}},{}),
     /return-scaffold\.incomplete/
   );
 });
@@ -277,7 +362,7 @@ integrationTest('prepared return authority-lock fails closed when recipient edit
     TRANSFER_DESCRIPTION:'deliver the completed local review result',
     TRANSFER_BOUNDARY:'local review result only; no remote mutation or acceptance claim',
     RETURNED_MATERIAL:'completed local review',
-    RETURNED_MATERIAL_REFERENCE:'../../review.md',
+    RETURNED_MATERIAL_REFERENCE:'../../../review.md',
     RETURNED_MATERIAL_PURPOSE:'provide the exact bounded work product',
     RETAINED_BY:'Sigma',
     RETAINED_BY_REFERENCE:sigmaRef,
@@ -300,10 +385,10 @@ integrationTest('prepared return authority-lock fails closed when recipient edit
     .replace(`- Return To Reference: [Sigma Role](${sigmaRef})`,`- Return To Reference: [Anchor Role](${anchorRef})`);
   await writeFile(prepared.scaffold.path,body,'utf8');
   await assert.rejects(
-    runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/handoffs',body:prepared.scaffold.path,preflight:true}},{}),
+    runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/work/first-use-guidance',body:prepared.scaffold.path,preflight:true}},{}),
     /return-scaffold\.authority-mismatch:to/
   );
-  const entries=await (await import('node:fs/promises')).readdir(path.join(root,'.topics','handoffs'));
+  const entries=await (await import('node:fs/promises')).readdir(path.join(root,'.topics','work','first-use-guidance'));
   assert.deepEqual(entries,['002-anchor-to-anchor.trace.md']);
   const state=JSON.parse(await readFile(path.join(root,'.tiinex','continuation.json'),'utf8'));
   assert.equal(state.returnHandoffPath,undefined);
@@ -317,10 +402,10 @@ integrationTest('all prepared-return mechanical endpoint coordinates are authori
     ['fromReference', (body)=>body.replace(`- From Reference: [Anchor endpoint](${anchorRef})`,`- From Reference: [Anchor endpoint](https://example.invalid/wrong-anchor)`)],
     ['to', (body)=>body.replace(/^- To: Sigma$/m,'- To: Anchor')],
     ['toReference', (body)=>body.replace(`- To Reference: [Sigma endpoint](${sigmaRef})`,`- To Reference: [Sigma endpoint](https://example.invalid/wrong-sigma)`)],
-    ['currentWorkControlReference', (body)=>body.replace('Controlling Artifact: [selected source Handoff](002-anchor-to-anchor.trace.md)','Controlling Artifact: [selected source Handoff](../wrong.trace.md)')],
+    ['currentWorkControlReference', (body)=>body.replace('Controlling Artifact: [selected source Handoff](002-anchor-to-anchor.trace.md)','Controlling Artifact: [selected source Handoff](wrong.trace.md)')],
     ['returnTo', (body)=>body.replace(/^- Return To: Sigma$/m,'- Return To: Anchor')],
     ['returnToReference', (body)=>body.replace(`- Return To Reference: [Sigma endpoint](${sigmaRef})`,`- Return To Reference: [Sigma endpoint](https://example.invalid/wrong-sigma-return)`) ],
-    ['returnedMaterialReference', (body)=>body.replace('Material Reference: [returned work](../../result.txt)','Material Reference: [returned work](../../wrong.txt)')]
+    ['returnedMaterialReference', (body)=>body.replace('Material Reference: [returned work](../../../result.txt)','Material Reference: [returned work](../../wrong.txt)')]
   ];
   for(const [field,mutate] of cases){
     await t.test(field,async()=>{
@@ -328,12 +413,12 @@ integrationTest('all prepared-return mechanical endpoint coordinates are authori
       await writeFile(path.join(root,'review.md'),'# Review\n\nBounded result.\n','utf8');
       const prepared=await runPrepareReturnCli({positionals:[root],flags:{}});
       let body=await readFile(prepared.scaffold.path,'utf8');
-      const replacements={RETURN_PURPOSE:'return bounded review',TRANSFER_DESCRIPTION:'deliver bounded result',TRANSFER_BOUNDARY:'local only',RETURNED_MATERIAL:'review',RETURNED_MATERIAL_REFERENCE:'../../review.md',RETURNED_MATERIAL_PURPOSE:'exact work product',RETAINED_BY:'Sigma',RETAINED_BY_REFERENCE:sigmaRef,RETAINED_RESPONSIBILITY:'human review',RETAINED_RESPONSIBILITY_BOUNDARY:'no remote authority',EXCLUSION_KIND:'excluded-scope',EXCLUSION_DESCRIPTION:'no remote mutation',EXCLUSION_RESPONSIBLE_PARTY:'Anchor',SIGNAL_KIND:'result',SIGNAL_MEANING:'return bounded result',DOES_NOT_MEAN:'acceptance',MUST_NOT_CLAIM:'remote reconciliation'};
+      const replacements={RETURN_PURPOSE:'return bounded review',TRANSFER_DESCRIPTION:'deliver bounded result',TRANSFER_BOUNDARY:'local only',RETURNED_MATERIAL:'review',RETURNED_MATERIAL_REFERENCE:'../../../review.md',RETURNED_MATERIAL_PURPOSE:'exact work product',RETAINED_BY:'Sigma',RETAINED_BY_REFERENCE:sigmaRef,RETAINED_RESPONSIBILITY:'human review',RETAINED_RESPONSIBILITY_BOUNDARY:'no remote authority',EXCLUSION_KIND:'excluded-scope',EXCLUSION_DESCRIPTION:'no remote mutation',EXCLUSION_RESPONSIBLE_PARTY:'Anchor',SIGNAL_KIND:'result',SIGNAL_MEANING:'return bounded result',DOES_NOT_MEAN:'acceptance',MUST_NOT_CLAIM:'remote reconciliation'};
       for(const [key,value] of Object.entries(replacements)) body=body.replaceAll(`<<TIINEX_REQUIRED:${key}>>`,value);
       body=mutate(body);
       await writeFile(prepared.scaffold.path,body,'utf8');
       await assert.rejects(
-        runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/handoffs',body:prepared.scaffold.path,preflight:true}},{}),
+        runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/work/first-use-guidance',body:prepared.scaffold.path,preflight:true}},{}),
         new RegExp(`return-scaffold\\.authority-mismatch:${field}`)
       );
     });
@@ -350,7 +435,7 @@ integrationTest('prepared return preflight rejects out-of-domain enum values wit
     TRANSFER_DESCRIPTION:'deliver the completed local review result',
     TRANSFER_BOUNDARY:'local review result only; no remote mutation or acceptance claim',
     RETURNED_MATERIAL:'completed local review',
-    RETURNED_MATERIAL_REFERENCE:'../../review.md',
+    RETURNED_MATERIAL_REFERENCE:'../../../review.md',
     RETURNED_MATERIAL_PURPOSE:'provide the exact bounded work product',
     RETAINED_BY:'Sigma',
     RETAINED_BY_REFERENCE:sigmaRef,
@@ -367,11 +452,11 @@ integrationTest('prepared return preflight rejects out-of-domain enum values wit
   for(const [key,value] of Object.entries(replacements)) body=body.replaceAll(`<<TIINEX_REQUIRED:${key}>>`,value);
   await writeFile(prepared.scaffold.path,body,'utf8');
   const beforeState=await readFile(path.join(root,'.tiinex','continuation.json'),'utf8');
-  const result=await runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/handoffs',body:prepared.scaffold.path,preflight:true}},{});
+  const result=await runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/work/first-use-guidance',body:prepared.scaffold.path,preflight:true}},{});
   assert.equal(result.status,'blocked');
   assert.ok((result.actionableFindings||[]).some((item)=>/Kind|domain|allowed/i.test(`${item.code} ${item.message}`)));
   assert.equal(await readFile(path.join(root,'.tiinex','continuation.json'),'utf8'),beforeState);
-  const entries=await (await import('node:fs/promises')).readdir(path.join(root,'.topics','handoffs'));
+  const entries=await (await import('node:fs/promises')).readdir(path.join(root,'.topics','work','first-use-guidance'));
   assert.deepEqual(entries,['002-anchor-to-anchor.trace.md']);
 });
 
@@ -385,7 +470,7 @@ integrationTest('filled prepare-return scaffold can be preflighted through exact
     TRANSFER_DESCRIPTION:'deliver the completed local review result',
     TRANSFER_BOUNDARY:'local review result only; no remote mutation or acceptance claim',
     RETURNED_MATERIAL:'completed local review',
-    RETURNED_MATERIAL_REFERENCE:'../../review.md',
+    RETURNED_MATERIAL_REFERENCE:'../../../review.md',
     RETURNED_MATERIAL_PURPOSE:'provide the exact bounded work product',
     RETAINED_BY:'Sigma',
     RETAINED_BY_REFERENCE:sigmaRef,
@@ -404,12 +489,12 @@ integrationTest('filled prepare-return scaffold can be preflighted through exact
   await writeFile(prepared.scaffold.path,body,'utf8');
   const statePath=path.join(root,'.tiinex','continuation.json');
   const beforeState=await readFile(statePath,'utf8');
-  const preflight=await runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/handoffs',body:prepared.scaffold.path,preflight:true}},{});
+  const preflight=await runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/work/first-use-guidance',body:prepared.scaffold.path,preflight:true}},{});
   assert.equal(preflight.status,'qualified-preflight');
   assert.equal(preflight.artifact.written,false);
   assert.equal(preflight.artifact.preflight,true);
   assert.equal(await readFile(statePath,'utf8'),beforeState);
-  const authored=await runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/handoffs',body:prepared.scaffold.path}},{});
+  const authored=await runCommonAuthorCli({positionals:[root],flags:{workspace:root,schema:'tiinex.handoff.v1',directory:'.topics/work/first-use-guidance',body:prepared.scaffold.path}},{});
   assert.equal(authored.status,'qualified');
   assert.equal(authored.artifact.written,true);
   const state=JSON.parse(await readFile(statePath,'utf8'));

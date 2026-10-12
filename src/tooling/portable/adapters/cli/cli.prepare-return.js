@@ -1,12 +1,13 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { resolveSchemaModule } from '../../../../schemas/resolver.js';
+import { parseArtifactMarkdown } from '../../../../artifacts/artifact.parse.js';
+import { canonicalC14nV2SelfState } from '../../../../integrity/integrity.c14nV2.js';
 import { readQualifiedReturnTransition, returnTransitionResultReference } from './cli.qualify-return.js';
 import { projectPortableCliOperation } from './cli.invocation.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 const SCAFFOLD_RELATIVE_PATH = '.tiinex/return-handoff.body.md';
-const RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH = '.topics/handoffs';
 
 export async function runPrepareReturnCli(parsed = {}, runtime = {}) {
   const flags = parsed.flags || {};
@@ -15,7 +16,7 @@ export async function runPrepareReturnCli(parsed = {}, runtime = {}) {
   if (String(state.schema || '') !== 'tiinex.portable.ground-continuation-state.v1') throw new Error('portable.cli.prepare-return.continuation-state.required');
   const returnTransition = await readQualifiedReturnTransition(workspaceRoot, state);
   const authority = await projectPreparedReturnAuthority(workspaceRoot, state, returnTransition);
-  const { incomingRelativePath, from, fromKind, fromReference, to, toKind, toReference, currentWorkControlReference, returnedMaterialReference } = authority;
+  const { from, fromKind, fromReference, to, toKind, toReference, currentWorkControlReference, returnedMaterialReference } = authority;
 
   const scaffoldRelativePath = SCAFFOLD_RELATIVE_PATH;
   const scaffoldPath = safeWorkspaceTarget(workspaceRoot, scaffoldRelativePath);
@@ -25,8 +26,9 @@ export async function runPrepareReturnCli(parsed = {}, runtime = {}) {
     await mkdir(path.dirname(scaffoldPath), { recursive: true });
     await writeFile(scaffoldPath, scaffold, 'utf8');
   }
-  const authorCommand = projectPortableCliOperation(runtime, 'author', [workspaceRoot, '--schema', 'tiinex.handoff.v1', '--directory', RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH, '--body', scaffoldPath]);
-  const preflightCommand = projectPortableCliOperation(runtime, 'author', [workspaceRoot, '--schema', 'tiinex.handoff.v1', '--directory', RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH, '--body', scaffoldPath, '--preflight']);
+  const authorArgs = [workspaceRoot, '--schema', 'tiinex.handoff.v1', '--directory', authority.authoredDirectory, '--parent', authority.causalParentPath, '--body', scaffoldPath];
+  const authorCommand = projectPortableCliOperation(runtime, 'author', authorArgs);
+  const preflightCommand = projectPortableCliOperation(runtime, 'author', [...authorArgs, '--preflight']);
   const handoffCommand = projectPortableCliOperation(runtime, 'handoff', [workspaceRoot]);
   return Object.freeze({
     schema: 'tiinex.portable.prepare-return.result.v1',
@@ -120,6 +122,7 @@ export async function validatePreparedReturnBodyAuthority({ workspaceRoot = '.',
 async function projectPreparedReturnAuthority(workspaceRoot, state = {}, returnTransition = null) {
   const incomingRelativePath = normalizeWorkspaceRelativePath(state.selectedHandoffPath || '');
   if (!incomingRelativePath) throw new Error('portable.cli.prepare-return.selected-handoff.required');
+  const { authoredDirectory, causalParentPath } = await resolveReturnAuthoringLocation(workspaceRoot, state);
   const incomingPath = safeWorkspaceTarget(workspaceRoot, incomingRelativePath);
   const incomingMarkdown = await readFile(incomingPath, 'utf8');
   const parties = section(incomingMarkdown, 'Handoff Parties');
@@ -140,15 +143,16 @@ async function projectPreparedReturnAuthority(workspaceRoot, state = {}, returnT
   const returnReferenceCompatible = !toSourceReference || !incomingFromReference || toSourceReference === incomingFromReference;
   const toKind = returnMatchesIncomingFrom && returnReferenceCompatible ? incomingFromKind : 'unknown';
   if (!from || !to) throw new Error('portable.cli.prepare-return.endpoint.required');
-  const fromReference = fromSourceReference ? rebaseReferenceForReturnAuthoring(fromSourceReference, incomingRelativePath) : '';
-  const toReference = toSourceReference ? rebaseReferenceForReturnAuthoring(toSourceReference, incomingRelativePath) : '';
-  const currentWorkControlReference = rebaseWorkspaceArtifactForReturnAuthoring(incomingRelativePath);
-  const returnedMaterialReference = returnTransitionResultReference(returnTransition?.result?.path || '');
+  const fromReference = fromSourceReference ? rebaseReferenceForReturnAuthoring(fromSourceReference, incomingRelativePath, authoredDirectory) : '';
+  const toReference = toSourceReference ? rebaseReferenceForReturnAuthoring(toSourceReference, incomingRelativePath, authoredDirectory) : '';
+  const currentWorkControlReference = rebaseWorkspaceArtifactForReturnAuthoring(incomingRelativePath, authoredDirectory);
+  const returnedMaterialReference = returnTransitionResultReference(returnTransition?.result?.path || '', authoredDirectory);
   if (!returnedMaterialReference) throw new Error('portable.cli.prepare-return.return-transition.result-reference.required');
   if (String(returnTransition?.returnProtocol?.returnTo || '') !== to || String(returnTransition?.returnProtocol?.returnToReference || '') !== toSourceReference) throw new Error('portable.cli.prepare-return.return-transition.endpoint-mismatch');
   return Object.freeze({
     sourceHandoff: incomingRelativePath,
-    authoredDirectory: RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH,
+    authoredDirectory,
+    causalParentPath,
     from,
     fromKind,
     fromReference,
@@ -163,13 +167,51 @@ async function projectPreparedReturnAuthority(workspaceRoot, state = {}, returnT
     currentWorkControl: Object.freeze({ state: 'selected-source-handoff-preserved', sourceHandoff: incomingRelativePath, authoredReference: currentWorkControlReference, boundary: 'The canonical return Handoff explicitly controls the exact selected source Handoff so successor current-work selection does not fall back to unrelated historical Task ancestry.' }),
     referenceProjection: Object.freeze({
       state: 'semantic-target-preserved-for-authored-location',
-      boundary: 'Optional Workspace-relative endpoint references, when present, are resolved against the exact selected source Handoff and rebased to the fixed return-Handoff authoring directory. Missing optional references remain missing; Tooling does not invent endpoint identity or Role references. Adapter-native/absolute references remain unchanged.'
+      boundary: 'Optional Workspace-relative endpoint references are resolved against the exact selected source Handoff and rebased to the qualified work-lineage return directory. Missing optional references remain missing; Tooling does not invent endpoint identity or Role references. Adapter-native/absolute references remain unchanged.'
     }),
     basis: 'exact selected-Handoff recipient endpoint plus exact Completion Expectation Return To authority, preserving optional references only when supplied and preserving endpoint kind only when the source Handoff itself classifies the same endpoint'
   });
 }
 
-function rebaseReferenceForReturnAuthoring(reference = '', sourceArtifactPath = '') {
+async function resolveReturnAuthoringLocation(workspaceRoot, state = {}) {
+  const incoming = normalizeWorkspaceRelativePath(state.selectedHandoffPath || '');
+  const last = normalizeWorkspaceRelativePath(state.lastAuthoredPath || '');
+  const candidate = last || incoming;
+  const candidateDirectory = path.posix.dirname(candidate);
+  // An old handoff remains readable; it cannot silently authorize creating
+  // a new artifact in the retired collection or inventing a new work area.
+  if (!/^\.topics\/work\/[^/]+$/.test(candidateDirectory)) {
+    throw new Error('portable.cli.prepare-return.work-lineage.unqualified: no qualified Task-local work directory for this return');
+  }
+  if (last && last !== incoming) {
+    await assertCausalDescent(workspaceRoot, last, incoming, candidateDirectory);
+  } else if (candidate !== incoming) {
+    throw new Error('portable.cli.prepare-return.causal-parent.unqualified');
+  }
+  return Object.freeze({ authoredDirectory: candidateDirectory, causalParentPath: candidate });
+}
+
+async function assertCausalDescent(workspaceRoot, start, selectedHandoff, directory) {
+  let cursor = start;
+  const visited = new Set();
+  for (let step = 0; step < 128; step++) {
+    if (cursor === selectedHandoff) return;
+    if (visited.has(cursor) || path.posix.dirname(cursor) !== directory) break;
+    visited.add(cursor);
+    let markdown;
+    try { markdown = await readFile(safeWorkspaceTarget(workspaceRoot, cursor), 'utf8'); }
+    catch { break; }
+    if (canonicalC14nV2SelfState(markdown).state !== 'verified') break;
+    const parent = String(parseArtifactMarkdown(markdown).envelope?.parent?.trace || '').trim();
+    if (!parent || /^(?:[a-z]+:\/\/|[^/]+::)/i.test(parent) || parent.startsWith('/')) break;
+    const next = path.posix.normalize(path.posix.join(path.posix.dirname(cursor), parent));
+    if (!next.startsWith('.topics/') || next.startsWith('../')) break;
+    cursor = next;
+  }
+  throw new Error('portable.cli.prepare-return.causal-parent.unqualified: last authored artifact is not a verified descendant of selected Handoff');
+}
+
+function rebaseReferenceForReturnAuthoring(reference = '', sourceArtifactPath = '', authoredDirectory = '') {
   const raw = String(reference || '').trim().replace(/\\/g, '/');
   if (!raw) return '';
   if (isNonRelativeReference(raw)) return raw;
@@ -179,15 +221,15 @@ function rebaseReferenceForReturnAuthoring(reference = '', sourceArtifactPath = 
   if (!target || target === '..' || target.startsWith('../') || target.startsWith('/')) {
     throw new Error(`portable.cli.prepare-return.endpoint-reference.outside-workspace:${reference}`);
   }
-  const rebased = path.posix.relative(RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH, target);
+  const rebased = path.posix.relative(authoredDirectory, target);
   return rebased || path.posix.basename(target);
 }
 
-function rebaseWorkspaceArtifactForReturnAuthoring(sourceArtifactPath = '') {
+function rebaseWorkspaceArtifactForReturnAuthoring(sourceArtifactPath = '', authoredDirectory = '') {
   const source = normalizeWorkspaceRelativePath(sourceArtifactPath);
   if (!source) throw new Error('portable.cli.prepare-return.source-handoff-path.required');
-  const rebased = path.posix.relative(RETURN_HANDOFF_DIRECTORY_RELATIVE_PATH, source);
-  if (!rebased || rebased === '..' || rebased.startsWith('../../') || rebased.startsWith('/')) {
+  const rebased = path.posix.relative(authoredDirectory, source);
+  if (!rebased || rebased === '..' || rebased.startsWith('/') ) {
     throw new Error(`portable.cli.prepare-return.current-work-control.outside-workspace:${sourceArtifactPath}`);
   }
   return rebased;

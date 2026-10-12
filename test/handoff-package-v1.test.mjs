@@ -395,7 +395,7 @@ test('embedded LLM bootstrap teaches one-pass recipient grounding without changi
   assert.match(text,/projection convenience only/);
   assert.match(text,/does not change semantic authority, applicability, readiness/);
   assert.match(text,/normal return is not loose-file delivery/);
-  assert.match(text,/qualify-return <continued-workspace-dir> --result <workspace-relative-result> --expected <workspace-relative-expected-file>/);
+  assert.match(text,/qualify-return <continued-workspace-dir> --result <workspace-relative-result> \[--expected <workspace-relative-expected-file>\]/);
   assert.match(text,/`prepare-return` fails closed until that receipt exists and remains byte-current/);
   assert.match(text,/run `prepare-return <continued-workspace-dir>` first|normal return is not loose-file delivery: run `prepare-return <continued-workspace-dir>` first/);
   assert.match(text,/run the exact emitted `author` command/);
