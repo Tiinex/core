@@ -16,6 +16,7 @@ import { creationSchemaReferenceValidationContext } from '../../draft/draft.vali
 import { historicalDeclaredSchemaReferenceAuthority, isQualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority, qualifiedIdentifierOnlyHistoricalSchemaReferenceAuthority } from '../../../../schemas/schema.reference.js';
 import { validatePreparedReturnBodyAuthority } from './cli.prepare-return.js';
 import { qualifyLocalCreationReferences } from './cli.local-creation-references.js';
+import { qualifyReductionSourceContext } from '../../reduction/reduction.sourceContext.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 
@@ -32,6 +33,10 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   if (!bodyPath) throw new Error('portable.cli.author.body.required');
   const bodyMarkdown = (await readFile(path.resolve(bodyPath), 'utf8')).trim();
   if (!bodyMarkdown) throw new Error('portable.cli.author.body.empty');
+  if (schemaId === 'tiinex.reduction.v1') {
+    const reductionSourceContext = qualifyReductionSourceContext(bodyMarkdown);
+    if (!reductionSourceContext.qualified) throw new Error(`portable.cli.author.reduction-source-context.invalid:${reductionSourceContext.findings.join(',')}`);
+  }
   if (schemaId === 'tiinex.handoff.v1' && /(?:<<TIINEX_REQUIRED:[A-Z0-9_]+>>|TIINEX_REQUIRED_[A-Z0-9_]+)/.test(bodyMarkdown)) throw new Error('portable.cli.author.return-scaffold.incomplete: replace every <<TIINEX_REQUIRED:...>> marker with exact supported return semantics before authoring.');
   if (schemaId === 'tiinex.handoff.v1') await validatePreparedReturnBodyAuthority({ workspaceRoot, state, bodyPath: path.resolve(bodyPath), bodyMarkdown });
   const title = String(flags.title || firstHeading(bodyMarkdown) || state?.roleLabel || schemaId).trim();

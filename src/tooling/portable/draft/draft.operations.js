@@ -7,6 +7,7 @@ import { buildPortableSchemaGuide } from '../schema/schema.guide.js';
 import { compilePortableSchemaContract } from '../schema/contract.compile.js';
 import { validatePortableContractInstance } from '../schema/contract.validate.js';
 import { portableRuntimeValidationContractForSchema } from '../schema/qualifiedLocalRoot.runtime.js';
+import { qualifyReductionSourceContext } from '../reduction/reduction.sourceContext.js';
 
 export function validatePortableDraft(input = {}, options = {}) {
   const markdown = String(input.markdown || input.draft?.markdown || '');
@@ -20,6 +21,10 @@ export function validatePortableDraft(input = {}, options = {}) {
   const runtimeProjection = portableRuntimeValidationContractForSchema(requestedSchema || declaredSchema);
   const audit = runAudit({ record, markdown, schemaReferenceAuthorities: input.schemaReferenceAuthorities || null, schemaReferenceContext: 'candidate', validationContractOverride: runtimeProjection.state === 'qualified' ? runtimeProjection.compiledContract : null });
   if (requestedSchema && declaredSchema !== requestedSchema) findings.push(portableFinding('error', 'portable.draft.schema.mismatch', 'Draft Current Schema does not match the requested schema.', { requestedSchema, declaredSchema, ref: path }));
+  if ((requestedSchema || declaredSchema) === 'tiinex.reduction.v1') {
+    const sourceContext = qualifyReductionSourceContext(markdown);
+    for (const detail of sourceContext.findings) findings.push(portableFinding('error', 'portable.draft.reduction-source-context.invalid', `New Reduction Source Context: ${detail}. Use compact exact references and integrity in the maintained schema example.`, { ref: path, detail }));
+  }
   const sharedParserQuirks = detectSharedParserQuirks(markdown, parsed, audit, path);
   const suppressedAuditCodes = new Set(sharedParserQuirks.flatMap((quirk) => quirk.suppressedCodes || []));
   findings.push(...(audit.findings || [])
