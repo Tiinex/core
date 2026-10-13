@@ -124,6 +124,30 @@ integrationTest('qualify-return without an expected file pins only result bytes 
   await assert.rejects(runPrepareReturnCli({ positionals: [root], flags: {} }), /return-transition\.result-stale/);
 });
 
+integrationTest('prepare-return supports nested Task-local work directories without weakening causal Parent enforcement', async () => {
+  const { root, incoming } = await fixture();
+  const nested = '.topics/work/grounding-validation/004-integrated-continuation';
+  const relocated = `${nested}/002-anchor-to-anchor.trace.md`;
+  await mkdir(path.join(root, nested), { recursive: true });
+  await (await import('node:fs/promises')).rename(path.join(root, incoming), path.join(root, relocated));
+  const statePath = path.join(root, '.tiinex', 'continuation.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  state.selectedHandoffPath = relocated;
+  await writeFile(statePath, JSON.stringify(state), 'utf8');
+  await runQualifyReturnCli({ positionals: [root], flags: { result: 'result.txt' } });
+  const prepared = await runPrepareReturnCli({ positionals: [root], flags: {} });
+  assert.equal(prepared.authority.authoredDirectory, nested);
+  assert.equal(prepared.authority.causalParentPath, relocated);
+  assert.match(prepared.nextAction.author.cli, /--parent \.topics\/work\/grounding-validation\/004-integrated-continuation\/002-anchor-to-anchor\.trace\.md /);
+  assert.equal(existsSync(path.join(root, '.topics', 'handoffs')), false);
+  // A related file in a different branch must not become an implied parent.
+  const sibling = '.topics/work/grounding-validation/004-integrated-continuation/002-1-unrelated.trace.md';
+  await writeFile(path.join(root, sibling), incomingHandoff(), 'utf8');
+  state.lastAuthoredPath = sibling;
+  await writeFile(statePath, JSON.stringify(state), 'utf8');
+  await assert.rejects(runPrepareReturnCli({ positionals: [root], flags: {} }), /causal-parent\.unqualified/);
+});
+
 integrationTest('prepared return rejects an unrelated Parent or authoring directory instead of fabricating a sibling', async () => {
   const { root } = await fixture();
   const prepared = await runPrepareReturnCli({ positionals: [root], flags: {} });

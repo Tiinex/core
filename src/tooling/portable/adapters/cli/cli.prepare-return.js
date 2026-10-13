@@ -180,7 +180,7 @@ async function resolveReturnAuthoringLocation(workspaceRoot, state = {}) {
   const candidateDirectory = path.posix.dirname(candidate);
   // An old handoff remains readable; it cannot silently authorize creating
   // a new artifact in the retired collection or inventing a new work area.
-  if (!/^\.topics\/work\/[^/]+$/.test(candidateDirectory)) {
+  if (!/^\.topics\/work\/[^/]+(?:\/[^/]+)*$/.test(candidateDirectory)) {
     throw new Error('portable.cli.prepare-return.work-lineage.unqualified: no qualified Task-local work directory for this return');
   }
   if (last && last !== incoming) {
