@@ -9,16 +9,19 @@ import { inspectPortableLineageIntegrity } from '../lineage/lineage.integrity.pl
 import { portableFinding } from '../findings.js';
 import { qualifyTiinexRouteArtifact } from '../handoff/routeArtifactConformance.js';
 import { hasTiinexEnvelopeFirstLine } from '../../../artifacts/artifact.parse.js';
+import { qualifyEditorExternalParents } from './editor.externalParents.js';
 
 export const PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID = 'tiinex.portable.editor-assistance.v1';
 
 export function projectPortableEditorAssistance(input = {}) {
   const records = normalizeRecords(input);
-  const tiinexRecords = records.filter((record) => hasTiinexEnvelopeFirstLine(record.markdown));
+  const localRecords = records.filter((record) => hasTiinexEnvelopeFirstLine(record.markdown));
+  const external = qualifyEditorExternalParents(input.parentRepositoryReads || [], localRecords);
+  const tiinexRecords = [...localRecords, ...external.records];
   const focusPath = norm(input.focusPath || input.focus || '');
-  const selectedRecords = focusPath ? tiinexRecords.filter((record) => norm(record.path || record.id || '') === focusPath) : tiinexRecords;
-  const lineageInspection = inspectPortableLineageIntegrity({ records: tiinexRecords });
-  const documents = selectedRecords.map((record) => projectDocument(record, tiinexRecords, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record), norm(input.selectedParentPath || ''), input.includeDescendantRepair === true));
+  const selectedRecords = focusPath ? localRecords.filter((record) => norm(record.path || record.id || '') === focusPath) : localRecords;
+  const lineageInspection = inspectPortableLineageIntegrity({ records: tiinexRecords, publicationProviderReceipts:external.publicationProviderReceipts });
+  const documents = selectedRecords.map((record) => projectDocument(record, tiinexRecords, lineageInspection, referenceResolutionsForRecord(input.referenceResolutions || [], record), norm(input.selectedParentPath || ''), input.includeDescendantRepair === true, String(input.selectedParentUrl || ''), external));
   const diagnostics = documents.flatMap((item) => item.diagnostics);
   return freeze({
     schema: PORTABLE_EDITOR_ASSISTANCE_SCHEMA_ID,
@@ -29,7 +32,7 @@ export function projectPortableEditorAssistance(input = {}) {
   });
 }
 
-function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = [], selectedParentPath = '', includeDescendantRepair = false) {
+function projectDocument(record = {}, records = [], lineageInspection = null, referenceResolutions = [], selectedParentPath = '', includeDescendantRepair = false, selectedParentUrl = '', external = {}) {
   if (isCanonicalSchemaSourceRecord(record)) return projectSchemaSourceDocument(record, records);
   const audit = auditPortableRecord(record, { requireExactSchemaAuthority: true, schemaReferenceResolutions: referenceResolutions });
   const markdown = String(record.markdown || '');
@@ -97,6 +100,16 @@ function projectDocument(record = {}, records = [], lineageInspection = null, re
       diagnosticCodes: ['portable.lineage-integrity.parent-unresolved', 'portable.lineage-integrity.parent-target-mismatch', 'portable.lineage-integrity.parent-schema-mismatch'],
       descendantCount: (lineageInspection?.artifacts || []).find((item) => norm(item.path || '') === recordPath)?.downstreamDescendants?.length || 0,
       boundary: 'Human-selected exact local Parent; Core verified its matching declared schema and primary self, resolved the relative header and c14n-v2 target and qualified only the current artifact. No descendant rewrite.'
+    }));
+  }
+  if (selectedParentUrl) {
+    const chosen = qualifyExplicitExternalParentSelection(record, records, selectedParentUrl, referenceResolutions, external);
+    if (chosen.state === 'qualified' && chosen.markdown !== markdown) actions.push(freeze({
+      id: 'relocate-selected-parent-and-self-seal',
+      title: 'Use exact published cross-Workspace Parent',kind:'replace-document',qualification:'deterministic-shared-core',
+      sourceSha256:sha256Hex(new TextEncoder().encode(markdown)),replacementMarkdown:chosen.markdown,
+      diagnosticCodes:['portable.lineage-integrity.parent-unresolved','portable.lineage-integrity.parent-target-mismatch'],
+      boundary:'Explicit human-selected GitHub commit permalink, host-read exact published bytes, verified Parent schema/self and child Parent digest. No local rewrite in the other repository.'
     }));
   }
   const referenceResolution = projectReferenceResolutionAssistance(markdown, referenceResolutions);
@@ -626,6 +639,44 @@ function qualifyExplicitLocalParentSelection(record = {}, records = [], parentPa
   const focused = (resulting.artifacts || []).find((item) => norm(item.path || '') === currentPath);
   if (!focused || focused.state !== 'healthy') return freeze({ state: 'blocked', reason: `reparent-lineage-${focused?.state || 'unavailable'}` });
   return freeze({ state: 'qualified', markdown: sealed.markdown, parentPath: selectedPath });
+}
+
+function qualifyExplicitExternalParentSelection(record = {}, records = [], locator = '', referenceResolutions = [], external = {}) {
+  const parent = (external.records || []).find(item => item.source?.permalink === locator);
+  if (!parent || !(external.publicationProviderReceipts || []).length) return freeze({state:'blocked',reason:'published-parent-bytes-unavailable'});
+  const child = parseArtifactEnvelopeForParentSelection(String(record.markdown || ''));
+  const parentHeader = parseArtifactEnvelopeForParentSelection(parent.markdown);
+  if (!child.parentSchema || child.parentSchema !== parentHeader.currentSchema) return freeze({state:'blocked',reason:'parent-schema-mismatch'});
+  const self = canonicalC14nV2SelfState(parent.markdown);
+  if (self.state !== 'verified' || !self.declaredValue) return freeze({state:'blocked',reason:'parent-self-unverified'});
+  const lines = String(record.markdown || '').replace(/\r\n?/g,'\n').split('\n');
+  const parentStart = lines.findIndex(line=>line==='- Parent');
+  const currentStart = lines.findIndex(line=>line==='- Current');
+  const integrityStart = lines.findIndex(line=>line==='# Continuity Integrity');
+  if (parentStart<0 || currentStart<=parentStart || integrityStart<=currentStart) return freeze({state:'blocked',reason:'parent-envelope-unavailable'});
+  const trace = [], browse = [];
+  for (let i=parentStart+1;i<currentStart;i++) {
+    if (/^  - Trace:\s*\[[^\]]+\]\([^)]+\)\s*$/.test(lines[i])) trace.push(i);
+    if (/^    - \[browse \+ git\]\([^)]+\)\s*$/.test(lines[i])) browse.push(i);
+  }
+  const valueIndex = primaryParentIntegrityValueLine(lines);
+  const towards=[];
+  for (let i=integrityStart+1;i<valueIndex;i++) if (/^  - Towards:\s*\[[^\]]+\]\([^)]+\)\s*$/.test(lines[i])) towards.push(i);
+  if (trace.length!==1 || browse.length!==1 || towards.length!==1 || valueIndex<=integrityStart) return freeze({state:'blocked',reason:'parent-target-shape-ambiguous'});
+  const label=parent.path.split('/').at(-1);
+  lines[trace[0]]=`  - Trace: [${label}](${locator})`;
+  lines[browse[0]]=`    - [browse + git](${locator})`;
+  lines[towards[0]]=`  - Towards: [${label}](${locator})`;
+  lines[valueIndex]=`  - Value: ${self.declaredValue}`;
+  const sealed=sealC14nV2Self(lines.join('\n'));
+  if (!['sealed','unchanged'].includes(sealed.state)) return freeze({state:'blocked',reason:'child-self-seal-failed'});
+  const audit=auditPortableRecord({...record,markdown:sealed.markdown},{requireExactSchemaAuthority:true,schemaReferenceResolutions:referenceResolutions});
+  if ((audit.findings||[]).some(item=>item.severity==='error')) return freeze({state:'blocked',reason:'child-schema-invalid'});
+  const changed=records.map(item=>item.path===record.path?{...item,markdown:sealed.markdown}:item);
+  const lineage=inspectPortableLineageIntegrity({records:changed,publicationProviderReceipts:external.publicationProviderReceipts});
+  const focused=(lineage.artifacts||[]).find(item=>item.path===record.path);
+  if (focused?.state!=='healthy') return freeze({state:'blocked',reason:`cross-parent-${focused?.state||'missing'}`});
+  return freeze({state:'qualified',markdown:sealed.markdown});
 }
 
 function parseArtifactEnvelopeForParentSelection(markdown = '') {

@@ -222,6 +222,7 @@ export async function commandInput(parsed, runtime = {}) {
     const participants = await readOptionalJson(flags.participants);
     return { input: {
       bundle: material, filename: path.basename(packagePath),
+      contentSources: runtime.contentSources || [],
       route: flags.route || flags.pointer || '',
       independentEntry: flags['independent-entry'] === true || flags['independent-entry'] === 'true',
       entryId: flags.entry || flags['entry-id'] || flags.mode || '',
@@ -239,6 +240,7 @@ export async function commandInput(parsed, runtime = {}) {
     const participants = await readOptionalJson(flags.participants);
     return { input: {
       bundle: material,
+      contentSources: runtime.contentSources || [],
       packageSourcePath: packagePath,
       mode: flags.mode || flags.entry || flags['entry-id'] || '',
       targetEntryId: flags.target || flags.where || flags['target-entry'] || flags['target-entry-id'] || '',
