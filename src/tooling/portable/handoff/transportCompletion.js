@@ -113,7 +113,7 @@ export function projectPortableTransportCompletion(input = {}) {
     '## Final check', '',
     ...nextActions.map(value => `- ${value}`), '',
     '## Technical details (optional)', '',
-    `- Handoff route: ${route ? `\`${inlineCode(route.id)}\`` : 'None (independent Guided Entry)'}`,
+    `- Handoff route: ${route ? `\`${inlineCode(route.id)}\`` : (independentEntry ? 'None (independent Guided Entry)' : 'None (route-less carrier)')}`,
     `- Purpose: ${entryId ? (entry?.modeDefinition?.label || 'Guided Entry') : (route ? 'Defined by the Handoff Pointer' : 'Generic')}`,
     `- Target: ${entry?.targetOption?.label || 'None'}`,
     ...(operatorGuide?.status === 'ready' && operatorGuide.reviewState !== 'accepted'

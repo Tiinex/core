@@ -39,6 +39,20 @@ test('pointerless Workspace has Start but never a fabricated recipient or Contin
  assert.doesNotMatch(result.clipboardText,/Continue from/);
  assert.match(result.markdown,/Send to:.*receiving conversation you choose/);
 });
+test('bootstrap-only transport completion preserves canonical shell while composing a qualified purpose Entry',()=>{
+ const bootstrap = {status:'valid', findings:[], carrierProjection:{status:'ready',mode:'bootstrap',routes:[],workspaces:[],startPath:'001-1-READ-BEFORE-PROCEEDING.trace.md'}};
+ const plain = projectPortableTransportCompletion({inspection:bootstrap,filename:'tiinex-bootstrap.handoff-package.zip'});
+ assert.equal(plain.status,'ready',plain.reasonCode);
+ assert.match(plain.clipboardText,/This is a bootstrap-only carrier/);
+ const guided = projectPortableTransportCompletion({inspection:bootstrap,filename:'tiinex-bootstrap.handoff-package.zip',entryId:'START',contentSources:[nativeEntryContentSource()]});
+ assert.equal(guided.status,'ready',guided.reasonCode);
+ assert.equal(guided.carrier.routeId,'');
+ assert.equal(guided.canonicalTransportText,plain.clipboardText);
+ assert.ok(guided.clipboardText.startsWith(plain.clipboardText.trimEnd()));
+ assert.match(guided.clipboardText,/Entry intent: Start/);
+ assert.doesNotMatch(guided.clipboardText,/Continue from/);
+ assert.match(guided.markdown,/None \(route-less carrier\)/);
+});
 test('qualified purpose Entry can augment exact shell without new authority',()=>{
  const result=projectPortableTransportCompletion({inspection:pointerless,entryId:'START',contentSources:[nativeEntryContentSource()]});
  assert.equal(result.status,'ready',result.reasonCode);

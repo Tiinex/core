@@ -1,7 +1,7 @@
 import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { projectPortableEntryCatalog } from '../entry/entry.catalog.js';
-import { projectHandoffHumanOutput, projectIndependentEntryCarrierOutput } from './carrierProjection.js';
+import { projectHandoffHumanOutput, projectBootstrapCarrierHumanOutput, projectIndependentEntryCarrierOutput } from './carrierProjection.js';
 
 export const WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID = 'tiinex.portable.workspace-entry-projection.v1';
 
@@ -29,10 +29,13 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   const projection = inspection.carrierProjection || {};
   const qualifiedRoutes = (projection.routes || []).filter((route) => String(route?.state || '') === 'qualified');
   const pointerlessWorkspace = projection.mode === 'workspace' && qualifiedRoutes.length === 0;
+  const bootstrapOnly = projection.mode === 'bootstrap' && qualifiedRoutes.length === 0 && (projection.workspaces || []).length === 0;
   const routedHandoff = projection.mode === 'handoff' && qualifiedRoutes.length > 0;
   const independentEntry = input.independentEntry === true;
   if (independentEntry && (!routedHandoff || input.route || input.routeId || input.pointer)) return blocked('independent-entry-route-conflict', inspection.findings || []);
-  if (!pointerlessWorkspace && !routedHandoff) return blocked('workspace-or-routed-handoff-carrier-required', inspection.findings || []);
+  if (!pointerlessWorkspace && !bootstrapOnly && !routedHandoff) return blocked('workspace-bootstrap-or-routed-handoff-carrier-required', inspection.findings || []);
+
+  if (bootstrapOnly && (input.route || input.routeId || input.pointer)) return blocked('bootstrap-entry-route-unavailable', inspection.findings || []);
 
   const entryCatalog = projectPortableEntryCatalog({ inspection, contentSources: input.contentSources || input.sources || [] });
   if (entryCatalog.status !== 'ready') return blocked(entryCatalog.reasonCode || 'entry-catalog-unavailable', [...(inspection.findings || []), ...(entryCatalog.findings || [])]);
@@ -56,7 +59,7 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     schema: WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID,
     status: 'ready',
     state: 'catalog',
-    carrierKind: independentEntry ? 'independent-entry' : (pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff'),
+    carrierKind: independentEntry ? 'independent-entry' : (bootstrapOnly ? 'bootstrap-only' : pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff'),
     modes,
     targets: routedHandoff ? routedTargetCatalog : targetCatalog,
     targetOptional: true,
@@ -74,6 +77,8 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     startPath: String(projection.startPath || '001-1-READ-BEFORE-PROCEEDING.trace.md'),
     boundary: independentEntry
       ? 'Independent Guided Entry is an explicit operator request over an unchanged routed Handoff carrier. No carried Handoff Pointer is selected; Entry, Target, and Roles qualify session intent only.'
+      : bootstrapOnly
+      ? 'Guided Entry exposes qualified reusable Entry definitions over a bootstrap-only carrier. No Workspace, Handoff route, recipient, Role-holder state, work authority, or access to referenced non-carried documentation is implied.'
       : pointerlessWorkspace
       ? 'Guided Entry exposes qualified reusable Entry definitions plus an explicit Custom runtime path. Entry selection describes recipient-session intent for a pointerless Workspace carrier; it does not alter the carrier or establish Handoff routing, recipient authority, Role-holder state, participant authority, acceptance, work transfer, or completion.'
       : 'Guided Entry exposes qualified reusable Entry definitions above an already-qualified routed Handoff carrier. Entry selection does not choose or alter Handoff authority: exact route selection remains qualified from the carried Handoff Pointer, and Entry/Role/participant/session choices cannot manufacture routing, recipient authority, acceptance, work transfer, or completion.'
@@ -113,7 +118,11 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   let routeId = '';
   let continueFrom = '';
   let shell = POINTERLESS_CANONICAL_SHELL(startPath);
-  if (independentEntry) {
+  if (bootstrapOnly) {
+    const projected = projectBootstrapCarrierHumanOutput({ projection, filename: input.filename || input.transportFilename || 'tiinex-bootstrap.handoff-package.zip' });
+    if (projected.status !== 'ready') return blocked('bootstrap-transport-unavailable', inspection.findings || [], modes, targetOptions);
+    shell = projected.normalInlineRouting.content.trimEnd();
+  } else if (independentEntry) {
     const projected = projectIndependentEntryCarrierOutput({ projection, filename: input.filename || input.transportFilename || 'tiinex-entry.handoff-package.zip' });
     if (projected.status !== 'ready') return blocked(`independent-entry-${projected.reasonCode || projected.status}`, inspection.findings || [], modes, targetOptions);
     shell = projected.normalInlineRouting.content.trimEnd();
@@ -157,7 +166,7 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     targetOption: targetDefinition ? targetChoice(targetDefinition) : NO_TARGET_OPTION,
     targetOptions,
     targetOptional: true,
-    carrierKind: independentEntry ? 'independent-entry' : (pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff'),
+    carrierKind: independentEntry ? 'independent-entry' : (bootstrapOnly ? 'bootstrap-only' : pointerlessWorkspace ? 'pointerless-workspace' : 'routed-handoff'),
     startPath,
     routeId,
     continueFrom,
@@ -167,6 +176,8 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     entryAugmentationText: `${lines.slice(augmentationStart).join('\n')}\n`,
     boundary: independentEntry
       ? 'Independent Guided Entry qualifies recipient-session intent only; no qualified carried Handoff Pointer is selected or activated, and no work/Role authority is manufactured.'
+      : bootstrapOnly
+      ? 'Guided Entry is a transport/invocation projection over an unchanged bootstrap-only carrier. Entry and Target qualify session intent, not Workspace content or referenced external documentation. No Handoff, recipient, Role, holder, work, mutation, or other authority is manufactured.'
       : pointerlessWorkspace
       ? 'Guided Entry is a transport/invocation projection over an unchanged pointerless Workspace carrier. Entry, Target Entry, Role, participant, and operator-instruction selection do not mutate the carrier or its semantic lineage and do not independently create authority, routing, acceptance, continuation, work transfer, or completion.'
       : 'Guided Entry is a transport/invocation projection over an unchanged routed Handoff carrier. The exact qualified Handoff transport shell remains authoritative and unchanged; Entry, Target Entry, Role, participant, and operator-instruction selection only adds recipient-session intent and does not create or alter routing, recipient authority, semantic Parent, acceptance, work transfer, or completion.'

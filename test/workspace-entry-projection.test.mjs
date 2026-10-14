@@ -48,6 +48,40 @@ function sessionEntryFixture() {
 }
 const reusableEntrySources = Object.freeze([nativeEntryContentSource()]);
 
+
+test('bootstrap-only carrier exposes reusable Entries and renders qualified Start intent without inventing Workspace authority', () => {
+  const inspection = { status: 'valid', carrierProjection: {
+    status: 'ready', mode: 'bootstrap', routes: [], workspaces: [],
+    startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md'
+  }, findings: [] };
+  const catalog = projectWorkspaceCarrierEntry({ inspection, contentSources: reusableEntrySources });
+  assert.equal(catalog.status, 'ready');
+  assert.equal(catalog.state, 'catalog');
+  assert.equal(catalog.carrierKind, 'bootstrap-only');
+  assert.ok(catalog.modes.some(mode => mode.label === 'Start'));
+  const rendered = projectWorkspaceCarrierEntry({ inspection, mode: 'START', contentSources: reusableEntrySources });
+  assert.equal(rendered.status, 'ready', rendered.reasonCode);
+  assert.equal(rendered.carrierKind, 'bootstrap-only');
+  assert.match(rendered.transportText, /This is a bootstrap-only carrier/);
+  assert.match(rendered.transportText, /Entry intent: Start/);
+  assert.match(rendered.transportText, /Qualified Entry: tiinex\.core\.entry\.start\.v1/);
+  assert.doesNotMatch(rendered.transportText, /Pointerless Workspace carrier:/);
+  assert.equal(rendered.routeId, '');
+  assert.equal(rendered.continueFrom, '');
+  assert.equal(rendered.primaryRole, null);
+  assert.deepEqual(rendered.participants, []);
+  assert.match(rendered.boundary, /No Handoff, recipient, Role, holder, work, mutation/);
+  assert.equal(projectWorkspaceCarrierEntry({ inspection, mode: 'START', route: 'route:fictional', contentSources: reusableEntrySources }).reasonCode, 'bootstrap-entry-route-unavailable');
+  assert.equal(projectWorkspaceCarrierEntry({ inspection, mode: 'START', independentEntry: true, contentSources: reusableEntrySources }).reasonCode, 'independent-entry-route-conflict');
+});
+
+test('bootstrap-only cannot claim purpose grounding from absent reusable content sources', () => {
+  const inspection = { status: 'valid', carrierProjection: { status: 'ready', mode: 'bootstrap', routes: [], workspaces: [] }, findings: [] };
+  const rendered = projectWorkspaceCarrierEntry({ inspection, mode: 'START', contentSources: [] });
+  assert.equal(rendered.status, 'blocked');
+  assert.equal(rendered.reasonCode, 'entry-mode-invalid');
+});
+
 // These assertions exercise the pure text/intent projection boundary without
 // weakening package inspection; integration coverage supplies a qualified
 // pointerless carrier to the public operation.
