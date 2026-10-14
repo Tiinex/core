@@ -75,6 +75,8 @@ test('embedded bootstrap catalog reports initialized Schema content without arch
     assert.equal(catalog.schemas.total, 1);
     assert.equal(catalog.schemas.specialized, 0);
     assert.equal(catalog.schemas.registrySource, 'portable-content-source-composition');
+    assert.equal(catalog.schemas.entries.length, 1);
+    assert.equal(catalog.schemas.entries[0].schemaId, 'tiinex.root.v1');
   } finally {
     await rm(contentRoot, { recursive: true, force: true });
     await rm(extractionRoot, { recursive: true, force: true });

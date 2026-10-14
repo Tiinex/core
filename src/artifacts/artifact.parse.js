@@ -1,3 +1,5 @@
+import { parseAuthorAttributions } from './artifact.authors.js';
+
 export const TIINEX_ENVELOPE_HEADING = '# Continuity Context';
 
 export function hasTiinexEnvelopeFirstLine(markdown = '') {
@@ -50,6 +52,8 @@ export function parseContinuityEnvelope(envelopeText = '') {
       createdAt: extractListField(currentBlock, 'Created At'),
       summary: extractListField(currentBlock, 'Summary'),
       authors: extractListField(currentBlock, 'Authors'),
+      authorsRaw: extractListField(currentBlock, 'Authors', { preserveRaw: true }),
+      authorAttributions: parseAuthorAttributions(extractListField(currentBlock, 'Authors', { preserveRaw: true })),
       status: extractListField(currentBlock, 'Status'),
       why: extractListField(currentBlock, 'Why')
     },

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,8 @@ import { initializePortableNodeRuntime } from '../src/tooling/portable/adapters/
 import { projectPortableEntryCatalog } from '../src/tooling/portable/entry/entry.catalog.js';
 import { projectPortableProcessCatalog } from '../src/tooling/portable/process/process.catalog.js';
 import { projectPortableScaffoldCatalog } from '../src/scaffolds/scaffold.catalog.js';
+import { runCatalogCli } from '../src/tooling/portable/adapters/cli/cli.catalog.js';
+import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
 
 const ROOT=path.resolve(fileURLToPath(new URL('..',import.meta.url)));
 const nativeRoot=path.resolve(String(process.env.TIINEX_TEST_NATIVE_ROOT || path.resolve(ROOT,'..','native')));
@@ -66,4 +68,28 @@ integrationTest('Native can be selected normally and replaced by a differently n
   assert.equal(scaffolds.status,'ready');
   assert.ok(scaffolds.scaffolds.length>0);
   assert.ok(scaffolds.scaffolds.every((scaffold)=>scaffold.sourceId==='@example/custom-defaults'));
+});
+
+
+integrationTest('an unfamiliar user schema becomes discoverable from qualified composed content, without a hardcoded manual entry', async (t) => {
+  const customRoot=await mkdtemp(path.join(os.tmpdir(),'tiinex-imported-playtest-'));
+  t.after(()=>rm(customRoot,{recursive:true,force:true}));
+  await writeFile(path.join(customRoot,'package.json'),JSON.stringify({name:'@example/playtest-content',version:'1.0.0',tiinex:{contentSource:{registeredSurfaces:'recursive'}}}));
+  await cp(path.join(nativeRoot,'.topics','.schemas'),path.join(customRoot,'.topics','.schemas'),{recursive:true});
+  const basePath=path.join(nativeRoot,'.topics','.schemas','core','topic','tiinex.topic.v1.schema.md');
+  const targetPath=path.join(customRoot,'.topics','.schemas','core','topic','example.playtest.v1.schema.md');
+  const base=await readFile(basePath,'utf8');
+  const changed=base.replaceAll('tiinex.topic.v1','example.playtest.v1').replace('Schema for bounded topic-oriented lineage artifacts.','Schema for one bounded playtest record.');
+  const sealed=sealC14nV2Self(changed);
+  assert.equal(sealed.state,'sealed');
+  await writeFile(targetPath,sealed.markdown,'utf8');
+  const selected=await discoverLocalTiinexContentSource({root:customRoot});
+  assert.equal(selected.status,'ready');
+  const runtime=await initializePortableNodeRuntime({runtimeRoot:ROOT,contentSources:[selected],discoverBundled:false,discoverInstalled:false,environmentContentRoots:''});
+  assert.equal(runtime.status,'ready',JSON.stringify(runtime.findings));
+  const catalog=await runCatalogCli({flags:{query:'playtest'}},{runtimeInitialization:runtime,contentSources:runtime.contentSources});
+  assert.equal(catalog.status,'ready');
+  assert.equal(catalog.schemas.total,112);
+  assert.deepEqual(catalog.schemas.entries.map(x=>x.schemaId),['example.playtest.v1']);
+  assert.equal(catalog.schemas.entries[0].sourcePath.includes('example.playtest.v1.schema.md'),true);
 });

@@ -1,3 +1,4 @@
+export { parseAuthorAttributions } from '../artifacts/artifact.authors.js';
 export { parseArtifactMarkdown, parseContinuityEnvelope, parseBody, parseIntegrity } from '../artifacts/artifact.parse.js';
 export {
   APPLICATION_DATA_SCHEMA_ID,

@@ -160,7 +160,7 @@ export function validateArtifactCreationResult(draft = {}, parentRecord = {}, op
   const parentExpected = !rootCreation && suppliedParent;
   const parentObserved = parsedParentHasAnyValue(parent);
   if (expectedSchemaId && currentSchemaId !== expectedSchemaId) findings.push(error('creation.current.schema.mismatch', `Creation result Current Schema must be ${expectedSchemaId}.`));
-  if (options.expectedAuthors !== undefined && String(parsed.envelope?.current?.authors || '') !== String(options.expectedAuthors)) findings.push(error('creation.current.authors.mismatch', 'Creation result Current Authors must preserve the caller-supplied exact value.'));
+  if (options.expectedAuthors !== undefined && String(parsed.envelope?.current?.authorsRaw || '') !== String(options.expectedAuthors)) findings.push(error('creation.current.authors.mismatch', 'Creation result Current Authors must preserve the caller-supplied exact value.'));
   if (rootCreation && suppliedParent) findings.push(error('creation.parent.input.unexpected', 'Standalone/root creation must not accept a Continuity Parent input.'));
   if (!parentExpected && parentObserved) findings.push(error('creation.parent.unexpected', 'Standalone/root creation must not invent Continuity Parent truth.'));
 

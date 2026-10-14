@@ -1,4 +1,5 @@
 import { parseArtifactMarkdown } from '../artifacts/artifact.parse.js';
+import { parseAuthorAttributions } from '../artifacts/artifact.authors.js';
 
 export const APPLICATION_DATA_SCHEMA_ID = 'tiinex.core.application-data.v1';
 
@@ -79,7 +80,9 @@ function projectRecord(record = {}, workspace, index, findings) {
   const createdAt = text(record.currentCreatedAt || record.createdAt || parsed?.envelope?.current?.createdAt || '');
   const historicalTimeMs = createdAt ? Date.parse(createdAt.replace(' ', 'T') + (/Z$|[+-]\d\d:?\d\d$/.test(createdAt) ? '' : 'Z')) : NaN;
   if (createdAt && !Number.isFinite(historicalTimeMs)) findings.push(finding('warning', 'application-data.created-at.invalid', 'Created At is present but cannot be represented as a deterministic historical timestamp.', { id, createdAt }));
-  const authors = splitIdentities(record.authors ?? parsed?.envelope?.current?.authors ?? '');
+  const authorsRaw = text(record.authors ?? parsed?.envelope?.current?.authorsRaw ?? parsed?.envelope?.current?.authors ?? '');
+  const authorAttributions = parseAuthorAttributions(authorsRaw);
+  const authors = freeze(authorAttributions.map((entry) => entry.label));
   const parentTarget = text(parsed?.envelope?.parent?.trace || record.parentRef || record.trace || '');
   const explicitParticipants = Array.isArray(record.participants) ? freeze(record.participants.map(identityString).filter(Boolean)) : undefined;
   const actionStatus = ['unknown', 'planned', 'occurred', 'cancelled'].includes(text(record.actionStatus).toLowerCase()) ? text(record.actionStatus).toLowerCase() : 'unknown';
@@ -92,6 +95,8 @@ function projectRecord(record = {}, workspace, index, findings) {
     createdAt,
     historicalTimeMs: Number.isFinite(historicalTimeMs) ? historicalTimeMs : null,
     authors,
+    authorsRaw,
+    authorAttributions,
     participants: explicitParticipants,
     actionStatus,
     parentTarget,
@@ -116,6 +121,8 @@ function finalizeRecord(record, workspace, locator, findings) {
     createdAt: record.createdAt,
     historicalTimeMs: record.historicalTimeMs,
     authors: record.authors,
+    authorsRaw: record.authorsRaw,
+    authorAttributions: record.authorAttributions,
     actionStatus: record.actionStatus,
     parent,
     source: record.source,
