@@ -9,13 +9,15 @@ export const REGISTERED_TIIINEX_DISCOVERY_SURFACES = Object.freeze([
   '.processes',
   '.scaffolds',
   '.schemas',
+  'documentation',
   '.workspaces'
 ]);
 export const COMPOSABLE_TIIINEX_CONTENT_SURFACES = Object.freeze([
   '.entries',
   '.processes',
   '.scaffolds',
-  '.schemas'
+  '.schemas',
+  'documentation'
 ]);
 
 const REGISTERED_SURFACE_SET = new Set(REGISTERED_TIIINEX_DISCOVERY_SURFACES);

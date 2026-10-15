@@ -11,11 +11,13 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     'Common path (same command for humans and LLMs):',
     `${command} version [--tree|--json]`,
     `${command} catalog [--json]`,
+    `${command} read-content --source <catalog-source-id> --path <catalog-source-path>`,
+    `${command} init-workspace <new-workspace-dir> --workspace-id <id> --title <title> --authors <authors>`,
     `${command} ground <handoff-package.zip> --route <Continue-from> [--holder-role <recipient-role>] [--holder-assignment-mode <mode>] [--recipient]`,
     `${command} ground <handoff-package.zip> --route <Continue-from> --holder-role <recipient-role> [--holder-assignment-mode <mode>] --recipient --continue <workspace-dir>`,
     `${command} qualify-return <continued-workspace-dir> --result <result-path> [--expected <expected-file-path>]`,
     `${command} prepare-return <continued-workspace-dir>`,
-    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
+    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--authors <author>] [--preflight]`,
     `${command} project-lineage-relation-neighborhood <material-root...> --focus <workspace::path|path> [--workspace-roots <roots.json>] [--coverage complete|bounded|partial|unknown] [--depth <n>]`,
     `${command} qualify-lineage-directory <workspace-or-material-root> --workspace-id <id> --directory <workspace-relative-directory> [--coverage complete|bounded|partial|unknown]`,
     `${command} qualify-lineage-workspace <workspace-or-material-root> --workspace-id <id> [--coverage complete|bounded|partial|unknown]`,
@@ -37,7 +39,7 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
     `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
     `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
-    `${command} handoff <workspace-dir>`,
+    `${command} handoff <workspace-dir> [--output-dir <dir>] [--carrier-prefix <prefix>]`,
     `${command} handoff <workspace-dir> --carrier-mode workspace (--package-parent <intended-predecessor-carrier.zip> | --new-root) [--output-dir <dir>]`,
     `${command} compare --left-kind <kind> --left <path> --right-kind <kind> --right <path> [side selectors]`,
     `${command} reconcile --base-kind <kind> --base <path> --incoming-kind <kind> --incoming <path> --current-kind <kind> --current <path> --reconciled-kind <kind> --reconciled <path> [--dispositions <json-file>]`,
@@ -191,13 +193,26 @@ function commonCommandHelp(command, surfaceCommand) {
     'This is a local Node adapter over Core-owned planning/apply/recovery; filename coordinates never imply semantic Parent authority.',
     ''
   ];
+  if (surfaceCommand === 'read-content') return [
+    'Tiinex portable tooling — exact selected source read',
+    `${command} read-content --source <catalog-source-id> --path <catalog-source-path>`,
+    'Read an exact source document shown by catalog. SHA and bytes are verified against the selected bootstrap manifest before projection; no remote fetching or schema/lineage acceptance is implied.',
+    'Missing sources and paths remain blocked. Do not infer unselected documentation or work/Role authority.',
+    ''
+  ];
+  if (surfaceCommand === 'init-workspace') return [
+    'Tiinex portable tooling — initialize a local Workspace',
+    `${command} init-workspace <new-workspace-dir> --workspace-id <id> --title <title> --authors <authors>`,
+    'Only after the human chooses local ongoing-work continuity. Creates a qualified Workspace descriptor in the designated local directory, not a Project or Role assignment. Inspect current schema and choose subsequent work scope separately.',
+    ''
+  ];
   if (surfaceCommand === 'catalog') return [
     'Tiinex portable tooling — reusable content catalog',
     '',
     `${command} catalog`,
     `${command} catalog --json`,
     '',
-    'Reads only exact manifest-declared content bundled with the active bootstrap and projects available reusable Entries, offered Process guidance, and Scaffolds. Registered discovery-surface membership is availability only; it does not establish applicability, occurrence, work/Role authority, target binding, acceptance, or mutation authority.',
+    'Reads only exact manifest-declared content bundled with the active bootstrap and projects available reusable Entries, Processes, Scaffolds, and maintained Documentation. Registered discovery-surface membership is availability only; it does not establish applicability, occurrence, work/Role authority, target binding, acceptance, or mutation authority.',
     'No ZIP archaeology, package-name special casing, network lookup, or repository crawl is performed.',
     ''
   ];
@@ -312,7 +327,7 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'author') return [
     'Tiinex portable tooling — author',
     '',
-    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--preflight]`,
+    `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--title <title>] [--summary <summary>] [--why <why>] [--authors <author>] [--preflight]`,
     `${command} schemas status <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
     `${command} schemas sync <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
     `${command} schemas check <content-workspace-dir> --docs <docs-workspace-dir> [--docs-commit <immutable-sha> --published] [--require-published]`,
@@ -324,10 +339,11 @@ function commonCommandHelp(command, surfaceCommand) {
   if (surfaceCommand === 'handoff') return [
     'Tiinex portable tooling — handoff',
     '',
-    `${command} handoff <workspace-dir>`,
+    `${command} handoff <workspace-dir> [--output-dir <dir>] [--carrier-prefix <prefix>]`,
     `${command} handoff <workspace-dir> --carrier-mode workspace (--package-parent <intended-predecessor-carrier.zip> | --new-root) [--output-dir <dir>]`,
     '',
     'For pointerless Workspace-carrier manufacture, `--package-parent` means the intended predecessor carrier, not the source package/material origin. Source material may be composed from other qualified packages or local Workspace roots. Omitting `--package-parent` does not silently mean new root; `--new-root` is required for an intentional independent root.',
+    'For the first locally authored formal Handoff without a qualified received package parent, give --carrier-prefix <prefix> when writing the new root package to --output-dir <dir>; common-path authoring does not guess a carrier namespace.',
     'For routed return manufacture, common-path handoff infers the latest qualified authored Handoff, selected Workspace identity/target, received package parent as carrier-lineage evidence, canonical projected filename, and return output directory. Ordinary non-Major continuation derives its sibling ordinal from the exact qualified selected Handoff Pointer order in the received parent carrier, so common-path `handoff` does not require `--package-sibling-index` or `--return-package-sibling-index`. A single selected Pointer derives `-1`; parallel qualified Pointers derive dense local ordinals in Pointer order, and each returned branch continues from its own carrier. Advanced manufacture may declare `--package-consolidation` against the common pre-batch parent carrier; with N qualified route Pointers it derives consolidation ordinal N+1 and rejects conflicting overrides or missing qualified common-frontier topology. `--package-sibling-index` remains an advanced compatibility override only when qualified route topology is unavailable for ordinary route returns, and must match when topology already proves the value; conflicting or ambiguous topology fails closed. `--return-package-major` remains the explicit Major-return declaration. Different carrier prefixes are never globally coordinated. Byte-identical duplicate transport at one exact output path is idempotent and divergent bytes fail closed. It does not implicitly carry sibling Workspaces from the received package; advanced manufacture must select exact reusable parent snapshots with `--package-parent-workspaces <id,...|all>`. Recovery/integration manufacture can bind the reconciled byte proof with `--require-reconciliation-proof --reconciliation-proof <full-reconcile-receipt.json>`; missing, non-ready, edited, or source-stale proof blocks package output. The default receipt keeps output identity, routing text, closure/workspace qualification, verification, and actionable findings compact; add `--full` for the complete manufacture receipt. Normal operator completion is exactly one Handoff package plus the adjacent exact routing text. In markdown-capable hosts render that routing in a fenced code block; do not emit canonical Workspace Evidence/Handoff markdown as additional loose transport files. Runtime-only `.tiinex` state is excluded from canonical manufacture.',
     '',
     `Advanced/internal catalog: ${command} operations`

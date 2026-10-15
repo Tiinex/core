@@ -15,7 +15,7 @@ import { runCommonWorkspaceInitCli } from './cli.workspace-init.js';
 import { projectCommonCliDefaultOutput } from './cli.common-output.js';
 import { runSchemasCli } from './cli.schemas.js';
 import { runVersionCli, formatVersionHuman } from './cli.version.js';
-import { runCatalogCli, formatCatalogHuman } from './cli.catalog.js';
+import { runCatalogCli, formatCatalogHuman, readCatalogContent } from './cli.catalog.js';
 import { runLineageMaintenanceApplyCli, runLineageMaintenanceRecoveryCli } from './cli.lineage-maintenance.js';
 import { inspectPortableAssetRelocationWorkspace } from '../node/asset.relocation.inspect.js';
 import { inspectPortableScopedMoveWorkspace } from '../node/lineage.scoped-move.inspect.js';
@@ -205,6 +205,17 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
   if (parsed.command === 'apply-lineage-maintenance') return runLineageMaintenanceApplyCli(parsed, io);
   if (parsed.command === 'project-git-commit-provenance') return runGitCommitProvenanceCli(parsed, io);
   if (parsed.command === 'recover-lineage-maintenance') return runLineageMaintenanceRecoveryCli(parsed, io);
+  if (parsed.command === 'read-content') {
+    try {
+      const sources = (runtime.contentSources || []).filter((source) => source?.status === 'ready');
+      const result = readCatalogContent(sources, parsed.flags.source, parsed.flags.path);
+      writeJson(io, result, parsed.flags.compact !== true);
+      return result.status === 'ready' ? 0 : 2;
+    } catch (error) {
+      io.error(JSON.stringify({ command: parsed.command, error: String(error?.message || error) }, null, 2));
+      return 1;
+    }
+  }
   if (parsed.command === 'catalog') {
     try {
       const result = await runCatalogCli(parsed, runtime);

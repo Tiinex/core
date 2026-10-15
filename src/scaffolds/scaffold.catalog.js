@@ -22,6 +22,7 @@ export function projectPortableScaffoldCatalog(input = {}) {
       id: handle,
       handle,
       name: String(parsed.identity.name || parsed.title || '').trim(),
+      purpose: String(parsed.identity.purpose || '').trim(),
       version: String(parsed.identity.version || '').trim(),
       kind: String(parsed.identity.kind || '').trim(),
       targetKind: String(parsed.target?.kind || '').trim(),

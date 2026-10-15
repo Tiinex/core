@@ -40,6 +40,8 @@ test('one discovered content source feeds Entry, Process, and Scaffold catalogs 
     assert.equal(scaffolds.status, 'ready');
     assert.equal(scaffolds.scaffolds.length, 1);
     assert.equal(scaffolds.scaffolds[0].handle, 'example.workspace.v1');
+    assert.equal(scaffolds.scaffolds[0].purpose, 'Demonstrate a qualified workspace structure without automatic application.');
+    assert.equal(scaffolds.scaffolds[0].parsed.identity.purpose, scaffolds.scaffolds[0].purpose);
     assert.match(scaffolds.boundary, /does not make the Scaffold applicable/i);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -95,6 +97,7 @@ function qualifiedScaffold() {
 
 - Scaffold Handle: example.workspace.v1
 - Scaffold Name: Example Workspace
+- Purpose: Demonstrate a qualified workspace structure without automatic application.
 - Scaffold Kind: workspace
 - Version: 1
 

@@ -1,0 +1,55 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { discoverLocalTiinexContentSource } from '../src/tooling/portable/adapters/node/contentSource.discovery.js';
+import { buildToolingBootstrapTransportFiles } from '../src/tooling/portable/adapters/node/handoff.manufacture.bootstrap.js';
+import { inspectPortableToolingBootstrap } from '../src/tooling/portable/handoff/toolingBootstrap.js';
+const CORE = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const NO_HOST = { ...process.env, TIINEX_CONTENT_ROOTS: '' };
+const run = (exe, ...args) => spawnSync(process.execPath, [exe, ...args], { encoding: 'utf8', timeout: 30_000, env: NO_HOST });
+const put = async (p,text) => { await mkdir(path.dirname(p), { recursive: true }); await writeFile(p,text); };
+
+test('third-party ordinary documentation is discoverable and read exactly from isolated manifest-backed bootstrap', async () => {
+ const root=await mkdtemp(path.join(tmpdir(),'tiinex-docs-source-'));
+ const receiver=await mkdtemp(path.join(tmpdir(),'tiinex-docs-receiver-'));
+ try {
+  await put(path.join(root,'package.json'),JSON.stringify({name:'@example/extension',version:'1.0.0'}));
+  const doc='.topics/documentation/getting-started/001-welcome.trace.md';
+  const exact='# Continuity Context\n\nSome test provenance.\n\n---\n\n# A third-party guide\n\nHelp when relevant.\n';
+  await put(path.join(root,doc),exact);
+  await put(path.join(root,'.topics/ordinary/nope.trace.md'),'not a composable source');
+  const src=await discoverLocalTiinexContentSource({root});
+  assert.equal(src.status,'ready');
+  assert.ok(src.surfaces.some(s=>s.name==='documentation'));
+  assert.deepEqual(src.entries.map(x=>x.sourcePath),[doc]);
+  const built=await buildToolingBootstrapTransportFiles({runtimeRoot:CORE,contentSources:[src],builtAt:'2026-10-15T00:00:00Z'});
+  assert.equal(built.manifest.content.files,1);
+  assert.equal(inspectPortableToolingBootstrap({files:built.files}).status,'valid');
+  for(const f of built.files)await put(path.join(receiver,f.path),f.data);
+  const exe=path.join(receiver,'tiinex.bootstrap/runtime/tools/tiinex-portable.mjs');
+  const list=run(exe,'catalog','--json');
+  assert.equal(list.status,0,list.stderr||list.stdout);
+  const cat=JSON.parse(list.stdout);
+  assert.deepEqual(cat.documentation.entries.map(x=>x.sourcePath),[doc]);
+  assert.equal(cat.documentation.entries[0].title,'A third-party guide');
+  const positive=run(exe,'read-content','--source','@example/extension','--path',doc);
+  assert.equal(positive.status,0,positive.stderr||positive.stdout);
+  const material=JSON.parse(positive.stdout);
+  assert.equal(material.status,'ready');assert.equal(material.content,exact);assert.equal(material.sourceId,'@example/extension');
+  const missing=run(exe,'read-content','--source','@example/extension','--path','.topics/documentation/no-such-guide.md');
+  assert.equal(missing.status,2);assert.equal(JSON.parse(missing.stdout).reasonCode,'material-not-in-selected-source');
+  const other=run(exe,'read-content','--source','@example/not-selected','--path',doc);
+  assert.equal(other.status,2);assert.equal(JSON.parse(other.stdout).reasonCode,'source-unavailable-or-ambiguous');
+  const notComposed=run(exe,'read-content','--source','@example/extension','--path','.topics/ordinary/nope.trace.md');
+  assert.equal(notComposed.status,2);
+  const help=run(exe,'--help');assert.equal(help.status,0);assert.match(help.stdout,/init-workspace/);assert.match(help.stdout,/read-content/);
+  const badPath=path.join(receiver,'tiinex.bootstrap/content/example-extension',doc);
+  await writeFile(badPath,exact+'TAMPERED');
+  const corrupt=run(exe,'read-content','--source','@example/extension','--path',doc);
+  assert.notEqual(corrupt.status,0);assert.match(corrupt.stderr,/digest-mismatch/);
+ } finally {await rm(root,{recursive:true,force:true});await rm(receiver,{recursive:true,force:true});}
+});

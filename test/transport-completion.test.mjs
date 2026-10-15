@@ -35,7 +35,8 @@ test('exact route produces byte-identical canonical transport text and unmodifie
 test('pointerless Workspace has Start but never a fabricated recipient or Continue From',()=>{
  const result=projectPortableTransportCompletion({inspection:pointerless});
  assert.equal(result.status,'ready');assert.equal(result.carrier.routeId,'');
- assert.match(result.clipboardText,/pointerless Workspace carrier/);
+ assert.match(result.clipboardText,/Cold start: read Start directly/);
+ assert.doesNotMatch(result.clipboardText,/pointerless Workspace carrier|No Handoff Continue From route/);
  assert.doesNotMatch(result.clipboardText,/Continue from/);
  assert.match(result.markdown,/Send to:.*receiving conversation you choose/);
 });
@@ -43,7 +44,8 @@ test('bootstrap-only transport completion preserves canonical shell while compos
  const bootstrap = {status:'valid', findings:[], carrierProjection:{status:'ready',mode:'bootstrap',routes:[],workspaces:[],startPath:'001-1-READ-BEFORE-PROCEEDING.trace.md'}};
  const plain = projectPortableTransportCompletion({inspection:bootstrap,filename:'tiinex-bootstrap.handoff-package.zip'});
  assert.equal(plain.status,'ready',plain.reasonCode);
- assert.match(plain.clipboardText,/This is a bootstrap-only carrier/);
+ assert.match(plain.clipboardText,/Cold start: read Start directly/);
+ assert.doesNotMatch(plain.clipboardText,/This is a bootstrap-only carrier|Runtime reuse check|composition\.sha256/);
  const guided = projectPortableTransportCompletion({inspection:bootstrap,filename:'tiinex-bootstrap.handoff-package.zip',entryId:'START',contentSources:[nativeEntryContentSource()]});
  assert.equal(guided.status,'ready',guided.reasonCode);
  assert.equal(guided.carrier.routeId,'');

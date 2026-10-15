@@ -203,17 +203,13 @@ function routedTransportText(startPath = '', continueFrom = '') {
 }
 
 function routeLessTransportText(startPath = '', mode = 'workspace') {
-  const bootstrap = mode === 'bootstrap' || mode === 'bootstrap-replacement';
-  const replacement = mode === 'bootstrap-replacement';
-  const boundary = replacement
-    ? 'This is a bootstrap-replacement carrier. Use it only to replace the active Tiinex bootstrap/runtime composition. After activating the declared bootstrap, resume the original work/package flow with that runtime. This carrier declares no Workspace material, Handoff Continue From route, recipient, Role, current-work, or other work authority, and bootstrap replacement must not be upgraded into broader semantic supersession.'
-    : bootstrap
-      ? 'This is a bootstrap-only carrier. After bootstrap, pass the package to Tiinex orientation. No Workspace material, Handoff Continue From route, recipient, or work authority is declared or implied.'
-      : 'This is a pointerless Workspace carrier. After bootstrap, pass the package to Tiinex orientation/material projection. No Handoff Continue From route, recipient, or work transfer is declared or implied.';
-  const reuse = bootstrap
-    ? '\nRuntime reuse check: after extracting the declared bootstrap, run `node <extract-root>/tiinex.bootstrap/runtime/tools/tiinex-portable.mjs version --json` before broad runtime/schema/companion re-reading. If `composition.sha256` equals the already-active Tiinex runtime, the manifest-declared runtime composition is byte-identical and prior interpretation may be reused. Different composition, later Build At, different Core version, different ZIP SHA, or later arrival does not by itself establish semantic supersession. If the next bounded operation needs schema-aware authoring or reusable Process/Role/Entry discovery, inspect `catalog --json`; zero qualified content sources/schemas is a valid mechanics-only bootstrap capability boundary, not permission to invent missing content.'
-    : '';
-  return `${coldStartInstruction(startPath)}\n\n${boundary}${reuse}\n`;
+  // Start is the canonical cold-start procedure. Transport selects the carrier
+  // and any session intent; it must not duplicate Start's qualification rules.
+  const start = coldStartInstruction(startPath);
+  if (mode !== 'bootstrap-replacement') return `${start}\n`;
+  // Replacement is an explicit operator intent rather than a package role;
+  // preserve that distinction outside the generic bootstrap-only Start.
+  return `${start}\n\nBootstrap replacement intent: replace only the active Tiinex bootstrap/runtime, then resume the original work/package flow. This does not transfer work authority or establish semantic supersession.\n`;
 }
 
 /** A separate, operator-requested Entry over a qualified routed carrier.

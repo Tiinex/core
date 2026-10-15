@@ -69,6 +69,7 @@ export function parseScaffoldArtifact(markdown = '') {
     identity: Object.freeze({
       handle: String(identity['Scaffold Handle'] || '').trim(),
       name: String(identity['Scaffold Name'] || '').trim(),
+      purpose: String(identity.Purpose || '').trim(),
       kind: normalizeToken(identity['Scaffold Kind']),
       version: String(identity.Version || '').trim()
     }),

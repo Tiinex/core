@@ -36,10 +36,9 @@ test('bootstrap carrier export reuses canonical Package V1 manufacture and carri
       '001-2-bootstrap.zip',
       '001-tiinex-handoff-package.trace.md'
     ]);
-    assert.match(result.transportText, /version --json/);
-    assert.match(result.transportText, /composition\.sha256/);
-    assert.match(result.transportText, /catalog --json/);
-    assert.match(result.transportText, /mechanics-only bootstrap capability boundary/);
+    assert.match(result.transportText, /Cold start: read Start directly/);
+    assert.doesNotMatch(result.transportText, /version --json|composition\.sha256|Runtime reuse check/);
+    assert.doesNotMatch(result.transportText, /composition\.sha256|catalog --json|mechanics-only bootstrap capability boundary/);
     assert.doesNotMatch(result.transportText, /Continue From:/);
     const descriptor = bundle.files.find((file) => file.path === '001-2-bootstrap.trace.md')?.content || '';
     assert.match(descriptor, /- Created At: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
@@ -87,8 +86,10 @@ test('bootstrap replacement transport projection is Core-owned and remains boots
   assert.equal(replacement.status, 'ready');
   assert.equal(replacement.primary.filename, 'tiinex-bootstrap-replacement-001.handoff-package.zip');
   assert.equal(replacement.presentation.kind, 'bootstrap-replacement-carrier');
-  assert.match(replacement.normalInlineRouting.content, /Use it only to replace the active Tiinex bootstrap\/runtime composition/);
+  assert.match(replacement.normalInlineRouting.content, /Bootstrap replacement intent: replace only the active Tiinex bootstrap\/runtime/);
   assert.match(replacement.normalInlineRouting.content, /resume the original work\/package flow/);
   assert.doesNotMatch(replacement.normalInlineRouting.content, /Continue from/);
   assert.doesNotMatch(normal.normalInlineRouting.content, /bootstrap-replacement carrier/);
+  assert.doesNotMatch(normal.normalInlineRouting.content, /Runtime reuse check|composition\.sha256|catalog --json|No Workspace material/);
+  assert.match(replacement.normalInlineRouting.content, /does not transfer work authority/);
 });

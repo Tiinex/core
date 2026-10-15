@@ -1,7 +1,7 @@
 import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
 import { projectPortableEntryCatalog } from '../entry/entry.catalog.js';
-import { projectHandoffHumanOutput, projectBootstrapCarrierHumanOutput, projectIndependentEntryCarrierOutput } from './carrierProjection.js';
+import { projectHandoffHumanOutput, projectBootstrapCarrierHumanOutput, projectWorkspaceCarrierHumanOutput, projectIndependentEntryCarrierOutput } from './carrierProjection.js';
 
 export const WORKSPACE_ENTRY_PROJECTION_SCHEMA_ID = 'tiinex.portable.workspace-entry-projection.v1';
 
@@ -20,8 +20,6 @@ const NO_TARGET_OPTION = Object.freeze({
   sourceKind: 'runtime',
   summary: 'Apply no environment-specific Target Entry augmentation.'
 });
-
-const POINTERLESS_CANONICAL_SHELL = (startPath) => `Handoff package attached.\n\nCold start: read Start directly; follow only its qualified bootstrap extraction instruction.\nStart: ${startPath}\n\nPointerless Workspace carrier: after bootstrap, orient/project the package. No Handoff route, recipient, or work transfer is declared or implied.`;
 
 export function projectWorkspaceCarrierEntry(input = {}) {
   const inspection = input.inspection || inspectHandoffPackageV1(input.bundle || input.package || input);
@@ -117,8 +115,12 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   const startPath = String(projection.startPath || '001-1-READ-BEFORE-PROCEEDING.trace.md');
   let routeId = '';
   let continueFrom = '';
-  let shell = POINTERLESS_CANONICAL_SHELL(startPath);
-  if (bootstrapOnly) {
+  let shell = '';
+  if (pointerlessWorkspace) {
+    const projected = projectWorkspaceCarrierHumanOutput({ projection, filename: input.filename || input.transportFilename || 'tiinex-workspace.handoff-package.zip' });
+    if (projected.status !== 'ready') return blocked('workspace-transport-unavailable', inspection.findings || [], modes, targetOptions);
+    shell = projected.normalInlineRouting.content.trimEnd();
+  } else if (bootstrapOnly) {
     const projected = projectBootstrapCarrierHumanOutput({ projection, filename: input.filename || input.transportFilename || 'tiinex-bootstrap.handoff-package.zip' });
     if (projected.status !== 'ready') return blocked('bootstrap-transport-unavailable', inspection.findings || [], modes, targetOptions);
     shell = projected.normalInlineRouting.content.trimEnd();

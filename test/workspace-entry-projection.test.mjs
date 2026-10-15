@@ -62,7 +62,8 @@ test('bootstrap-only carrier exposes reusable Entries and renders qualified Star
   const rendered = projectWorkspaceCarrierEntry({ inspection, mode: 'START', contentSources: reusableEntrySources });
   assert.equal(rendered.status, 'ready', rendered.reasonCode);
   assert.equal(rendered.carrierKind, 'bootstrap-only');
-  assert.match(rendered.transportText, /This is a bootstrap-only carrier/);
+  assert.match(rendered.transportText, /Cold start: read Start directly/);
+  assert.doesNotMatch(rendered.transportText, /This is a bootstrap-only carrier|Runtime reuse check|composition\.sha256/);
   assert.match(rendered.transportText, /Entry intent: Start/);
   assert.match(rendered.transportText, /Qualified Entry: tiinex\.core\.entry\.start\.v1/);
   assert.doesNotMatch(rendered.transportText, /Pointerless Workspace carrier:/);
@@ -86,7 +87,7 @@ test('bootstrap-only cannot claim purpose grounding from absent reusable content
 // weakening package inspection; integration coverage supplies a qualified
 // pointerless carrier to the public operation.
 test('Guided Entry mode catalog uses reusable content sources and remains transport-only', () => {
-  const result = projectWorkspaceCarrierEntry({ inspection: { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] }, contentSources: reusableEntrySources });
+  const result = projectWorkspaceCarrierEntry({ inspection: { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] }, contentSources: reusableEntrySources });
   assert.equal(result.state, 'catalog');
   assert.deepEqual(result.modes.map((mode) => mode.label), ['Explore', 'Resume', 'Start', 'Custom']);
   assert.deepEqual(result.modes.map((mode) => mode.sourceKind), ['content-source', 'content-source', 'content-source', 'runtime']);
@@ -97,7 +98,7 @@ test('Guided Entry catalog separates WHAT purpose Entries from WHERE Target Entr
   const targetPath = '.topics/.entries/where/example-web/001-example-web-target-entry.trace.md';
   const inspection = {
     status: 'valid',
-    carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+    carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
     workspaces: [{ workspaceId: 'interop-example', archive: { state: 'qualified', entries: [
       { path: targetPath, data: new TextEncoder().encode(targetEntryFixture()) }
     ] } }],
@@ -133,7 +134,7 @@ test('Core renders Session Entry grounding obligations without VS Code semantics
   const markdown = sessionEntryFixture();
   const inspection = {
     status: 'valid',
-    carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+    carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
     workspaces: [{ workspaceId: 'business', archive: { state: 'qualified', entries: [
       { path: '.topics/entries/grounded-session.trace.md', data: new TextEncoder().encode(markdown) }
     ] } }],
@@ -158,7 +159,7 @@ test('Core renders Session Entry grounding obligations without VS Code semantics
 
 test('EXPLORE requires current cross-Workspace grounding before participant-facing directions', () => {
   const result = projectWorkspaceCarrierEntry({
-    inspection: { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] },
+    inspection: { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] },
     mode: 'EXPLORE',
     contentSources: reusableEntrySources
   });
@@ -184,7 +185,7 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
   const result = projectWorkspaceCarrierEntry({
     inspection: {
       status: 'valid',
-      carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+      carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
       workspaces: [{ workspaceId: 'business', archive: { state: 'qualified', entries: [
         { path: anchorPath, data: new TextEncoder().encode(roleFixture('Anchor')) },
         { path: sigmaPath, data: new TextEncoder().encode(roleFixture('Sigma')) }
@@ -197,8 +198,9 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
     participants: [{ label: 'Sigma', reference: 'https://github.com/Tiinex/business/blob/' + 'b'.repeat(40) + '/' + sigmaPath, workspaceId: 'business', path: sigmaPath }]
   });
   assert.equal(result.state, 'rendered');
-  assert.match(result.transportText, /Cold start: read Start directly; follow only its qualified bootstrap extraction instruction/);
-  assert.match(result.transportText, /Pointerless Workspace carrier: after bootstrap, orient\/project the package/);
+  assert.match(result.transportText, /Cold start: read Start directly; do not enumerate or broadly extract this package/);
+  assert.match(result.transportText, /Cold start: read Start directly/);
+  assert.doesNotMatch(result.transportText, /Pointerless Workspace carrier:|Runtime reuse check/);
   assert.match(result.transportText, /Entry intent: Resume/);
   assert.match(result.transportText, /Session Role: Anchor/);
   assert.match(result.transportText, /Session Role: Anchor — material carried in this package at `business::\.topics\/roles\/anchor\.trace\.md`/);
@@ -206,18 +208,18 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
   assert.match(result.transportText, /Session selections do not establish semantic holder\/participant\/recipient authority, acceptance, or work transfer/);
   assert.match(result.transportText, /qualify these exact Role materials and apply declared presentation\/communication preferences as presentation only/);
   assert.doesNotMatch(result.transportText, /TL;DR/i);
-  assert.match(result.transportText, /No Handoff route, recipient, or work transfer is declared or implied\./);
+  assert.doesNotMatch(result.transportText, /No Handoff route, recipient, or work transfer is declared or implied/);
 });
 
 test('Guided Entry rejects duplicate Primary Role participant and missing CUSTOM instruction', () => {
-  const inspection = { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] };
+  const inspection = { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, findings: [] };
   assert.equal(projectWorkspaceCarrierEntry({ inspection, mode: 'CUSTOM' }).reasonCode, 'custom-instruction-required');
   assert.equal(projectWorkspaceCarrierEntry({ inspection, mode: 'RESUME', contentSources: reusableEntrySources, primaryRole: { label: 'Anchor', reference: 'r' }, participants: [{ label: 'Anchor', reference: 'r' }] }).reasonCode, 'primary-role-duplicate-participant');
 });
 
 
 test('Guided Entry uses a commit-pinned external Role reference only when the Role is not carried', () => {
-  const inspection = { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, workspaces: [], findings: [] };
+  const inspection = { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, workspaces: [], findings: [] };
   const pinned = projectWorkspaceCarrierEntry({
     inspection,
     mode: 'START',
@@ -249,7 +251,7 @@ test('Guided Entry uses a commit-pinned external Role reference only when the Ro
 });
 
 test('Guided Entry deduplicates Roles by exact identity rather than human label alone', () => {
-  const inspection = { status: 'valid', carrierProjection: { mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, workspaces: [], findings: [] };
+  const inspection = { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' }, workspaces: [], findings: [] };
   const result = projectWorkspaceCarrierEntry({
     inspection,
     mode: 'START',

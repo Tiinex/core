@@ -42,6 +42,15 @@ test('focused handoff help exposes pointerless Workspace parent-vs-new-root capa
   assert.match(help, /Omitting `--package-parent` does not silently mean new root/i);
 });
 
+test('author and first formal Handoff help disclose exact local-only author/prefix options', () => {
+  const authorHelp = portableCliHelpText(runtime, 'author');
+  const handoffHelp = portableCliHelpText(runtime, 'handoff');
+  const commonHelp = portableCliHelpText(runtime);
+  for (const value of [authorHelp, commonHelp]) assert.match(value, /--authors <author>/);
+  assert.match(handoffHelp, /handoff <workspace-dir> \[--output-dir <dir>\] \[--carrier-prefix <prefix>\]/);
+  assert.match(handoffHelp, /first locally authored formal Handoff.*--carrier-prefix/);
+});
+
 test('pointerless Workspace manufacture fails closed until carrier continuity intent is explicit', async () => {
   await assert.rejects(
     prepareHandoffManufactureCliCommand({

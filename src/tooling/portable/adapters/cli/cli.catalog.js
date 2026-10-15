@@ -5,6 +5,7 @@ import { projectPortableScaffoldCatalog } from '../../../../scaffolds/scaffold.c
 import { SCAFFOLD_PLAN_SCHEMA_ID } from '../../../../scaffolds/scaffold.plan.js';
 import { SCAFFOLD_COMPOSITE_PLAN_SCHEMA_ID } from '../../../../scaffolds/scaffold.compose.js';
 import { schemaRegistry } from '../../../../schemas/registry.js';
+import { readPortableSelectedContent } from '../../content/contentSource.read.js';
 
 export async function runCatalogCli(parsed = {}, runtime = {}) {
   const runtimeSources = Array.isArray(runtime?.contentSources) ? runtime.contentSources.filter((source) => source?.status === 'ready') : [];
@@ -21,6 +22,7 @@ export async function runCatalogCli(parsed = {}, runtime = {}) {
     : bundled;
   const entries = projectPortableEntryCatalog({ contentSources });
   const processes = projectPortableProcessCatalog({ contentSources });
+  const documentation = projectPortableDocumentationCatalog(contentSources);
   const scaffolds = projectPortableScaffoldCatalog({ contentSources });
   const schemaRuntime = runtime?.runtimeInitialization?.schemaRuntime || null;
   const schemaQuery = String(parsed?.flags?.query || '').trim().toLowerCase();
@@ -66,6 +68,7 @@ export async function runCatalogCli(parsed = {}, runtime = {}) {
     }))),
     entries,
     processes,
+    documentation,
     scaffolds,
     schemas,
     capabilities: Object.freeze({
@@ -85,6 +88,7 @@ export function formatCatalogHuman(result = {}) {
     `Sources: ${result.discovery?.sources || 0}`,
     `Entries: ${result.entries?.entries?.length || 0}`,
     `Processes: ${result.processes?.processes?.length || 0}`,
+    `Documentation: ${result.documentation?.entries?.length || 0}`,
     `Scaffolds: ${result.scaffolds?.scaffolds?.length || 0}`,
     `Schemas: ${result.schemas?.total || 0}${result.schemas?.state ? ` (${result.schemas.state})` : ''}`
   ];
@@ -100,14 +104,41 @@ export function formatCatalogHuman(result = {}) {
     lines.push('', 'Processes:');
     for (const process of result.processes.processes) lines.push(`- ${process.title || process.artifactPath} — ${process.sourceId}`);
   }
+  if (result.documentation?.entries?.length) {
+    lines.push('', 'Documentation (read a selected guide by source and path):');
+    for (const item of result.documentation.entries) lines.push(`- ${item.title} — ${item.sourceId} :: ${item.sourcePath}`);
+    lines.push('Use read-content --source <source-id> --path <source-path> to retrieve exact qualified transport bytes.');
+  }
   if (result.schemas?.entries?.length) {
     lines.push('', 'Available schema contracts (discoverability only):');
     for (const schema of result.schemas.entries) lines.push(`- ${schema.schemaId} — ${schema.label}${schema.summary ? `: ${schema.summary}` : ''}`);
   }
   if (result.scaffolds?.scaffolds?.length) {
     lines.push('', 'Scaffolds:');
-    for (const scaffold of result.scaffolds.scaffolds) lines.push(`- ${scaffold.handle}${scaffold.version ? ` ${scaffold.version}` : ''} — ${scaffold.sourceId}`);
+    for (const scaffold of result.scaffolds.scaffolds) lines.push(`- ${scaffold.handle}${scaffold.version ? ` ${scaffold.version}` : ''}${scaffold.purpose ? `: ${scaffold.purpose}` : ''} — ${scaffold.sourceId}`);
   }
   lines.push('', 'Discovery only: availability does not imply applicability or mutation authority.');
   return lines.join('\n');
+}
+
+// Documentation is maintained source material, not an authoritative schema registry.
+// Cataloguing it never grants an Entry, Role, Process, or work assignment.
+export function projectPortableDocumentationCatalog(contentSources = []) {
+  const entries = [];
+  for (const source of contentSources) {
+    for (const item of source.entries || []) {
+      if (item.surface !== 'documentation' || !/\.trace\.md$/i.test(item.sourcePath)) continue;
+      const raw = new TextDecoder('utf-8', { fatal: true }).decode(item.data);
+      const body = raw.includes('\n---\n') ? raw.split('\n---\n', 2)[1] : raw;
+      const title = body.match(/^# (.+)$/m)?.[1] || item.sourcePath.split('/').pop();
+      entries.push(Object.freeze({ sourceId: source.source.id, sourcePath: item.sourcePath, title,
+        sha256: item.sha256, bytes: item.bytes, sourceQualification: 'selected-content-source-exact-bytes-not-semantic-acceptance' }));
+    }
+  }
+  entries.sort((a,b) => a.sourceId.localeCompare(b.sourceId) || a.sourcePath.localeCompare(b.sourcePath));
+  return Object.freeze({ entries: Object.freeze(entries), boundary: 'Read a selected exact source document when relevant. Documentation describes when and why; actual schema/companion sources define validity. Presence does not grant authority.' });
+}
+
+export function readCatalogContent(contentSources, sourceId, sourcePath) {
+  return readPortableSelectedContent({ contentSources, sourceId, sourcePath });
 }

@@ -61,7 +61,8 @@ test('direct Package V1 Workspace carrier is first-class pointerless transport w
   assert.equal(human.status, 'ready');
   assert.equal(human.presentation.recipientLabel, '');
   assert.match(human.normalInlineRouting.content, /Start:\n001-1-READ-BEFORE-PROCEEDING\.trace\.md/);
-  assert.match(human.normalInlineRouting.content, /pointerless Workspace carrier/);
+  assert.match(human.normalInlineRouting.content, /Cold start: read Start directly/);
+  assert.doesNotMatch(human.normalInlineRouting.content, /pointerless Workspace carrier|No Handoff Continue From route/);
   assert.doesNotMatch(human.normalInlineRouting.content, /Continue from:/i);
 });
 
@@ -83,8 +84,16 @@ test('direct Package V1 bootstrap-only carrier stays material- and route-free wi
   assert.doesNotMatch(rootText, /Major Reason:/);
   const human = projectHandoffCarrierOutputFromPackage({ bundle: result.bundle, filename: 'tiinex-bootstrap-001.handoff-package.zip' });
   assert.equal(human.status, 'ready');
-  assert.match(human.normalInlineRouting.content, /bootstrap-only carrier/);
+  assert.match(human.normalInlineRouting.content, /Cold start: read Start directly/);
+  assert.doesNotMatch(human.normalInlineRouting.content, /bootstrap-only carrier|Runtime reuse check|composition\.sha256/);
   assert.doesNotMatch(human.normalInlineRouting.content, /Continue from:/i);
+  const start = result.bundle.files.find((file) => file.path === '001-1-READ-BEFORE-PROCEEDING.trace.md');
+  const startText = new TextDecoder().decode(packageFileBytes(start));
+  assert.match(startText, /If the operator selected no session Entry/);
+  assert.match(startText, /starting a new goal or already has meaningful work in progress/);
+  assert.match(startText, /qualified Getting Started guidance where available/);
+  assert.match(startText, /earlier conversation does not become qualified lineage retroactively/);
+  assert.doesNotMatch(human.normalInlineRouting.content, /If the operator selected no session Entry/);
 });
 
 function seal(text){const r=sealC14nV2Self(text);assert.equal(r.state,'sealed');return `${r.markdown}\n`;}
