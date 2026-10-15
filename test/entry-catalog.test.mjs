@@ -221,3 +221,55 @@ test('carried Entry descendant schemas participate in discovery without leaking 
   assert.equal(catalog.entries[0].groundingMaterial.length, 2);
   assert.ok(!catalog.entries.some((entry) => entry.artifactPath.endsWith('.schema.md')));
 });
+
+
+function entryChildBoundToParent(parent, { name = 'Example', childPath = '001-example-entry.trace.md' } = {}) {
+  const digest = canonicalC14nV2SelfState(parent).declaredValue;
+  let child = carriedEntryFixture({ name, canonicalIdentifier: 'example.entry.v2', version: '2', parentTrace: childPath });
+  child = child.replace('# Continuity Integrity\n', `# Continuity Integrity\n\n- sha256-base64url-c14n-v2\n  - Towards: [${childPath}](${childPath})\n  - Value: ${digest}\n`);
+  const sealed = sealC14nV2Self(child);
+  assert.equal(sealed.state, 'sealed');
+  return `${sealed.markdown}\n`;
+}
+
+test('embedded content-source Entry discovery presents only the current qualified Parent leaf', () => {
+  const source = nativeEntryContentSource();
+  const parentPath = '.topics/.entries/what/example/001-example-entry.trace.md';
+  const childPath = '.topics/.entries/what/example/001-1-example-entry.trace.md';
+  const parent = carriedEntryFixture({ name: 'Example', canonicalIdentifier: 'example.entry.v1', version: '1' });
+  const child = entryChildBoundToParent(parent);
+  const extras = [[parentPath, parent], [childPath, child]].map(([sourcePath, markdown]) => ({
+    surface: '.entries', surfaceRoot: '.topics/.entries', sourcePath, data: new TextEncoder().encode(markdown)
+  }));
+  const contentSources = [{ ...source, entries: [...source.entries, ...extras] }];
+  const catalog = projectPortableEntryCatalog({ contentSources });
+  assert.equal(catalog.status, 'ready');
+  assert.deepEqual(catalog.entries.filter((entry) => entry.name === 'Example').map((entry) => entry.canonicalIdentifier), ['example.entry.v2']);
+  assert.equal(catalog.entries.find((entry) => entry.name === 'Example').label, 'Example');
+  assert.equal(catalog.entries.find((entry) => entry.name === 'Example').currentLeaf, true);
+});
+
+test('embedded content-source Entry versions are not silently superseded without an exact Parent', () => {
+  const source = nativeEntryContentSource();
+  const extras = [
+    ['.topics/.entries/what/example/001-example-entry.trace.md', carriedEntryFixture({ name: 'Example', canonicalIdentifier: 'example.entry.v1', version: '1' })],
+    ['.topics/.entries/what/example/001-1-example-entry.trace.md', carriedEntryFixture({ name: 'Example', canonicalIdentifier: 'example.entry.v2', version: '2' })]
+  ].map(([sourcePath, markdown]) => ({ surface: '.entries', sourcePath, data: new TextEncoder().encode(markdown) }));
+  const catalog = projectPortableEntryCatalog({ contentSources: [{ ...source, entries: [...source.entries, ...extras] }] });
+  assert.deepEqual(catalog.entries.filter((entry) => entry.name === 'Example').map((entry) => entry.version), ['2','1']);
+});
+
+
+test('a forged content-source Parent digest cannot conceal an older qualified Entry', () => {
+  const source = nativeEntryContentSource();
+  const parent = carriedEntryFixture({ name: 'Example', canonicalIdentifier: 'example.entry.v1' });
+  const linkedChild = entryChildBoundToParent(parent);
+  const forged = linkedChild.replace(/(  - Towards: \[001-example-entry\.trace\.md\]\(001-example-entry\.trace\.md\)\n  - Value: )[^\n]+/, '$1not-the-parent-digest');
+  const sealed = sealC14nV2Self(forged);
+  assert.equal(sealed.state, 'sealed');
+  const parentPath = '.topics/.entries/what/example/001-example-entry.trace.md';
+  const childPath = '.topics/.entries/what/example/001-1-example-entry.trace.md';
+  const entries = [[parentPath, parent], [childPath, `${sealed.markdown}\n`]].map(([sourcePath, markdown]) => ({ surface: '.entries', sourcePath, data: new TextEncoder().encode(markdown) }));
+  const catalog = projectPortableEntryCatalog({ contentSources: [{ ...source, entries: [...source.entries, ...entries] }] });
+  assert.deepEqual(catalog.entries.filter((entry) => entry.name === 'Example').map((entry) => entry.version), ['2','1']);
+});

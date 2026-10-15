@@ -1,4 +1,5 @@
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
+import { canonicalC14nV2SelfState } from '../../../integrity/integrity.c14nV2.js';
 import { resolveLineage } from '../../../lineage/lineage.resolve.js';
 import { schemaMarkdown as nativeSchemaMarkdown, schemaPackManifest } from '../../../schemas/registry.js';
 import { compilePortableSchemaContractChain } from '../schema/contract.compile.js';
@@ -55,10 +56,9 @@ export function projectPortableEntryCatalog(input = {}) {
     }));
   }
 
-  const leaves = currentLeafKeys(projected);
   const materialById = new Map(representations.map((material) => [material.id, material]));
-  const qualified = projected
-    .filter((entry) => entry.readQualified && (entry.sourceKind === 'content-source' || leaves.has(entry.id)));
+  const leaves = currentLeafKeys(projected, materialById);
+  const qualified = projected.filter((entry) => entry.readQualified && leaves.has(entry.id));
   const byExactBytes = new Map();
   for (const entry of qualified) {
     const bytes = String(materialById.get(entry.id)?.markdown || '');
@@ -472,12 +472,17 @@ function rootDeclarationGroupNames() {
   return cachedRootDeclarationGroups;
 }
 
-function currentLeafKeys(entries) {
+function currentLeafKeys(entries, materialById = new Map()) {
   const byWorkspace = new Map();
+  const bySource = new Map();
   for (const entry of entries) {
-    if (entry.sourceKind !== 'carried' || !entry.lineageRecord) continue;
-    if (!byWorkspace.has(entry.workspaceId)) byWorkspace.set(entry.workspaceId, []);
-    byWorkspace.get(entry.workspaceId).push(entry);
+    if (entry.sourceKind === 'carried' && entry.lineageRecord) {
+      if (!byWorkspace.has(entry.workspaceId)) byWorkspace.set(entry.workspaceId, []);
+      byWorkspace.get(entry.workspaceId).push(entry);
+    } else if (entry.sourceKind === 'content-source') {
+      if (!bySource.has(entry.sourceId)) bySource.set(entry.sourceId, []);
+      bySource.get(entry.sourceId).push(entry);
+    }
   }
   const leaves = new Set();
   for (const group of byWorkspace.values()) {
@@ -496,7 +501,50 @@ function currentLeafKeys(entries) {
       if (entry) leaves.add(entry.id);
     }
   }
+
+  // Reusable content sources have the same real Parent lineage as carried
+  // Workspaces. Hide a historical Entry only when an exact, qualified child
+  // points at it within the same source; version numbers alone prove nothing.
+  for (const group of bySource.values()) {
+    const byPath = new Map(group.map((entry) => [normalizePath(entry.artifactPath), entry]));
+    const superseded = new Set();
+    for (const child of group) {
+      if (!child.readQualified) continue;
+      const childText = String(materialById.get(child.id)?.markdown || '');
+      if (canonicalC14nV2SelfState(childText).state !== 'verified') continue;
+      let parsedChild;
+      try { parsedChild = parseArtifactMarkdown(childText); } catch { continue; }
+      const parent = parsedChild?.envelope?.parent;
+      const reference = String(parent?.trace || '').trim();
+      const resolvedPath = resolveContentParentPath(child.artifactPath, reference);
+      const ancestor = byPath.get(resolvedPath);
+      if (!ancestor || !ancestor.readQualified || ancestor.id === child.id) continue;
+      if (String(parent?.schema?.id || '') !== ancestor.schemaId) continue;
+      if (child.name !== ancestor.name || child.entryKind !== ancestor.entryKind) continue;
+      const ancestorIntegrity = canonicalC14nV2SelfState(String(materialById.get(ancestor.id)?.markdown || ''));
+      if (ancestorIntegrity.state !== 'verified') continue;
+      // The child's explicit Parent integrity must bind the exact ancestor bytes.
+      const bound = (parsedChild?.integrity?.entries || []).some((item) =>
+        item.method === 'sha256-base64url-c14n-v2' &&
+        resolveContentParentPath(child.artifactPath, String(item.towards || '')) === resolvedPath &&
+        item.value === ancestorIntegrity.declaredValue
+      );
+      if (bound) superseded.add(ancestor.id);
+    }
+    for (const entry of group) if (!superseded.has(entry.id)) leaves.add(entry.id);
+  }
   return leaves;
+}
+
+function resolveContentParentPath(fromPath, relative) {
+  if (!relative || /^(?:[a-z]+:|\/|\\)/i.test(relative) || relative.includes('\\')) return '';
+  const parts = normalizePath(fromPath).split('/').slice(0, -1);
+  for (const part of relative.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') { if (!parts.length) return ''; parts.pop(); }
+    else parts.push(part);
+  }
+  return parts.join('/');
 }
 
 function eligibleEntryPath(value = '') {
