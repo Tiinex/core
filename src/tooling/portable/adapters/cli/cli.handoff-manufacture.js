@@ -298,11 +298,14 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   if (!parentPackagePath && !explicitNewRoot && !explicitMajor) throw new Error('portable.cli.workspace-carrier.root-intent.required');
   let carrierLineage = Object.freeze({ ...initialHandoffCarrierLineage(flags['carrier-prefix'] || ''), checkpointKind: 'progression', majorReason: '' });
   let inheritedCarrierProfile = normalizeHandoffCarrierProfile(null);
+  let predecessorWorkspaceSnapshots = [];
   let carrierAllocation = Object.freeze({ state: explicitMajor ? 'unresolved' : explicitNewRoot ? 'root' : 'qualified', allocationMode: explicitMajor ? 'pending-prefix-major' : explicitNewRoot ? 'initial-root' : 'parent-continuation', siblingIndex: null, provenance: Object.freeze({ basis: explicitMajor ? 'pending-prefix-major' : explicitNewRoot ? 'initial-carrier-root' : 'explicit-carrier-parent' }) });
   if (parentPackagePath) {
     const resolvedParent = path.resolve(parentPackagePath);
     const parentBytes = new Uint8Array(await readFile(resolvedParent));
     const parentBundle = await loadNodePortableInput([resolvedParent], { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] });
+    const parentInspection = inspectHandoffPackageV1(parentBundle);
+    if (parentInspection.status === 'valid') predecessorWorkspaceSnapshots = (parentInspection.workspaces || []).map((item) => ({ id: String(item.workspaceId || ''), sha256: String(item.archiveSha256 || '') })).filter((item) => item.id);
     inheritedCarrierProfile = parentHandoffCarrierProfileFromBundle(parentBundle);
     const parentLineage = parentHandoffCarrierLineageFromBundle(parentBundle, { packageSha256: '', packageFilename: path.basename(resolvedParent) });
     if (explicitMajor) {
@@ -359,6 +362,7 @@ async function prepareWorkspaceCarrierCliCommand(flags = {}, workspaceRoot = '.'
   const input = await prepareNodeWorkspaceCarrierManufacturingInput({
     workspaceRoot,
     additionalWorkspaces,
+    predecessorWorkspaceSnapshots,
     workspaceId: flags['workspace-id'] || '',
     workspaceTitle: flags['workspace-title'] || flags.title || '',
     workspaceTargetPath: flags['workspace-target'] || flags['workspace-artifact'] || '',
@@ -419,6 +423,14 @@ export function summarizeHandoffManufactureCliOutput(result = {}, writeReceipt =
   });
   const bootstrapInspection = result.toolingBootstrapInspection || {};
   const projection = result.carrierProjection || {};
+  const predecessorSnapshots = result.manufacturingEvidence?.predecessorWorkspaceSnapshots || [];
+  const emittedSnapshots = result.inspection?.workspaces || [];
+  const emittedById = new Map(emittedSnapshots.map((item) => [String(item.workspaceId || ''), String(item.archiveSha256 || '')]));
+  const predecessorIds = predecessorSnapshots.map((item) => String(item.id || '')).filter(Boolean);
+  const missingPredecessorIds = predecessorIds.filter((id) => !emittedById.has(id));
+  const identicalPredecessorIds = predecessorSnapshots.filter((item) => item.sha256 && emittedById.get(item.id) === item.sha256).map((item) => item.id);
+  const changedPredecessorIds = predecessorSnapshots.filter((item) => emittedById.has(item.id) && item.sha256 !== emittedById.get(item.id)).map((item) => item.id);
+  const newWorkspaceIds = [...emittedById.keys()].filter((id) => !predecessorIds.includes(id));
   const routeSummary = Object.freeze((projection.routes || []).map((route) => Object.freeze({
     id: String(route.id || ''),
     state: String(route.state || ''),
@@ -463,6 +475,23 @@ export function summarizeHandoffManufactureCliOutput(result = {}, writeReceipt =
         })))
       }))),
       workspaces: Object.freeze((result.plan?.workspaceMaterializations || []).map(summarizeWorkspace))
+    }),
+    receiverMaterialReview: Object.freeze({
+      status: 'needs-source-dependency-assessment',
+      carriedWorkspaceIds: Object.freeze((result.plan?.workspaceMaterializations || []).map((item) => String(item.id || '')).filter(Boolean)),
+      predecessorCoverage: Object.freeze({
+        state: predecessorIds.length ? (missingPredecessorIds.length ? 'missing-previous-workspace-ids-needs-relevance-decision' : 'all-previous-workspace-ids-present') : 'no-qualified-predecessor-snapshot-evidence',
+        predecessorWorkspaceIds: Object.freeze(predecessorIds),
+        missingPredecessorWorkspaceIds: Object.freeze(missingPredecessorIds),
+        unchangedPredecessorWorkspaceIds: Object.freeze(identicalPredecessorIds),
+        revisedPredecessorWorkspaceIds: Object.freeze(changedPredecessorIds),
+        newWorkspaceIds: Object.freeze(newWorkspaceIds),
+        boundary: 'This is a mechanical comparison of complete qualified Workspace snapshots by ID and archive SHA against the explicit carrier parent. Missing does not prove relevance; matching an ID does not prove semantic sufficiency, and an independent --new-root has no predecessor relation to compare. Review relevance before excluding a received Workspace.'
+      }),
+      trigger: 'before-declaring-a-checkpoint-content-complete-or-delivering-for-independent-continuation',
+      check: 'From the position of a fresh recipient with only this ZIP, list the exact source Workspace snapshots and ordinary files needed to reproduce or verify the newly recorded work. Compare each dependency with the snapshots actually carried; include missing qualified source Workspaces explicitly or disclose the missing dependency before claiming complete continuity.',
+      manufactureOptions: 'For a pointerless Workspace carrier, use explicit additional Workspace roots/targets (for example --workspace-roots with exact qualified snapshots); --package-parent establishes intended carrier lineage, not automatic source inclusion. Keep original snapshots immutable.',
+      boundary: 'Preflight, package inspection and roundtrip establish the packaged representation, not completeness against undeclared external dependencies. Do not infer missing dependencies or copy all parent Workspaces indiscriminately; user-approved scope, confidentiality, ownership and actual work relevance govern inclusion.'
     }),
     carrierProjection: Object.freeze({
       status: String(projection.status || 'unknown'),

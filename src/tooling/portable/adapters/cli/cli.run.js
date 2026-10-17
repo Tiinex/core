@@ -12,6 +12,7 @@ import { runCommonAuthorCli } from './cli.common-author.js';
 import { runPrepareReturnCli } from './cli.prepare-return.js';
 import { runQualifyReturnCli } from './cli.qualify-return.js';
 import { runCommonWorkspaceInitCli } from './cli.workspace-init.js';
+import { runDeliverableContinuityReviewCli } from './cli.deliverable-review.js';
 import { projectCommonCliDefaultOutput } from './cli.common-output.js';
 import { runSchemasCli } from './cli.schemas.js';
 import { runVersionCli, formatVersionHuman } from './cli.version.js';
@@ -247,6 +248,11 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
       const result = await runPrepareReturnCli(parsed, runtime);
       writeJson(io, result, parsed.flags.compact !== true);
       return 0;
+    }
+    if (parsed.command === 'review-deliverable') {
+      const result = await runDeliverableContinuityReviewCli(parsed);
+      writeJson(io, result, parsed.flags.compact !== true);
+      return result.status === 'blocked' ? 2 : 0;
     }
     if (parsed.command === 'init-workspace') {
       const result = await runCommonWorkspaceInitCli(parsed, runtime);

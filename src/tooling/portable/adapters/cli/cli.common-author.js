@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArtifactMarkdown } from '../../../../artifacts/artifact.parse.js';
 import { buildArtifactCreationContract } from '../../../../schemas/creation.contracts.js';
+import { schemaReferenceAuthorityForRegisteredSchema } from '../../../../schemas/creation.schemaReferences.js';
 import { renderArtifactCreationDraftMarkdown } from '../../../../schemas/creation.renderer.js';
 import { canonicalC14nV2SelfState } from '../../../../integrity/integrity.c14nV2.js';
 import { sha256Hex, utf8Bytes } from '../../../../export/package.bytes.js';
@@ -17,6 +18,7 @@ import { historicalDeclaredSchemaReferenceAuthority, isQualifiedIdentifierOnlyHi
 import { validatePreparedReturnBodyAuthority } from './cli.prepare-return.js';
 import { qualifyLocalCreationReferences } from './cli.local-creation-references.js';
 import { qualifyReductionSourceContext } from '../../reduction/reduction.sourceContext.js';
+import { projectPortableAuthoringParent } from '../../editor/authoring.parent.js';
 
 const STATE_RELATIVE_PATH = '.tiinex/continuation.json';
 
@@ -61,10 +63,45 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   const parentPath = parentReference ? (parentSource ? path.resolve(parentSource) : safeWorkspaceTarget(workspaceRoot, parentReference)) : '';
   const artifactRelativePath = requestedArtifactRelativePath || await allocateArtifactRelativePath({ workspaceRoot, targetDirectory, parentRelativePath: parentReference, schemaId, title });
   const artifactPath = safeWorkspaceTarget(workspaceRoot, artifactRelativePath);
-  const parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentReference, { workspaceRoot, childRelativePath: artifactRelativePath, runtime, publishedReference: parentPublishedReference }) : {};
+  let parentRecord = parentPath ? await parentRecordFromArtifact(parentPath, parentReference, { workspaceRoot, childRelativePath: artifactRelativePath, runtime, publishedReference: parentPublishedReference }) : {};
+  // An exact historical Parent schema may be equivalent to the registered
+  // contract while retaining a different immutable commit locator. Accept
+  // only an already-qualified historical repository-read proof; never promote
+  // an old schema ID, locator or unverified caller assertion to authority.
+  const historicalProofPath = String(flags['historical-parent-proof'] || '').trim();
+  let historicalParentQualification = null;
+  if (historicalProofPath) {
+    if (!parentPath) throw new Error('portable.cli.author.historical-parent-proof.parent-required');
+    const historicalSchemaSource = JSON.parse(await readFile(path.resolve(historicalProofPath), 'utf8'));
+    const projection = projectPortableAuthoringParent({
+      records: [{ path: parentReference, markdown: parentRecord.markdown }],
+      reference: parentReference,
+      ...(parentPublishedReference ? { publishedReference: parentPublishedReference } : {}),
+      historicalSchemaSource
+    });
+    if (projection.status !== 'ready' || !projection.parentRecord) {
+      const reason = projection.historicalSourceRecovery?.status || projection.findings?.[0]?.code || 'unqualified';
+      throw new Error(`portable.cli.author.historical-parent-proof.unqualified:${reason}`);
+    }
+    parentRecord = projection.parentRecord;
+    historicalParentQualification = projection;
+  }
   const transitionType = String(flags.transition || defaultTransition(schemaId, Boolean(parentPath))).trim();
   const contract = buildArtifactCreationContract({ schemaId, transitionType });
   assertAuthorCreationContractReady(contract, runtime, schemaId);
+  // A declared immutable historical Parent schema target is not made current
+  // merely because the child schema qualifies. Compare against the Parent's
+  // own exact registered schema authority, not the unrelated child's schema.
+  // Identifier-only historical Parents retain their separate bounded rules.
+  const parentSchemaId = String(parentRecord.schemaId || parentRecord.currentSchemaId || '');
+  const historicalParentTarget = String(parentRecord.schemaReferenceAuthority?.preferredTarget || '');
+  if (historicalParentTarget && historicalParentTarget.endsWith(`/${parentSchemaId}.schema.md`) && !historicalParentQualification && !sameExactSchemaReferenceAuthority(
+    parentRecord.schemaReferenceAuthority,
+    schemaReferenceAuthorityForRegisteredSchema(parentSchemaId),
+    parentSchemaId
+  )) {
+    throw new Error(`portable.cli.author.parent.schema-revision-unqualified:${parentSchemaId}: A declared immutable Parent Current Schema target does not match the qualified current registered Parent schema authority. Verify exact historical schema bytes through the designated read-only historical-schema workflow; do not infer equivalence from the schema ID or child contract.`);
+  }
   const summary = String(flags.summary || title).trim();
   const authors = String(flags.authors || state?.roleLabel || '').trim();
   const why = Object.prototype.hasOwnProperty.call(flags, 'why') ? String(flags.why || '').trim() : '';
@@ -103,8 +140,11 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
       { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] }
     );
     const candidateAudit = await runPortableOperation('audit', auditMaterial, {});
-    const parentAudit = parentPath
-      ? await runHistoricalParentAudit(parentPath, parentRecord, contract, flags)
+    // The historical-proof projection has already audited this exact Parent
+    // against its independently qualified byte-equivalent schema. A second
+    // audit against the current commit locator would wrongly undo that proof.
+    const parentAudit = parentPath && !historicalParentQualification
+      ? await runHistoricalParentAudit(parentPath, parentRecord, flags)
       : null;
     const audit = mergeAuthorAuditResults(candidateAudit, parentAudit);
     const stageMaterial = await loadNodePortableInput(
@@ -172,14 +212,14 @@ export async function runCommonAuthorCli(parsed = {}, runtime = {}) {
   }
 }
 
-async function runHistoricalParentAudit(parentPath, parentRecord = {}, contract = {}, flags = {}) {
+async function runHistoricalParentAudit(parentPath, parentRecord = {}, flags = {}) {
   const material = await loadNodePortableInput(
     [parentPath],
     { maxFiles: flags['max-files'], maxTextBytes: flags['max-text-bytes'] }
   );
   const exactCurrentMatch = sameExactSchemaReferenceAuthority(
     parentRecord.schemaReferenceAuthority || null,
-    contract?.schemaReferences?.current || null,
+    schemaReferenceAuthorityForRegisteredSchema(parentRecord.schemaId || parentRecord.currentSchemaId || ''),
     parentRecord.schemaId || parentRecord.currentSchemaId || ''
   );
   return runPortableOperation('audit', material, {

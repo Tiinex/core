@@ -89,11 +89,15 @@ test('direct Package V1 bootstrap-only carrier stays material- and route-free wi
   assert.doesNotMatch(human.normalInlineRouting.content, /Continue from:/i);
   const start = result.bundle.files.find((file) => file.path === '001-1-READ-BEFORE-PROCEEDING.trace.md');
   const startText = new TextDecoder().decode(packageFileBytes(start));
-  assert.match(startText, /If the operator selected no session Entry/);
-  assert.match(startText, /starting a new goal or already has meaningful work in progress/);
-  assert.match(startText, /qualified Getting Started guidance where available/);
-  assert.match(startText, /earlier conversation does not become qualified lineage retroactively/);
-  assert.doesNotMatch(human.normalInlineRouting.content, /If the operator selected no session Entry/);
+  assert.match(startText, /When no Session Entry was explicitly selected/);
+  assert.match(startText, /actual current user goal, carrier context and qualified Entry purposes/);
+  assert.match(startText, /Discover candidates through Tooling/);
+  assert.match(startText, /read-content/);
+  assert.match(startText, /An assistant-selected method is a transparent session-level working choice/);
+  assert.match(startText, /prefer Getting Started when qualified and applicable/);
+  assert.match(startText, /If no such owner exists, normally initialize an isolated, reversible scratch Workspace/);
+  assert.match(startText, /Previous chat content is not qualified lineage retroactively/);
+  assert.doesNotMatch(human.normalInlineRouting.content, /When no Session Entry was explicitly selected/);
 });
 
 function seal(text){const r=sealC14nV2Self(text);assert.equal(r.state,'sealed');return `${r.markdown}\n`;}

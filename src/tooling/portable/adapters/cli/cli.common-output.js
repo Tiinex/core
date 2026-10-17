@@ -71,8 +71,10 @@ function projectOrientDefault(result = {}, parsed = {}, runtime = {}) {
     ? projectPortableCliOperation(runtime, 'ground', [packageArg, '--route', selected.pointerPath])
     : null;
   const pointerlessCapabilities = result.status === 'ready' && routes.length === 0 && workspaces.length > 0
-    ? projectPointerlessWorkspaceCarrierCapabilities({ runtime, packageArg, carrierLineage: result.carrierLineage || projection.carrierLineage || null })
+    ? projectPointerlessWorkspaceCarrierCapabilities({ runtime, packageArg, carrierLineage: result.carrierLineage || projection.carrierLineage || null, workspaces })
     : null;
+  const readyRouteLess = result.status === 'ready' && routes.length === 0 && !result.selection && !projection.selection;
+  const sessionScratch = readyRouteLess ? projectLocalSessionScratchStart(runtime, workspaces) : null;
   return Object.freeze({
     schema: result.schema,
     operation: result.operation || 'orient-handoff-package',
@@ -85,6 +87,7 @@ function projectOrientDefault(result = {}, parsed = {}, runtime = {}) {
     authority: projection.authority ? Object.freeze({ ...projection.authority }) : null,
     carrierLineage: compactCarrierLineage(result.carrierLineage),
     capabilities: pointerlessCapabilities,
+    sessionScratch,
     nextAction: routedGround ? Object.freeze({
       ...routedGround,
       package: packageArg,
@@ -93,7 +96,12 @@ function projectOrientDefault(result = {}, parsed = {}, runtime = {}) {
       kind: 'select-workspace-carrier-capability',
       options: Object.freeze(['continue-explicit-carrier-parent', 'start-explicit-new-root', 'project-workspace-landing']),
       capabilityProjection: 'capabilities',
-      boundary: 'Pointerless Workspace carriage creates no recipient/work authority. Select an operational capability explicitly; do not infer carrier parent from source material or package arrival.'
+      sessionScratch: 'sessionScratch',
+      workingSetDecision: 'capabilities.workingSetDecision',
+      boundary: 'Pointerless Workspace carriage creates no recipient/work authority. Qualified workspaces retain their own ownership and source bindings; an independent local scratch does not write to them.'
+    }) : sessionScratch ? Object.freeze({
+      ...sessionScratch,
+      kind: 'prepare-local-session-scratch'
     }) : null,
     findingSummary: result.findingSummary || null,
     actionableFindings: Object.freeze(actionableFindings.slice(0, 20)),
@@ -103,7 +111,46 @@ function projectOrientDefault(result = {}, parsed = {}, runtime = {}) {
   });
 }
 
-function projectPointerlessWorkspaceCarrierCapabilities({ runtime = {}, packageArg = '', carrierLineage = null } = {}) {
+function projectLocalSessionScratchStart(runtime = {}, carriedWorkspaces = []) {
+  const projected = projectPortableCliOperation(runtime, 'init-workspace', [
+    '<new-local-scratch-dir>', '--workspace-id', '<unique-session-local-id>',
+    '--title', '<session-working-title>', '--authors', '<authors>'
+  ]);
+  return Object.freeze({
+    ...projected,
+    kind: 'optional-local-session-workspace-preparation',
+    operation: 'init-workspace',
+    trigger: 'after-successful-route-less-orientation',
+    recommendation: carriedWorkspaces.length
+      ? 'Qualified Workspaces were carried. Inspect their exact material and determine whether the next substantive work belongs to an existing Workspace before treating a disposable session scratch as a new durable work identity. Scratch may be initialized for separate assistant working memory, but it does not replace or narrow carried context.'
+      : 'When local writing is allowed, initialize an independent disposable local working Workspace now, before waiting for a formal project or a continuity keyword. Use it for later meaningful qualified records, not placeholder Topics.',
+    carriedWorkspaceContinuity: Object.freeze({
+      workspaceIds: Object.freeze(carriedWorkspaces.map((item) => String(item.id || '')).filter(Boolean)),
+      preferred: carriedWorkspaces.length ? 'reconcile-qualified-carried-workspaces-before-choosing-new-durable-workspace' : 'prepare-disposable-local-scratch',
+      boundary: 'Local scratch is a temporary working facility, not a mandatory extra permanent Workspace. Never silently overwrite a carried source or infer ownership from carriage.'
+    }),
+    firstWorkDecision: Object.freeze({
+      trigger: 'on-a-later-user-turn-with-bounded-reusable-working-content-or-at-natural-stop',
+      positive: 'Before finalizing that turn, identify a truthful bounded provisional result or working direction. If locally writable and qualified, check the applicable schema and Parent, run author --preflight and author in the session Workspace, then manufacture, verify and make the first pointerless carrier available after the first qualified record. Do not require an accepted Project or a request to save.',
+      negative: 'For greetings, a single vague suggestion, explicit no-write, missing qualified schema/Parent, or non-documentable content, do not author a placeholder; defer, or state the exact blocker, and revisit when material circumstances change.',
+      fidelity: 'Separate what the user expressed from assistant suggestions, possible plans, and accepted decisions. Initial content need not be a settled project.',
+      boundary: 'Future-turn decision aid only. This field does not watch later messages, perform authoring, establish authority, or establish a delivered carrier.'
+    }),
+    deliverableBoundaryReview: Object.freeze({
+      trigger: 'once-a-new-reusable-local-file-is-produced-and-verified-but-before-the-final-delivery-link',
+      command: 'review-deliverable --artifact <actual-output-file> --workspace <prepared-local-scratch-dir>',
+      purpose: 'Obtain observed file existence, hash, and whether it resides in the qualified local working root; then decide whether to qualify and deliver a carrier or defer with a concrete reason.',
+      limitation: 'Read-only opt-in check, not a host hook, monitoring guarantee, qualified Topic validation, or proof that all material followed the carrier. Its use in ordinary ChatGPT Web is experimental.'
+    }),
+    firstCheckpoint: carriedWorkspaces.length
+      ? 'Before manufacture, decide whether this is a continuation of the received carrier or an actually independent new root. For continuation use --package-parent <received-carrier.zip> and retain complete qualified Workspace snapshots needed for the next session; a new scratch alone is not equivalent to the received working set. Use --new-root only for a justified independent line. Inspect the final carrier in isolation before delivery.'
+      : 'After the first meaningful qualified work state, manufacture and verify a pointerless Workspace carrier with handoff --carrier-mode workspace --new-root, then deliver the exact carrier to the person while the session is still available. Continue later checkpoints with --package-parent <prior-carrier.zip>. If additional qualified sources are required for recovery, include their exact closure; scratch alone may be insufficient.',
+    exceptions: Object.freeze(['explicit-read-only-or-no-file-request', 'host-local-writes-unavailable', 'existing-selected-workspace-already-owns-the-work']),
+    boundary: 'This is an advisory operation projection, not evidence that initialization occurred, not an automatic filesystem mutation, and not authority over a Project, Task, Role, remote source or existing carried Workspace.'
+  });
+}
+
+function projectPointerlessWorkspaceCarrierCapabilities({ runtime = {}, packageArg = '', carrierLineage = null, workspaces = [] } = {}) {
   const continueCarrier = projectPortableCliOperation(runtime, 'handoff', [
     '<workspace-dir>', '--carrier-mode', 'workspace', '--package-parent', '<intended-predecessor-carrier.zip>', '--output-dir', '<output-dir>'
   ]);
@@ -117,6 +164,15 @@ function projectPointerlessWorkspaceCarrierCapabilities({ runtime = {}, packageA
     state: 'pointerless-workspace-carrier-ready',
     carrierLineage: compactCarrierLineage(carrierLineage),
     materialSourceIndependentFromCarrierParent: true,
+    workingSetDecision: Object.freeze({
+      kind: 'reconcile-carried-workspaces-before-creating-durable-workspace',
+      receivedWorkspaceIds: Object.freeze(workspaces.map((item) => String(item.id || '')).filter(Boolean)),
+      sameWork: 'Prefer a local writable continuation of the same qualified Workspace identity and complete working material when the person is continuing that work. Preserve original source bytes unchanged; local work does not imply external mutation or authority.',
+      distinctWork: 'Create a separate Workspace only for a justified distinct purpose, ownership or scope. If it analyzes or depends on a received Workspace, carry that qualified source snapshot alongside the new Workspace, without falsely merging authority.',
+      scratch: 'Disposable session scratch is an optional implementation detail, not an automatically persistent extra Workspace or a reason to discard received Workspaces.',
+      package: 'For intended continuation use --package-parent and include complete qualified necessary Workspace snapshots. Never silently replace them with a partial export or only a summary; justify and disclose any intentional bounded or omitted material.',
+      interpretation: 'Do not assume every carried Workspace is relevant, that possession gives modification rights, or that a carrier parent automatically imports source snapshots.'
+    }),
     carrierContinuityDecision: Object.freeze({
       state: 'explicit-choice-required-for-workspace-manufacture',
       continueParent: Object.freeze({
@@ -593,6 +649,7 @@ function projectHandoffDefault(result = {}, parsed = {}) {
       normalEmission: compactHandoffNormalEmission(human.normalEmissionBoundary),
       delivery
     }),
+    receiverMaterialReview: result.receiverMaterialReview ? Object.freeze({ ...result.receiverMaterialReview }) : null,
     roundtripSummary: result.roundtripSummary ? Object.freeze({ ...result.roundtripSummary }) : null,
     toolingBootstrapInspection: result.toolingBootstrapInspection ? Object.freeze({
       status: String(result.toolingBootstrapInspection.status || ''),

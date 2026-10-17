@@ -12,6 +12,7 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
   const workspaceRoot = path.resolve(String(input.workspaceRoot || input.workspace || '.'));
   const workspaceId = safeWorkspaceToken(input.workspaceId || path.basename(workspaceRoot) || 'workspace');
   const requestedWorkspaceTitle = String(input.workspaceTitle || input.title || '').trim();
+  const predecessorWorkspaceSnapshots = Object.freeze((input.predecessorWorkspaceSnapshots || []).map((item) => Object.freeze({ id: String(item.id || ''), sha256: String(item.sha256 || '') })).filter((item) => item.id));
   const additionalWorkspaceDescriptors = normalizeAdditionalWorkspaceDescriptors(input.additionalWorkspaces || input.workspaceRoots || input.workspaceDescriptors || []);
   const seen = new Set([workspaceId]);
   const descriptors = [{ id: workspaceId, root: workspaceRoot, title: requestedWorkspaceTitle, primary: true }, ...additionalWorkspaceDescriptors.map((descriptor) => {
@@ -88,7 +89,7 @@ export async function prepareNodeWorkspaceCarrierManufacturingInput(input = {}, 
     carrierAllocation: input.carrierAllocation ? Object.freeze({ ...input.carrierAllocation }) : null,
     carrierProfile: normalizeHandoffCarrierProfile(input.carrierProfile || null),
     toolingBootstrap: toolingBootstrap.summary,
-    manufacturingEvidence: Object.freeze({ workspaceEnumerations: Object.freeze(enumerations.map((item) => Object.freeze({ id: item.materialization.id, root: item.root, evidence: item.evidence }))), toolingBootstrap: toolingBootstrap.summary, runtimeSourceAlignment }),
+    manufacturingEvidence: Object.freeze({ predecessorWorkspaceSnapshots, workspaceEnumerations: Object.freeze(enumerations.map((item) => Object.freeze({ id: item.materialization.id, root: item.root, evidence: item.evidence }))), toolingBootstrap: toolingBootstrap.summary, runtimeSourceAlignment }),
     verifyRoundtrip: input.verifyRoundtrip !== false
   });
 }
