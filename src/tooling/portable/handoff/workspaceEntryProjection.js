@@ -1,5 +1,6 @@
 import { inspectHandoffPackageV1 } from './handoffPackageV1.inspect.js';
 import { parseArtifactMarkdown } from '../../../artifacts/artifact.parse.js';
+import { parseRoleMaterial } from './coldStartQualification.materials.js';
 import { projectPortableEntryCatalog } from '../entry/entry.catalog.js';
 import { projectHandoffHumanOutput, projectBootstrapCarrierHumanOutput, projectWorkspaceCarrierHumanOutput, projectIndependentEntryCarrierOutput } from './carrierProjection.js';
 
@@ -109,8 +110,15 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   const bundle = input.bundle || input.package || null;
   const resolvedPrimaryRole = primaryRole ? resolveSessionRoleReference(primaryRole, inspection, bundle) : null;
   if (primaryRole && !resolvedPrimaryRole) return blocked('session-role-material-unresolved', inspection.findings || [], modes, targetOptions);
+  if (resolvedPrimaryRole?.assignmentState === 'unresolved') return blocked('session-role-assignment-mode-unresolved', inspection.findings || [], modes, targetOptions);
+  if (resolvedPrimaryRole?.assignmentState === 'not-authorized') return blocked('session-role-explicit-session-not-authorized', inspection.findings || [], modes, targetOptions);
   const resolvedParticipants = participants.map((participant) => resolveSessionRoleReference(participant, inspection, bundle));
   if (resolvedParticipants.some((item) => !item)) return blocked('participant-role-material-unresolved', inspection.findings || [], modes, targetOptions);
+  const operatorParticipants = participants.flatMap((participant, i) => participant.operatorParticipant ? [resolvedParticipants[i]] : []);
+  if (operatorParticipants.length > 1) return blocked('operator-participant-ambiguous', inspection.findings || [], modes, targetOptions);
+  const operatorParticipant = operatorParticipants[0] || null;
+  if (operatorParticipant?.assignmentState === 'unresolved') return blocked('operator-participant-assignment-mode-unresolved', inspection.findings || [], modes, targetOptions);
+  if (operatorParticipant?.assignmentState !== 'requires-receiver-qualification' && operatorParticipant && !operatorParticipant.assignmentModes.includes('explicit-participation')) return blocked('operator-participant-explicit-participation-not-authorized', inspection.findings || [], modes, targetOptions);
 
   const startPath = String(projection.startPath || '001-1-READ-BEFORE-PROCEEDING.trace.md');
   let routeId = '';
@@ -139,20 +147,27 @@ export function projectWorkspaceCarrierEntry(input = {}) {
   }
   const lines = [shell, ''];
   const augmentationStart = lines.length;
+  // Interpretation belongs to the qualified Start/Entry/Target material, not
+  // to a growing second rulebook in the operator's clipboard transport.
+  lines.push(customRequested ? 'Entry intent: Custom' : `Entry intent: ${definition.label}`);
+  lines.push('Guided Entry selections (interpret using Start: Guided Entry Selection Interpretation):');
   if (customRequested) {
-    lines.push('Entry intent: Custom', '', 'After bootstrap, treat the following operator instruction as session intent. Ground it against the available qualified Workspace material before acting.', '', 'Operator instruction:', customInstruction);
+    lines.push('- Operator instruction:');
+    lines.push(customInstruction);
   } else {
-    lines.push(`Entry intent: ${definition.label}`, '', ...entryGuidanceLines(definition));
+    lines.push(...entryGuidanceLines(definition).map(line => `- ${line}`));
   }
-  if (targetDefinition) lines.push('', `Target intent: ${targetDefinition.label}`, '', ...targetGuidanceLines(targetDefinition));
-  else lines.push('', 'Target intent: Generic / no target');
+  if (targetDefinition) {
+    lines.push(`- Target intent: ${targetDefinition.label}`);
+    lines.push(...targetGuidanceLines(targetDefinition).map(line => `- ${line}`));
+  } else lines.push('- Target intent: Generic / no target');
   if (resolvedPrimaryRole || resolvedParticipants.length) {
-    lines.push('', 'Session context (conversation context only; not package/transfer authority):');
-    if (resolvedPrimaryRole) lines.push(`Session Role: ${resolvedPrimaryRole.label} — material ${resolvedPrimaryRole.materialDescription}`);
-    for (const participant of resolvedParticipants) lines.push(`Participant: ${participant.label} — material ${participant.materialDescription}`);
-    lines.push('Session selections do not establish semantic holder/participant/recipient authority, acceptance, or work transfer.');
-    if (!customRequested && String(definition?.presentation?.['Preference Sources'] || '').trim()) {
-      lines.push('After bootstrap, qualify these exact Role materials and apply declared presentation/communication preferences as presentation only; do not treat them as semantic holder/participant/recipient authority.');
+    lines.push('- Roles (ordered):');
+    if (resolvedPrimaryRole) lines.push(`  1. Primary Session Role: ${resolvedPrimaryRole.label} — ${resolvedPrimaryRole.materialDescription}`);
+    for (let i = 0; i < resolvedParticipants.length; i++) {
+      const participant = resolvedParticipants[i];
+      const operator = participants[i].operatorParticipant === true;
+      lines.push(`  ${i + 1 + Number(Boolean(resolvedPrimaryRole))}. Participant ${i + 1}${operator ? ' (operator, explicit-participation requested)' : ' (context)'}: ${participant.label} — ${participant.materialDescription}`);
     }
   }
   return Object.freeze({
@@ -173,7 +188,7 @@ export function projectWorkspaceCarrierEntry(input = {}) {
     routeId,
     continueFrom,
     primaryRole: resolvedPrimaryRole ? { label: resolvedPrimaryRole.label, authoringLabel: resolvedPrimaryRole.authoringLabel, reference: resolvedPrimaryRole.reference } : null,
-    participants: Object.freeze(resolvedParticipants.map((item) => ({ label: item.label, reference: item.reference }))),
+    participants: Object.freeze(resolvedParticipants.map((item, i) => ({ label: item.label, reference: item.reference, operatorParticipant: participants[i].operatorParticipant === true }))),
     transportText: `${lines.join('\n')}\n`,
     entryAugmentationText: `${lines.slice(augmentationStart).join('\n')}\n`,
     boundary: independentEntry
@@ -279,7 +294,6 @@ function targetGuidanceLines(entry) {
   if (entry.sourceKind === 'carried') lines.push(`Target material: carried in this package at \`${entry.workspaceId}::${entry.artifactPath}\``);
   else if (entry.sourceKind === 'content-source') lines.push(`Target material: qualified reusable content source \`${entry.sourceId || ''}::${entry.artifactPath}\``);
   else lines.push(`Target material: qualified reusable Target Entry \`${entry.artifactPath}\``);
-  lines.push('After the purpose Entry is grounded, qualify and compose that exact Target material as environment adaptation. Do not infer Role/recipient authority, work transfer, Process applicability, or remote-mutation authority from Target selection.');
   return lines;
 }
 
@@ -296,7 +310,6 @@ function entryGuidanceLines(entry) {
   if (entry.sourceKind === 'carried') lines.push(`Entry material: carried in this package at \`${entry.workspaceId}::${entry.artifactPath}\``);
   else if (entry.sourceKind === 'content-source') lines.push(`Entry material: qualified reusable content source \`${entry.sourceId || ''}::${entry.artifactPath}\``);
   else lines.push(`Entry material: qualified reusable Entry \`${entry.artifactPath}\``);
-  lines.push('After bootstrap, qualify and apply that exact Entry material within the carrier/session authority boundaries. This transport text intentionally does not restate its procedure or declared grounding material.');
   return lines;
 }
 
@@ -339,14 +352,16 @@ function resolveSessionRoleReference(identity, inspection, bundle = null) {
   const workspaceId = String(identity?.workspaceId || '').trim();
   const artifactPath = normalizePath(identity?.path || identity?.artifactPath || '');
   const label = String(identity?.label || '').trim();
-  // Operator-facing Role Label is presentation only. The exact qualified Role
-  // artifact remains the binding; this label does not change session authority.
+  // The exact qualified Role artifact is the binding. A Role label alone
+  // neither grants holder authority nor replaces canonical Assignment Modes.
   const authoringLabel = String(identity?.authoringLabel || '').trim();
   if (!label || !workspaceId || !artifactPath) return null;
   const local = findCarriedRoleMaterial(inspection, bundle, workspaceId, artifactPath);
   if (local) {
     return Object.freeze({
       label,
+      assignmentState: local.assignmentState,
+      assignmentModes: local.assignmentModes,
       authoringLabel,
       reference: `${workspaceId}::${artifactPath}`,
       materialDescription: `carried in this package at \`${workspaceId}::${artifactPath}\``
@@ -357,6 +372,8 @@ function resolveSessionRoleReference(identity, inspection, bundle = null) {
   return Object.freeze({
     label,
     authoringLabel,
+    assignmentState: 'requires-receiver-qualification',
+    assignmentModes: [],
     reference: external,
     materialDescription: `available at ${markdownLink(label, external)}`
   });
@@ -370,7 +387,7 @@ function findCarriedRoleMaterial(inspection, bundle, workspaceId, artifactPath) 
       try {
         const markdown = new TextDecoder('utf-8', { fatal: true }).decode(entry.data || new Uint8Array());
         const parsed = parseArtifactMarkdown(markdown);
-        if (String(parsed?.envelope?.current?.schema?.id || '') === 'tiinex.party.role.v1') return entry;
+        if (String(parsed?.envelope?.current?.schema?.id || '') === 'tiinex.party.role.v1') return qualifiedSessionRoleEntry(entry, markdown);
       } catch { return null; }
     }
   }
@@ -380,11 +397,20 @@ function findCarriedRoleMaterial(inspection, bundle, workspaceId, artifactPath) 
       try {
         const markdown = new TextDecoder('utf-8', { fatal: true }).decode(file.data || new Uint8Array());
         const parsed = parseArtifactMarkdown(markdown);
-        if (String(parsed?.envelope?.current?.schema?.id || '') === 'tiinex.party.role.v1') return file;
+        if (String(parsed?.envelope?.current?.schema?.id || '') === 'tiinex.party.role.v1') return qualifiedSessionRoleEntry(file, markdown);
       } catch { return null; }
     }
   }
   return null;
+}
+
+function qualifiedSessionRoleEntry(entry, markdown) {
+  const role = parseRoleMaterial({ path: String(entry?.path || ''), markdown });
+  const qualification = role?.canonicalQualification || {};
+  const assignmentState = String(qualification.state || '') !== 'qualified'
+    ? 'unresolved'
+    : (qualification.assignmentModes || []).includes('explicit-session') ? 'authorized' : 'not-authorized';
+  return Object.freeze({ assignmentState, assignmentModes: Object.freeze(qualification.assignmentModes || []) });
 }
 
 function isQualifiedExternalRoleReference(value) {
@@ -415,7 +441,7 @@ function normalizeSessionIdentity(value = null) {
   const reference = String(value.reference || value.target || '').trim();
   const workspaceId = String(value.workspaceId || value.workspace || '').trim();
   const path = String(value.path || value.artifactPath || '').trim();
-  return label ? Object.freeze({ label, authoringLabel, reference, workspaceId, path }) : null;
+  return label ? Object.freeze({ label, authoringLabel, reference, workspaceId, path, operatorParticipant: value.operatorParticipant === true }) : null;
 }
 
 function normalizeParticipants(value = []) {

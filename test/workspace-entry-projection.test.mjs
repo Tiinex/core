@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { projectWorkspaceCarrierEntry } from '../src/tooling/portable/handoff/workspaceEntryProjection.js';
+import { renderHandoffPackageV1Start } from '../src/tooling/portable/handoff/handoffPackageV1.render.js';
 import { nativeEntryByName, nativeEntryContentSource } from './helpers/native-entry-fixtures.mjs';
 import { currentSchemaTarget } from './helpers/current-schema-targets.mjs';
 import { sealC14nV2Self } from '../src/integrity/integrity.c14nV2.js';
@@ -9,8 +10,8 @@ import { C14N_V2_VALIDATOR_TARGET } from '../src/integrity/integrity.methodRefer
 const ROOT_SCHEMA_TARGET = currentSchemaTarget('tiinex.root.v1');
 const ROLE_SCHEMA_TARGET = currentSchemaTarget('tiinex.party.role.v1');
 
-function roleFixture(label) {
-  const sealed = sealC14nV2Self(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE_SCHEMA_TARGET})\n  - Created At: 2026-10-01 00:00:00\n  - Authors: Fixture\n  - Summary: ${label} role.\n  - Status: active/local\n\n---\n\n# ${label} Role\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: fixture\n\n## Role Boundary\n\n- In Scope: fixture work\n- Out Of Scope: everything else\n\n## Authority And Responsibility Boundary\n\n- May Do: fixture work\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session\n- Assignment Modes: explicit-session\n\n## Interpretation Limits\n\n- Does Not Prove: durable holder identity\n- Must Not Be Treated As: broader authority\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
+function roleFixture(label, modes = 'explicit-session') {
+  const sealed = sealC14nV2Self(`# Continuity Context\n\n- Envelope Schema: [tiinex.root.v1](${ROOT_SCHEMA_TARGET})\n- Current\n  - Current Schema: [tiinex.party.role.v1](${ROLE_SCHEMA_TARGET})\n  - Created At: 2026-10-01 00:00:00\n  - Authors: Fixture\n  - Summary: ${label} role.\n  - Status: active/local\n\n---\n\n# ${label} Role\n\n## Role Identity\n\n- Role Label: ${label}\n- Role Kind: fixture\n\n## Role Boundary\n\n- In Scope: fixture work\n- Out Of Scope: everything else\n\n## Authority And Responsibility Boundary\n\n- May Do: fixture work\n- Does Not Authorize: external mutation\n\n## Holder Relationship\n\n- Holder State: assignable per explicit session\n- Assignment Modes: ${modes}\n\n## Interpretation Limits\n\n- Does Not Prove: durable holder identity\n- Must Not Be Treated As: broader authority\n\n# Continuity Integrity\n\n- [sha256-base64url-c14n-v2](${C14N_V2_VALIDATOR_TARGET})\n  - Towards: self\n  - Value: \n`);
   assert.equal(sealed.state, 'sealed');
   return `${sealed.markdown}\n`;
 }
@@ -124,7 +125,7 @@ test('Guided Entry catalog separates WHAT purpose Entries from WHERE Target Entr
   assert.match(rendered.transportText, /Entry intent: Explore/);
   assert.match(rendered.transportText, /Target intent: Example Web/);
   assert.match(rendered.transportText, /Qualified Target Entry: example\.entry\.target\.web\.v1/);
-  assert.match(rendered.transportText, /qualify and compose that exact Target material as environment adaptation/);
+  assert.match(rendered.transportText, /Target material: carried in this package at/);
   assert.doesNotMatch(rendered.transportText, /Provides: file upload; conversation branching/);
   assert.equal(rendered.targetDefinition.target.canonicalIdentifier, 'example.web');
   assert.deepEqual(rendered.targetDefinition.target.provides, ['file upload', 'conversation branching']);
@@ -147,7 +148,7 @@ test('Core renders Session Entry grounding obligations without VS Code semantics
   const rendered = projectWorkspaceCarrierEntry({ inspection, entryId: carried.id });
   assert.equal(rendered.status, 'ready');
   assert.match(rendered.transportText, /Qualified Entry: example\.grounded\.session\.v1/);
-  assert.match(rendered.transportText, /intentionally does not restate its procedure or declared grounding material/);
+  assert.match(rendered.transportText, /Guided Entry selections \(interpret using Start:/);
   assert.doesNotMatch(rendered.transportText, /Grounding material \(required before this Entry is fully grounded\)/);
   assert.equal(rendered.entryDefinition.schemaId, 'tiinex.entry.session.v1');
   assert.equal(rendered.entryDefinition.groundingMaterial.length, 1);
@@ -166,7 +167,7 @@ test('EXPLORE requires current cross-Workspace grounding before participant-faci
   assert.equal(result.status, 'ready');
   assert.match(result.transportText, /Entry intent: Explore/);
   assert.match(result.transportText, /Qualified Entry: tiinex\.core\.entry\.explore\.v1/);
-  assert.match(result.transportText, /intentionally does not restate its procedure/);
+  assert.match(result.transportText, /Guided Entry selections \(interpret using Start:/);
   assert.doesNotMatch(result.transportText, /do not stop at the Workspace containing the Role or at the first plausible active or ready artifact/);
   assert.match(result.entryDefinition.summary, /most current truthful multi-Workspace grounding reasonably available/);
   assert.match(result.entryDefinition.preparation['Discovery Breadth'], /do not stop at the Workspace containing the Role or at the first plausible active or ready artifact/);
@@ -199,14 +200,16 @@ test('Guided Entry renders canonical cold-start shell plus RESUME intent and ses
   });
   assert.equal(result.state, 'rendered');
   assert.match(result.transportText, /Cold start: read Start directly; do not enumerate or broadly extract this package/);
+  assert.doesNotMatch(result.transportText, /First-response verification gate:|If tooling is unavailable or verification fails/);
+  assert.match(result.transportText, /Guided Entry selections \(interpret using Start: Guided Entry Selection Interpretation\)/);
   assert.match(result.transportText, /Cold start: read Start directly/);
   assert.doesNotMatch(result.transportText, /Pointerless Workspace carrier:|Runtime reuse check/);
   assert.match(result.transportText, /Entry intent: Resume/);
   assert.match(result.transportText, /Session Role: Anchor/);
-  assert.match(result.transportText, /Session Role: Anchor — material carried in this package at `business::\.topics\/roles\/anchor\.trace\.md`/);
-  assert.match(result.transportText, /Participant: Sigma — material carried in this package at `business::\.topics\/roles\/sigma\.trace\.md`/);
-  assert.match(result.transportText, /Session selections do not establish semantic holder\/participant\/recipient authority, acceptance, or work transfer/);
-  assert.match(result.transportText, /qualify these exact Role materials and apply declared presentation\/communication preferences as presentation only/);
+  assert.match(result.transportText, /Primary Session Role: Anchor — carried in this package at `business::\.topics\/roles\/anchor\.trace\.md`/);
+  assert.match(result.transportText, /Participant 1 \(context\): Sigma — carried in this package at `business::\.topics\/roles\/sigma\.trace\.md`/);
+  assert.doesNotMatch(result.transportText, /operator selected this Primary Session Role|operate as the selected Role|permanent holder identity/);
+  assert.ok(result.transportText.length < 1100, `compact transport too long: ${result.transportText.length}`);
   assert.doesNotMatch(result.transportText, /TL;DR/i);
   assert.doesNotMatch(result.transportText, /No Handoff route, recipient, or work transfer is declared or implied/);
 });
@@ -261,7 +264,7 @@ test('Guided Entry deduplicates Roles by exact identity rather than human label 
   });
   assert.equal(result.status, 'ready');
   assert.match(result.transportText, /Session Role: Anchor/);
-  assert.match(result.transportText, /Participant: Anchor/);
+  assert.match(result.transportText, /Participant 1 \(context\): Anchor/);
 });
 
 test('routed carrier independent Guided Entry applies selected Anchor session Role without activating Sigma Handoff', () => {
@@ -280,4 +283,73 @@ test('routed carrier independent Guided Entry applies selected Anchor session Ro
   assert.match(entry.transportText,/Session Role: Anchor/);
   assert.doesNotMatch(entry.transportText,/001-3-1-1-1-handoff-pointer|001-3-1-2-handoff-pointer/);
   assert.equal(projectWorkspaceCarrierEntry({...data,route:'route:sigma'}).reasonCode,'independent-entry-route-conflict');
+});
+
+
+test('Guided Entry refuses a carried Role that forbids explicit-session even when selected as Primary', () => {
+  const path = '.topics/roles/anchor.trace.md';
+  const inspection = { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+    workspaces: [{ workspaceId: 'business', archive: { state: 'qualified', entries: [{ path, data: new TextEncoder().encode(roleFixture('Anchor', 'handoff')) }] } }], findings: [] };
+  const result = projectWorkspaceCarrierEntry({ inspection, mode: 'EXPLORE', contentSources: reusableEntrySources, primaryRole: { label: 'Anchor', workspaceId: 'business', path } });
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.reasonCode, 'session-role-explicit-session-not-authorized');
+});
+
+test('Guided Entry never mistakes participant context for Primary Role assignment', () => {
+  const path = '.topics/roles/sigma.trace.md';
+  const inspection = { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+    workspaces: [{ workspaceId: 'business', archive: { state: 'qualified', entries: [{ path, data: new TextEncoder().encode(roleFixture('Sigma')) }] } }], findings: [] };
+  const result = projectWorkspaceCarrierEntry({ inspection, mode: 'EXPLORE', contentSources: reusableEntrySources, participants: [{ label: 'Sigma', workspaceId: 'business', path }] });
+  assert.equal(result.status, 'ready');
+  assert.doesNotMatch(result.transportText, /Primary Session Role:/);
+  assert.doesNotMatch(result.transportText, /operate as the selected Role/);
+  assert.match(result.transportText, /Participant 1 \(context\): Sigma/);
+});
+
+test('Guided Entry qualifies explicit chat-operator Sigma participation without assuming it from one contextual participant', () => {
+  const path = '.topics/roles/sigma.trace.md';
+  const inspection = { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+    workspaces: [{ workspaceId: 'business', archive: { state: 'qualified', entries: [{ path, data: new TextEncoder().encode(roleFixture('Sigma', 'handoff, explicit-participation')) }] } }], findings: [] };
+  const identity = { label: 'Sigma', workspaceId: 'business', path };
+  const context = projectWorkspaceCarrierEntry({ inspection, mode: 'EXPLORE', contentSources: reusableEntrySources, participants: [identity] });
+  assert.equal(context.status, 'ready');
+  assert.doesNotMatch(context.transportText, /operator, explicit-participation requested/);
+  const qualified = projectWorkspaceCarrierEntry({ inspection, mode: 'EXPLORE', contentSources: reusableEntrySources, participants: [{ ...identity, operatorParticipant: true }] });
+  assert.equal(qualified.status, 'ready', qualified.reasonCode);
+  assert.match(qualified.transportText, /Participant 1 \(operator, explicit-participation requested\): Sigma/);
+  assert.doesNotMatch(qualified.transportText, /when `explicit-participation` is authorized|address them using the Role's declared communication preferences/);
+  assert.doesNotMatch(qualified.transportText, /Participant selections provide context and qualified presentation\/communication preferences only/);
+  assert.deepEqual(qualified.participants.map(p => p.operatorParticipant), [true]);
+});
+
+test('Guided Entry rejects nonauthorized, ambiguous, and unqualified operator participation', () => {
+  const p1 = '.topics/roles/sigma.trace.md';
+  const p2 = '.topics/roles/other.trace.md';
+  const inspection = { status: 'valid', carrierProjection: { status: 'ready', mode: 'workspace', routes: [], startPath: '001-1-READ-BEFORE-PROCEEDING.trace.md' },
+    workspaces: [{ workspaceId: 'business', archive: { state: 'qualified', entries: [
+      { path: p1, data: new TextEncoder().encode(roleFixture('Sigma', 'handoff')) },
+      { path: p2, data: new TextEncoder().encode(roleFixture('Other', 'explicit-participation')) }
+    ] } }], findings: [] };
+  const sigma = { label: 'Sigma', workspaceId: 'business', path: p1, operatorParticipant: true };
+  const other = { label: 'Other', workspaceId: 'business', path: p2, operatorParticipant: true };
+  const input = { inspection, mode: 'EXPLORE', contentSources: reusableEntrySources };
+  assert.equal(projectWorkspaceCarrierEntry({ ...input, participants: [sigma] }).reasonCode, 'operator-participant-explicit-participation-not-authorized');
+  assert.equal(projectWorkspaceCarrierEntry({ ...input, participants: [sigma, other] }).reasonCode, 'operator-participant-ambiguous');
+  const valid = projectWorkspaceCarrierEntry({ ...input, participants: [{ ...sigma, operatorParticipant: false }, other] });
+  assert.equal(valid.status, 'ready');
+  assert.match(valid.transportText, /Participant 1 \(context\): Sigma/);
+  assert.match(valid.transportText, /Participant 2 \(operator, explicit-participation requested\): Other/);
+});
+
+
+test('Start owns the qualified Guided Entry selection rules absent from the compact operator transport', () => {
+  const start = renderHandoffPackageV1Start({
+    carrierMode: 'workspace', createdAt: '2026-10-19 00:00:00',
+    bootstrapArtifactPath: '001-2-bootstrap.trace.md', bootstrapArchivePath: '001-2-bootstrap.zip'
+  });
+  assert.match(start, /## Guided Entry Selection Interpretation/);
+  assert.match(start, /Primary Session Role.*explicit-session/);
+  assert.match(start, /Participant N.*explicit-participation/);
+  assert.match(start, /report the concrete unverified step/);
+  assert.match(start, /cannot manufacture holder permanence, Handoff routing or transfer/);
 });

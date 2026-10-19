@@ -36,6 +36,7 @@ test('pointerless Workspace has Start but never a fabricated recipient or Contin
  const result=projectPortableTransportCompletion({inspection:pointerless});
  assert.equal(result.status,'ready');assert.equal(result.carrier.routeId,'');
  assert.match(result.clipboardText,/Cold start: read Start directly/);
+ assert.doesNotMatch(result.clipboardText,/First-response verification gate:/); // Generic transport must stay canonical and unselected.
  assert.doesNotMatch(result.clipboardText,/pointerless Workspace carrier|No Handoff Continue From route/);
  assert.doesNotMatch(result.clipboardText,/Continue from/);
  assert.match(result.markdown,/Send to:.*receiving conversation you choose/);
