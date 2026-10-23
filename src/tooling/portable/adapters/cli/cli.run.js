@@ -67,7 +67,18 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
   }
   if (parsed.command === 'discover-carrier-frontier') {
     try {
-      const result = await discoverCarrierFrontier({ carrier: parsed.positionals[0] || parsed.flags.carrier, scope: parsed.flags.scope, limit: parsed.flags.limit, focus: parsed.flags.focus, compareCarrier: parsed.flags['compare-carrier'], full: parsed.flags.full === true });
+      const allowedFlags = new Set(['carrier','scope','limit','focus','compare-carrier','full','compact','cursor']);
+      const unexpected = Object.keys(parsed.flags).filter((key) => !allowedFlags.has(key));
+      if (unexpected.length || parsed.positionals.length > 1 ||
+          ['full','compact'].some((key) => parsed.flags[key] !== undefined && parsed.flags[key] !== true) ||
+          ['carrier','scope','limit','focus','compare-carrier','cursor'].some((key) => parsed.flags[key] === true)) {
+        const result = { schema: 'tiinex.portable.carrier-frontier-discovery.v1', status: 'blocked',
+          reason: 'cli-arguments-invalid', unexpectedFlags: unexpected,
+          detail: 'Unknown flags, extra positionals, missing flag values and invalid boolean flag values are rejected.' };
+        writeJson(io, result, parsed.flags.compact !== true);
+        return 2;
+      }
+      const result = await discoverCarrierFrontier({ carrier: parsed.positionals[0] || parsed.flags.carrier, scope: parsed.flags.scope, limit: parsed.flags.limit, focus: parsed.flags.focus, compareCarrier: parsed.flags['compare-carrier'], cursor: parsed.flags.cursor, full: parsed.flags.full === true });
       writeJson(io, result, parsed.flags.compact !== true);
       return result.status === 'blocked' ? 2 : 0;
     } catch (error) {

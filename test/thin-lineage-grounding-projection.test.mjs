@@ -712,6 +712,8 @@ test('pointerless Workspace orientation projects executable carrier capabilities
   assert.equal(output.exploreDiscovery.kind, 'qualified-cross-workspace-discovery');
   assert.match(output.exploreDiscovery.cli, /discover-carrier-frontier \/incoming\/tiinex-full-001\.handoff-package\.zip/);
   assert.equal(output.nextAction.exploreDiscovery, 'exploreDiscovery');
+  assert.equal(output.groundingBaseline.kind, 'shared-qualified-workspace-baseline');
+  assert.equal(output.nextAction.groundingBaseline, 'groundingBaseline');
   const complete = projectCommonCliDefaultOutput({
     schema: 'result', operation: 'orient-handoff-package', status: 'ready',
     workspaces: [{ id: 'core', qualification: 'qualified' }], routes: [],
@@ -719,6 +721,7 @@ test('pointerless Workspace orientation projects executable carrier capabilities
   }, { command: 'orient-handoff-package', positionals: ['/incoming/tiinex-full-001.handoff-package.zip'], flags: { full: true } }, runtime);
   assert.equal(complete.rootArtifact.exact, 'preserved-full-receipt');
   assert.equal(complete.exploreDiscovery.kind, 'qualified-cross-workspace-discovery');
+  assert.equal(complete.groundingBaseline.kind, 'shared-qualified-workspace-baseline');
   assert.match(complete.exploreDiscovery.cli, /discover-carrier-frontier/);
   assert.equal(output.capabilities.materialSourceIndependentFromCarrierParent, true);
   assert.equal(output.capabilities.carrierContinuityDecision.state, 'explicit-choice-required-for-workspace-manufacture');

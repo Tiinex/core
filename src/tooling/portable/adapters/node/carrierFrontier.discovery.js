@@ -19,6 +19,7 @@ export async function discoverCarrierFrontier(input = {}) {
   const requestedLimit = input.limit === undefined || input.limit === '' ? 15 : Number(input.limit);
   if (input.full !== true && (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100)) return blocked('limit-invalid', 'Expected --limit integer from 1 to 100.');
   const limit = input.full === true ? Number.MAX_SAFE_INTEGER : requestedLimit;
+  if (input.full === true && input.cursor) return blocked('cursor-with-full-invalid', 'Choose either --full or a cursor-paginated view.');
   const focus = String(input.focus || '').trim();
   const compareCarrier = String(input.compareCarrier || '').trim();
   let material;
@@ -63,10 +64,25 @@ export async function discoverCarrierFrontier(input = {}) {
         topology: node.topology.role,
         currentness: node.currentness.state,
         lifecycle: node.lifecycle.state,
-        classification: 'topological-leaf-only'
+        classification: 'topological-leaf-only',
+        artifactKind: artifactKind(node.schemaId),
+        focusArg: node.path
       };
     })
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.workspaceId.localeCompare(right.workspaceId) || left.path.localeCompare(right.path));
+  // A cursor is scoped to this exact ordered candidate projection, not merely a
+  // filename or wall-clock time. A changed snapshot invalidates old cursors.
+  const fingerprint = createHash('sha256').update(JSON.stringify({scope, candidates})).digest('hex');
+  const requestedCursor = String(input.cursor || '').trim();
+  const cursorState = requestedCursor ? decodeFrontierCursor(requestedCursor) : { offset: 0, fingerprint, scope };
+  if (!cursorState || cursorState.scope !== scope || cursorState.fingerprint !== fingerprint
+      || !Number.isSafeInteger(cursorState.offset) || cursorState.offset < 0 || (requestedCursor && cursorState.offset >= candidates.length)) {
+    return blocked('cursor-invalid-or-stale', 'Cursor must come from this same qualified carrier and scope; restart at the first page after a change.');
+  }
+  const offset = cursorState.offset;
+  const page = candidates.slice(offset, offset + limit);
+  const nextOffset = offset + page.length;
+  const nextCursor = nextOffset < candidates.length ? encodeFrontierCursor({ offset: nextOffset, scope, fingerprint }) : null;
   const latestCandidateByWorkspace = workspaceCounts.map((workspace) => {
     const latest = candidates.find((candidate) => candidate.workspaceId === workspace.id);
     return {
@@ -115,10 +131,17 @@ export async function discoverCarrierFrontier(input = {}) {
       unresolvedCurrentness: projection.summary.unresolvedCurrentness,
       parentIntegrityMismatches: mismatches.length,
       materialErrors: materialFindings.length,
-      shown: Math.min(limit, candidates.length)
+      shown: page.length
     },
     workspaces: workspaceCounts,
     latestCandidateByWorkspace,
+    feed: {
+      ordering: 'declared-created-at-descending-then-workspace-and-path',
+      total: candidates.length, offset, returned: page.length, hasMore: nextCursor !== null, nextCursor,
+      candidateKindCounts: candidateKindCounts(candidates),
+      visibleWorkspaceDistribution: workspaceDistribution(page),
+      interpretation: 'The current page is not an activity rank or a complete view of all workspaces. latestCandidateByWorkspace gives separate coverage; --cursor retrieves later pages.'
+    },
     focusNeighborhood,
     focusIntegrityFindings,
     carrierComparison,
@@ -128,15 +151,15 @@ export async function discoverCarrierFrontier(input = {}) {
       semanticCurrentness: 'unresolved-unless-explicit-qualified-facts-are-supplied',
       boundary: 'A newer bootstrap, ZIP timestamp, or implementation source file does not backfill a trace last-modified timestamp.'
     },
-    candidates: candidates.slice(0, limit),
+    candidates: page,
     integrityFindings: mismatches.map((finding) => ({ code: finding.code, nodeId: finding.nodeId, target: finding.target, severity: finding.severity,
       triage: 'requires-exact-parent-material-and-lineage-review; not automatically a current-work blocker' })),
     boundaries: {
       carrier: 'qualified Package V1 and complete carried Workspace archive bindings only',
       source: 'read-only; no extraction of Workspace trees or remote access',
-      ordering: 'declared Created At used for triage only; never semantic currentness',
+      ordering: 'declared Created At used for triage only; never semantic currentness; cursor pagination is snapshot-scoped',
       currentness: 'unresolved without separately qualified facts; use --focus <workspace/path> for qualified relation neighborhood before deciding controlling work',
-      leaves: 'topological candidates, not active Tasks or controlling lineage; latestCandidateByWorkspace provides coverage even when the global top-N omits a Workspace',
+      leaves: 'topological candidates, not active Tasks or controlling lineage; artifactKind is schema-based, not a currentness decision; latestCandidateByWorkspace provides coverage even when the global top-N omits a Workspace',
       findings: 'Global Parent mismatches and focusIntegrityFindings use the operative-state integrity projection; neighborhood.findings alone does not establish Parent integrity. This operation does not repair artifacts',
       comparison: 'When --compare-carrier is supplied, qualified snapshot byte deltas indicate differences between two received snapshots only; they are not last-modified timestamps, global missing-workspace proof or semantic supersession.'
     }
@@ -188,4 +211,33 @@ function diffQualifiedWorkspaceEntries(currentProvider, referenceProvider, works
     omittedPaths: Math.max(0, changed.length - 30),
     boundary: 'Byte deltas between two qualified snapshots only; source modification time and semantic currentness are not derivable.'
   };
+}
+
+function artifactKind(schemaId = '') {
+  const parts = String(schemaId).split('.');
+  const value = parts[1] || 'unknown';
+  return value === 'evidence' ? 'evidence' : value === 'task' ? 'task' :
+    value === 'project' ? 'project' : value === 'reduction' ? 'reduction' :
+    value === 'return' ? 'return' : value === 'decision' ? 'decision' :
+    value === 'entry' ? 'entry' : value === 'handoff' ? 'handoff' : 'other';
+}
+function candidateKindCounts(candidates) {
+  const counts = {};
+  for (const candidate of candidates) counts[candidate.artifactKind] = (counts[candidate.artifactKind] || 0) + 1;
+  return counts;
+}
+function workspaceDistribution(candidates) {
+  const counts = {};
+  for (const candidate of candidates) counts[candidate.workspaceId] = (counts[candidate.workspaceId] || 0) + 1;
+  return counts;
+}
+function encodeFrontierCursor(value) {
+  return Buffer.from(JSON.stringify({v:1, ...value}), 'utf8').toString('base64url');
+}
+function decodeFrontierCursor(token) {
+  if (!/^[A-Za-z0-9_-]{1,1024}$/.test(token)) return null;
+  try {
+    const result = JSON.parse(Buffer.from(token, 'base64url').toString('utf8'));
+    return result?.v === 1 && encodeFrontierCursor({ offset: result.offset, scope: result.scope, fingerprint: result.fingerprint }) === token ? result : null;
+  } catch { return null; }
 }
