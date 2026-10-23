@@ -9,6 +9,9 @@ test('bootstrap-only Start encourages situation-based Entry selection and qualif
     assert.ok(start.includes(snippet), `bootstrap Start missing ${snippet}`);
   }
   assert.match(start, /not consent to unrelated project ownership or remote mutation/);
+  assert.match(start, /When this receiving chat already contains meaningful work/);
+  assert.match(start, /prefer the qualified Adopt Ongoing Conversation Entry when available and applicable/);
+  assert.match(start, /orientation or a scratch Workspace alone is not a preservation result/);
 });
 
 test('pointerless multi-Workspace Start adopts early local praxis without assigning carried work', () => {

@@ -31,6 +31,7 @@ import {inspectPortableCrossWorkspaceClosedGraph} from '../node/lineage.crossWor
 import { readFile as readNodeFile } from 'node:fs/promises';
 import { runGitCommitProvenanceCli } from './cli.git-commit-provenance.js';
 import { runPortableAgentRoleSyncNode } from '../node/agent.roleSync.node.js';
+import { discoverCarrierFrontier } from '../node/carrierFrontier.discovery.js';
 
 export function portableCliRuntimeContentRoots(argv = process.argv.slice(2)) {
   const parsed = parseArgs(argv);
@@ -62,6 +63,16 @@ export async function runPortableCli(argv = process.argv.slice(2), io = console,
       return result.status==='ready'?0:2;
     } catch(error) {
       io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)})); return 1;
+    }
+  }
+  if (parsed.command === 'discover-carrier-frontier') {
+    try {
+      const result = await discoverCarrierFrontier({ carrier: parsed.positionals[0] || parsed.flags.carrier, scope: parsed.flags.scope, limit: parsed.flags.limit, focus: parsed.flags.focus, compareCarrier: parsed.flags['compare-carrier'], full: parsed.flags.full === true });
+      writeJson(io, result, parsed.flags.compact !== true);
+      return result.status === 'blocked' ? 2 : 0;
+    } catch (error) {
+      io.error(JSON.stringify({schema:'tiinex.portable.cli.error.v1',command:parsed.command,error:String(error?.message||error)}));
+      return 1;
     }
   }
   if (parsed.command === 'inspect-agent-capabilities') {

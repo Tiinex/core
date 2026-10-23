@@ -19,6 +19,7 @@ export function portableCliHelpText(runtimeOrPrefix = '', surfaceCommand = '') {
     `${command} qualify-return <continued-workspace-dir> --result <result-path> [--expected <expected-file-path>]`,
     `${command} prepare-return <continued-workspace-dir>`,
     `${command} author <workspace-dir> --schema <schema-id> (--path <workspace-relative-artifact> | --directory <workspace-relative-directory>) --body <body.md> [--parent <workspace-relative-or-qualified-parent>] [--parent-source <local-parent-file>] [--parent-reference <commit-pinned-browse+git-permalink>] [--historical-parent-proof <accepted-repository-read.json>] [--title <title>] [--summary <summary>] [--why <why>] [--authors <author>] [--preflight]`,
+    `${command} discover-carrier-frontier <qualified-carrier.zip> [--scope topics|all] [--limit <1..100>|--full] [--focus <workspace/path>] [--compare-carrier <reference.zip>]`,
     `${command} project-lineage-relation-neighborhood <material-root...> --focus <workspace::path|path> [--workspace-roots <roots.json>] [--coverage complete|bounded|partial|unknown] [--depth <n>]`,
     `${command} qualify-lineage-directory <workspace-or-material-root> --workspace-id <id> --directory <workspace-relative-directory> [--coverage complete|bounded|partial|unknown]`,
     `${command} qualify-lineage-workspace <workspace-or-material-root> --workspace-id <id> [--coverage complete|bounded|partial|unknown]`,

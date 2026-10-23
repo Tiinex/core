@@ -6,7 +6,15 @@ import { projectPortableCliOperation } from './cli.invocation.js';
 const COMMON_DEFAULT_PROJECTION = 'common-default';
 
 export function projectCommonCliDefaultOutput(result = {}, parsed = {}, runtime = {}) {
-  if (parsed?.flags?.full === true) return result;
+  if (parsed?.flags?.full === true) {
+    // Keep the complete, unmodified orientation receipt and add the same
+    // advisory discovery route visible in the compact orientation projection.
+    if (parsed?.command === 'orient-handoff-package') {
+      const compact = projectOrientDefault(result, { ...parsed, flags: { ...parsed.flags, full: false } }, runtime);
+      return compact.exploreDiscovery ? Object.freeze({ ...result, exploreDiscovery: compact.exploreDiscovery }) : result;
+    }
+    return result;
+  }
   if (parsed?.command === 'orient-handoff-package') return projectOrientDefault(result, parsed, runtime);
   if (parsed?.command === 'project-grounding-readiness') return projectGroundDefault(result, parsed, runtime);
   if (parsed?.command === 'manufacture-handoff-package' && parsed?.surfaceCommand === 'handoff') return projectHandoffDefault(result, parsed);
@@ -75,6 +83,12 @@ function projectOrientDefault(result = {}, parsed = {}, runtime = {}) {
     : null;
   const readyRouteLess = result.status === 'ready' && routes.length === 0 && !result.selection && !projection.selection;
   const sessionScratch = readyRouteLess ? projectLocalSessionScratchStart(runtime, workspaces) : null;
+  const exploreDiscovery = pointerlessCapabilities ? Object.freeze({
+    ...projectPortableCliOperation(runtime, 'discover-carrier-frontier', [packageArg]),
+    kind: 'qualified-cross-workspace-discovery',
+    when: 'After successful orientation, when the qualified Entry is Explore or broad Workspace-wide discovery is required',
+    resultBoundary: 'Topological leaves are candidates, not automatically current Tasks, governing priorities, or implementation changes; inspect qualified parents, returns, lifecycle, and ownership before selecting work.'
+  }) : null;
   return Object.freeze({
     schema: result.schema,
     operation: result.operation || 'orient-handoff-package',
@@ -87,6 +101,7 @@ function projectOrientDefault(result = {}, parsed = {}, runtime = {}) {
     authority: projection.authority ? Object.freeze({ ...projection.authority }) : null,
     carrierLineage: compactCarrierLineage(result.carrierLineage),
     capabilities: pointerlessCapabilities,
+    exploreDiscovery,
     sessionScratch,
     nextAction: routedGround ? Object.freeze({
       ...routedGround,
@@ -94,7 +109,8 @@ function projectOrientDefault(result = {}, parsed = {}, runtime = {}) {
       route: selected.pointerPath
     }) : pointerlessCapabilities ? Object.freeze({
       kind: 'select-workspace-carrier-capability',
-      options: Object.freeze(['continue-explicit-carrier-parent', 'start-explicit-new-root', 'project-workspace-landing']),
+      options: Object.freeze(['discover-qualified-frontier-when-Explore', 'continue-explicit-carrier-parent', 'start-explicit-new-root', 'project-workspace-landing']),
+      exploreDiscovery: 'exploreDiscovery',
       capabilityProjection: 'capabilities',
       sessionScratch: 'sessionScratch',
       workingSetDecision: 'capabilities.workingSetDecision',
